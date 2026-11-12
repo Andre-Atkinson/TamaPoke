@@ -19,6 +19,17 @@ void batPowerOff();                // apagado fisico del PMU
 bool usbPresent();
 bool usbPresentNow();             // sin cache (una lectura I2C): para decidir si se puede dormir
 
+// Extra fields on the 5-minute HEALTH line. 0 strips them.
+// -DTAMAPOKE_CHG_DEBUG=0
+#ifndef TAMAPOKE_CHG_DEBUG
+#define TAMAPOKE_CHG_DEBUG 1
+#endif
+#if TAMAPOKE_CHG_DEBUG
+void batFormatHealth(char *dst, size_t n);  // charger state, die temp, programmed currents
+#else
+inline void batFormatHealth(char *dst, size_t n) { if (n) dst[0] = 0; }
+#endif
+
 // boton PWR del AXP2101: pulsacion larga 4s = apagado fisico (RTC sigue vivo);
 // la pulsacion corta la captura el firmware (pantalla on/off)
 void pwrSetup();

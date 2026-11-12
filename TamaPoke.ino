@@ -545,18 +545,44 @@ void loop() {
 
   // latido de salud cada 5 min (para el soak test; se descarta si no hay monitor)
   static uint32_t lastHealth = 0;
-  if (now - lastHealth > 300000) {
+  uint32_t healthEvery = TAMAPOKE_CHG_DEBUG ? 60000UL : 300000UL;
+  if (now - lastHealth > healthEvery) {
     lastHealth = now;
+#if TAMAPOKE_CHG_DEBUG
+    char chg[220];
+    batFormatHealth(chg, sizeof chg);
+#endif
 #if BOARD_AMOLED_175C
-    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d locked=%d\n",
+    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d locked=%d"
+#if TAMAPOKE_CHG_DEBUG
+                  " cpu=%u %s"
+#endif
+                  "\n",
                   (unsigned long)(now / 1000), ESP.getFreeHeap(), ESP.getMinFreeHeap(),
                   batPercent(), batMillivolts(), batCharging() ? 1 : 0,
-                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0, screenIsLocked() ? 1 : 0);
+                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0, screenIsLocked() ? 1 : 0
+#if TAMAPOKE_CHG_DEBUG
+                  , getCpuFrequencyMhz(), chg
+#endif
+                  );
 #else
-    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d\n",
+    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d"
+#if TAMAPOKE_CHG_DEBUG
+                  " cpu=%u %s"
+#endif
+                  "\n",
                   (unsigned long)(now / 1000), ESP.getFreeHeap(), ESP.getMinFreeHeap(),
                   batPercent(), batMillivolts(), batCharging() ? 1 : 0,
-                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0);
+                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0
+#if TAMAPOKE_CHG_DEBUG
+                  , getCpuFrequencyMhz(), chg
+#endif
+                  );
+#endif
+#if TAMAPOKE_CHG_DEBUG
+    char tasks[800];
+    vTaskGetRunTimeStats(tasks);
+    Serial.println(tasks);
 #endif
   }
 
