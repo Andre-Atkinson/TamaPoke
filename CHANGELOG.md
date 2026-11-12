@@ -10,6 +10,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Battery as a number.** The clock screen cycles the header between the
+  existing icon and a percent (`87%`, with a `+` while charging). The choice
+  is saved. The default is still the icon.
+
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
   build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
   `boards/175c/partitions.csv`). Sprites come from a LittleFS partition in flash

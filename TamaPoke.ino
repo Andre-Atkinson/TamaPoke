@@ -81,6 +81,7 @@ int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 
 bool screenOff = false;       // original 1.75: single PWR; 1.75C: triple-press lock
 uint8_t userDim = 0;          // nivel de brillo de ajustes (power.h): 0 alto, 1 medio, 2 bajo
+bool batAsPercent = false;    // ajustes: false = icono (el de siempre), true = "87%"
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
@@ -372,6 +373,7 @@ void setup() {
     Preferences p;
     p.begin("tamapoke", true);
     userDim = p.getUChar("bri", 0) % BRIGHT_LEVELS;
+    batAsPercent = p.getBool("bpct", false);
     p.end();
   }
   panel->setBrightness(180);
@@ -1411,6 +1413,7 @@ static uint32_t screenKey() {
     h = mixKey(h, audioEnabled());
     h = mixKey(h, audioVolume());
     h = mixKey(h, userDim);
+    h = mixKey(h, batAsPercent);
     h = mixKey(h, gLang);
   } else if (cardOpen) {
     for (uint32_t v : { (uint32_t)pet.speciesId, (uint32_t)pet.shiny, (uint32_t)pet.ageMinutes, (uint32_t)pet.streak,
@@ -2081,10 +2084,19 @@ void renderClock() {
   setCur(LANG_PILL_X + (LANG_PILL_W - textW(lp, 2)) / 2, LANG_PILL_Y + 8);
   printT(lp);
 
-  gfx->fillRoundRect(133, 340, 200, 48, 14, UI_BAR_OK);
+  // icono de bateria o numero; por defecto el icono
+  gfx->fillRoundRect(183, 332, 100, 26, 8, UI_WHITE);
+  gfx->drawRoundRect(183, 332, 100, 26, 8, UI_INK);
+  gfx->setTextColor(UI_INK);
+  setSize(2);
+  const char *bl = batAsPercent ? "%" : "icon";
+  setCur(183 + (100 - textW(bl, 2)) / 2, 338);
+  printT(bl);
+
+  gfx->fillRoundRect(133, 366, 200, 36, 14, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
   setSize(3);
-  setCur(CX - 18, 352);
+  setCur(CX - 18, 374);
   printT("OK");
 
   gfx->setTextColor(UI_TRACK);
@@ -2138,7 +2150,15 @@ void clockTap(int16_t x, int16_t y) {
       return;
     }
   }
-  if (y >= 340 && y <= 388 && x >= 133 && x <= 333) { applyClock(); return; }
+  if (y >= 332 && y < 358 && x >= 183 && x < 283) {
+    batAsPercent = !batAsPercent;
+    Preferences p;
+    p.begin("tamapoke", false);
+    p.putBool("bpct", batAsPercent);
+    p.end();
+    return;
+  }
+  if (y >= 366 && y <= 402 && x >= 133 && x <= 333) { applyClock(); return; }
 }
 
 // llama + numero de racha arriba a la izquierda
@@ -2577,12 +2597,21 @@ void galleryTap(int16_t x, int16_t y) {
 void drawBattery() {
   int pc = batPercent();
   if (pc < 0) return;  // sin bateria conectada
-  int x = CX - 14, y = 12, w = 24, h = 11;
   bool charging = batCharging();
   uint16_t col = charging ? UI_BAR_OK
                  : (pc >= 40) ? inkColor()
                  : (pc >= 15) ? UI_BAR_WARN
                               : UI_BAR_BAD;
+  if (batAsPercent) {
+    char s[8];
+    snprintf(s, sizeof(s), charging ? "%d%%+" : "%d%%", pc);
+    gfx->setTextColor(col);
+    setSize(2);
+    setCur(centerX(s, 2), 8);
+    printT(s);
+    return;
+  }
+  int x = CX - 14, y = 12, w = 24, h = 11;
   gfx->drawRoundRect(x, y, w, h, 2, col);
   gfx->fillRect(x + w, y + 3, 3, 5, col);  // borne
   if (charging) {
