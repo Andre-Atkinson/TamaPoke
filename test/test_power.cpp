@@ -210,7 +210,10 @@ TEST(power, la_cpu_baja_en_reposo_y_se_queda_alta_con_usb_o_en_el_juego) {
   c.screenOff = true;
   CHECK_EQ((int)cpuMhzFor(c), 80);
   c.usb = true;
-  CHECK_EQ((int)cpuMhzFor(c), 240);
+  CHECK_EQ((int)cpuMhzFor(c), 80);  // pantalla apagada: 80 tambien con USB
+  c = ctx(0);
+  c.usb = true;
+  CHECK_EQ((int)cpuMhzFor(c), 240);  // en uso, el USB se queda a 240
   c = ctx(0);
   c.gameOpen = true;
   CHECK_EQ((int)cpuMhzFor(c), 240);
