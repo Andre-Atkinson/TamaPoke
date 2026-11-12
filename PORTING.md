@@ -25,7 +25,7 @@ Sources: [1.75C pin_config.h](https://github.com/waveshareteam/ESP32-S3-Touch-AM
 | Touch reset | GPIO 40 | GPIO **2** |
 | I2S MCLK | GPIO 42 | GPIO **16** |
 | QSPI / I2C / I2S BCLK, WS, DO, DI / PA | 38, 4–7, 12; 15/14, INT 11; 9, 45, 8, 10; PA 46 | Same |
-| PWR button | AXP2101 PEK IRQ | Key2 → AXP2101 **PWRON** (4 s power-off) and **SYS_OUT → GPIO 3** (high while pressed) |
+| PWR button | AXP2101 PEK short IRQ | Key2 → AXP2101 **PWRON** only. Short press is the PKEY IRQ (polled over I2C): one press toggles the screen, three within 350 ms lock. GPIO 3 is net **SYS_OUT** and does not follow the key. Hold 4 s still powers off |
 | OLED power | AXP **BLDO1 3.3 V** | Panel J3 is on **VCC3V3 (DCDC1)**. BLDO1 is 1.2 V and BLDO2 2.8 V on this board, so BLDO1 is **not** reprogrammed. |
 | RTC PCF85063 | Present (I2C 0x51) | **Not fitted.** The firmware keeps a software clock (`time()`/`settimeofday()`), set from the clock screen; it is lost when the AXP cuts power. |
 | microSD | Yes (sprites) | **No slot**: sprites live in a LittleFS partition in flash |

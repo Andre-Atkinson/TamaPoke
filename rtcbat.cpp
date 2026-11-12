@@ -142,14 +142,16 @@ bool usbPresentNow() { return pmuOk ? pmu.isVbusIn() : true; }
 void pwrSetup() {
 #if BOARD_AMOLED_175C
   if (pmuOk) {
-    // AXP2101 register 0x27 bits [3:2] = 00: keep the 4 s hardware power-off.
-    // No PEK IRQ here: the triple press is read raw from GPIO3 (screenlock.h).
+    // Key2 is AXP2101 PWRON. Register 0x27 bits [3:2] = 00 keeps the 4 s
+    // hardware power-off. The short press is the PKEY IRQ, polled over I2C
+    // (the IRQ pin is not routed to an ESP32 GPIO on this board).
     if (!pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S))
       Serial.println("PWR: could not set AXP 4s shutdown; check PMU");
     pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
+    pmu.enableIRQ(XPOWERS_AXP2101_PKEY_SHORT_IRQ);
     pmu.clearIrqStatus();
   }
-  // SYS_OUT is already pulled up on the board (R9). High = PWR held.
+  // GPIO3 / SYS_OUT does not follow the key. Left as an input only.
   pinMode(PWR_SENSE_PIN, INPUT);
 #else
   if (!pmuOk) return;
@@ -161,13 +163,11 @@ void pwrSetup() {
 }
 
 bool pwrShortPressed() {
-#if BOARD_AMOLED_175C
-  return false;  // raw GPIO3 goes to PwrButton in the sketch (triple press)
-#else
+  // Both boards: the status bit latches until cleared, so a press during
+  // light sleep is still seen on the next poll.
   if (!pmuOk) return false;
   pmu.getIrqStatus();
   bool hit = pmu.isPekeyShortPressIrq();
   if (hit) pmu.clearIrqStatus();
   return hit;
-#endif
 }
