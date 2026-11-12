@@ -10,6 +10,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **CPU frequency scaling.** 240 MHz while the pet is in use, 160 MHz once the
+  panel has dimmed or the pet is asleep, 80 MHz with the screen off or at the
+  5 min near-off step. USB and a minigame stay at 240 MHz. Not changed while a
+  sound is playing, because the I2S clock follows the CPU.
+
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
   build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
   `boards/175c/partitions.csv`). Sprites come from a LittleFS partition in flash

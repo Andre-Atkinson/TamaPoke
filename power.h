@@ -94,6 +94,16 @@ inline bool lightSleepAllowed(const PowerCtx &c) {
 }
 #define POWER_SLEEP_MS 200  // duracion de cada sueno; el toque despierta antes
 
+// 240 MHz en uso, 160 atenuada, 80 con la pantalla apagada o casi apagada.
+// USB y el minijuego se quedan a 240 para no mover el reloj del serie ni del juego.
+inline uint32_t cpuMhzFor(const PowerCtx &c) {
+  if (c.usb || c.gameOpen) return 240;
+  uint8_t stage = dimStageFor(c.idleMs);
+  if (c.screenOff || stage == DIM_OFF) return 80;
+  if (stage == DIM_LOW || c.sleeping) return 160;
+  return 240;
+}
+
 // cada cuanto se lee la bateria por I2C
 inline uint32_t powerCacheMs(const PowerCtx &c) {
   return (c.screenOff || dimStageFor(c.idleMs) == DIM_OFF) ? 10000 : 2000;

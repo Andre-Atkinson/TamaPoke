@@ -561,6 +561,15 @@ void loop() {
   }
   // cede la CPU en los pases que no dibujan: sin esto el loop gira a pleno rendimiento
   // entre frames; 1 ms no se nota en el tactil (se lee cada 20 ms) y el frame no se retrasa
+  // bajar la CPU en reposo. No mientras suena: el reloj del I2S sale del APB.
+  if (!audioBusy()) {
+    uint32_t want = cpuMhzFor(pc);
+    static uint32_t cpuNow = 240;
+    if (want != cpuNow) {
+      setCpuFrequencyMhz(want);
+      cpuNow = want;
+    }
+  }
   if (!drewFrame) idleWait(pc);
 }
 

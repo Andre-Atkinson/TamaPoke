@@ -198,3 +198,23 @@ TEST(power, los_niveles_de_volumen_bajan_y_el_alto_es_el_de_siempre) {
   CHECK(sfxAmp(2) > 0);
   CHECK_EQ((int)sfxAmp(7), (int)sfxAmp(2));   // un valor raro guardado no sube el volumen
 }
+
+TEST(power, la_cpu_baja_en_reposo_y_se_queda_alta_con_usb_o_en_el_juego) {
+  PowerCtx c = ctx(0);
+  CHECK_EQ((int)cpuMhzFor(c), 240);
+  c.idleMs = 100000;
+  CHECK_EQ((int)cpuMhzFor(c), 160);
+  c.idleMs = 400000;
+  CHECK_EQ((int)cpuMhzFor(c), 80);
+  c = ctx(0);
+  c.screenOff = true;
+  CHECK_EQ((int)cpuMhzFor(c), 80);
+  c.usb = true;
+  CHECK_EQ((int)cpuMhzFor(c), 240);
+  c = ctx(0);
+  c.gameOpen = true;
+  CHECK_EQ((int)cpuMhzFor(c), 240);
+  c.sleeping = true;
+  c.gameOpen = false;
+  CHECK_EQ((int)cpuMhzFor(c), 160);
+}
