@@ -11,10 +11,15 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 ### Added
 
 - **LiPo charge profile on the AXP2101** (both boards). Charging is enabled at
-  4.20 V / 400 mA (50 mA precharge, 25 mA termination, 500 mA USB input limit),
-  matching Waveshare's 1.75C example and the 4.2 V cell in `batcurve.h`. The
-  existing low-battery save-and-shutdown (under 3.30 V for 30 s, PMU cutoff
-  3.10 V) is unchanged. Rails are not retargeted.
+  4.20 V / 400 mA. Termination is the chip default, **125 mA** (reg `0x63` =
+  `0x15`): 25 mA never crossed the taper on this board, so the charger stayed
+  in CV at 4.20 V and `isCharging()` stayed true. USB input limit is **900 mA**
+  (reg `0x16` = 2). At 500 mA the chip enters input-current regulation, and the
+  datasheet disables termination for as long as that lasts. Precharge stays at
+  the 125 mA reset value. The TS pin is taken out of battery-temperature mode
+  (the 1.75C has no NTC) and the button-cell charger is forced off. Rails are
+  not retargeted. The 5-minute `HEALTH` line adds charger state, die temp and
+  CPU MHz unless built with `-DTAMAPOKE_CHG_DEBUG=0`.
 
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
   build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
