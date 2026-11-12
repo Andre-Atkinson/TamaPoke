@@ -26,6 +26,7 @@ static uint32_t gAmpHoldUntil = 0;  // un efecto pedido en reposo mantiene el am
 static bool gAmpHold = false;       // (indicador aparte: asi la comparacion no falla al dar la vuelta millis())
 static uint32_t gAmpOnAt = 0;       // cuando se encendio el amplificador
 static QueueHandle_t gQ = nullptr;
+static bool gI2sOn = false;
 
 // El NS4150B tarda bastante mas de 8 ms en estabilizarse tras cada apagado, asi
 // que encenderlo justo antes de cada efecto se comia los cortos: el jingle de
@@ -33,28 +34,32 @@ static QueueHandle_t gQ = nullptr;
 // haya sonido y la mascota este despierta, como en el ejemplo verificado de
 // Waveshare, y solo se apaga al dormir o al silenciar.
 static bool esW(uint8_t reg, uint8_t val);
+static bool i2sStart();
+static void i2sStop();
 
 static void updateAmplifierPower() {
   // gReady evita encenderlo en una placa donde el codec no arranco: ahi el
   // amplificador solo aportaria siseo, porque no va a sonar nada.
   if (gAmpHold && (int32_t)(gAmpHoldUntil - millis()) <= 0) gAmpHold = false;
   bool idleOff = gIdle && !gAmpHold;
+  bool run = gReady && gOn && !gSleeping && !idleOff;
   static int last = -1;  // solo se escribe el pin si cambia
-  int want = (gReady && gOn && !gSleeping && !idleOff) ? HIGH : LOW;
+  int want = run ? HIGH : LOW;
   if (want != last) {
     last = want;
     if (want == HIGH) gAmpOnAt = millis();
     digitalWrite(PA, want);
   }
-  // Silencio de ajustes: el amplificador ya esta apagado, pero el ES8311
-  // sigue alimentando el DAC (reg 0x0D). Al volver a activar el sonido se
-  // restauran los dos registros que es8311Init() deja en marcha.
+  // Idle (screen off / dim) and mute both drop the codec. Idle also stops
+  // I2S so MCLK on GPIO16 and BCLK are not toggling the whole time.
   static int codec = -1;
-  int codecOn = (gReady && gOn) ? 1 : 0;
-  if (gReady && codecOn != codec) {
-    codec = codecOn;
-    if (codecOn) { esW(0x0D, 0xFA); esW(0x44, 0x58); }
-    else esW(0x0D, 0x00);
+  if (!gReady) return;
+  if (run) {
+    if (!gI2sOn) i2sStart();
+    if (codec != 1) { esW(0x0D, 0xFA); esW(0x44, 0x58); codec = 1; }
+  } else {
+    if (codec != 0) { esW(0x0D, 0x00); codec = 0; }
+    i2sStop();
   }
 }
 
@@ -173,18 +178,31 @@ static void audioTask(void *) {
   }
 }
 
+static bool i2sStart() {
+  if (gI2sOn) return true;
+  i2s.setPins(I2S_BCK_IO, I2S_WS_IO, I2S_DO_IO, I2S_DI_IO, I2S_MCK_IO);
+  if (!i2s.begin(I2S_MODE_STD, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT,
+                 I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_BOTH)) {
+    Serial.println("I2S begin fallo");
+    return false;
+  }
+  gI2sOn = true;
+  return true;
+}
+
+static void i2sStop() {
+  if (!gI2sOn) return;
+  i2s.end();
+  gI2sOn = false;
+}
+
 void audioBegin() {
   // I2S primero: arranca el MCLK que necesita el códec para engancharse
   pinMode(PA, OUTPUT);
   digitalWrite(PA, LOW);   // hasta saber si el sonido esta activado
 
-  i2s.setPins(I2S_BCK_IO, I2S_WS_IO, I2S_DO_IO, I2S_DI_IO, I2S_MCK_IO);
-  if (!i2s.begin(I2S_MODE_STD, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT,
-                 I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_BOTH)) {
-    Serial.println("I2S begin fallo");
-    return;
-  }
-  if (!es8311Init()) { Serial.println("ES8311 no responde (audio off)"); return; }
+  if (!i2sStart()) return;
+  if (!es8311Init()) { Serial.println("ES8311 no responde (audio off)"); i2sStop(); return; }
 
   Preferences p;
   p.begin("tamapoke", true);
@@ -241,3 +259,5 @@ void audioSetIdle(bool idle) {
   gIdle = idle;
   updateAmplifierPower();  // tambien cuando vence el mantenimiento de un aviso
 }
+
+bool audioClocksOn() { return gI2sOn; }

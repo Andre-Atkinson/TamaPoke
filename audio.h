@@ -29,4 +29,5 @@ uint8_t audioVolume();
 inline int16_t sfxAmp(uint8_t level) { return level == 1 ? 2000 : level >= 2 ? 700 : 5000; }
 void audioSetSleeping(bool sleeping);  // dormida: amplificador apagado
 bool audioBusy();                      // un efecto pedido en reposo aun puede estar sonando: no dormir la CPU
-void audioSetIdle(bool idle);          // sin uso reciente: amplificador apagado (un efecto lo enciende 4 s)
+void audioSetIdle(bool idle);          // sin uso: amp, codec y relojes I2S parados
+bool audioClocksOn();
