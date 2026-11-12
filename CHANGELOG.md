@@ -16,6 +16,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   toggles the screen; three within 350 ms still lock it. Holding PWR for 4 s
   is still the hardware power-off.
 
+- **QMI8658 powers down.** The 1.75C IMU sits on VCC3V3 and this firmware does
+  not read it. If the chip answers 0x05, CTRL7 is cleared and CTRL1 disables
+  the sensor so it is not left in its power-on mode.
+
 ### Added
 
 - **LiPo charge profile on the AXP2101** (both boards). Charging is enabled at

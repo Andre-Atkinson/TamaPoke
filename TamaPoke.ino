@@ -401,6 +401,21 @@ void setup() {
   Serial.printf("TamaPoke fw v%s (%s)\n", FW_VERSION, BOARD_NAME);
   loadLang();  // idioma guardado (ES por defecto)
   Wire.begin(IIC_SDA, IIC_SCL);
+#if BOARD_AMOLED_175C
+  // QMI8658 is on VCC3V3 and is not used by this firmware. Power it down so a
+  // default-on gyro does not draw continuously. WHO_AM_I is 0x05.
+  const uint8_t qmiAddrs[] = { 0x6B, 0x6A };
+  for (uint8_t a : qmiAddrs) {
+    Wire.beginTransmission(a);
+    Wire.write(0x00);
+    if (Wire.endTransmission(false) != 0) continue;
+    if (Wire.requestFrom(a, (uint8_t)1) != 1 || Wire.read() != 0x05) continue;
+    Wire.beginTransmission(a); Wire.write(0x08); Wire.write(0x00); Wire.endTransmission();
+    Wire.beginTransmission(a); Wire.write(0x02); Wire.write(0x01); Wire.endTransmission();
+    Serial.printf("QMI8658 0x%02X power-down CTRL7=0 CTRL1=0x01\n", a);
+    break;
+  }
+#endif
   // CST9217 (tactil), AXP2101 (PMU) y PCF85063 (RTC) comparten este bus I2C.
   // Red de seguridad para PMU/RTC (SensorLib NO respeta este timeout en el
   // tactil; el cuelgue del tactil dormido se resuelve gateando por INT, ver
