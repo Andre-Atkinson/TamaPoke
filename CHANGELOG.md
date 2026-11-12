@@ -18,8 +18,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   datasheet disables termination for as long as that lasts. Precharge stays at
   the 125 mA reset value. The TS pin is taken out of battery-temperature mode
   (the 1.75C has no NTC) and the button-cell charger is forced off. Rails are
-  not retargeted. The 5-minute `HEALTH` line adds charger state, die temp and
-  CPU MHz unless built with `-DTAMAPOKE_CHG_DEBUG=0`.
+  not retargeted.   The `HEALTH` line adds charger state, die temp (`22+(7274-raw)/20`, raw
+  included; the datasheet only specifies 0.1 mV/LSB), which rails are on, and
+  CPU MHz. With the debug flag it prints every 60 s plus FreeRTOS run-time
+  stats. `-DTAMAPOKE_CHG_DEBUG=0` restores the plain 5-minute line.
 
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
   build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus

@@ -523,10 +523,11 @@ void loop() {
 
   // latido de salud cada 5 min (para el soak test; se descarta si no hay monitor)
   static uint32_t lastHealth = 0;
-  if (now - lastHealth > 300000) {
+  uint32_t healthEvery = TAMAPOKE_CHG_DEBUG ? 60000UL : 300000UL;
+  if (now - lastHealth > healthEvery) {
     lastHealth = now;
 #if TAMAPOKE_CHG_DEBUG
-    char chg[120];
+    char chg[220];
     batFormatHealth(chg, sizeof chg);
 #endif
 #if BOARD_AMOLED_175C
@@ -555,6 +556,11 @@ void loop() {
                   , getCpuFrequencyMhz(), chg
 #endif
                   );
+#endif
+#if TAMAPOKE_CHG_DEBUG
+    char tasks[800];
+    vTaskGetRunTimeStats(tasks);
+    Serial.println(tasks);
 #endif
   }
 

@@ -104,6 +104,7 @@ bool batBegin() {
   pmu.setVbusCurrentLimit(XPOWERS_AXP2101_VBUS_CUR_LIM_900MA);
   pmu.setChargingLedMode(XPOWERS_CHG_LED_CTRL_CHG);
   Serial.println("AXP2101 chg: CV=4.20V (0x64=3) ICC=400mA (0x62=0x0A) ITERM=125mA (0x63=0x15) IIN=900mA (0x16=2) TS=off btn=off");
+  Serial.println("tdie C = 22+(7274-raw)/20 (XPowers). Datasheet ADC is 0.1 mV/LSB, 0-0.8192 V, no Celsius formula.");
   return true;
 }
 
@@ -193,14 +194,25 @@ void batFormatHealth(char *dst, size_t n) {
   // here are the programmed limits, not the live taper current.
   int st = pmu.getChargerStatus();
   const char *dir = pmu.isCharging() ? "chg" : pmu.isDischarge() ? "dis" : "stdby";
-  snprintf(dst, n, "st=%s dir=%s tdie=%.1f vbus=%u icc=%d iterm=%d btn=%d therm=%d ilim=%d",
-           chgStateName(st), dir, pmu.getTemperature(),
+  uint16_t tdieRaw = 0;
+  float tdie = pmu.getTemperature(&tdieRaw);
+  // rails= DCDC1..5, ALDO1..4, BLDO1..2, DLDO1..2 as 1/0. DCDC1 is VCC3V3.
+  snprintf(dst, n,
+           "st=%s dir=%s tdie=%.1f raw=%u vbus=%u icc=%d iterm=%d btn=%d therm=%d ilim=%d "
+           "rails=D%u%u%u%u%uA%u%u%u%uB%u%uL%u%u",
+           chgStateName(st), dir, tdie, (unsigned)tdieRaw,
            (unsigned)pmu.getVbusVoltage(),
            iccMilliamp(pmu.getChargerConstantCurr()),
            25 * (pmu.getChargerTerminationCurr() & 0x0F),
            pmu.isEnableButtonBatteryCharge() ? 1 : 0,
            pmu.getThermalRegulationStatus() ? 1 : 0,
-           pmu.getCurrentLimitStatus() ? 1 : 0);
+           pmu.getCurrentLimitStatus() ? 1 : 0,
+           pmu.isEnableDC1() ? 1 : 0, pmu.isEnableDC2() ? 1 : 0, pmu.isEnableDC3() ? 1 : 0,
+           pmu.isEnableDC4() ? 1 : 0, pmu.isEnableDC5() ? 1 : 0,
+           pmu.isEnableALDO1() ? 1 : 0, pmu.isEnableALDO2() ? 1 : 0,
+           pmu.isEnableALDO3() ? 1 : 0, pmu.isEnableALDO4() ? 1 : 0,
+           pmu.isEnableBLDO1() ? 1 : 0, pmu.isEnableBLDO2() ? 1 : 0,
+           pmu.isEnableDLDO1() ? 1 : 0, pmu.isEnableDLDO2() ? 1 : 0);
 }
 #endif
 bool usbPresent() { refreshPower(); return cachedUsb; }
