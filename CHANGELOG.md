@@ -8,6 +8,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ## [Unreleased]
 
+### Fixed
+
+- **QMI8658 powers down.** The 1.75C IMU sits on VCC3V3 and this firmware does
+  not read it. If the chip answers 0x05, CTRL7 is cleared and CTRL1 disables
+  the sensor so it is not left in its power-on mode.
+
 ### Added
 
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
