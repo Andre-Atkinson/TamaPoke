@@ -14,6 +14,9 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   sound setting now also clears ES8311 register 0x0D so the DAC supply drops.
   Turning sound back on restores the power-up values from init. Idle amp
   gating is unchanged.
+- **I2S clocks stop while idle.** With the screen off (or the pet asleep) and
+  no sound playing, `i2s.end()` stops MCLK on GPIO16 and BCLK. The codec
+  analog is powered down too, and both come back before the next effect.
 
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
   build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
