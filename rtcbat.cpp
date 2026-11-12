@@ -71,8 +71,25 @@ void rtcSetEpoch(uint32_t e) {
 bool batBegin() {
   pmuOk = pmu.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL);
   if (!pmuOk) { Serial.println("AXP2101 no detectado"); return false; }
+  pmu.enableBattDetection();
   pmu.enableBattVoltageMeasure();
+  pmu.enableVbusVoltageMeasure();
   pmu.setSysPowerDownVoltage(BAT_HW_CUTOFF_MV);  // respaldo: el PMU corta solo si el firmware no llega a tiempo
+  // Single-cell LiPo, same profile as Waveshare's 1.75C AXP2101 example and the
+  // 4.20 V curve in batcurve.h. Written explicitly: after a full drain the PMU
+  // comes back at silicon defaults, and nothing else programs the charger.
+  // 400 mA is about 0.36 C of the 1100 mAh pack in the README. USB input stays
+  // at 500 mA (USB 2.0 without extra negotiation). Do not enable the button cell.
+  pmu.enableCellbatteryCharge();
+  pmu.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_50MA);
+  if (!pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_400MA))
+    Serial.println("AXP2101: could not set charge current");
+  pmu.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_25MA);
+  pmu.enableChargerTerminationLimit();
+  if (!pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2))
+    Serial.println("AXP2101: could not set 4.20 V");
+  pmu.setVbusCurrentLimit(XPOWERS_AXP2101_VBUS_CUR_LIM_500MA);
+  pmu.setChargingLedMode(XPOWERS_CHG_LED_CTRL_CHG);
   return true;
 }
 
