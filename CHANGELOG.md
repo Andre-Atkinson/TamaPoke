@@ -8,6 +8,14 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ## [Unreleased]
 
+### Fixed
+
+- **CO5300 actually sleeps when the screen is off.** Writing brightness 0
+  (reg `0x51`) leaves the panel scanning, so it stays lit. Screen-off and the
+  1.75C lock blank now send `0x51=0`, display off `0x28`, wait 120 ms, and
+  sleep-in `0x10`. Wake is sleep-out `0x11`, wait 120 ms, display on `0x29`,
+  then brightness. DCDC1 is not switched off.
+
 ### Added
 
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
