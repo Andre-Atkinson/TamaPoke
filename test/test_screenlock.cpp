@@ -72,3 +72,21 @@ TEST(ScreenLock, WrapAndRelockHint) {
   l.frameShown(t + 10000);
   CHECK(!l.blank(t + 10599)); CHECK(l.blank(t + 10600));
 }
+TEST(ScreenLock, PkeyShortTogglesAndThreeLock) {
+  uint8_t n = 0; uint32_t last = 0;
+  CHECK_EQ((int)pwrShortAction(n, last, true, 1000, B::GAP_MS), (int)PWR_EDGE_NONE);
+  CHECK_EQ((int)pwrShortAction(n, last, false, 1000 + B::GAP_MS, B::GAP_MS), (int)PWR_EDGE_NONE);
+  CHECK_EQ((int)pwrShortAction(n, last, false, 1001 + B::GAP_MS, B::GAP_MS), (int)PWR_EDGE_TOGGLE);
+  CHECK_EQ(n, 0);
+  CHECK_EQ((int)pwrShortAction(n, last, true, 2000, B::GAP_MS), (int)PWR_EDGE_NONE);
+  CHECK_EQ((int)pwrShortAction(n, last, true, 2200, B::GAP_MS), (int)PWR_EDGE_NONE);
+  CHECK_EQ((int)pwrShortAction(n, last, false, 2200 + B::GAP_MS, B::GAP_MS), (int)PWR_EDGE_NONE);
+  CHECK_EQ((int)pwrShortAction(n, last, false, 2201 + B::GAP_MS, B::GAP_MS), (int)PWR_EDGE_TOGGLE);
+  CHECK_EQ((int)pwrShortAction(n, last, true, 3000, B::GAP_MS), (int)PWR_EDGE_NONE);
+  CHECK_EQ((int)pwrShortAction(n, last, true, 3200, B::GAP_MS), (int)PWR_EDGE_NONE);
+  CHECK_EQ((int)pwrShortAction(n, last, true, 3400, B::GAP_MS), (int)PWR_EDGE_LOCK);
+  CHECK_EQ(n, 0);
+  n = 1; last = 0xFFFFFFF0u;
+  CHECK_EQ((int)pwrShortAction(n, last, false, 0xFFFFFFF0u + B::GAP_MS, B::GAP_MS), (int)PWR_EDGE_NONE);
+  CHECK_EQ((int)pwrShortAction(n, last, false, 0xFFFFFFF0u + B::GAP_MS + 1, B::GAP_MS), (int)PWR_EDGE_TOGGLE);
+}

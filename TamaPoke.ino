@@ -204,6 +204,8 @@ bool holdFired = false;
 BootButton bootButton;
 PwrButton pwrButton;
 ScreenLock screenLock;
+static uint8_t pwrEdges = 0;     // short PKEY presses still inside the triple window
+static uint32_t pwrEdgeAt = 0;
 static bool panelSleeping = false;
 static bool touchNeedsRelease = false;
 #endif
@@ -283,10 +285,8 @@ void pollBootButton() {
 #endif
 }
 
-// Poll every loop (not the old 250 ms PMU poll, which misses quick presses).
-void pollPwrButton() {
 #if BOARD_AMOLED_175C
-  if (!pwrButton.update(digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED, millis())) return;
+static void pwrToggleLock() {
   bool locked = screenLock.toggle();
   // Discard both a partly-entered BOOT gesture and a finger already on the glass.
   bootButton.begin(digitalRead(BOOT_BUTTON_PIN) == LOW, millis());
@@ -316,6 +316,28 @@ void pollPwrButton() {
     gTouchIrq = true;  // one initial sample: swallow any finger held through unlock
     showControlToast("Unlocked");
     Serial.println("PWR triple: Unlocked");
+  }
+}
+#endif
+
+// Poll every loop (not the old 250 ms PMU poll, which misses quick presses).
+void pollPwrButton() {
+#if BOARD_AMOLED_175C
+  // PWR is the AXP2101 PKEY. GPIO3 does not change when the key is pressed.
+  // The IRQ latches, so poll often enough that three quick presses stay distinct.
+  static uint32_t lastPoll = 0;
+  uint32_t now = millis();
+  bool event = false;
+  if (now - lastPoll >= 40) {
+    lastPoll = now;
+    event = pwrShortPressed();
+  }
+  PwrEdgeAction act = pwrShortAction(pwrEdges, pwrEdgeAt, event, now, PwrButton::GAP_MS);
+  if (act == PWR_EDGE_LOCK) pwrToggleLock();
+  else if (act == PWR_EDGE_TOGGLE && !screenLock.locked()) {
+    Serial.println("PWR short");
+    screenOff = !screenOff;
+    if (!screenOff) wakeUI();
   }
 #else
   // Keep the original board's PEK short-press behaviour unchanged.
@@ -425,7 +447,7 @@ void setup() {
   pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
   bootButton.begin(digitalRead(BOOT_BUTTON_PIN) == LOW, millis());
   pwrButton.begin(digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED, millis());
-  Serial.println("PWR GPIO3 active high: triple=lock/unlock gap=350ms tap<600ms debounce=25ms; hold 4s=hardware off");
+  Serial.println("PWR: AXP2101 PKEY short toggles the screen, triple within 350ms locks; hold 4s=hardware off");
   Serial.println("BOOT GPIO0 ready: debounce=25ms single=mute");
   trainingCaptureReady = touchOk && trainingCapture.begin(readTrainingTouch);
   if (!trainingCaptureReady) Serial.println("Strength training: touch capture unavailable");
@@ -622,17 +644,16 @@ void idleWait(PowerCtx c) {
   bool locked = screenIsLocked();
   bool controlsBusy = false;
 #if BOARD_AMOLED_175C
-  // PWR must wake at its FIRST edge, then stay awake through
-  // debounce/releases/the next-click window.
-  controlsBusy = pwrButton.active() || (!locked && bootButton.active());
+  // Stay awake while a short press is still waiting to become a single or a triple.
+  // The PKEY IRQ latches across light sleep; GPIO3 is not the key.
+  controlsBusy = pwrEdges || (!locked && bootButton.active());
 #endif
   if (!controlsBusy && lightSleepAllowed(c) && millis() - lastRender >= 100 && !audioBusy()) {
     c.usb = usbPresentNow();
     if (!lightSleepAllowed(c)) { delay(idleDelayMs(c)); return; }
     if (!locked && digitalRead(TP_INT) == LOW) { gTouchIrq = true; delay(1); return; }
 #if BOARD_AMOLED_175C
-    if (digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED ||
-        (!locked && digitalRead(BOOT_BUTTON_PIN) == LOW)) { delay(1); return; }
+    if (!locked && digitalRead(BOOT_BUTTON_PIN) == LOW) { delay(1); return; }
 #endif
     uint32_t ms = POWER_SLEEP_MS;
     uint32_t iv = frameIntervalMs(c);
@@ -643,13 +664,11 @@ void idleWait(PowerCtx c) {
     esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000);
     if (!locked) gpio_wakeup_enable((gpio_num_t)TP_INT, GPIO_INTR_LOW_LEVEL);
 #if BOARD_AMOLED_175C
-    gpio_wakeup_enable((gpio_num_t)PWR_SENSE_PIN, GPIO_INTR_HIGH_LEVEL);
     if (!locked) gpio_wakeup_enable((gpio_num_t)BOOT_BUTTON_PIN, GPIO_INTR_LOW_LEVEL);
 #endif
     esp_sleep_enable_gpio_wakeup();
     esp_light_sleep_start();
 #if BOARD_AMOLED_175C
-    gpio_wakeup_disable((gpio_num_t)PWR_SENSE_PIN);
     if (!locked) gpio_wakeup_disable((gpio_num_t)BOOT_BUTTON_PIN);
 #endif
     if (!locked) {
