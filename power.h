@@ -100,7 +100,7 @@ inline bool amplifierWanted(const PowerCtx &c) {
 }
 
 // pausa del bucle principal en un pase que no dibuja
-inline uint32_t idleDelayMs(const PowerCtx &c) { return c.screenOff ? 20 : 1; }
+inline uint32_t idleDelayMs(const PowerCtx &c) { return c.screenOff ? 100 : 1; }
 
 // con la pantalla apagada, o casi apagada (5 min sin tocar), y sin USB se duerme la CPU (light
 // sleep) entre frames y sondeos; con USB no: se perderia el puerto serie de la tarjeta SD
@@ -108,6 +108,19 @@ inline bool lightSleepAllowed(const PowerCtx &c) {
   return !c.usb && (c.screenOff || dimStageNow(c) == DIM_OFF);
 }
 #define POWER_SLEEP_MS 200  // duracion de cada sueno; el toque despierta antes
+
+// 240 MHz en uso, 160 atenuada, 80 con la pantalla apagada o casi apagada.
+// El minijuego se queda a 240. USB tambien, salvo con la pantalla apagada o
+// casi apagada: ahi 240 MHz calienta el chip sin dibujar nada. El light sleep
+// sigue vetado con USB (power.h): el CDC se cae durante el sueno.
+inline uint32_t cpuMhzFor(const PowerCtx &c) {
+  if (c.gameOpen) return 240;
+  uint8_t stage = dimStageFor(c.idleMs);
+  if (c.screenOff || stage == DIM_OFF) return 80;
+  if (c.usb) return 240;
+  if (stage == DIM_LOW || c.sleeping) return 160;
+  return 240;
+}
 
 // cada cuanto se lee la bateria por I2C
 inline uint32_t powerCacheMs(const PowerCtx &c) {

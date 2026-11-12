@@ -47,6 +47,14 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   it; USB only skips light sleep. Never keeps the existing 90 s dim and 5 min
   near-off. A minigame is left running.
 
+- **CPU frequency scaling.** 240 MHz while the pet is in use, 160 MHz once the
+  panel has dimmed or the pet is asleep, 80 MHz with the screen off or at the
+  5 min near-off step. A minigame stays at 240 MHz. USB stays at 240 MHz while
+  the screen is on, and drops to 80 MHz with the screen off, same as on battery.
+  Light sleep stays off while USB is connected, so the serial port stays up.
+  With the screen off the loop waits 100 ms instead of 20 ms.
+  Not changed while a sound is playing, because the I2S clock follows the CPU.
+
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
   build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
   `boards/175c/partitions.csv`). Sprites come from a LittleFS partition in flash
