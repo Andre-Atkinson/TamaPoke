@@ -450,7 +450,7 @@ void setup() {
   pwrButton.begin(digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED, millis());
   Serial.println("PWR GPIO3 active high: triple=lock/unlock gap=350ms tap<600ms debounce=25ms; hold 4s=hardware off");
   Serial.println("BOOT GPIO0 ready: debounce=25ms single=mute");
-  trainingCaptureReady = touchOk && trainingCapture.begin(readTrainingTouch);
+  trainingCaptureReady = touchReady && trainingCapture.begin(readTrainingTouch);
   if (!trainingCaptureReady) Serial.println("Strength training: touch capture unavailable");
 #endif
   lastInteract = millis();
