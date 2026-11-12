@@ -115,7 +115,7 @@ inline bool lightSleepAllowed(const PowerCtx &c) {
 // sigue vetado con USB (power.h): el CDC se cae durante el sueno.
 inline uint32_t cpuMhzFor(const PowerCtx &c) {
   if (c.gameOpen) return 240;
-  uint8_t stage = dimStageFor(c.idleMs);
+  uint8_t stage = dimStageNow(c);
   if (c.screenOff || stage == DIM_OFF) return 80;
   if (c.usb) return 240;
   if (stage == DIM_LOW || c.sleeping) return 160;
