@@ -85,7 +85,7 @@ inline bool amplifierWanted(const PowerCtx &c) {
 }
 
 // pausa del bucle principal en un pase que no dibuja
-inline uint32_t idleDelayMs(const PowerCtx &c) { return c.screenOff ? 20 : 1; }
+inline uint32_t idleDelayMs(const PowerCtx &c) { return c.screenOff ? 100 : 1; }
 
 // con la pantalla apagada, o casi apagada (5 min sin tocar), y sin USB se duerme la CPU (light
 // sleep) entre frames y sondeos; con USB no: se perderia el puerto serie de la tarjeta SD

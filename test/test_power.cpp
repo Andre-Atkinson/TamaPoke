@@ -125,7 +125,7 @@ TEST(power, light_sleep_con_la_pantalla_apagada_o_casi_apagada_y_sin_usb) {
   CHECK(lightSleepAllowed(c));
   c.usb = true;
   CHECK(!lightSleepAllowed(c));
-  CHECK_EQ((int)idleDelayMs(c), 20);
+  CHECK_EQ((int)idleDelayMs(c), 100);
   c.screenOff = false;
   CHECK_EQ((int)idleDelayMs(c), 1);
 }

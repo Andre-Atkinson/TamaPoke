@@ -15,6 +15,7 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   5 min near-off step. A minigame stays at 240 MHz. USB stays at 240 MHz while
   the screen is on, and drops to 80 MHz with the screen off, same as on battery.
   Light sleep stays off while USB is connected, so the serial port stays up.
+  With the screen off the loop waits 100 ms instead of 20 ms.
   Not changed while a sound is playing, because the I2S clock follows the CPU.
 
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
