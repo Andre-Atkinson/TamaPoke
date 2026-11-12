@@ -35,6 +35,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   existing icon and a percent (`87%`, with a `+` while charging). The choice
   is saved. The default is still the icon.
 
+- **Screen-off timeout.** The clock screen cycles 60 s (the default), 30 s,
+  15 s and never. The panel dims at half that time and turns off at the end,
+  including while the clock, keyboard or gallery is open. USB does not disable
+  it; USB only skips light sleep. Never keeps the existing 90 s dim and 5 min
+  near-off. A minigame is left running.
+
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
   build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
   `boards/175c/partitions.csv`). Sprites come from a LittleFS partition in flash
