@@ -33,6 +33,7 @@
 #include "power.h"
 #include "bootbutton.h"
 #include "screenlock.h"
+#include "touchlock.h"
 #include "trainingcapture.h"
 #include <Preferences.h>
 
@@ -83,6 +84,9 @@ bool screenOff = false;       // original 1.75: single PWR; 1.75C: triple-press 
 uint8_t userDim = 0;          // nivel de brillo de ajustes (power.h): 0 alto, 1 medio, 2 bajo
 bool batAsPercent = false;    // ajustes: false = icono (el de siempre), true = "87%"
 uint32_t powerOffMs = 60000;  // 0 = nunca (horario de 90 s / 5 min); por defecto 60 s
+uint32_t touchLockMs = 10000;  // 0 = al apagarse; TOUCH_LOCK_NEVER = desactivado
+TouchLock autoTouch;
+static bool touchReady = false;
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
@@ -368,6 +372,25 @@ void updateScreenLock(uint32_t now) {
 #endif
 }
 
+static void touchBringUp() {
+  detachInterrupt(digitalPinToInterrupt(TP_INT));
+  touch.setPins(TP_RESET, TP_INT);
+  touchReady = false;
+  for (int i = 0; i < 3 && !touchReady; i++) {
+    touchReady = touch.begin(Wire, 0x5A, IIC_SDA, IIC_SCL);
+    if (!touchReady) delay(150);
+  }
+  if (!touchReady) {
+    Serial.println("CST9217 no detectado");
+    return;
+  }
+  touch.reset();
+  touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
+  touch.setMirrorXY(true, true);
+  pinMode(TP_INT, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+}
+
 void setup() {
   Serial.setRxBufferSize(8192);  // la transferencia a SD llega en bloques de 2 KB
   Serial.begin(115200);
@@ -399,31 +422,23 @@ void setup() {
     batAsPercent = p.getBool("bpct", false);
     uint8_t offSel = p.getUChar("off", 0);  // 0 = 60 s, 1 = 30 s, 2 = 15 s, 3 = nunca
     powerOffMs = offSel == 1 ? 30000UL : offSel == 2 ? 15000UL : offSel == 3 ? 0 : 60000UL;
+    uint8_t tlk = p.getUChar("tlk", 0);  // 0 = 10 s, 1 = 30 s, 2 = 60 s, 3 = 0 s, 4 = off
+    touchLockMs = touchLockFromSel(tlk);
     p.end();
   }
+  autoTouch.delayMs = touchLockMs;
   if (powerOffMs)
     Serial.printf("screen-off %lu s (USB does not disable it; dims at half)\n",
                   (unsigned long)(powerOffMs / 1000));
   else
     Serial.println("screen-off never (USB does not disable it)");
+  if (touchLockMs == TOUCH_LOCK_NEVER) Serial.println("touch-lock off");
+  else Serial.printf("touch-lock %lu s after screen off\n", (unsigned long)(touchLockMs / 1000));
   panel->setBrightness(180);
   applyLangFont();  // fuente del idioma guardado (clasica salvo CJK)
 
-  touch.setPins(TP_RESET, TP_INT);
-  bool touchOk = false;
-  for (int i = 0; i < 3 && !touchOk; i++) {  // a veces falla al primer intento
-    touchOk = touch.begin(Wire, 0x5A, IIC_SDA, IIC_SCL);
-    if (!touchOk) delay(150);
-  }
-  if (!touchOk) Serial.println("CST9217 no detectado");
-  // begin() deja el chip en modo comando (lee la identidad y no sale);
-  // hace falta un reset por hardware para que vuelva a reportar toques
-  touch.reset();
-  touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
-  touch.setMirrorXY(true, true);  // panel montado 180 deg; same on official 1.75C widgets demo
   // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
-  pinMode(TP_INT, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+  touchBringUp();
 
   pet.begin();
   sdBegin();
@@ -531,6 +546,14 @@ void loop() {
                   (unsigned long)idleSince(now, lastInteract),
                   (unsigned long)powerOffMs, usbPresent() ? 1 : 0);
   }
+  int tlockEdge = autoTouch.update(screenOff, now);
+  if (tlockEdge > 0) {
+    Serial.println("touch lock");
+    if (touchReady) touch.sleep();  // lowest-power mode; PWR wake re-inits the chip
+  } else if (tlockEdge < 0) {
+    Serial.println("touch unlock");
+    touchBringUp();
+  }
   updateBrightness(now);
 
   // bateria al limite seguro (sin USB): se guarda la partida y se apaga el PMU antes de que la
@@ -572,27 +595,28 @@ void loop() {
     batFormatHealth(chg, sizeof chg);
 #endif
 #if BOARD_AMOLED_175C
-    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d locked=%d"
+    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d locked=%d tlock=%d"
 #if TAMAPOKE_CHG_DEBUG
                   " cpu=%u %s"
 #endif
                   "\n",
                   (unsigned long)(now / 1000), ESP.getFreeHeap(), ESP.getMinFreeHeap(),
                   batPercent(), batMillivolts(), batCharging() ? 1 : 0,
-                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0, screenIsLocked() ? 1 : 0
+                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0, screenIsLocked() ? 1 : 0,
+                  autoTouch.active ? 1 : 0
 #if TAMAPOKE_CHG_DEBUG
                   , getCpuFrequencyMhz(), chg
 #endif
                   );
 #else
-    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d"
+    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d tlock=%d"
 #if TAMAPOKE_CHG_DEBUG
                   " cpu=%u %s"
 #endif
                   "\n",
                   (unsigned long)(now / 1000), ESP.getFreeHeap(), ESP.getMinFreeHeap(),
                   batPercent(), batMillivolts(), batCharging() ? 1 : 0,
-                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0
+                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0, autoTouch.active ? 1 : 0
 #if TAMAPOKE_CHG_DEBUG
                   , getCpuFrequencyMhz(), chg
 #endif
@@ -926,7 +950,7 @@ void drainTrainingTouch() {
 
 // el toque se resuelve al LEVANTAR el dedo para distinguir tap de deslizar
 void handleTouch() {
-  if (screenIsLocked()) return;  // no touch I2C transactions or actions while locked
+  if (screenIsLocked() || autoTouch.active) return;  // no touch I2C while either lock is on
 #if BOARD_AMOLED_175C
   if (trainingNeedsRelease && trainingCaptureReady) {
     // Swallow the exit contact until the legacy reader reports no point.
@@ -1478,6 +1502,7 @@ static uint32_t screenKey() {
     h = mixKey(h, userDim);
     h = mixKey(h, batAsPercent);
     h = mixKey(h, powerOffMs);
+    h = mixKey(h, touchLockMs);
     h = mixKey(h, gLang);
   } else if (cardOpen) {
     for (uint32_t v : { (uint32_t)pet.speciesId, (uint32_t)pet.shiny, (uint32_t)pet.ageMinutes, (uint32_t)pet.streak,
@@ -2148,8 +2173,15 @@ void renderClock() {
   setCur(LANG_PILL_X + (LANG_PILL_W - textW(lp, 2)) / 2, LANG_PILL_Y + 8);
   printT(lp);
 
-  // timeout a la izquierda, formato de bateria a la derecha. El bloqueo tactil
-  // entra mas a la izquierda cuando se fusiona esa rama.
+  const char *tl = touchLockMs == 0 ? "L0" : touchLockMs == 10000 ? "L10"
+                   : touchLockMs == 30000 ? "L30" : touchLockMs == 60000 ? "L60" : T(S_TLOCK_OFF);
+  gfx->fillRoundRect(36, 332, 80, 26, 8, UI_WHITE);
+  gfx->drawRoundRect(36, 332, 80, 26, 8, UI_INK);
+  gfx->setTextColor(UI_INK);
+  setSize(2);
+  setCur(36 + (80 - textW(tl, 2)) / 2, 338);
+  printT(tl);
+
   const char *ol = powerOffMs == 60000 ? "60s" : powerOffMs == 30000 ? "30s" : powerOffMs == 15000 ? "15s" : "--";
   gfx->fillRoundRect(133, 332, 90, 26, 8, UI_WHITE);
   gfx->drawRoundRect(133, 332, 90, 26, 8, UI_INK);
@@ -2222,6 +2254,15 @@ void clockTap(int16_t x, int16_t y) {
       sfxPlay(SFX_TAP);
       return;
     }
+  }
+  if (y >= 332 && y < 358 && x >= 36 && x < 116) {
+    touchLockMs = touchLockNext(touchLockMs);
+    autoTouch.delayMs = touchLockMs;
+    Preferences p;
+    p.begin("tamapoke", false);
+    p.putUChar("tlk", touchLockSel(touchLockMs));
+    p.end();
+    return;
   }
   if (y >= 332 && y < 358 && x >= 133 && x < 223) {
     uint8_t sel = powerOffMs == 60000 ? 1 : powerOffMs == 30000 ? 2 : powerOffMs == 15000 ? 3 : 0;

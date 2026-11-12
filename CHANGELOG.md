@@ -35,6 +35,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   existing icon and a percent (`87%`, with a `+` while charging). The choice
   is saved. The default is still the icon.
 
+- **Automatic touch lock.** After the screen has been off for 10 s (the
+  default), 0 s, 30 s or 60 s, touches no longer wake it. A short PWR press
+  wakes the screen and clears the lock. The clock pill cycles those delays
+  and off. The CST9217 is put to sleep only once the lock engages, and a
+  wake re-inits it. The triple-press pocket lock is unchanged.
+
 - **Screen-off timeout.** The clock screen cycles 60 s (the default), 30 s,
   15 s and never. The panel dims at half that time and turns off at the end,
   including while the clock, keyboard or gallery is open. USB does not disable
