@@ -505,7 +505,7 @@ void setup() {
   pwrButton.begin(digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED, millis());
   Serial.println("PWR: AXP2101 PKEY short toggles the screen, triple within 350ms locks; hold 4s=hardware off");
   Serial.println("BOOT GPIO0 ready: debounce=25ms single=mute");
-  trainingCaptureReady = touchOk && trainingCapture.begin(readTrainingTouch);
+  trainingCaptureReady = touchReady && trainingCapture.begin(readTrainingTouch);
   if (!trainingCaptureReady) Serial.println("Strength training: touch capture unavailable");
 #endif
   lastInteract = millis();
