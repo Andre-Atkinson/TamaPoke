@@ -73,6 +73,10 @@ bool batBegin() {
   if (!pmuOk) { Serial.println("AXP2101 no detectado"); return false; }
   pmu.enableBattVoltageMeasure();
   pmu.setSysPowerDownVoltage(BAT_HW_CUTOFF_MV);  // respaldo: el PMU corta solo si el firmware no llega a tiempo
+  // 1.75C schematic: DCDC5 has no inductor and the output cap is not fitted.
+  // DCDC1 (VCC3V3) feeds the ESP32 and stays on. Other rails are labeled as
+  // used (0.9/1.2/1.8 V and the ALDOs) and are left as the chip set them.
+  pmu.disableDC5();
   return true;
 }
 
