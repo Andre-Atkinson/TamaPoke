@@ -32,6 +32,8 @@ static QueueHandle_t gQ = nullptr;
 // arranque (440 ms) se oia y los pitidos de 35 ms no. Se deja encendido mientras
 // haya sonido y la mascota este despierta, como en el ejemplo verificado de
 // Waveshare, y solo se apaga al dormir o al silenciar.
+static bool esW(uint8_t reg, uint8_t val);
+
 static void updateAmplifierPower() {
   // gReady evita encenderlo en una placa donde el codec no arranco: ahi el
   // amplificador solo aportaria siseo, porque no va a sonar nada.
@@ -43,6 +45,16 @@ static void updateAmplifierPower() {
     last = want;
     if (want == HIGH) gAmpOnAt = millis();
     digitalWrite(PA, want);
+  }
+  // Silencio de ajustes: el amplificador ya esta apagado, pero el ES8311
+  // sigue alimentando el DAC (reg 0x0D). Al volver a activar el sonido se
+  // restauran los dos registros que es8311Init() deja en marcha.
+  static int codec = -1;
+  int codecOn = (gReady && gOn) ? 1 : 0;
+  if (gReady && codecOn != codec) {
+    codec = codecOn;
+    if (codecOn) { esW(0x0D, 0xFA); esW(0x44, 0x58); }
+    else esW(0x0D, 0x00);
   }
 }
 

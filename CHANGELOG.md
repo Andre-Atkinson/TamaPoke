@@ -55,6 +55,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   With the screen off the loop waits 100 ms instead of 20 ms.
   Not changed while a sound is playing, because the I2S clock follows the CPU.
 
+- **Codec off while muted.** The speaker amp was already gated. Muting the
+  sound setting now also clears ES8311 register 0x0D so the DAC supply drops.
+  Turning sound back on restores the power-up values from init. Idle amp
+  gating is unchanged.
+
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
   build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
   `boards/175c/partitions.csv`). Sprites come from a LittleFS partition in flash
