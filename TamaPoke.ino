@@ -31,6 +31,7 @@
 #include "audio.h"
 #include "blit.h"
 #include "power.h"
+#include "panelpower.h"
 #include "bootbutton.h"
 #include "screenlock.h"
 #include "touchlock.h"
@@ -212,7 +213,7 @@ PwrButton pwrButton;
 ScreenLock screenLock;
 static uint8_t pwrEdges = 0;     // short PKEY presses still inside the triple window
 static uint32_t pwrEdgeAt = 0;
-static bool panelSleeping = false;
+static bool panelAsleep = false;
 static bool touchNeedsRelease = false;
 #endif
 static uint8_t panelBrightness = 255;  // ultimo brillo enviado al panel (255 = forzar el primero)
@@ -311,10 +312,8 @@ static void pwrToggleLock() {
     lastInteract = millis();
     Serial.println("PWR triple: Locked");
   } else {
-    if (panelSleeping) {
-      panel->displayOn();  // CO5300 DISPON + SLPOUT, library's 120 ms delays
-      panelSleeping = false;
-    }
+    // Wake is syncPanelPower(): 0x11, 120 ms, 0x29, then 0x51.
+    // GFX displayOn() sends 0x29 before 0x11 and leaves the panel dark.
     screenOff = false;
     pinMode(TP_INT, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
@@ -359,17 +358,23 @@ void pollPwrButton() {
 #endif
 }
 
-void updateScreenLock(uint32_t now) {
-#if BOARD_AMOLED_175C
-  // Leave time for the preceding canvas QSPI DMA to finish before sending commands.
-  if (screenLock.blank(now) && !panelSleeping && now - lastRender >= 100) {
-    panel->setBrightness(0);
-    panelBrightness = 0;
-    panel->displayOff();  // CO5300 DISPOFF (0x28), SLPIN (0x10); NOT shared DCDC1
-    panelSleeping = true;
-    Serial.println("Screen lock: CO5300 off/asleep; touch and BOOT ignored");
+static void runPanelProgram(const PanelStep *s, int n) {
+  uint32_t since = millis() - lastRender;
+  if (since < 30) delay(30 - since);
+  for (int i = 0; i < n; i++) {
+    if (s[i].kind == PANEL_WAIT) {
+      Serial.printf("panel wait %u\n", s[i].waitMs);
+      delay(s[i].waitMs);
+    } else if (s[i].kind == PANEL_CMD) {
+      Serial.printf("panel cmd 0x%02X\n", s[i].a);
+      bus->sendCommand(s[i].a);
+    } else {
+      Serial.printf("panel reg 0x%02X=%u\n", s[i].a, s[i].b);
+      bus->beginWrite();
+      bus->writeC8D8(s[i].a, s[i].b);
+      bus->endWrite();
+    }
   }
-#endif
 }
 
 static void touchBringUp() {
@@ -390,6 +395,17 @@ static void touchBringUp() {
   pinMode(TP_INT, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
 }
+
+// DCDC1 is VCC3V3 for the ESP32 and the panel. Do not switch it off.
+static void syncPanelPower(bool wantSleep, uint8_t wakeBrightness) {
+  if (!panelSleepEdge(panelAsleep, wantSleep)) return;
+  PanelStep steps[6];
+  int n = wantSleep ? panelSleepProgram(steps, 6) : panelWakeProgram(steps, 6, wakeBrightness);
+  runPanelProgram(steps, n);
+  panelBrightness = wantSleep ? 0 : wakeBrightness;
+}
+
+void updateScreenLock(uint32_t) {}
 
 void setup() {
   Serial.setRxBufferSize(8192);  // la transferencia a SD llega en bloques de 2 KB
@@ -569,7 +585,14 @@ void loop() {
     Serial.println("touch unlock");
     touchBringUp();
   }
-  updateBrightness(now);
+  bool wantSleep = screenOff;
+#if BOARD_AMOLED_175C
+  wantSleep = wantSleep || screenLock.blank(millis());
+#endif
+  uint8_t wakeBri = wantSleep ? 0 : brightnessFor(powerCtx(now));
+  syncPanelPower(wantSleep, wakeBri);
+  now = millis();  // the CO5300 sequence waits 120 ms per command
+  if (!panelAsleep) updateBrightness(now);
 
   // bateria al limite seguro (sin USB): se guarda la partida y se apaga el PMU antes de que la
   // celda baje mas; el RTC conserva la hora
@@ -713,7 +736,7 @@ void wakeUI() {
 // brillo segun sueno + inactividad (proteccion del AMOLED) y bateria
 void updateBrightness(uint32_t now) {
 #if BOARD_AMOLED_175C
-  if (panelSleeping) return;  // brightness/auto-dim must never wake a sleeping panel
+  if (panelAsleep) return;  // 0x51 during SLPIN does not wake the CO5300
 #endif
   // los eventos visibles despiertan la pantalla solos
   if (!screenOff && (pet.evolving() || pet.ceremony || pet.eating() || pet.showHeart())) {
@@ -785,7 +808,7 @@ void handleSerial() {
 #if BOARD_AMOLED_175C
   if (line == "LOCK?") {
     Serial.printf("LOCK locked=%d panel_sleep=%d pwr=%d\n", screenLock.locked() ? 1 : 0,
-                  panelSleeping ? 1 : 0,
+                  panelAsleep ? 1 : 0,
                   digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED ? 1 : 0);
     return;
   }
