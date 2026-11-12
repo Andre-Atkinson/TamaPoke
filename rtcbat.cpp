@@ -91,7 +91,8 @@ bool batBegin() {
   // 1.75C has no NTC. TS in battery-temperature mode (reg 0x50 bit 4 = 0)
   // suspends charge when the pin is out of range. begin() already switches it
   // to an external ADC input; say so again here. No backup cell: reg 0x18 bit 2 off.
-  // DCDC/LDO voltages are not touched. On the 1.75C the panel is DCDC1.
+  // Rail voltages are not retargeted. On the 1.75C the panel is DCDC1.
+  // DCDC5 has no inductor and its output capacitor is not fitted, so it is off.
   pmu.disableTSPinMeasure();
   pmu.enableCellbatteryCharge();
   pmu.disableButtonBatteryCharge();
@@ -105,6 +106,7 @@ bool batBegin() {
   pmu.setChargingLedMode(XPOWERS_CHG_LED_CTRL_CHG);
   Serial.println("AXP2101 chg: CV=4.20V (0x64=3) ICC=400mA (0x62=0x0A) ITERM=125mA (0x63=0x15) IIN=900mA (0x16=2) TS=off btn=off");
   Serial.println("tdie C = 22+(7274-raw)/20 (XPowers). Datasheet ADC is 0.1 mV/LSB, 0-0.8192 V, no Celsius formula.");
+  pmu.disableDC5();
   return true;
 }
 

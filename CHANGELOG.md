@@ -20,6 +20,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   not read it. If the chip answers 0x05, CTRL7 is cleared and CTRL1 disables
   the sensor so it is not left in its power-on mode.
 
+- **AXP2101 DCDC5 off.** On the 1.75C schematic that converter is unconnected
+  (no inductor, output capacitor not fitted). DCDC1 stays on: it is VCC3V3
+  for the ESP32 and the panel.
+
 ### Added
 
 - **LiPo charge profile on the AXP2101** (both boards). Charging is enabled at
