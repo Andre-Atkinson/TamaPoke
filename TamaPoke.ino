@@ -81,6 +81,7 @@ int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 
 bool screenOff = false;       // original 1.75: single PWR; 1.75C: triple-press lock
 uint8_t userDim = 0;          // nivel de brillo de ajustes (power.h): 0 alto, 1 medio, 2 bajo
+uint32_t powerOffMs = 60000;  // 0 = nunca (horario de 90 s / 5 min); por defecto 60 s
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
@@ -372,8 +373,15 @@ void setup() {
     Preferences p;
     p.begin("tamapoke", true);
     userDim = p.getUChar("bri", 0) % BRIGHT_LEVELS;
+    uint8_t offSel = p.getUChar("off", 0);  // 0 = 60 s, 1 = 30 s, 2 = 15 s, 3 = nunca
+    powerOffMs = offSel == 1 ? 30000UL : offSel == 2 ? 15000UL : offSel == 3 ? 0 : 60000UL;
     p.end();
   }
+  if (powerOffMs)
+    Serial.printf("screen-off %lu s (USB does not disable it; dims at half)\n",
+                  (unsigned long)(powerOffMs / 1000));
+  else
+    Serial.println("screen-off never (USB does not disable it)");
   panel->setBrightness(180);
   applyLangFont();  // fuente del idioma guardado (clasica salvo CJK)
 
@@ -490,6 +498,15 @@ void loop() {
   pollPwrButton();  // original board: same PEK short press as before
 #endif
 
+  // Apagado por inactividad en cualquier pantalla, tambien el reloj y la galeria
+  // (son estaticas: fps 0 no significa que el temporizador este parado). El USB
+  // no lo desactiva: solo impide el light sleep.
+  if (!screenOff && autoScreenOff(powerCtx(now)) && !pet.evolving() && !pet.ceremony) {
+    screenOff = true;
+    Serial.printf("screen off: idle %lu ms, timeout %lu ms, usb=%d\n",
+                  (unsigned long)idleSince(now, lastInteract),
+                  (unsigned long)powerOffMs, usbPresent() ? 1 : 0);
+  }
   updateBrightness(now);
 
   // bateria al limite seguro (sin USB): se guarda la partida y se apaga el PMU antes de que la
@@ -578,6 +595,7 @@ PowerCtx powerCtx(uint32_t now) {
   c.charging = batCharging();
   c.batPct = batPercent();
   c.userDim = userDim;
+  c.offMs = powerOffMs;
   return c;
 }
 
@@ -601,11 +619,11 @@ void updateBrightness(uint32_t now) {
 #endif
   // los eventos visibles despiertan la pantalla solos
   if (!screenOff && (pet.evolving() || pet.ceremony || pet.eating() || pet.showHeart())) {
-    if (dimStageFor(idleSince(now, lastInteract)) != DIM_AWAKE) wakeUI();
+    if (dimStageNow(powerCtx(now)) != DIM_AWAKE) wakeUI();
     else lastInteract = now;
   }
   PowerCtx c = powerCtx(now);
-  dimStage = dimStageFor(c.idleMs);
+  dimStage = dimStageNow(c);
   uint8_t target = brightnessFor(c);
   if (target != panelBrightness) {
     panelBrightness = target;
@@ -1411,6 +1429,7 @@ static uint32_t screenKey() {
     h = mixKey(h, audioEnabled());
     h = mixKey(h, audioVolume());
     h = mixKey(h, userDim);
+    h = mixKey(h, powerOffMs);
     h = mixKey(h, gLang);
   } else if (cardOpen) {
     for (uint32_t v : { (uint32_t)pet.speciesId, (uint32_t)pet.shiny, (uint32_t)pet.ageMinutes, (uint32_t)pet.streak,
@@ -2081,10 +2100,19 @@ void renderClock() {
   setCur(LANG_PILL_X + (LANG_PILL_W - textW(lp, 2)) / 2, LANG_PILL_Y + 8);
   printT(lp);
 
-  gfx->fillRoundRect(133, 340, 200, 48, 14, UI_BAR_OK);
+  // timeout de apagado: 60 s, 30 s, 15 s o nunca (el horario de siempre)
+  const char *ol = powerOffMs == 60000 ? "60s" : powerOffMs == 30000 ? "30s" : powerOffMs == 15000 ? "15s" : "--";
+  gfx->fillRoundRect(183, 332, 100, 26, 8, UI_WHITE);
+  gfx->drawRoundRect(183, 332, 100, 26, 8, UI_INK);
+  gfx->setTextColor(UI_INK);
+  setSize(2);
+  setCur(183 + (100 - textW(ol, 2)) / 2, 338);
+  printT(ol);
+
+  gfx->fillRoundRect(133, 366, 200, 36, 14, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
   setSize(3);
-  setCur(CX - 18, 352);
+  setCur(CX - 18, 374);
   printT("OK");
 
   gfx->setTextColor(UI_TRACK);
@@ -2138,7 +2166,16 @@ void clockTap(int16_t x, int16_t y) {
       return;
     }
   }
-  if (y >= 340 && y <= 388 && x >= 133 && x <= 333) { applyClock(); return; }
+  if (y >= 332 && y < 358 && x >= 183 && x < 283) {
+    uint8_t sel = powerOffMs == 60000 ? 1 : powerOffMs == 30000 ? 2 : powerOffMs == 15000 ? 3 : 0;
+    powerOffMs = sel == 1 ? 30000UL : sel == 2 ? 15000UL : sel == 3 ? 0 : 60000UL;
+    Preferences p;
+    p.begin("tamapoke", false);
+    p.putUChar("off", sel);
+    p.end();
+    return;
+  }
+  if (y >= 366 && y <= 402 && x >= 133 && x <= 333) { applyClock(); return; }
 }
 
 // llama + numero de racha arriba a la izquierda
