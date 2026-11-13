@@ -26,6 +26,13 @@ void Pet::newEgg() {
   int shinyBase = (lastEnd == CER_FAREWELL ? 24 : 48) - careBonus();
   if (shinyBase < 8) shinyBase = 8;
   eggShiny = (random(shinyBase) == 0);
+  // eleccion de huevo: la tirada de arriba (rareza, bendicion, maldicion, bonus
+  // de cuidado) es uno de los tres, asi que las probabilidades no cambian; los
+  // otros dos son comunes. Va despues del shiny para que, con el ajuste
+  // apagado, la secuencia de tiradas sea la de siempre. El shiny sorteado
+  // arriba va con el huevo que elija, sea cual sea.
+  eggPick = !starterPick && eggPickMode == EGGPICK_ON;
+  if (eggPick) rollEggChoices(eggTarget, eggCand);
   eggTaps = 0;
   fullness = 80;
   joy = 80;
@@ -57,8 +64,8 @@ void Pet::syncClock(uint32_t nowEpoch) {
   lastSeenEpoch = nowEpoch;
   if (nowEpoch == 0) return;
   uint32_t mins = (seen && nowEpoch > seen) ? (nowEpoch - seen) / 60 : 0;
-  if (mins < 2 || ceremony != CER_NONE || starterPick) {
-    save();  // primera vez, sin tiempo que aplicar o aun eligiendo inicial
+  if (mins < 2 || ceremony != CER_NONE || starterPick || eggPick) {
+    save();  // primera vez, sin tiempo que aplicar o aun eligiendo inicial/huevo
     return;
   }
   if (mins > 14UL * 24 * 60) mins = 14UL * 24 * 60;  // tope: 2 semanas
@@ -109,10 +116,10 @@ void Pet::update(uint32_t nowMs) {
 
 void Pet::tick() {
   if (ceremony != CER_NONE) return;  // el tiempo se detiene en la despedida
-  if (starterPick) return;  // la partida no empieza hasta elegir inicial: si el
-                            // tiempo corriera aqui, el huevo eclosionaria solo a
-                            // los 3 min con la especie sorteada y se perderia la
-                            // eleccion del jugador
+  if (starterPick || eggPick) return;  // la partida no empieza hasta elegir
+                            // inicial o huevo: si el tiempo corriera aqui, el
+                            // huevo eclosionaria solo a los 3 min con la especie
+                            // sorteada y se perderia la eleccion del jugador
   ageMinutes++;
 
   if (isEgg()) {
@@ -232,6 +239,10 @@ uint8_t Pet::eggRarity() const {
   return (eggTarget >= 1 && eggTarget <= 151) ? DEX_TBL[eggTarget].rarity : R_COMUN;
 }
 
+uint16_t Pet::eggAccent() const {
+  return (eggTarget >= 1 && eggTarget <= DEX_COUNT) ? DEX_TBL[eggTarget].accent : (uint16_t)0x5DCD;  // 'g'
+}
+
 // elige la especie del huevo: tirada de rareza (mejorada por una despedida
 // completa, castigada por una escapada) y sesgo hacia lineas incompletas
 int16_t Pet::pickEggSpecies() {
@@ -265,6 +276,72 @@ int16_t Pet::pickEggSpecies() {
     }
   }
   return CLASSIC_DEX[random(NUM_CLASSIC_DEX)];  // inalcanzable, por si acaso
+}
+
+// los tres huevos a elegir: `special` es la tirada normal (pickEggSpecies) y
+// los otros dos son comunes, de especie y color de tipo distintos (el color es
+// la pista que se ve en la cascara). Como pickEggSpecies, prefieren lineas
+// evolutivas incompletas; si no se puede todo a la vez, cede primero la linea
+// nueva y despues el color. Hay 47 comunes, asi que siempre sale algo.
+void Pet::rollEggChoices(int16_t special, int16_t out[EGG_CHOICES]) {
+  // defensivo: las llamadas de newEgg() pasan una especie de huevo; load() puede
+  // pasar un eggTarget danado que no lo sea (entonces se sortea uno)
+  if (special < 1 || special > DEX_COUNT || DEX_TBL[special].rarity == R_EVO)
+    special = pickEggSpecies();
+  out[0] = special;
+  for (int k = 1; k < EGG_CHOICES; k++) {
+    out[k] = -1;
+    for (int pass = 0; pass < 4 && out[k] < 0; pass++) {
+      bool newColour = pass < 2;               // pasadas 0 y 1
+      bool newLine = pass == 0 || pass == 2;   // pasadas 0 y 2
+      int16_t cand[DEX_COUNT];
+      int n = 0;
+      for (int16_t d = 1; d <= DEX_COUNT; d++) {
+        if (DEX_TBL[d].rarity != R_COMUN) continue;
+        bool taken = false, sameColour = false;
+        for (int j = 0; j < k; j++) {
+          if (out[j] == d) taken = true;
+          if (DEX_TBL[out[j]].accent == DEX_TBL[d].accent) sameColour = true;
+        }
+        // `taken` es redundante con `sameColour` en las pasadas 0 y 1 (defensivo):
+        // solo cuenta en las pasadas 2 y 3, donde el color ya no se exige
+        if (taken || (newColour && sameColour)) continue;
+        if (newLine && !lineHasUnregistered(d)) continue;
+        cand[n++] = d;
+      }
+      if (n > 0) out[k] = cand[random(n)];
+    }
+  }
+  // barajar: el huevo de la tirada normal no siempre en el mismo sitio
+  for (int i = EGG_CHOICES - 1; i > 0; i--) {
+    int j = random(i + 1);
+    int16_t t = out[i];
+    out[i] = out[j];
+    out[j] = t;
+  }
+}
+
+// tres especies de huevo validas y distintas (lo que se lee de NVS se comprueba)
+bool Pet::validEggChoices(const int16_t c[EGG_CHOICES]) {
+  for (int i = 0; i < EGG_CHOICES; i++) {
+    if (c[i] < 1 || c[i] > DEX_COUNT || DEX_TBL[c[i]].rarity == R_EVO) return false;
+    for (int j = 0; j < i; j++)
+      if (c[j] == c[i]) return false;
+  }
+  return true;
+}
+
+void Pet::chooseEgg(uint8_t i) {
+  if (!eggPick || i >= EGG_CHOICES) return;
+  eggTarget = eggCand[i];
+  eggPick = false;
+  save();
+}
+
+void Pet::cancelEggChoice() {
+  if (!eggPick) return;
+  eggPick = false;
+  save();
 }
 
 void Pet::registerSpecies(int16_t dex) {
@@ -592,6 +669,11 @@ void Pet::setBedPreset(uint8_t v) {
   prefs.putUChar("bed", bedPreset);
 }
 
+void Pet::setEggPickMode(uint8_t v) {
+  eggPickMode = v < EGGPICK_COUNT ? v : (uint8_t)EGGPICK_OFF;
+  prefs.putUChar("eggch", eggPickMode);
+}
+
 void Pet::clean() {
   if (ceremony != CER_NONE) return;
   poops = 0;
@@ -611,7 +693,7 @@ void Pet::caress() {
 }
 
 void Pet::eggTap() {
-  if (!isEgg()) return;
+  if (!isEgg() || eggPick) return;  // eligiendo huevo: aun no hay huevo que tocar
   if (++eggTaps >= 3) hatch();
   else save();
 }
@@ -642,6 +724,10 @@ void Pet::save() {
   prefs.putBool("shy", shiny);
   prefs.putBool("eshy", eggShiny);
   prefs.putBool("stpk", starterPick);
+  prefs.putBool("ecpk", eggPick);
+  prefs.putShort("ec0", eggCand[0]);
+  prefs.putShort("ec1", eggCand[1]);
+  prefs.putShort("ec2", eggCand[2]);
   prefs.putBytes("dexsh", dexShinyReg, sizeof(dexShinyReg));
   prefs.putUInt("age", ageMinutes);
   prefs.putShort("dexn", speciesId);
@@ -689,6 +775,10 @@ void Pet::load() {
   shiny = prefs.getBool("shy", false);
   eggShiny = prefs.getBool("eshy", false);
   starterPick = prefs.getBool("stpk", false);
+  eggPick = prefs.getBool("ecpk", false);  // guardados antiguos: sin la clave = sin eleccion
+  eggCand[0] = prefs.getShort("ec0", 0);
+  eggCand[1] = prefs.getShort("ec1", 0);
+  eggCand[2] = prefs.getShort("ec2", 0);
   prefs.getBytes("dexsh", dexShinyReg, sizeof(dexShinyReg));
   ageMinutes = prefs.getUInt("age", 0);
   if (prefs.isKey("dexn")) {
@@ -724,6 +814,7 @@ void Pet::load() {
   prefs.getString("nick", nick, sizeof(nick));
   pace = prefs.getUChar("pace", PACE_NORMAL);
   bedPreset = prefs.getUChar("bed", 0);
+  eggPickMode = prefs.getUChar("eggch", EGGPICK_OFF);
 
   // Range-check what came out of NVS before anything indexes with it. Normally
   // these were written by this firmware, but a different build flashed earlier
@@ -737,10 +828,25 @@ void Pet::load() {
   if (lastEnd > CER_RELEASE) lastEnd = CER_NONE;
   if (pace >= PACE_COUNT) pace = PACE_NORMAL;
   if (bedPreset >= BED_PRESETS) bedPreset = 0;
+  if (eggPickMode >= EGGPICK_COUNT) eggPickMode = EGGPICK_OFF;
   if (eggTarget < 1 || eggTarget > DEX_COUNT) eggTarget = pickEggSpecies();
   if (speciesId == 0 || speciesId < -1 || speciesId > DEX_COUNT) {
     newEgg();  // that pet doesn't exist in this firmware: start a fresh egg
     return;
+  }
+  // A pending egg choice only makes sense on an egg with no starter choice open
+  // (if a damaged save has both, the starter screen wins). Candidates that are
+  // not three distinct egg species are rolled again around the saved roll (eggTarget,
+  // already range-checked above), so a damaged candidate save keeps a Rare/Legendary.
+  // A saved roll that is not an egg species is replaced first, so eggTarget stays
+  // one of the three while the choice is open.
+  if (eggPick) {
+    if (starterPick || !isEgg()) {
+      eggPick = false;
+    } else if (!validEggChoices(eggCand)) {
+      if (DEX_TBL[eggTarget].rarity == R_EVO) eggTarget = pickEggSpecies();
+      rollEggChoices(eggTarget, eggCand);  // conserva la tirada guardada
+    }
   }
 
   // siembra: la mascota actual cuenta como criada (guardados antiguos)

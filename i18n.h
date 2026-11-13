@@ -64,6 +64,9 @@ enum StrId : uint8_t {
   S_TLOCK_OFF,  // "off" — automatic touch lock disabled
   // ficha: pagina Care (ritmo y hora de dormir; los horarios van en digitos)
   S_CARE, S_PACE, S_PACE_NORMAL, S_PACE_RELAXED, S_BEDTIME, S_BED_OFF,
+  // eleccion de huevo: titulo, pista bajo el huevo tocado, rareza comun, y el
+  // boton de la pagina Care (etiqueta + sus dos valores)
+  S_CHOOSE_EGG, S_EGG_TAP_AGAIN, S_EGG_COMMON, S_EGGS, S_EGG_CHOOSE, S_EGG_SURPRISE,
   // minijuegos de Play: nombre y pista de la portada (orden de GameId), Berry Song
   S_GAME_KEEPY, S_GAME_CATCH, S_GAME_PEEK, S_GAME_SONG,
   S_HINT_KEEPY, S_HINT_CATCH, S_HINT_PEEK, S_HINT_SONG,

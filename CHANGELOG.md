@@ -39,9 +39,19 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   sticks until the next bedtime. It waits for a minigame, dialog, bath or
   evolution to finish; a minigame or the bag left open with the screen off is
   abandoned without a prize at bedtime. It follows the clock you set; off by default.
-- **`CARE?` serial command** prints `pace=<n> bed=<n> inbed=<0|1> stale=<0|1>`
-  (`stale=1`: bedtime paused until the clock is set).
-- Strings for the Care page in all eight languages.
+- **Choose your egg.** A third button on the Care page, *Eggs*: Surprise (the
+  default, one random egg as before) or Choose. With Choose, every ending after
+  the first game shows three eggs instead of one. The shell shows the rarity
+  (cream Common, silver Rare, gold Legendary) and the spots the type colour; the
+  species stays a surprise. Tap an egg to look at it, tap it again to pick it.
+  One of the three is the usual roll (same odds, farewell blessing, runaway
+  curse and shiny chance); the other two are Common eggs of other types. Time is
+  paused until you pick, and the choice survives a power-off. Saved under new
+  keys in the pet's NVS namespace (`eggch`, `ecpk`, `ec0`-`ec2`).
+- **`CARE?` serial command** prints `pace=<n> bed=<n> inbed=<0|1> stale=<0|1>
+  egg=<0|1> picking=<0|1>` (`stale=1`: bedtime paused until the clock is set;
+  `egg=1`: Eggs set to Choose; `picking=1`: the three-egg choice is on screen).
+- Strings for the Care page and the egg choice in all eight languages.
 
 ### Fixed
 
@@ -51,6 +61,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 - A finger held still for 3 s during a minigame could open the "Release?"
   dialog behind the game. Games now get the touch directly, with no long press
   or swipes.
+- **"Rare egg!" / "Legendary egg!?" now shows on the egg screen.** It was drawn
+  and then painted over by the bottom panel in the same frame, so it never
+  appeared.
+- **The stat card closes when an ending starts.** A farewell or runaway started
+  from the serial console with the card open left it over the ceremony and the
+  new egg (on the first page it read past the Pokédex table).
 
 - **Auto touch lock no longer defeats light sleep.** A sleeping CST9217 leaves
   TP_INT open drain, which reads low, so the idle loop saw a touch on every

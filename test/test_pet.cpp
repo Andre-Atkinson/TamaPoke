@@ -1544,3 +1544,605 @@ TEST(save, species_zero_is_not_a_pet) {
   CHECK(b.isEgg());
   CHECK(b.speciesId != 0);
 }
+
+// ---------------------------------------------------------------- eleccion de huevo
+// Ajuste "Care" (NVS "eggch"): tras un final salen tres huevos a elegir. Uno es la
+// tirada de siempre y los otros dos son comunes de otro color de tipo.
+
+// acaba la vida actual con una ceremonia y deja el huevo (o la eleccion) siguiente
+static void endLife(Pet &p, uint8_t how) {
+  if (how == CER_FAREWELL) p.startFarewell();
+  else if (how == CER_RUNAWAY) p.startRunaway();
+  else p.release();
+  mockAdvanceMillis(CEREMONY_MS + 1);
+  p.update(millis());
+}
+
+static void registerRange(Pet &p, int16_t from, int16_t to) {
+  for (int16_t d = from; d <= to; d++) p.dexReg[(d - 1) >> 3] |= (uint8_t)(1 << ((d - 1) & 7));
+}
+
+// comprobacion propia (no Pet::validEggChoices, que es lo que se prueba): tres
+// especies de huevo (1..151, no formas evolucionadas) y distintas
+static bool threeEggSpecies(const int16_t c[EGG_CHOICES]) {
+  for (int i = 0; i < EGG_CHOICES; i++) {
+    if (c[i] < 1 || c[i] > DEX_COUNT) return false;
+    if (DEX_TBL[c[i]].rarity == R_EVO) return false;
+    for (int j = 0; j < i; j++)
+      if (c[j] == c[i]) return false;
+  }
+  return true;
+}
+
+static bool choicesValid(const Pet &p) {
+  int16_t c[EGG_CHOICES];
+  for (uint8_t i = 0; i < EGG_CHOICES; i++) c[i] = p.eggChoice(i);
+  return threeEggSpecies(c);
+}
+
+TEST(eggpick, apagado_por_defecto_un_final_da_un_solo_huevo) {
+  Pet p;
+  makePet(p, 4);
+  CHECK_EQ(p.eggPickMode, (uint8_t)EGGPICK_OFF);
+  endLife(p, CER_RELEASE);
+  CHECK(p.isEgg());
+  CHECK_MSG(!p.awaitingEgg(), "con el ajuste apagado no hay eleccion");
+  p.eggTap();
+  p.eggTap();
+  p.eggTap();
+  CHECK(!p.isEgg());
+}
+
+TEST(eggpick, encendido_un_final_ofrece_tres_huevos_validos) {
+  for (uint8_t how : { (uint8_t)CER_FAREWELL, (uint8_t)CER_RELEASE, (uint8_t)CER_RUNAWAY }) {
+    Pet p;
+    makePet(p, 6);
+    p.setEggPickMode(EGGPICK_ON);
+    endLife(p, how);
+    CHECK(p.isEgg());
+    CHECK_MSG(p.awaitingEgg(), "tras cualquier final, con el ajuste encendido, toca elegir");
+    CHECK_MSG(choicesValid(p), "tres especies de huevo validas y distintas");
+  }
+}
+
+TEST(eggpick, la_primera_partida_sigue_con_el_inicial) {
+  mockNvsReset();
+  Pet p;
+  p.begin();
+  p.setEggPickMode(EGGPICK_ON);
+  p.newEgg();  // sin pokedex, como tras WIPE
+  CHECK(p.awaitingStarter());
+  CHECK_MSG(!p.awaitingEgg(), "la primera partida no ofrece huevos: elige inicial");
+}
+
+TEST(eggpick, el_tiempo_no_corre_mientras_elige) {
+  Pet p;
+  makePet(p, 4);
+  p.setEggPickMode(EGGPICK_ON);
+  p.setClock(1000u * 86400);
+  endLife(p, CER_RELEASE);
+  CHECK(p.awaitingEgg());
+  advance(p, 600);  // 10 horas encendido
+  CHECK_MSG(p.isEgg(), "el huevo no eclosiona solo mientras elige");
+  CHECK_EQ(p.ageMinutes, (uint32_t)0);
+  CHECK(p.awaitingEgg());
+}
+
+TEST(eggpick, el_tiempo_apagado_no_se_aplica_mientras_elige) {
+  Pet p;
+  makePet(p, 4);
+  p.setEggPickMode(EGGPICK_ON);
+  p.setClock(1000u * 86400);
+  endLife(p, CER_RELEASE);
+  CHECK(p.awaitingEgg());
+  p.syncClock(1000u * 86400 + 3 * 86400);  // tres dias apagado
+  CHECK_MSG(p.isEgg(), "el huevo no eclosiona en ausencia mientras elige");
+  CHECK_EQ(p.ageMinutes, (uint32_t)0);
+}
+
+TEST(eggpick, tocar_no_eclosiona_mientras_elige) {
+  Pet p;
+  makePet(p, 4);
+  p.setEggPickMode(EGGPICK_ON);
+  endLife(p, CER_RELEASE);
+  p.eggTap();
+  p.eggTap();
+  p.eggTap();
+  CHECK_MSG(p.isEgg(), "aun no hay huevo que tocar");
+  CHECK_EQ(p.eggCracks(), (uint8_t)0);
+  CHECK(p.awaitingEgg());
+}
+
+TEST(eggpick, elegir_fija_el_huevo_y_reanuda_el_tiempo) {
+  for (uint8_t pick = 0; pick < EGG_CHOICES; pick++) {
+    Pet p;
+    makePet(p, 4);
+    p.setEggPickMode(EGGPICK_ON);
+    endLife(p, CER_RELEASE);
+    int16_t want = p.eggChoice(pick);
+    p.chooseEgg(EGG_CHOICES);  // fuera de rango: nada
+    CHECK(p.awaitingEgg());
+    p.chooseEgg(pick);
+    CHECK(!p.awaitingEgg());
+    CHECK_EQ(p.eggRarity(), DEX_TBL[want].rarity);  // la pantalla del huevo ve el elegido
+    CHECK_EQ(p.eggAccent(), DEX_TBL[want].accent);
+    advance(p, 3);  // ya corre el tiempo: eclosiona solo a los 3 min
+    CHECK(!p.isEgg());
+    CHECK_EQ(p.speciesId, want);
+  }
+}
+
+TEST(eggpick, uno_de_los_tres_es_la_tirada_de_siempre) {
+  Pet p;
+  makePet(p, 4);
+  p.setEggPickMode(EGGPICK_ON);
+  registerRange(p, 1, 40);  // >= 25: tambien pueden salir legendarios
+  p.lastEnd = CER_FAREWELL;
+  p.streak = 30;
+  p.bond = 100;
+  int notCommon = 0;
+  for (int seed = 1; seed <= 300; seed++) {
+    randomSeed(seed);
+    int16_t expected = p.pickEggSpecies();
+    randomSeed(seed);
+    p.newEgg();
+    CHECK(p.awaitingEgg());
+    int found = 0;
+    for (uint8_t i = 0; i < EGG_CHOICES; i++)
+      if (p.eggChoice(i) == expected) found++;
+    CHECK_MSG(found == 1, "la tirada normal (mismas probabilidades) es uno de los tres");
+    if (DEX_TBL[expected].rarity != R_COMUN) notCommon++;
+  }
+  CHECK_MSG(notCommon > 0, "el test tambien cubre huevos raros");
+}
+
+TEST(eggpick, los_otros_dos_son_comunes) {
+  Pet p;
+  makePet(p, 4);
+  registerRange(p, 1, 40);
+  p.lastEnd = CER_FAREWELL;
+  p.streak = 30;
+  p.bond = 100;
+  int sawRare = 0;
+  for (int seed = 1; seed <= 300; seed++) {
+    randomSeed(seed);
+    int16_t special = p.pickEggSpecies();
+    int16_t out[EGG_CHOICES];
+    p.rollEggChoices(special, out);
+    int notCommon = 0;
+    for (int16_t d : out)
+      if (DEX_TBL[d].rarity != R_COMUN) notCommon++;
+    CHECK_MSG(notCommon == (DEX_TBL[special].rarity != R_COMUN ? 1 : 0),
+              "solo el huevo de la tirada normal puede ser raro o legendario");
+    if (notCommon) sawRare++;
+  }
+  CHECK(sawRare > 0);
+}
+
+TEST(eggpick, el_huevo_de_la_tirada_normal_cambia_de_sitio) {
+  Pet p;
+  makePet(p, 4);
+  int where[EGG_CHOICES] = { 0, 0, 0 };
+  for (int seed = 1; seed <= 90; seed++) {
+    randomSeed(seed);
+    int16_t out[EGG_CHOICES];
+    p.rollEggChoices(4, out);
+    for (int i = 0; i < EGG_CHOICES; i++)
+      if (out[i] == 4) where[i]++;
+  }
+  for (int i = 0; i < EGG_CHOICES; i++)
+    CHECK_MSG(where[i] > 0, "el huevo de la tirada normal sale en cualquier posicion");
+}
+
+TEST(eggpick, una_escapada_da_tres_comunes) {
+  Pet p;
+  makePet(p, 4);
+  p.setEggPickMode(EGGPICK_ON);
+  registerRange(p, 1, 40);
+  p.streak = 30;
+  p.bond = 100;
+  p.lastEnd = CER_RUNAWAY;
+  for (int seed = 1; seed <= 100; seed++) {
+    randomSeed(seed);
+    p.newEgg();
+    for (uint8_t i = 0; i < EGG_CHOICES; i++)
+      CHECK_MSG(DEX_TBL[p.eggChoice(i)].rarity == R_COMUN, "tras una escapada los tres son comunes");
+  }
+}
+
+TEST(eggpick, tres_colores_de_tipo_distintos) {
+  // con pokedex vacia, a medias y con todas las lineas comunes completas
+  for (int16_t upTo : { (int16_t)4, (int16_t)80, (int16_t)151 }) {
+    Pet p;
+    makePet(p, 4);
+    registerRange(p, 1, upTo);
+    for (int seed = 1; seed <= 200; seed++) {
+      randomSeed(seed);
+      int16_t out[EGG_CHOICES];
+      p.rollEggChoices(p.pickEggSpecies(), out);
+      CHECK(threeEggSpecies(out));
+      CHECK_MSG(DEX_TBL[out[0]].accent != DEX_TBL[out[1]].accent &&
+                DEX_TBL[out[0]].accent != DEX_TBL[out[2]].accent &&
+                DEX_TBL[out[1]].accent != DEX_TBL[out[2]].accent,
+                "cada huevo da una pista de tipo distinta");
+    }
+  }
+}
+
+TEST(eggpick, los_comunes_prefieren_lineas_incompletas) {
+  Pet p;
+  makePet(p, 4);
+  registerRange(p, 1, 60);  // muchas lineas comunes ya completas
+  for (int seed = 1; seed <= 200; seed++) {
+    randomSeed(seed);
+    int16_t out[EGG_CHOICES];
+    p.rollEggChoices(1, out);  // el especial da igual: se miran los otros dos
+    for (int16_t d : out)
+      if (d != 1)
+        CHECK_MSG(p.lineHasUnregistered(d), "los comunes extra completan la pokedex");
+  }
+}
+
+TEST(eggpick, sin_linea_nueva_cede_la_linea_antes_que_el_color) {
+  // Todo registrado salvo los comunes del color del huevo especial: los unicos
+  // comunes con la linea incompleta comparten su color, asi que la pasada 0
+  // (color nuevo y linea nueva) no encuentra nada y la pasada 1 (solo color
+  // nuevo) si. Si cediera antes el color, los extras saldrian del color del
+  // especial.
+  Pet p;
+  makePet(p, 4);
+  const int16_t special = 4;
+  registerRange(p, 1, 151);
+  int sameColour = 0;
+  for (int16_t d = 1; d <= DEX_COUNT; d++)
+    if (DEX_TBL[d].rarity == R_COMUN && DEX_TBL[d].accent == DEX_TBL[special].accent) {
+      p.dexReg[(d - 1) >> 3] &= (uint8_t)~(1 << ((d - 1) & 7));
+      sameColour++;
+    }
+  CHECK_MSG(sameColour >= 2, "hay otros comunes del mismo color sin registrar");
+  for (int seed = 1; seed <= 100; seed++) {
+    randomSeed(seed);
+    int16_t out[EGG_CHOICES];
+    p.rollEggChoices(special, out);
+    CHECK(threeEggSpecies(out));
+    CHECK_MSG(DEX_TBL[out[0]].accent != DEX_TBL[out[1]].accent &&
+              DEX_TBL[out[0]].accent != DEX_TBL[out[2]].accent &&
+              DEX_TBL[out[1]].accent != DEX_TBL[out[2]].accent,
+              "cede la linea antes que el color: tres colores distintos");
+  }
+}
+
+TEST(eggpick, el_shiny_no_cambia_y_va_con_el_elegido) {
+  // misma semilla, ajuste apagado y encendido: el shiny del bicho que nace es el
+  // mismo (se sortea antes que los huevos extra) elija el huevo que elija
+  int shinies = 0;
+  for (int seed = 1; seed <= 400; seed++) {
+    Pet off;
+    makePet(off, 4);
+    off.streak = 30;
+    off.bond = 100;  // shiny 1/8 tras despedida: salen bastantes
+    off.lastEnd = CER_FAREWELL;
+    randomSeed(seed);
+    off.newEgg();
+    off.eggTap();
+    off.eggTap();
+    off.eggTap();
+    Pet on;
+    makePet(on, 4);
+    on.setEggPickMode(EGGPICK_ON);
+    on.streak = 30;
+    on.bond = 100;
+    on.lastEnd = CER_FAREWELL;
+    randomSeed(seed);
+    on.newEgg();
+    on.chooseEgg((uint8_t)(seed % EGG_CHOICES));
+    on.eggTap();
+    on.eggTap();
+    on.eggTap();
+    CHECK_MSG(on.shiny == off.shiny, "el sorteo shiny es el de siempre");
+    if (on.shiny) shinies++;
+  }
+  CHECK(shinies > 0);
+}
+
+TEST(eggpick, la_eleccion_sobrevive_a_un_reinicio) {
+  Pet a;
+  makePet(a, 4);
+  a.setEggPickMode(EGGPICK_ON);
+  endLife(a, CER_FAREWELL);
+  CHECK(a.awaitingEgg());
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.eggPickMode, (uint8_t)EGGPICK_ON);
+  CHECK_MSG(b.awaitingEgg(), "apagar a mitad de la eleccion la conserva");
+  for (uint8_t i = 0; i < EGG_CHOICES; i++) CHECK_EQ(b.eggChoice(i), a.eggChoice(i));
+  b.chooseEgg(2);
+  Pet c;
+  c.begin();
+  CHECK_MSG(!c.awaitingEgg(), "elegir se guarda");
+  c.eggTap();
+  c.eggTap();
+  c.eggTap();
+  CHECK_EQ(c.speciesId, a.eggChoice(2));
+}
+
+TEST(eggpick, un_guardado_antiguo_sin_las_claves_sigue_como_siempre) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.remove("eggch");
+    raw.remove("ecpk");
+    raw.remove("ec0");
+    raw.remove("ec1");
+    raw.remove("ec2");
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.speciesId, (int16_t)4);
+  CHECK_EQ(b.eggPickMode, (uint8_t)EGGPICK_OFF);
+  CHECK(!b.awaitingEgg());
+  endLife(b, CER_RELEASE);
+  CHECK_MSG(!b.awaitingEgg(), "sin la clave el ajuste esta apagado: un huevo como siempre");
+}
+
+TEST(eggpick, un_guardado_antiguo_con_un_huevo_pendiente_sigue_como_siempre) {
+  // el guardado antiguo es un huevo por eclosionar con el ajuste apagado: sin la
+  // clave "ecpk" no puede salir una eleccion (un bicho ya nacido la limpiaria
+  // aunque el valor por defecto fuese true)
+  Pet a;
+  makePet(a, 4);
+  endLife(a, CER_RELEASE);
+  CHECK(a.isEgg());
+  CHECK(!a.awaitingEgg());
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.remove("eggch");
+    raw.remove("ecpk");
+    raw.remove("ec0");
+    raw.remove("ec1");
+    raw.remove("ec2");
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(b.isEgg());
+  CHECK_EQ(b.eggPickMode, (uint8_t)EGGPICK_OFF);
+  CHECK_MSG(!b.awaitingEgg(), "un huevo guardado sin las claves sigue siendo un huevo, sin eleccion");
+  for (int i = 0; i < 3; i++) {
+    a.eggTap();
+    b.eggTap();
+  }
+  CHECK(!a.isEgg());
+  CHECK(!b.isEgg());
+  CHECK_EQ(b.speciesId, a.speciesId);  // nace lo mismo que habria nacido
+}
+
+TEST(eggpick, candidatos_invalidos_en_la_nvs_se_vuelven_a_sortear) {
+  // fuera de rango, forma evolucionada (2 IVYSAUR), repetidos, negativos
+  const int16_t bad[][EGG_CHOICES] = {
+    { 300, 4, 7 }, { 1, 2, 7 }, { 4, 4, 7 }, { -1, 4, 7 }, { 1, 4, 0 }, { 1, 4, 152 },
+  };
+  for (auto &b3 : bad) {
+    Pet a;
+    makePet(a, 4);
+    a.setEggPickMode(EGGPICK_ON);
+    endLife(a, CER_RELEASE);
+    {
+      Preferences raw;
+      raw.begin("tamapoke", false);
+      raw.putShort("ec0", b3[0]);
+      raw.putShort("ec1", b3[1]);
+      raw.putShort("ec2", b3[2]);
+      raw.end();
+    }
+    Pet b;
+    b.begin();
+    CHECK(b.awaitingEgg());
+    CHECK_MSG(choicesValid(b), "lo leido de NVS se comprueba antes de usarlo");
+  }
+}
+
+TEST(eggpick, candidatos_invalidos_conservan_la_tirada_guardada) {
+  // un guardado con los candidatos danados sigue ofreciendo el huevo raro o
+  // legendario que ya habia tocado, no una tirada nueva
+  Pet a;
+  makePet(a, 4);
+  a.setEggPickMode(EGGPICK_ON);
+  registerRange(a, 1, 40);  // >= 25: tambien pueden salir legendarios
+  a.lastEnd = CER_FAREWELL;
+  a.streak = 30;
+  a.bond = 100;
+  int notCommon = 0;
+  for (int seed = 1; seed <= 60; seed++) {
+    randomSeed(seed);
+    int16_t expected = a.pickEggSpecies();
+    randomSeed(seed);
+    a.newEgg();
+    CHECK(a.awaitingEgg());
+    {
+      Preferences raw;
+      raw.begin("tamapoke", false);
+      raw.putShort("ec0", 300);
+      raw.putShort("ec1", 4);
+      raw.putShort("ec2", 4);
+      raw.end();
+    }
+    Pet b;
+    b.begin();
+    CHECK(b.awaitingEgg());
+    CHECK(choicesValid(b));
+    int found = 0;
+    for (uint8_t i = 0; i < EGG_CHOICES; i++)
+      if (b.eggChoice(i) == expected) found++;
+    CHECK_MSG(found == 1, "la tirada guardada sigue entre los tres tras recomponerlos");
+    if (DEX_TBL[expected].rarity != R_COMUN) notCommon++;
+  }
+  CHECK_MSG(notCommon > 0, "el test cubre huevos raros o legendarios");
+}
+
+TEST(eggpick, una_tirada_guardada_que_no_es_de_huevo_se_sustituye) {
+  // eggT2 danado (2 IVYSAUR no es una especie de huevo) junto con candidatos
+  // danados: los tres siguen siendo huevos validos
+  Pet a;
+  makePet(a, 4);
+  a.setEggPickMode(EGGPICK_ON);
+  endLife(a, CER_RELEASE);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putShort("eggT2", 2);
+    raw.putShort("ec0", 300);
+    raw.putShort("ec1", 4);
+    raw.putShort("ec2", 4);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(b.awaitingEgg());
+  CHECK_MSG(choicesValid(b), "una tirada que no es de huevo no entra en los tres");
+  // y la tirada guardada pasa a ser uno de los tres (eggTarget es privado: se ve
+  // por la rareza y el color que exponen eggRarity()/eggAccent())
+  CHECK_MSG(b.eggRarity() != R_EVO, "eggTarget ya no es una forma evolucionada");
+  int match = 0;
+  for (uint8_t i = 0; i < EGG_CHOICES; i++) {
+    const DexEntry &c = DEX_TBL[b.eggChoice(i)];
+    if (c.rarity == b.eggRarity() && c.accent == b.eggAccent()) match++;
+  }
+  CHECK_MSG(match >= 1, "eggTarget es uno de los tres mientras se elige");
+}
+
+TEST(eggpick, los_comunes_extra_varian_entre_finales) {
+  // si los dos comunes extra no se sortearan, saldrian siempre los mismos
+  for (int16_t upTo : { (int16_t)4, (int16_t)60 }) {
+    Pet p;
+    makePet(p, 4);
+    registerRange(p, 1, upTo);
+    bool seen[DEX_COUNT + 1] = { false };
+    int distinct = 0;
+    for (int seed = 1; seed <= 100; seed++) {
+      randomSeed(seed);
+      int16_t out[EGG_CHOICES];
+      p.rollEggChoices(1, out);  // el especial fijo: se miran los otros dos
+      for (int16_t d : out)
+        if (d != 1 && !seen[d]) {
+          seen[d] = true;
+          distinct++;
+        }
+    }
+    CHECK_MSG(distinct > 10, "los dos comunes extra se sortean, no son siempre los mismos");
+  }
+}
+
+TEST(eggpick, el_validador_rechaza_cada_caso_malo) {
+  const int16_t bad[][EGG_CHOICES] = {
+    { 300, 4, 7 }, { 1, 2, 7 }, { 4, 4, 7 }, { -1, 4, 7 }, { 1, 4, 0 }, { 1, 4, 152 }, { 1, 7, 1 },
+  };
+  for (auto &b3 : bad) CHECK(!Pet::validEggChoices(b3));
+  const int16_t good[EGG_CHOICES] = { 151, 1, 7 };
+  CHECK(Pet::validEggChoices(good));
+}
+
+TEST(eggpick, candidatos_validos_en_la_nvs_se_respetan) {
+  Pet a;
+  makePet(a, 4);
+  a.setEggPickMode(EGGPICK_ON);
+  endLife(a, CER_RELEASE);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putShort("ec0", 151);  // MEW: legendario, valido
+    raw.putShort("ec1", 1);
+    raw.putShort("ec2", 7);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.eggChoice(0), (int16_t)151);
+  CHECK_EQ(b.eggChoice(1), (int16_t)1);
+  CHECK_EQ(b.eggChoice(2), (int16_t)7);
+}
+
+TEST(eggpick, ajuste_fuera_de_rango_vuelve_a_apagado) {
+  Pet p;
+  makePet(p, 4);
+  p.setEggPickMode(EGGPICK_ON);
+  p.setEggPickMode(EGGPICK_COUNT);  // el primer valor invalido
+  CHECK_EQ(p.eggPickMode, (uint8_t)EGGPICK_OFF);
+  p.setEggPickMode(EGGPICK_ON);
+  p.setEggPickMode(200);
+  CHECK_EQ(p.eggPickMode, (uint8_t)EGGPICK_OFF);
+  for (uint8_t v : { (uint8_t)EGGPICK_COUNT, (uint8_t)99 }) {
+    {
+      Preferences raw;
+      raw.begin("tamapoke", false);
+      raw.putUChar("eggch", v);
+      raw.end();
+    }
+    Pet b;
+    b.begin();
+    CHECK_EQ(b.speciesId, (int16_t)4);  // la mascota no se toca
+    CHECK_EQ(b.eggPickMode, (uint8_t)EGGPICK_OFF);
+  }
+}
+
+TEST(eggpick, el_ajuste_se_guarda_y_sobrevive_a_un_huevo_nuevo) {
+  Pet p;
+  makePet(p, 4);
+  p.setEggPickMode(EGGPICK_ON);
+  p.newEgg();
+  CHECK_EQ(p.eggPickMode, (uint8_t)EGGPICK_ON);
+  Pet q;
+  q.begin();
+  CHECK_EQ(q.eggPickMode, (uint8_t)EGGPICK_ON);
+}
+
+TEST(eggpick, inicial_y_huevo_a_la_vez_gana_el_inicial) {
+  Pet a;
+  makePet(a, 4);
+  a.setEggPickMode(EGGPICK_ON);
+  endLife(a, CER_RELEASE);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putBool("stpk", true);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(b.awaitingStarter());
+  CHECK_MSG(!b.awaitingEgg(), "un guardado con las dos elecciones abre solo la del inicial");
+}
+
+TEST(eggpick, una_mascota_ya_nacida_no_queda_eligiendo) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putBool("ecpk", true);  // guardado danado: eleccion pendiente con mascota
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.speciesId, (int16_t)4);
+  CHECK_MSG(!b.awaitingEgg(), "sin huevo no hay nada que elegir");
+  uint32_t age = b.ageMinutes;
+  advance(b, 2);
+  CHECK_MSG(b.ageMinutes == age + 2, "el tiempo sigue corriendo");
+}
+
+TEST(eggpick, cancelar_sale_de_la_eleccion) {
+  Pet p;
+  makePet(p, 4);
+  p.setEggPickMode(EGGPICK_ON);
+  endLife(p, CER_RELEASE);
+  p.cancelEggChoice();
+  CHECK(!p.awaitingEgg());
+  Pet q;
+  q.begin();
+  CHECK_MSG(!q.awaitingEgg(), "cancelar se guarda");
+}

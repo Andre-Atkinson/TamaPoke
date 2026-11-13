@@ -241,7 +241,9 @@ static std::vector<uint32_t> codepoints(const char *s) {
 }
 
 TEST(i18n, la_pagina_care_en_japones_va_solo_en_kana_y_en_coreano_solo_en_hangul) {
-  const StrId care[] = { S_CARE, S_PACE, S_PACE_NORMAL, S_PACE_RELAXED, S_BEDTIME, S_BED_OFF };
+  const StrId care[] = { S_CARE, S_PACE, S_PACE_NORMAL, S_PACE_RELAXED, S_BEDTIME, S_BED_OFF,
+                         S_CHOOSE_EGG, S_EGG_TAP_AGAIN, S_EGG_COMMON, S_EGGS, S_EGG_CHOOSE,
+                         S_EGG_SURPRISE };
   for (StrId id : care) {
     gLang = LANG_JA;
     for (uint32_t c : codepoints(T(id)))
@@ -255,7 +257,7 @@ TEST(i18n, la_pagina_care_en_japones_va_solo_en_kana_y_en_coreano_solo_en_hangul
 
 // las etiquetas de la pagina Care van en botones de 320 px a tamano 4 (24 px por letra)
 TEST(i18n, los_valores_de_la_pagina_care_caben_en_el_boton) {
-  const StrId vals[] = { S_PACE_NORMAL, S_PACE_RELAXED, S_BED_OFF };
+  const StrId vals[] = { S_PACE_NORMAL, S_PACE_RELAXED, S_BED_OFF, S_EGG_CHOOSE, S_EGG_SURPRISE };
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     if (LANG_IS_CJK(lang)) continue;  // el ancho CJK solo se puede ver en la placa
     gLang = (Lang)lang;
@@ -264,6 +266,19 @@ TEST(i18n, los_valores_de_la_pagina_care_caben_en_el_boton) {
   gLang = LANG_DEFAULT;
 }
 
+// pantalla de eleccion de huevo, tamano 2 (12 px por letra): el titulo va a y=84,
+// donde el circulo mide ~350 px, y la pista bajo los huevos a y=336, donde mide ~410
+TEST(i18n, los_textos_de_la_eleccion_de_huevo_caben) {
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    if (LANG_IS_CJK(lang)) continue;  // el ancho CJK solo se puede ver en la placa
+    gLang = (Lang)lang;
+    CHECK_MSG(strlen(T(S_CHOOSE_EGG)) * 12 <= 330, std::string("titulo demasiado ancho: ") + T(S_CHOOSE_EGG));
+    for (StrId id : { S_EGG_TAP_AGAIN, S_EGG_COMMON, S_EGG_RARE, S_EGG_LEGEND })
+      CHECK_MSG(strlen(T(id)) * 12 <= 390, std::string("demasiado ancho: ") + T(id));
+    CHECK_MSG(strlen(T(S_EGGS)) * 12 <= 300, std::string("etiqueta demasiado ancha: ") + T(S_EGGS));
+  }
+  gLang = LANG_DEFAULT;
+}
 // Minijuegos de Play: los nombres y pistas de la portada. Japones solo en kana y coreano
 // solo en silabas hangul (mas espacio y la puntuacion ASCII "!.?", que las dos fuentes
 // U8g2 traen); en los idiomas latinos, que quepan: el nombre va a tamano 3 (18 px por

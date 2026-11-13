@@ -89,3 +89,21 @@ wait 1s
 shot 17-sleeping
 tap 264 404
 wait 1s
+
+# Care page, Eggs -> Choose; a runaway (serial RUN) then offers three eggs
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+tap 233 288
+swipe up
+serial RUN
+wait 12s
+shot 18-egg-choice
+tap 233 220
+wait 500ms
+shot 19-egg-look
+tap 233 220
+wait 1s
+shot 20-egg-picked
