@@ -981,3 +981,45 @@ TEST(save, out_of_range_stats_and_egg_target_are_clamped) {
   CHECK_EQ(b.hygiene, (uint8_t)100);
   CHECK_EQ(b.lastEnd, (uint8_t)CER_NONE);
 }
+
+// A saved egg (dexn = -1) goes through the clamps without newEgg() resetting anything.
+TEST(save, an_egg_save_with_wild_values_is_clamped_field_by_field) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putShort("dexn", -1);
+    raw.putShort("eggT2", 400);
+    raw.putUChar("poop", 200);
+    raw.putUChar("joy", 255);
+    raw.putUChar("ene", 255);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(b.isEgg());
+  CHECK_EQ(b.poops, (uint8_t)3);
+  CHECK_EQ(b.joy, (uint8_t)100);
+  CHECK_EQ(b.energy, (uint8_t)100);
+  // eggTarget is private: the hatched species shows whether 400 was replaced
+  b.eggTap();
+  b.eggTap();
+  b.eggTap();
+  CHECK(b.speciesId >= 1 && b.speciesId <= DEX_COUNT);
+}
+
+TEST(save, species_zero_is_not_a_pet) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putShort("dexn", 0);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(b.isEgg());
+  CHECK(b.speciesId != 0);
+}

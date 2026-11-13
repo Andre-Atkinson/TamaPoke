@@ -87,17 +87,13 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   Not changed while a sound is playing or queued, as a precaution: the I2S
   source on the S3 is PLL_F160M by default, not the CPU clock.
 
-- **Codec and I2S off while muted or idle.** The speaker amp was already gated.
-  When it is gated (muted, pet asleep, screen dimmed at half the screen-off
-  timeout, 30 s by default, or screen off) and no sound is playing, the ES8311
-  DAC is powered down (REG12=0x02, REG0D=0xFA) and `i2s.end()` stops MCLK on
-  GPIO16 and BCLK. Waking restarts I2S first and then re-runs the **full**
-  ES8311 init (the sequence verified on this board), because the codec derives
-  its clock from BCLK and loses it while I2S is stopped. A mutex keeps
-  `i2s.end()` from running under a sound in progress (ESP_I2S has no lock), and
-  a playing sound stops after its current chunk when the state is withdrawn.
-  The power-down values are not checked against Espressif's driver source (not
-  available here) and none of this is heard-tested on hardware.
+- **Codec and I2S stay on; only the amplifier is gated.** An earlier
+  version also powered the ES8311 down (REG0D) and stopped I2S while muted or
+  idle. On the real 1.75C that left the board silent after a BOOT mute then
+  unmute, and no ES8311 driver source was available to get the wake sequence
+  right, so that gating was removed: the PA pin still drops while the pet
+  sleeps, the screen is dimmed or off, or sound is muted, as before.
+  `audioBusy()` now also covers a sound that is playing or queued.
 
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
   build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus

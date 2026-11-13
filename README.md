@@ -373,9 +373,8 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
 - **1.75C only, on by default:** the screen turns off after 60 s without touching (dimming at 30 s), and the
   touch controller is put to sleep and its interrupt ignored 10 s after that, so the idle board can light-sleep;
   a short PWR press wakes it. The CPU runs at 240 MHz in use, 160 MHz once dimmed or asleep and 80 MHz with the
-  screen off (a minigame stays at 240). When the amplifier is gated the audio task stops the I2S clocks and powers
-  the ES8311 down. The original 1.75 keeps its previous behaviour by default (screen-off and touch lock set to
-  never) but can pick either in the settings, and CPU scaling and I2S gating apply to both boards.
+  screen off (a minigame stays at 240). The original 1.75 keeps its previous behaviour by default (screen-off and touch lock set to
+  never) but can pick either in the settings, and CPU scaling applies to both boards.
 - **Low battery (< 20 %, not charging):** brightness capped (100, then 60 under 10 %) and frames twice as slow.
 - **Battery reads over I2C** every 10 s instead of 2 s when the screen is off or almost off.
 - The pet walks by real time, so lower frame rates do not slow it down.
