@@ -52,8 +52,8 @@ Workflow:
    ruff; neither is in the local gate).
 
 Guardrails:
-- Never merge, approve, or close anything. Merging is the owner's per-PR
-  decision.
+- Never merge, approve, or close anything. Merging belongs to the session
+  that dispatched you (see **Merging** in `CLAUDE.md`).
 - Never flash the board, open its serial port or send it commands unless your
   brief says the owner asked for it in this session (see the board rule in
   `CLAUDE.md`).
