@@ -64,6 +64,9 @@ enum StrId : uint8_t {
   S_TLOCK_OFF,  // "off" — automatic touch lock disabled
   // ficha: pagina Care (ritmo y hora de dormir; los horarios van en digitos)
   S_CARE, S_PACE, S_PACE_NORMAL, S_PACE_RELAXED, S_BEDTIME, S_BED_OFF,
+  // eleccion de huevo: titulo, pista bajo el huevo tocado, rareza comun, y el
+  // boton de la pagina Care (etiqueta + sus dos valores)
+  S_CHOOSE_EGG, S_EGG_TAP_AGAIN, S_EGG_COMMON, S_EGGS, S_EGG_CHOOSE, S_EGG_SURPRISE,
   STR_COUNT
 };
 

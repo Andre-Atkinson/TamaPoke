@@ -82,7 +82,7 @@ While **awake**, per minute:
   next bedtime, and if you put it to bed early it still wakes in the morning.
   It waits until a minigame, dialog, bath or evolution is finished; a minigame or
   the training bag left open with the screen off is abandoned (no prize) at bedtime. Eggs, farewell
-  scenes and the starter pick are skipped. It follows the clock you set (swipe
+  scenes, the starter pick and the egg choice are skipped. It follows the clock you set (swipe
   down): after a full power-off the 1.75C clock can be wrong until you set it, so
   after a power-off bedtime stays paused until the clock is set (clock screen, or
   `board.py clock`); it then acts as if the device had just started, so at 22:30 the
@@ -126,6 +126,16 @@ While **awake**, per minute:
 - 👋 **Release** — long-press the creature to let it go on your terms (neutral).
 
 After any ending, a **new egg** appears.
+
+- 🥚 **Choose your egg** (stat card, *Care* page → *Eggs*: *Surprise* by default,
+  or *Choose*). With *Choose*, every ending after the first game shows **three
+  eggs** instead of one. Each shell shows the egg's rarity (cream Common, silver
+  Rare, gold Legendary) and its spots the Pokémon's **type colour**; the species
+  stays a surprise. Tap an egg to look at it, tap it again to pick it. One of the
+  three is the normal roll above (same odds, same blessing/curse, same shiny
+  chance, which goes with whichever egg you pick); the other two are Common eggs
+  of other types. Time is paused until you pick (as on the starter screen), and
+  the choice survives a power-off. The first game still picks a starter.
 
 ### Bonds, streaks, medals, Pokédex
 - **Streak** (player-wide, survives across pets): first care each real day; milestones
@@ -407,7 +417,8 @@ runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio tes
 `REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery) · `CAREDAY` ·
 `TIME <epoch>` / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
 `SAVE` (write pending pet changes now) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
-inbed=<0|1> stale=<0|1>`, stale = bedtime paused until the clock is set) · `LS` / `PUT` (SD files). `tools/board.py`
+inbed=<0|1> stale=<0|1> egg=<0|1> picking=<0|1>`, stale = bedtime paused until the clock
+is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on screen) · `LS` / `PUT` (SD files). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.

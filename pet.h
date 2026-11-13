@@ -18,6 +18,10 @@
 // ritmo de cuidado (ajuste "Care", NVS "pace"): normal o relajado (las necesidades
 // bajan a la mitad de velocidad mientras esta despierto)
 enum : uint8_t { PACE_NORMAL = 0, PACE_RELAXED = 1, PACE_COUNT = 2 };
+// eleccion de huevo (ajuste "Care", NVS "eggch"): tras un final, en vez de un
+// huevo al azar salen tres a elegir. Apagado por defecto.
+enum : uint8_t { EGGPICK_OFF = 0, EGGPICK_ON = 1, EGGPICK_COUNT = 2 };
+#define EGG_CHOICES 3
 
 // milisegundos que faltan hasta `deadline` (0 si ya paso, o si deadline==0:
 // "temporizador inactivo"). Todos los temporizadores del juego (dialogos,
@@ -110,8 +114,10 @@ public:
   // ajustes "Care" persistentes (NVS "pace" y "bed"); valores fuera de rango = 0
   uint8_t pace = PACE_NORMAL;  // 0 normal, 1 relajado
   uint8_t bedPreset = 0;       // 0 apagado, 1..3 ver bedtime.h
+  uint8_t eggPickMode = EGGPICK_OFF;  // 0 un huevo sorpresa, 1 elegir entre tres
   void setPace(uint8_t v);
   void setBedPreset(uint8_t v);
+  void setEggPickMode(uint8_t v);
   void clean();
   void caress();  // tocar al bicho
   void eggTap();  // tocar el huevo: 3 toques y eclosiona
@@ -142,6 +148,16 @@ public:
   // primera partida: el jugador elige inicial (Bulbasaur/Charmander/Squirtle)
   bool awaitingStarter() const { return starterPick; }
   void chooseStarter(int16_t dex) { eggTarget = dex; starterPick = false; save(); }
+  // eleccion de huevo (ajuste eggPickMode): tres candidatos guardados en NVS; el
+  // tiempo se para hasta que elige, como con el inicial
+  bool awaitingEgg() const { return eggPick; }
+  int16_t eggChoice(uint8_t i) const { return i < EGG_CHOICES ? eggCand[i] : (int16_t)-1; }
+  void chooseEgg(uint8_t i);         // i fuera de rango o sin eleccion: no hace nada
+  void cancelEggChoice();            // consola SPEC: sale de la eleccion sin elegir
+  // rellena out[] con tres especies de huevo distintas: `special` (la tirada de
+  // siempre) y dos comunes de otros colores de tipo, en orden aleatorio
+  void rollEggChoices(int16_t special, int16_t out[EGG_CHOICES]);
+  static bool validEggChoices(const int16_t c[EGG_CHOICES]);
   void factoryReset() { prefs.clear(); }  // borra la NVS (test: comando serie WIPE)
   void dbgRunawayReady() { fullness = joy = energy = hygiene = 0; neglectTicks = RUNAWAY_TICKS; }  // test
   // uint16_t, no uint8_t: con MINUTES_PER_LEVEL=60 el nivel son las horas, asi
@@ -161,6 +177,7 @@ public:
   uint16_t registeredCount() const;
   bool lineHasUnregistered(int16_t base) const;
   uint8_t eggRarity() const;       // rareza del huevo actual (sin revelar especie)
+  uint16_t eggAccent() const;      // color de tipo del huevo actual (pista: motas de la cascara)
   int16_t pickEggSpecies();        // publica para poder simular tiradas (EGGS)
   uint8_t lowestStat() const { return min(min(fullness, joy), min(energy, hygiene)); }
   PetMood mood() const;
@@ -201,6 +218,8 @@ private:
   uint16_t evoDeclinedLv = 0;   // "mantener forma": no ofrecer evolucion hasta subir de nivel
   uint32_t farDeclinedAge = 0;  // "quedaros juntos": no ofrecer despedida hasta esta edad
   bool starterPick = false;     // primera partida: esperando que el jugador elija inicial
+  bool eggPick = false;         // esperando que elija uno de los tres huevos (NVS "ecpk")
+  int16_t eggCand[EGG_CHOICES] = { 0, 0, 0 };  // candidatos (NVS "ec0".."ec2")
   uint8_t neglectTicks = 0;
   uint16_t goodTicks = 0;  // racha bien cuidado: forja la DEF
   uint32_t ceremonyUntil = 0;

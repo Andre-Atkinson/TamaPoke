@@ -38,6 +38,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Mant\202n: salir",
     "off",
     "CUIDADO", "RITMO", "Normal", "Tranquilo", "A DORMIR", "Apagado",
+    "Elige un huevo!", "Toca otra vez para elegir", "Huevo com\243n", "HUEVOS", "Elegir", "Sorpresa",
   },
   // ---------------- EN ----------------
   {
@@ -70,6 +71,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Hold to exit",
     "off",
     "CARE", "PACE", "Normal", "Relaxed", "BEDTIME", "Off",
+    "Choose an egg!", "Tap again to choose", "Common egg", "EGGS", "Choose", "Surprise",
   },
   // ---------------- FR ----------------
   {
@@ -102,6 +104,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Tenir: sortir",
     "off",
     "SOINS", "RYTHME", "Normal", "D\202tendu", "COUCHER", "Aucun",
+    "Choisis un oeuf!", "Touche encore pour choisir", "Oeuf commun", "OEUFS", "Choisir", "Surprise",
   },
   // ---------------- DE ----------------
   // El aleman si lleva dieresis: la fuente 5x7 del firmware es una tabla CP437
@@ -139,6 +142,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Halten: Ende",
     "aus",
     "PFLEGE", "TEMPO", "Normal", "Entspannt", "SCHLAFZEIT", "Aus",
+    "W\204hle ein Ei!", "Nochmal tippen zum W\204hlen", "Normales Ei", "EIER", "W\204hlen", "\232berraschung",
   },
   // ---------------- IT ----------------
   {
@@ -171,6 +175,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Tieni: esci",
     "off",
     "CURE", "RITMO", "Normale", "Rilassato", "NANNA", "Spento",
+    "Scegli un uovo!", "Tocca ancora per scegliere", "Uovo comune", "UOVA", "Scegli", "Sorpresa",
   },
   // ---------------- PT ----------------
   {
@@ -203,6 +208,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Segure: sair",
     "off",
     "CUIDADOS", "RITMO", "Normal", "Calmo", "HORA DE DORMIR", "Desligado",
+    "Escolha um ovo!", "Toque de novo para escolher", "Ovo comum", "OVOS", "Escolher", "Surpresa",
   },
   // ---------------- JA ----------------
   {
@@ -258,6 +264,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "長押しで終了",
     "off",
     "おせわ", "ペース", "ふつう", "ゆったり", "おやすみ", "なし",
+    "たまごを えらんでね", "もういちど タッチで けってい", "ふつうのたまご", "たまご", "えらぶ", "おまかせ",
   },
   // ---------------- KO ----------------
   // Los especificadores van en el MISMO ORDEN que en la fila inglesa aunque
@@ -295,6 +302,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "길게 눌러 종료",
     "off",
     "돌봄", "속도", "보통", "여유", "취침", "끔",
+    "알을 고르세요", "한 번 더 누르면 선택", "보통 알", "알", "선택", "깜짝",
   },
 };
 

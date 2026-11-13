@@ -1,6 +1,14 @@
 # Design: choose your egg
 
-Status: **draft, waiting for the owner's decisions** (2026-11-13).
+Status: **approved by the owner on 2026-11-13**, with these decisions:
+
+1. Each egg reveals its **type colour and rarity** (no NEW badge, no silhouette).
+2. **Same odds as today**: one egg is today's roll, the other two are Common.
+3. A **Care-page button, off by default** ("Eggs: Surprise / Choose").
+4. **Tap to look, tap again to pick**; no re-roll, no backing out.
+
+Sections below keep the options that were offered; ★ marks the recommendation,
+and the decision above is what was built.
 
 ## What it is
 
@@ -58,8 +66,8 @@ with today's odds, and goes with whichever egg she picks.
 
 ★ A third button on the Care page (with relaxed pace and bedtime): **Eggs:
 Choose / Surprise**. On by default, so the next ending after the update
-already offers the choice. Alternatives: off by default, or always on with no
-button. The Care page only opens while there is a pet, so the setting cannot
+already offers the choice. Alternatives: off by default (**chosen**), or always
+on with no button. The Care page only opens while there is a pet, so the setting cannot
 change in the middle of a choice.
 
 The three buttons shrink from 96 to 72 px high (y = 92, 172, 252) so the page
@@ -68,8 +76,9 @@ lowest button's bottom edge), the button is 320.
 
 ### 4. Choosing
 
-★ Tap an egg to look (it lifts and wobbles, and its rarity and "Tap again to
-choose" appear under the row); tap the same egg again to pick it. She must
+★ Tap an egg to look (it lifts over a glow in its type colour, and its rarity
+and "Tap again to choose" appear under the row; a still screen, no animation,
+so it costs no extra redraws); tap the same egg again to pick it. She must
 pick one: no re-roll and no backing out, and the choice waits for as long as
 she likes. Alternatives: one tap picks (like the starter screen), or tap-tap
 plus a "Surprise me" button that picks one of the three at random.
@@ -90,7 +99,10 @@ so waking the watch never picks an egg.
   starter screen.
 - **First game, or after WIPE:** the starter screen, never the egg choice.
 - **Serial:** `HATCH` does nothing while she is choosing (there is no egg
-  yet); `SPEC` ends the choice; `EGGS` stays read-only. No new commands.
+  yet); `SPEC` ends the choice; `EGGS` stays read-only. No new commands;
+  `CARE?` (read-only) also prints `egg=` and `picking=`.
+- **The egg screen after picking** shows the egg as it looked in the choice
+  (same shell and spots). With *Surprise* the egg screen looks as before.
 
 ## Save data (NVS namespace `tamapoke`)
 
@@ -98,15 +110,16 @@ New keys only; no existing key changes meaning.
 
 | Key | Type | Meaning | Missing / invalid |
 |---|---|---|---|
-| `echo` | UChar | 0 = Surprise, 1 = Choose | Missing: the default from decision 3. Any other value: the default |
+| `eggch` | UChar | 0 = Surprise, 1 = Choose | Missing or any other value: 0 (Surprise) |
 | `ecpk` | Bool | A choice is on screen | Missing: false (old saves behave exactly as today) |
 | `ec0`, `ec1`, `ec2` | Short | Candidate Pokédex numbers | If any is outside 1..151, not an egg species, or a duplicate: roll a fresh three |
 
-While a choice is open, `eggTarget` holds candidate 0, so anything that reads
-the egg (`eggRarity()`, `EGGS`) stays valid. Picking sets `eggTarget`, clears
-`ecpk` and saves once. If `stpk` and `ecpk` are both set (corrupt save), the
-starter screen wins and the egg choice is cleared. `load()` range-checks all
-of this, as the hard rules require.
+While a choice is open, `eggTarget` keeps the normal roll (one of the three),
+so anything that reads the egg (`eggRarity()`, `eggAccent()`) stays valid.
+Picking sets `eggTarget`, clears `ecpk` and saves once. If `stpk` and `ecpk`
+are both set (corrupt save), the starter screen wins and the egg choice is
+cleared; `ecpk` on a pet that has already hatched is cleared too. `load()`
+range-checks all of this, as the hard rules require.
 
 ## Screen (466 × 466, round)
 
@@ -115,7 +128,7 @@ of this, as the hard rules require.
      .-.          .-.          .-.
     ( o )        ( o )        ( o )        three eggs, scale 4 (68 × 88 px)
      '-'          '-'          '-'         centres x = 93 / 233 / 373, y ≈ 214
-                 ~~~~~                     the selected egg lifts and wobbles
+                 ~~~~~                     the selected egg lifts over a glow
              Rare egg!                     rarity of the selected egg, y ≈ 300
          Tap again to choose               hint, y ≈ 336
 ```
@@ -125,9 +138,9 @@ colour as well as the text, so it reads at a glance in any language.
 
 ## Strings (all 8 languages)
 
-New: `S_CHOOSE_EGG` (title), `S_EGG_TAP_AGAIN` (hint), `S_EGGS` (Care button
-label), `S_EGG_CHOOSE` / `S_EGG_SURPRISE` (its values), and `S_EGG_NEW` only if
-the NEW badge is chosen. "Rare egg!" and "Legendary egg!?" already exist.
+New: `S_CHOOSE_EGG` (title), `S_EGG_TAP_AGAIN` (hint), `S_EGG_COMMON` (rarity
+of a Common egg), `S_EGGS` (Care button label), `S_EGG_CHOOSE` /
+`S_EGG_SURPRISE` (its values). "Rare egg!" and "Legendary egg!?" already exist.
 Japanese uses kana only and Korean only syllables in `unifont_t_korean2`;
 the Care-page glyph test in `test/test_i18n.cpp` is extended to the new
 strings, and Care values must fit the 300 px button at size 4.
@@ -143,7 +156,7 @@ strings, and Care values must fit the 300 px button at size 4.
   sets the egg and ends the choice; `eggTap` does nothing while choosing.
 - Persistence: save/load keeps the three candidates and the pending flag;
   missing keys behave as today; out-of-range, non-egg and duplicate
-  candidates are re-rolled; an out-of-range `echo` falls back to the default;
+  candidates are re-rolled; an out-of-range `eggch` falls back to Surprise;
   `stpk` + `ecpk` together resolve to the starter screen.
 
 ## Out of scope
