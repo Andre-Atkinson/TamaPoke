@@ -1865,6 +1865,37 @@ TEST(eggpick, una_tirada_guardada_que_no_es_de_huevo_se_sustituye) {
   b.begin();
   CHECK(b.awaitingEgg());
   CHECK_MSG(choicesValid(b), "una tirada que no es de huevo no entra en los tres");
+  // y la tirada guardada pasa a ser uno de los tres (eggTarget es privado: se ve
+  // por la rareza y el color que exponen eggRarity()/eggAccent())
+  CHECK_MSG(b.eggRarity() != R_EVO, "eggTarget ya no es una forma evolucionada");
+  int match = 0;
+  for (uint8_t i = 0; i < EGG_CHOICES; i++) {
+    const DexEntry &c = DEX_TBL[b.eggChoice(i)];
+    if (c.rarity == b.eggRarity() && c.accent == b.eggAccent()) match++;
+  }
+  CHECK_MSG(match >= 1, "eggTarget es uno de los tres mientras se elige");
+}
+
+TEST(eggpick, los_comunes_extra_varian_entre_finales) {
+  // si los dos comunes extra no se sortearan, saldrian siempre los mismos
+  for (int16_t upTo : { (int16_t)4, (int16_t)60 }) {
+    Pet p;
+    makePet(p, 4);
+    registerRange(p, 1, upTo);
+    bool seen[DEX_COUNT + 1] = { false };
+    int distinct = 0;
+    for (int seed = 1; seed <= 100; seed++) {
+      randomSeed(seed);
+      int16_t out[EGG_CHOICES];
+      p.rollEggChoices(1, out);  // el especial fijo: se miran los otros dos
+      for (int16_t d : out)
+        if (d != 1 && !seen[d]) {
+          seen[d] = true;
+          distinct++;
+        }
+    }
+    CHECK_MSG(distinct > 10, "los dos comunes extra se sortean, no son siempre los mismos");
+  }
 }
 
 TEST(eggpick, el_validador_rechaza_cada_caso_malo) {

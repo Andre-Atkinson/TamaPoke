@@ -102,7 +102,8 @@ so waking the watch never picks an egg.
   yet); `SPEC` ends the choice; `EGGS` stays read-only. No new commands;
   `CARE?` (read-only) also prints `egg=` and `picking=`.
 - **The egg screen after picking** shows the egg as it looked in the choice
-  (same shell and spots). With *Surprise* the egg screen looks as before.
+  (same shell and spots). With *Surprise* the egg itself looks as before; only
+  the fixed rarity label (see "Existing bug") is new.
 
 ## Save data (NVS namespace `tamapoke`)
 
@@ -114,8 +115,10 @@ New keys only; no existing key changes meaning.
 | `ecpk` | Bool | A choice is on screen | Missing: false (old saves behave exactly as today) |
 | `ec0`, `ec1`, `ec2` | Short | Candidate Pokédex numbers | If any is outside 1..151, not an egg species, or a duplicate: re-roll the other two around the saved roll (`eggTarget`), so a damaged candidate save keeps a Rare or Legendary |
 
-While a choice is open, `eggTarget` keeps the normal roll (one of the three),
-so anything that reads the egg (`eggRarity()`, `eggAccent()`) stays valid.
+While a choice is open, `eggTarget` keeps the normal roll, which is one of the
+three; a saved roll that is not an egg species is replaced before the three are
+re-rolled. Nothing reads it until the pick sets it, and it always holds a valid
+species, so `eggRarity()` and `eggAccent()` stay safe.
 Picking sets `eggTarget`, clears `ecpk` and saves once. If `stpk` and `ecpk`
 are both set (corrupt save), the starter screen wins and the egg choice is
 cleared; `ecpk` on a pet that has already hatched is cleared too. `load()`
@@ -126,7 +129,7 @@ range-checks all of this, as the hard rules require.
 ```
             Choose an egg!                 title, size 2-3, y ≈ 68
      .-.          .-.          .-.
-    ( o )        ( o )        ( o )        three eggs, scale 4 (68 × 88 px)
+    ( o )        ( o )        ( o )        three eggs, scale 4 (68 × 92 px)
      '-'          '-'          '-'         centres x = 93 / 233 / 373, y ≈ 214
                  ~~~~~                     the selected egg lifts over a glow
              Rare egg!                     rarity of the selected egg, y ≈ 300

@@ -810,9 +810,15 @@ void Pet::load() {
   // (if a damaged save has both, the starter screen wins). Candidates that are
   // not three distinct egg species are rolled again around the saved roll (eggTarget,
   // already range-checked above), so a damaged candidate save keeps a Rare/Legendary.
+  // A saved roll that is not an egg species is replaced first, so eggTarget stays
+  // one of the three while the choice is open.
   if (eggPick) {
-    if (starterPick || !isEgg()) eggPick = false;
-    else if (!validEggChoices(eggCand)) rollEggChoices(eggTarget, eggCand);  // conserva la tirada guardada
+    if (starterPick || !isEgg()) {
+      eggPick = false;
+    } else if (!validEggChoices(eggCand)) {
+      if (DEX_TBL[eggTarget].rarity == R_EVO) eggTarget = pickEggSpecies();
+      rollEggChoices(eggTarget, eggCand);  // conserva la tirada guardada
+    }
   }
 
   // siembra: la mascota actual cuenta como criada (guardados antiguos)
