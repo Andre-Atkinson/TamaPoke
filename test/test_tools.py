@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -294,6 +295,127 @@ class TestBuffersDeTexto(unittest.TestCase):
                         peor, tam,
                         f'TamaPoke.ino:{n}: {var}[{tam}] con {sid} en {lang} necesita {peor} bytes')
         self.assertGreater(revisadas, 10, 'el patron de snprintf ya no encuentra las llamadas')
+
+
+class TestBoardScripts(unittest.TestCase):
+    """flash_175c.sh / pet_save.sh / board_env.sh against a fake esptool that
+    only records its arguments, so nothing here touches a real board."""
+
+    NVS_BYTES = 0x5000
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.log = os.path.join(self.tmp, 'esptool.log')
+        self.fake = os.path.join(self.tmp, 'esptool')
+        # Records each call; for read-flash it writes OFFSET-sized zeros to the
+        # destination, like the real tool would.
+        with open(self.fake, 'w') as fh:
+            fh.write('#!/usr/bin/env bash\n'
+                     f'echo "$*" >> "{self.log}"\n'
+                     'args=("$@")\n'
+                     'for i in "${!args[@]}"; do\n'
+                     '  if [[ "${args[$i]}" == read-flash ]]; then\n'
+                     '    size=$(( ${args[$((i+2))]} )); dest="${args[$((i+3))]}"\n'
+                     '    head -c "$size" /dev/zero > "$dest"\n'
+                     '  fi\n'
+                     'done\n')
+        os.chmod(self.fake, 0o755)
+        self.port = os.path.join(self.tmp, 'fake-port')  # not a tty: board.py fails, as intended
+        open(self.port, 'w').close()
+        self.env = dict(os.environ, ESPTOOL=self.fake,
+                        TAMAPOKE_BACKUP_DIR=os.path.join(self.tmp, 'backups'))
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_tool(self, *args):
+        return subprocess.run([os.path.join(TOOLS, args[0]), *args[1:]], env=self.env,
+                              capture_output=True, text=True, timeout=60)
+
+    def calls(self):
+        if not os.path.exists(self.log):
+            return []
+        with open(self.log) as fh:
+            return [line.split() for line in fh if line.strip()]
+
+    def test_partition_offsets_come_from_the_175c_table(self):
+        out = subprocess.run(
+            ['bash', '-c', f'source "{TOOLS}/board_env.sh"; part_off nvs; part_size nvs; '
+                           'part_off app0; part_off storage'],
+            capture_output=True, text=True, check=True).stdout.split()
+        self.assertEqual(out, ['0x9000', '0x5000', '0x10000', '0x310000'])
+
+    def test_app_only_writes_just_app0(self):
+        outdir = os.path.join(self.tmp, 'out')
+        os.makedirs(outdir)
+        open(os.path.join(outdir, 'TamaPoke.ino.bin'), 'wb').close()
+        r = self.run_tool('flash_175c.sh', '--port', self.port, '--out', outdir, '--app-only')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (call,) = self.calls()
+        addrs = [a for a in call if a.startswith('0x')]
+        self.assertEqual(addrs, ['0x10000'], f'app-only must not write anything else: {call}')
+
+    def test_restore_refuses_a_file_that_is_not_a_save(self):
+        bad = os.path.join(self.tmp, 'not-a-save.bin')
+        with open(bad, 'wb') as fh:
+            fh.write(b'\0' * (self.NVS_BYTES - 1))
+        r = self.run_tool('pet_save.sh', 'restore', '--port', self.port, '--file', bad)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('Refusing', r.stderr)
+        self.assertFalse(any('write-flash' in c for c in self.calls()), 'wrote a bad save')
+
+    def test_restore_refuses_a_save_that_fails_its_checksum(self):
+        save = os.path.join(self.tmp, 'pet.nvs.bin')
+        with open(save, 'wb') as fh:
+            fh.write(b'\0' * self.NVS_BYTES)
+        with open(save + '.sha256', 'w') as fh:
+            fh.write('0' * 64 + '  pet.nvs.bin\n')
+        r = self.run_tool('pet_save.sh', 'restore', '--port', self.port, '--file', save)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(any('write-flash' in c for c in self.calls()), 'wrote a corrupted save')
+
+    def test_restore_backs_up_the_current_pet_before_writing_nvs_only(self):
+        save = os.path.join(self.tmp, 'pet.nvs.bin')
+        with open(save, 'wb') as fh:
+            fh.write(b'\0' * self.NVS_BYTES)
+        r = self.run_tool('pet_save.sh', 'restore', '--port', self.port, '--file', save)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        verbs = [next(a for a in c if a in ('read-flash', 'write-flash')) for c in self.calls()]
+        self.assertEqual(verbs, ['read-flash', 'write-flash'], 'must back up before writing')
+        write = self.calls()[1]
+        self.assertEqual([a for a in write if a.startswith('0x')], ['0x9000'])
+        backups = os.listdir(os.path.join(self.tmp, 'backups'))
+        self.assertTrue(any(b.startswith('pre-restore-') and b.endswith('.nvs.bin') for b in backups))
+
+    def test_backup_reads_the_nvs_partition_with_the_rom_loader(self):
+        dest = os.path.join(self.tmp, 'b', 'pet.nvs.bin')
+        r = self.run_tool('pet_save.sh', 'backup', '--port', self.port, '--file', dest)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (call,) = self.calls()
+        self.assertIn('--no-stub', call)
+        self.assertEqual(call[call.index('read-flash') + 1:call.index('read-flash') + 3],
+                         ['0x9000', '0x5000'])
+        self.assertEqual(os.path.getsize(dest), self.NVS_BYTES)
+        self.assertTrue(os.path.exists(dest + '.sha256'))
+
+
+class TestBoardPy(unittest.TestCase):
+    def setUp(self):
+        import board
+        self.board = board
+
+    def test_wallclock_epoch_is_local_time_written_as_utc(self):
+        # The firmware reads the epoch back with gmtime_r and shows it as the
+        # local time, so the fields must match localtime, not the true epoch.
+        now = 1_794_562_514
+        ep = self.board.local_wallclock_epoch(now)
+        self.assertEqual(time.gmtime(ep)[:6], time.localtime(now)[:6])
+
+    def test_parse_rtc(self):
+        self.assertEqual(self.board.parse_rtc(['x', 'rtc=1794562514']), 1794562514)
+        self.assertIsNone(self.board.parse_rtc(['spec=4 rtc=5']))
+        self.assertIsNone(self.board.parse_rtc(['rtc=abc']))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -25,3 +25,6 @@ tools/build/
 # local firmware export directory and Python environment
 /out/
 .venv/
+
+# pet save backups (tools/pet_save.sh): personal, never committed
+/backups/

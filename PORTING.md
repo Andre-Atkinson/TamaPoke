@@ -89,11 +89,44 @@ app and LittleFS offsets from the same file.
 | `coredump` | `0x1FF0000` | 64 KB |
 
 **App-only update** (keeps the pet, settings and sprites): write only
-`TamaPoke.ino.bin` at `0x10000`, e.g.
-`esptool --chip esp32s3 --port <port> --baud 921600 write-flash 0x10000 TamaPoke.ino.bin`.
-Don't use `--erase-flash`, and don't write `0x9000` (NVS) or `0x310000`
+`TamaPoke.ino.bin` at `0x10000`, which is what `tools/flash_175c.sh --app-only`
+does. Don't use `--erase-flash`, and don't write `0x9000` (NVS) or `0x310000`
 (LittleFS). `flash_175c.sh --fw-only` also rewrites the bootloader and
 partition table, which is harmless when they're unchanged but isn't app-only.
+A full flash (no flag, or `--fw-only`) also writes the core's `boot_app0.bin`
+at `0xe000`, so a board that came with another firmware boots `app0`.
+
+## Looking after the device (1.75C)
+
+All of these talk to the board over its USB cable only. `--port` defaults to
+the one `/dev/cu.usbmodem*` (macOS) or `/dev/ttyACM*` (Linux) present.
+
+```bash
+tools/update_175c.sh --out ./out          # back up the pet, build, flash the app only, set the clock
+tools/pet_save.sh backup                  # pet save -> backups/pet-<date>-<time>.nvs.bin
+tools/pet_save.sh restore --file backups/pet-....nvs.bin
+python3 tools/board.py clock              # set the board clock to this computer's local time
+python3 tools/board.py status             # HEALTH + STATS
+python3 tools/board.py save               # write pending pet changes to flash now
+```
+
+- **The pet's save** is the whole NVS partition (20 KB at `0x9000`): the pet,
+  the Pokédex, streak, medals and settings. `backup` first sends `SAVE` so the
+  firmware writes anything still pending, then reads the partition with the
+  ROM loader (`--no-stub`). The esptool stub drops off USB-Serial/JTAG while
+  sending some flash blocks back, and a 20 KB read is quick either way.
+  Each backup gets a `.sha256` next to it.
+- **`restore`** refuses a file that isn't exactly 20 KB or doesn't match its
+  `.sha256`, and saves the pet that is on the board first
+  (`backups/pre-restore-...`), so a restore can itself be undone.
+- **`backups/`** is git-ignored: pet saves are personal. Set
+  `TAMAPOKE_BACKUP_DIR` to keep them somewhere else.
+- **The clock**: the 1.75C has no RTC chip, so its software clock is lost
+  when the PMU cuts power (a 4 s PWR hold or a flat battery). The firmware
+  stores local wall-clock time as if it were UTC (the clock screen does the
+  same), so `board.py clock` sends this computer's local time in that form.
+- `board.py` uses only the Python standard library (no venv needed) and
+  needs the serial port to itself: close any serial monitor first.
 
 ## Sprite storage trade-off
 

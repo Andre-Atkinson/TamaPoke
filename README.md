@@ -381,7 +381,8 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
 runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio test) ·
 `REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery) · `CAREDAY` ·
 `TIME <epoch>` / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
-`LS` / `PUT` (SD files).
+`SAVE` (write pending pet changes now) · `LS` / `PUT` (SD files). `tools/board.py`
+sends these from a script (clock sync, status); see `PORTING.md`.
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
 
