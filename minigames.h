@@ -49,6 +49,8 @@ struct MiniGames {
       default: return keepy.done();
     }
   }
+  // Berry Song repeated all 12 notes (the sketch plays a fanfare instead of the usual end sound)
+  bool won() const { return flow.game == GAME_SONG && song.won; }
   bool over() const { return flow.phase == GP_OVER; }
   bool playing() const { return flow.phase == GP_PLAY; }
 
@@ -70,12 +72,38 @@ struct MiniGames {
 
   // One touch report. Returns true when the player held the exit chip: leave
   // now, without a reward. Touches before play starts (title card) and after
-  // it ends do nothing.
-  bool touch(bool pressed, int x, int y, uint32_t now) {
-    GameTouch k = input.update(pressed, x, y, now);
+  // it ends do nothing. `dark`: the screen was off or dimmed when the report
+  // came in; a touch that starts then is swallowed until it lifts (it only
+  // wakes the screen) and never reaches the game.
+  //
+  // `counted` says whether this report was activity (it restarts the 15 s idle
+  // end, and the sketch refreshes the screen timers): a press, or a slide of
+  // more than MOVE_PX from the last counted point. A finger resting on the panel
+  // reports GT_MOVE every 20 ms and must not count, or Berry Song would never end.
+  static constexpr int MOVE_PX = 8;
+  bool counted = false;
+  int lastX = 0, lastY = 0;
+
+  bool touch(bool pressed, int x, int y, uint32_t now, bool dark = false) {
+    counted = false;
+    bool start = pressed && !input.down && !input.blocked && !dark;
+    GameTouch k = input.update(pressed, x, y, now, dark);
     if (k == GT_EXIT) return true;
-    if (flow.phase != GP_PLAY || (k != GT_DOWN && k != GT_MOVE)) return false;
-    flow.touched();
+    if (flow.phase != GP_PLAY) return false;
+    if (k == GT_NONE) {
+      // A touch that starts on the exit chip can still hit a keepy-uppy ball
+      // under it (the ball goes as high as y 28). Only the start: the hold goes on.
+      if (start && input.onExit && flow.game == GAME_KEEPY && keepy.touchDown(x, y)) count(x, y);
+      return false;
+    }
+    if (k == GT_DOWN) {
+      count(x, y);
+    } else if (k == GT_MOVE) {
+      int dx = x - lastX, dy = y - lastY;
+      if (dx * dx + dy * dy > MOVE_PX * MOVE_PX) count(x, y);
+    } else {
+      return false;
+    }
     switch (flow.game) {
       case GAME_CATCH: catcher.touch(x); break;
       case GAME_PEEK: if (k == GT_DOWN) peek.touchDown(x, y); break;
@@ -100,6 +128,12 @@ struct MiniGames {
       case GAME_SONG: return song.takeEvents();
       default: return keepy.takeEvents();
     }
+  }
+  void count(int x, int y) {
+    counted = true;
+    lastX = x;
+    lastY = y;
+    flow.touched();
   }
   uint8_t takeNote() { return flow.game == GAME_SONG ? song.takeNote() : SongGame::NO_PAD; }
 };

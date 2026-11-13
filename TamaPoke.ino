@@ -657,7 +657,7 @@ void bedApply() {
   bedPending = BED_NONE;
   if (ev == BED_SLEEP) {
     // Un juego o el saco abiertos aqui solo pueden estar a oscuras (bedBusy): se abandonan
-    // sin premio, como al tocar su cabecera. playResult() y trainStrength() se pagan al
+    // sin premio, como al tocar su cabecera. playGame() y trainStrength() se pagan al
     // terminar la partida (que ya no llegara) y no miran pet.sleeping.
     gameOpen = false;
     if (sackOpen) {
@@ -1924,13 +1924,24 @@ void startGame() {
 // juego sin premio, como antes tocar la cabecera; el resto del toque se traga para
 // que al soltar no se resuelva como un toque en la pantalla principal.
 void gameTouch(bool pressed, int16_t x, int16_t y) {
-  wakeUI();
-  if (pressed && !wasPressed) {
+  bool start = pressed && !wasPressed;
+  // Un toque que empieza con la pantalla apagada o atenuada solo la despierta
+  // (como en la pantalla principal): el juego no lo ve, ni siquiera al soltar.
+  bool dark = start && (screenOff || dimStage > 0);
+  if (dark) screenOff = false;
+  if (start) {
     holdFired = true;  // nada de este toque llega al gesto normal si el juego se cierra
     swallowGesture = true;
   }
-  if (gameOverUntil) return;  // pantalla de resultado: solo esperar
-  if (games.touch(pressed, x, y, millis())) {
+  if (gameOverUntil) {  // pantalla de resultado: solo esperar
+    if (start || (!pressed && wasPressed)) wakeUI();
+    return;
+  }
+  bool exitHeld = games.touch(pressed, x, y, millis(), dark);
+  // El dedo quieto informa cada 20 ms: solo cuenta (y despierta) al apoyar, al
+  // soltar o al moverse de verdad (games.counted); si no, Berry Song no acabaria.
+  if (start || (!pressed && wasPressed) || games.counted) wakeUI();
+  if (exitHeld) {
     gameOpen = false;
     holdFired = true;
     swallowGesture = true;
@@ -1945,7 +1956,8 @@ void gameSounds() {
   if (note < 4) sfxPlay(SFX_NOTE0 + note);
   uint8_t e = games.takeEvents();
   if (e & GEV_BAD) sfxPlay(SFX_DENY);
-  if (e & GEV_HEART) sfxPlay(SFX_HEART);
+  if (e & GEV_WIN) sfxPlay(SFX_EVOLVE);  // las 12 notas: la fanfarria (finishGame no suena otra)
+  else if (e & GEV_HEART) sfxPlay(SFX_HEART);
   else if ((e & GEV_GOOD) && games.game() != GAME_SONG) sfxPlay(games.game() == GAME_CATCH ? SFX_EAT : SFX_PLAY);
 }
 
@@ -1955,7 +1967,7 @@ void finishGame() {
   gameShownScore = games.score();
   gameNewHi = gameShownScore > pet.gameBest(g);
   pet.playGame(g, gameShownScore);
-  sfxPlay(gameNewHi && gameShownScore > 0 ? SFX_MEDAL : SFX_LEVEL);
+  if (!games.won()) sfxPlay(gameNewHi && gameShownScore > 0 ? SFX_MEDAL : SFX_LEVEL);
   gameOverUntil = millis() + 4000;
 }
 
@@ -2358,6 +2370,7 @@ void renderGame() {
   uint16_t ink = gameNight() ? UI_INK_NIGHT : UI_INK;
   if (!gameOverUntil) {
     games.frame(millis());
+    if (games.busy()) wakeUI();  // la melodia suena: el tiempo no es inactividad ni apaga la pantalla
     gameSounds();
     if (games.over()) finishGame();
   }
@@ -2371,6 +2384,7 @@ void renderGame() {
     flushUI();
     return;
   }
+  drawGameExit();  // antes del juego: la bola de keepy-uppy sube hasta y=28 y va por encima
   if (games.flow.phase == GP_TITLE) {
     drawGameTitle(ink);
   } else {
@@ -2381,7 +2395,6 @@ void renderGame() {
       default: drawKeepy(ink); break;
     }
   }
-  drawGameExit();
   flushUI();
 }
 

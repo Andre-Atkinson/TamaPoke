@@ -44,10 +44,11 @@ struct KeepyGame {
   uint16_t result() const { return score; }
   uint8_t takeEvents() { uint8_t e = events; events = 0; return e; }
 
-  void touchDown(int x, int y) {
-    if (done()) return;
+  // true when the touch hit the ball
+  bool touchDown(int x, int y) {
+    if (done()) return false;
     float dx = ballX - x, dy = ballY - y;
-    if (dx * dx + dy * dy >= HIT_R * HIT_R) return;
+    if (dx * dx + dy * dy >= HIT_R * HIT_R) return false;
     if (score < 255) score++;
     events |= GEV_GOOD;
     // a soft hit: a moderate lift that grows slowly with the score
@@ -60,6 +61,7 @@ struct KeepyGame {
     hitY = ballY;
     hitT = t;
     hasHit = true;
+    return true;
   }
 
   void step(uint32_t dtMs) {

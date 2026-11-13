@@ -120,9 +120,28 @@ TEST(minigames, si_el_tactil_deja_de_informar_el_boton_no_completa) {
   r.update(true, EX, EY, 0);
   r.update(true, EX, EY, 50);
   CHECK(r.heldMs(60) > 0);
-  CHECK_EQ(r.heldMs(200), (uint32_t)0);  // >100 ms sin informes: el progreso no cuenta
+  CHECK(r.heldMs(50 + GameClock::MAX_STEP_MS) > 0);  // hasta 250 ms entre informes aun cuenta
+  CHECK_EQ(r.heldMs(50 + GameClock::MAX_STEP_MS + 1), (uint32_t)0);  // mas: el progreso no cuenta
   CHECK_EQ((int)r.update(true, EX, EY, 1200), (int)GT_NONE);  // hueco de 1150 ms: desarmado
   CHECK_EQ((int)r.update(true, EX, EY, 2500), (int)GT_NONE);
+  // con informes cada 260 ms (por encima del limite) nunca completa
+  GameTouchRouter slow;
+  slow.update(true, EX, EY, 0);
+  for (uint32_t t = 260; t <= 6000; t += 260) CHECK_MSG(slow.update(true, EX, EY, t) == GT_NONE, "sale con informes a 260 ms");
+}
+
+TEST(minigames, con_informes_lentos_pero_dentro_del_limite_el_boton_si_completa) {
+  // un fotograma de juego puede tardar 70-100+ ms y el tactil se lee entre fotogramas
+  GameTouchRouter r;
+  CHECK_EQ((int)r.update(true, EX, EY, 0), (int)GT_NONE);
+  GameTouch last = GT_NONE;
+  uint32_t t = 0;
+  while (t < 1100 && last != GT_EXIT) {
+    t += GameClock::MAX_STEP_MS - 10;  // 240 ms entre informes
+    last = r.update(true, EX, EY, t);
+  }
+  CHECK_EQ((int)last, (int)GT_EXIT);
+  CHECK(t >= GameTouchRouter::EXIT_HOLD_MS);
 }
 
 TEST(minigames, los_toques_fuera_del_boton_son_del_juego) {
@@ -143,6 +162,19 @@ TEST(minigames, el_boton_de_salir_cabe_en_la_pantalla_redonda) {
   const int x1 = x0 + GameTouchRouter::EXIT_W, y1 = y0 + GameTouchRouter::EXIT_H;
   for (int x : { x0, x1 })
     for (int y : { y0, y1 }) CHECK_MSG((x - 233) * (x - 233) + (y - 233) * (y - 233) < 233 * 233, "esquina fuera");
+}
+
+TEST(minigames, un_toque_que_empieza_con_la_pantalla_apagada_solo_despierta) {
+  GameTouchRouter r;
+  CHECK_EQ((int)r.update(true, 233, 300, 0, true), (int)GT_NONE);   // empieza a oscuras: tragado
+  CHECK_EQ((int)r.update(true, 240, 300, 20, false), (int)GT_NONE);  // ya despierta, pero es el mismo dedo
+  CHECK_EQ((int)r.update(true, 250, 300, 40, false), (int)GT_NONE);
+  CHECK_EQ((int)r.update(false, 250, 300, 60, false), (int)GT_NONE);  // ni un UP
+  CHECK_EQ((int)r.update(true, 233, 300, 80, false), (int)GT_DOWN);   // el siguiente toque ya es del juego
+  // un dedo ya apoyado no se traga porque la pantalla se apague a mitad
+  GameTouchRouter d;
+  CHECK_EQ((int)d.update(true, 233, 300, 0, false), (int)GT_DOWN);
+  CHECK_EQ((int)d.update(true, 235, 300, 20, true), (int)GT_MOVE);
 }
 
 // ---------------------------------------------------------------- reloj y flujo
@@ -241,7 +273,10 @@ TEST(minigames, la_partida_acaba_cuando_acaba_el_juego) {
   playUntil(m, now);
   for (int i = 0; i < 400 && !m.over(); i++) {
     m.frame(now += 85);
-    if (i % 50 == 0) m.touch(true, 233, 350, now);  // tocar de vez en cuando: no es inactividad
+    if (i % 50 == 0) {  // tocar de vez en cuando (soltando y apoyando): no es inactividad
+      m.touch(false, 233, 350, now);
+      m.touch(true, 233, 350, now);
+    }
   }
   CHECK(m.over());
   CHECK(m.catcher.done());
@@ -267,6 +302,211 @@ TEST(minigames, despues_de_acabar_los_toques_no_cambian_nada) {
   uint16_t s = m.score();
   m.touch(true, (int)m.keepy.ballX, (int)m.keepy.ballY, now);
   CHECK_EQ(m.score(), s);
+}
+
+// avanza fotogramas de 85 ms hasta el turno del jugador en Berry Song
+static void songToTurn(MiniGames &m, uint32_t &now) {
+  playUntil(m, now);
+  for (int i = 0; i < 400 && !m.song.playersTurn(); i++) m.frame(now += 85);
+}
+
+TEST(minigames, con_el_dedo_quieto_Berry_Song_acaba_a_los_15_s_de_empezar_su_turno) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_SONG, now, 0, false);
+  songToTurn(m, now);
+  CHECK(m.song.playersTurn());
+  uint32_t turn0 = now;
+  m.touch(true, 233, 233, now);  // un dedo fuera de los botones, quieto: informa cada 85 ms
+  CHECK(m.counted);              // apoyarlo si cuenta
+  while (!m.over() && now - turn0 < 40000) {
+    m.frame(now += 85);
+    m.touch(true, 233, 233, now);
+    CHECK_MSG(!m.counted, "un dedo quieto cuenta como actividad");
+    if (m.counted) break;
+  }
+  CHECK(m.over());
+  CHECK(!m.song.done());
+  CHECK_RANGE(now - turn0, (uint32_t)14000, (uint32_t)16000);
+}
+
+TEST(minigames, un_dedo_que_se_mueve_mas_de_8_px_cuenta_y_uno_que_tiembla_no) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_CATCH, now, 0, false);
+  playUntil(m, now);
+  m.touch(true, 200, 300, now);
+  CHECK(m.counted);
+  m.touch(true, 208, 300, now += 20);  // 8 px: aun es temblor
+  CHECK(!m.counted);
+  m.touch(true, 209, 300, now += 20);  // 9 px
+  CHECK(m.counted);
+  m.touch(true, 213, 300, now += 20);  // 4 px desde el ultimo punto contado
+  CHECK(!m.counted);
+  m.touch(true, 217, 303, now += 20);  // 8*8 + 3*3 > 64
+  CHECK(m.counted);
+  m.touch(false, 217, 303, now += 20);
+  CHECK(!m.counted);
+}
+
+TEST(minigames, deslizar_en_Berry_Catch_sigue_contando_como_actividad) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_CATCH, now, 0, false);
+  playUntil(m, now);
+  m.touch(true, 150, 350, now);
+  uint32_t t0 = now;
+  int x = 150, dir = 20;
+  while (now - t0 < 22000) {  // 22 s deslizando sin parar: pasa de los 15 s de inactividad
+    m.frame(now += 85);
+    x += dir;
+    if (x > 300 || x < 150) dir = -dir;
+    m.touch(true, x, 350, now);
+    CHECK_MSG(!m.over(), "acaba por inactividad deslizando: t=" + std::to_string(now - t0));
+    if (m.over()) break;
+  }
+  CHECK(!m.over());
+}
+
+TEST(minigames, en_Berry_Catch_el_deslizamiento_mueve_el_objetivo) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_CATCH, now, 0, false);
+  playUntil(m, now);
+  m.touch(true, 150, 350, now);
+  CHECK_EQ(m.catcher.targetX, (int16_t)150);
+  m.touch(true, 320, 350, now += 20);  // MOVE
+  CHECK_EQ(m.catcher.targetX, (int16_t)320);
+}
+
+TEST(minigames, a_los_14_s_de_turno_sin_tocar_Berry_Song_no_ha_acabado_aun_por_inactividad) {
+  // el tiempo que suena la melodia no cuenta: la cuenta empieza al acabar de sonar
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_SONG, now, 0, false);
+  songToTurn(m, now);
+  CHECK(m.song.playersTurn());
+  uint32_t turn0 = now;
+  CHECK(turn0 > GameFlow::TITLE_MS + 2000);  // la melodia de 2 notas dura mas de 2 s
+  while (now - turn0 < 14000) m.frame(now += 85);
+  CHECK_MSG(!m.over(), "la melodia se contaba como inactividad");
+  while (!m.over() && now - turn0 < 20000) m.frame(now += 85);
+  CHECK(m.over());
+}
+
+TEST(minigames, solo_Berry_Song_se_queda_ocupada_mientras_suena) {
+  MiniGames m;
+  m.begin(GAME_SONG, 0, 0, false);
+  CHECK(m.busy());  // LEAD
+  m.begin(GAME_KEEPY, 0, 0, false);
+  CHECK(!m.busy());
+}
+
+TEST(minigames, puntuar_keepy_solo_cuenta_al_apoyar_no_al_mantener) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_KEEPY, now, 0, false);
+  playUntil(m, now);
+  int bx = (int)m.keepy.ballX, by = (int)m.keepy.ballY;
+  m.touch(true, bx, by, now);
+  for (int i = 0; i < 10; i++) m.touch(true, bx, by, now += 20);  // 10 MOVE sobre la bola
+  CHECK_EQ(m.keepy.score, (uint8_t)1);
+  CHECK_EQ(m.score(), (uint16_t)1);
+}
+
+TEST(minigames, empezar_un_toque_a_oscuras_no_llega_al_juego_ni_siquiera_con_la_bola_congelada) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_KEEPY, now, 0, false);
+  playUntil(m, now);
+  int bx = (int)m.keepy.ballX, by = (int)m.keepy.ballY;
+  uint32_t touched0 = m.flow.lastTouch;
+  for (int i = 0; i < 300; i++) {  // 300 toques a ciegas, sin fotogramas (pantalla apagada)
+    CHECK(!m.touch(true, bx, by, now += 20, true));
+    CHECK(!m.counted);
+    CHECK(!m.touch(false, bx, by, now += 20, false));
+  }
+  CHECK_EQ(m.keepy.score, (uint8_t)0);
+  CHECK_EQ(m.flow.lastTouch, touched0);
+  // el mismo dedo, ya despierta, sigue tragado hasta soltar
+  m.touch(true, bx, by, now += 20, true);
+  m.touch(true, bx, by, now += 20, false);
+  m.touch(true, bx, by, now += 20, false);
+  CHECK_EQ(m.keepy.score, (uint8_t)0);
+  m.touch(false, bx, by, now += 20, false);
+  m.touch(true, bx, by, now += 20, false);
+  CHECK_EQ(m.keepy.score, (uint8_t)1);
+}
+
+TEST(minigames, la_bola_de_keepy_bajo_el_boton_de_salir_se_puede_golpear_y_el_boton_sigue_saliendo) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_KEEPY, now, 0, false);
+  playUntil(m, now);
+  m.keepy.ballX = 233;
+  m.keepy.ballY = 40;  // bajo el boton (y 20..60)
+  CHECK(GameTouchRouter::inExit(233, 40));
+  CHECK(!m.touch(true, 233, 40, now += 20));
+  CHECK_EQ(m.keepy.score, (uint8_t)1);  // el toque que empieza en el boton golpea
+  CHECK(m.counted);
+  CHECK(m.keepy.takeEvents() & GEV_GOOD);
+  for (int i = 0; i < 10; i++) m.touch(true, 233, 40, now += 20);  // mantener no vuelve a golpear
+  CHECK_EQ(m.keepy.score, (uint8_t)1);
+  // y mantenerlo 1 s sigue saliendo
+  bool out = false;
+  for (int i = 0; i < 60 && !out; i++) out = m.touch(true, 233, 40, now += 20);
+  CHECK(out);
+  m.touch(false, 233, 40, now += 20);
+  // lejos de la bola: es solo el boton, no puntua ni cuenta como actividad
+  m.keepy.ballX = 233;
+  m.keepy.ballY = 200;
+  uint8_t before = m.keepy.score;
+  uint32_t lt = m.flow.lastTouch;
+  CHECK(!m.touch(true, 233, 40, now += 20));
+  CHECK_EQ(m.keepy.score, before);
+  CHECK(!m.counted);
+  CHECK_EQ(m.flow.lastTouch, lt);
+  // en los otros juegos el boton sigue siendo solo el boton
+  MiniGames p;
+  now = 0;
+  p.begin(GAME_PEEK, now, 0, false);
+  playUntil(p, now);
+  p.touch(true, 233, 40, now += 20);
+  CHECK(!p.counted);
+}
+
+TEST(minigames, play_con_otra_entropia_reparte_otra_primera_ronda) {
+  bool game[GAME_COUNT] = {};
+  uint32_t states[8];
+  for (uint32_t e = 0; e < 8; e++) {
+    MiniGames m;
+    m.start(0, 0x1000u + e, 0, false);
+    game[m.game()] = true;
+    states[e] = m.rng.s;
+  }
+  int kinds = 0;
+  for (bool g : game) kinds += g;
+  CHECK_MSG(kinds >= 2, "la entropia no cambia el primer juego");
+  for (int a = 0; a < 8; a++)
+    for (int b = a + 1; b < 8; b++) CHECK_MSG(states[a] != states[b], "dos entropias dan el mismo dado");
+  // misma entropia = misma partida
+  MiniGames x, y;
+  x.start(0, 77, 0, false);
+  y.start(0, 77, 0, false);
+  CHECK_EQ(x.game(), y.game());
+  CHECK_EQ(x.rng.s, y.rng.s);
+}
+
+TEST(minigames, ganar_Berry_Song_se_avisa_para_la_fanfarria) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_SONG, now, 0, false);
+  CHECK(!m.won());
+  m.song.won = true;
+  CHECK(m.won());
+  m.begin(GAME_KEEPY, now, 0, false);
+  m.song.won = true;
+  CHECK(!m.won());  // solo cuenta en Berry Song
 }
 
 // ---------------------------------------------------------------- keepy-uppy
@@ -587,6 +827,19 @@ TEST(peek, tocar_otro_arbusto_no_cuesta_nada) {
   CHECK_EQ(p.score, (uint8_t)1);
 }
 
+TEST(peek, el_segundo_asomo_tambien_se_puede_golpear) {
+  PeekGame p = peekUp(2);
+  uint8_t first = p.bush;
+  p.touchDown(PeekGame::BX[first], PeekGame::BY[first] - 60);
+  CHECK_EQ(p.score, (uint8_t)1);
+  CHECK(p.hit);
+  while (p.up()) p.step(10);
+  while (!p.up()) p.step(10);  // otro asomo
+  CHECK_EQ(p.pops, (uint8_t)1);
+  p.touchDown(PeekGame::BX[p.bush], PeekGame::BY[p.bush] - 60);
+  CHECK_EQ(p.score, (uint8_t)2);
+}
+
 TEST(peek, la_zona_de_toque_es_el_arbusto_y_lo_que_asoma) {
   for (uint8_t b = 0; b < PeekGame::BUSHES; b++) {
     int x = PeekGame::BX[b], y = PeekGame::BY[b];
@@ -681,6 +934,33 @@ TEST(song, repetir_las_12_notas_gana) {
   CHECK(s.won);
   CHECK(s.takeEvents() & GEV_WIN);
   CHECK_EQ(s.result(), (uint16_t)12);
+}
+
+TEST(song, esta_ocupada_en_todas_las_fases_menos_el_turno_y_el_final) {
+  SongGame s;
+  s.reset(6);
+  CHECK_EQ((int)s.phase, (int)SongGame::LEAD);
+  CHECK(s.busy());
+  s.step(SongGame::LEAD_MS + 10);
+  CHECK_EQ((int)s.phase, (int)SongGame::SHOW);
+  CHECK(s.busy());
+  listen(s);
+  CHECK_EQ((int)s.phase, (int)SongGame::TURN);
+  CHECK(!s.busy());
+  press(s, s.seq[0]);
+  press(s, s.seq[1]);  // acierta la ronda
+  CHECK_EQ((int)s.phase, (int)SongGame::PAUSE);
+  CHECK(s.busy());
+  listen(s);
+  press(s, (uint8_t)((s.seq[0] + 1) % SongGame::PADS));  // falla
+  CHECK_EQ((int)s.phase, (int)SongGame::WRONG);
+  CHECK(s.busy());
+  for (int miss = 0; miss < 2; miss++) {
+    listen(s);
+    press(s, (uint8_t)((s.seq[0] + 1) % SongGame::PADS));
+  }
+  CHECK(s.done());
+  CHECK(!s.busy());
 }
 
 TEST(song, las_notas_se_aceleran_con_melodias_largas) {

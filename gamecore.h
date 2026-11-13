@@ -11,14 +11,14 @@ enum GameId : uint8_t { GAME_KEEPY = 0, GAME_CATCH, GAME_PEEK, GAME_SONG, GAME_C
 // ---------------------------------------------------------------- reward
 
 // A "good game" in each one. At par every game pays the same reward: full JOY,
-// +3 SPEED and a heart (Pet::playResult with 15 points).
+// +3 SPEED and a heart (Pet::playGame -> Pet::playReward with 15 points).
 constexpr uint8_t GAME_PAR[GAME_COUNT] = { 15, 20, 14, 6 };
 // Highest record each game can really produce. A saved record above it can only
 // be a damaged or foreign save, so it loads as 0 (keepy-uppy scores are 8-bit).
 constexpr uint16_t GAME_REC_MAX[GAME_COUNT] = { 255, 200, 20, 12 };
 constexpr uint8_t GAME_SCORE_CAP = 30;  // normalised score ceiling
 
-// Raw score -> the 0..30 score Pet::playResult pays out. Keepy-uppy (par 15)
+// Raw score -> the 0..30 score Pet::playReward pays out. Keepy-uppy (par 15)
 // keeps its raw score up to the cap.
 inline uint8_t gameNormScore(uint8_t game, uint16_t raw) {
   if (game >= GAME_COUNT) return 0;
@@ -83,8 +83,11 @@ using GameBag = ShuffleBag<GAME_COUNT>;
 // Leaving a game: a "Hold: exit" chip at the top centre, held for 1 s, like the
 // strength bag's exit on the 1.75C. The hold has to start on the chip; sliding
 // onto it never arms it, and the touch that exits is swallowed until the finger
-// lifts. A finger report only counts while reports keep coming (<= 100 ms apart),
-// so a stalled touch stream can't complete a hold.
+// lifts. A finger report only counts while reports keep coming (<= 250 ms apart,
+// GameClock::MAX_STEP_MS: a game frame can take 100 ms or more and reports are
+// only read between frames), so a stalled touch stream can't complete a hold.
+// A touch that starts while the screen is dark (screen off or dimmed) only wakes
+// it: it is swallowed until it lifts and never reaches the game.
 //
 // Every other touch goes to the game: DOWN when it starts, MOVE while it stays
 // down, UP when it lifts.
@@ -93,7 +96,7 @@ enum GameTouch : uint8_t { GT_NONE = 0, GT_DOWN, GT_MOVE, GT_UP, GT_EXIT };
 struct GameTouchRouter {
   static constexpr int EXIT_X = 153, EXIT_Y = 20, EXIT_W = 160, EXIT_H = 40;
   static constexpr uint32_t EXIT_HOLD_MS = 1000;
-  static constexpr uint32_t REPORT_GAP_MS = 100;
+  static constexpr uint32_t REPORT_GAP_MS = 250;  // == GameClock::MAX_STEP_MS (checked below)
 
   static constexpr bool inExit(int x, int y) {
     return x >= EXIT_X && x < EXIT_X + EXIT_W && y >= EXIT_Y && y < EXIT_Y + EXIT_H;
@@ -113,7 +116,13 @@ struct GameTouchRouter {
   }
 
   // One touch report from the panel.
-  GameTouch update(bool pressed, int x, int y, uint32_t now) {
+  // `dark`: the screen was off or dimmed when this report came in. A touch that
+  // starts then is swallowed until it lifts (it only wakes the screen).
+  GameTouch update(bool pressed, int x, int y, uint32_t now, bool dark = false) {
+    if (!blocked && pressed && !down && dark) {
+      blocked = true;
+      onExit = armed = false;
+    }
     if (blocked) {
       down = pressed;
       if (!pressed) blocked = false;
@@ -161,6 +170,8 @@ struct GameClock {
     return d;
   }
 };
+static_assert(GameTouchRouter::REPORT_GAP_MS == GameClock::MAX_STEP_MS,
+              "the exit hold must survive the slowest frame the game clock accepts");
 
 // Title card -> play -> over. A game keeps the screen on, so a game nobody
 // touches for 15 s ends (and pays for what was done). Time the game spends
