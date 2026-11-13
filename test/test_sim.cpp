@@ -4,6 +4,8 @@
 #include "../sim/png.h"
 #include "../sim/runner.h"
 #include "../sim/script.h"
+#include "../sim/simhw.h"
+#include "../rtcbat.h"
 #include "../i18n.h"
 #include <stdio.h>
 #include <sys/stat.h>
@@ -128,6 +130,50 @@ TEST(SimScript, los_deslizamientos_cortos_superan_el_umbral_del_firmware) {
   }
 }
 
+// La preparacion antes de arrancar: lang, clock, battery, usb y charging. main() aplica
+// todo lo que hay antes de simPreBootEnd() y deja el resto al bucle de pasos.
+TEST(SimScript, la_preparacion_llega_hasta_el_primer_paso_que_corre_el_firmware) {
+  SimScript s = simParseScript("battery 40\nlang ja\nusb on\nclock 2026-11-13 23:30\ncharging on\ntap 1 1\nlang_after\n");
+  CHECK(!s.error.empty());  // paso desconocido
+  s = simParseScript("battery 40\nlang ja\nusb on\nclock 2026-11-13 23:30\ncharging on\ntap 1 1\nbattery 10\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(simPreBootEnd(s), (size_t)5);
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_BATTERY);
+  CHECK_EQ((int)s.cmds[1].op, (int)OP_LANG);
+  CHECK_EQ((int)s.cmds[5].op, (int)OP_TAP);
+}
+
+TEST(SimScript, battery_antes_de_lang_no_deja_el_idioma_para_despues_del_arranque) {
+  SimScript s = simParseScript("battery 40\nlang ja\ntap 1 1\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(simPreBootEnd(s), (size_t)2);  // el lang (indice 1) esta antes del arranque
+  s = simParseScript("usb on\nclock 2026-11-13 23:30\nwait 1s\n");
+  CHECK_EQ(simPreBootEnd(s), (size_t)2);
+}
+
+TEST(SimScript, sin_pasos_de_preparacion_o_sin_pasos_que_corran) {
+  CHECK_EQ(simPreBootEnd(simParseScript("wait 1s\n")), (size_t)0);
+  CHECK_EQ(simPreBootEnd(simParseScript("")), (size_t)0);
+  CHECK_EQ(simPreBootEnd(simParseScript("lang es\nbattery 5\n")), (size_t)2);  // solo preparacion
+}
+
+TEST(SimScript, lang_y_clock_tras_un_paso_que_corre_se_rechazan_pero_battery_vale) {
+  CHECK(!simParseScript("wait 1s\nlang ja\n").error.empty());
+  CHECK(!simParseScript("wait 1s\nclock 2026-11-13 10:00\n").error.empty());
+  CHECK(simParseScript("wait 1s\nbattery 5\nusb on\ncharging on\n").error.empty());
+}
+
+// swipe X0 Y0 X1 Y1 DUR corre 8 tramos de DUR/8: por debajo de 8 sondeos del firmware
+// (20 ms) el punto de salida no se lee y el gesto es un toque
+TEST(SimScript, un_deslizamiento_de_menos_de_160ms_se_rechaza) {
+  CHECK_EQ(simParseScript("swipe 233 313 233 153 0\n", "s.txt").error,
+           std::string("s.txt:1: swipe duration must be at least 160ms"));
+  CHECK(!simParseScript("swipe 233 313 233 153 159ms\n").error.empty());
+  CHECK(simParseScript("swipe 233 313 233 153 160ms\n").error.empty());
+  CHECK(simParseScript("swipe 233 313 233 153\n").error.empty());  // por defecto 240 ms
+  CHECK(simParseScript("swipe left\n").error.empty());
+}
+
 TEST(SimScript, los_errores_dicen_fichero_y_linea) {
   CHECK_EQ(simParseScript("wait 1s\ntapp 1 2\n", "x.txt").error, std::string("x.txt:2: unknown step 'tapp'"));
   SimScript late = simParseScript("tap 1 2\nlang ja\n", "y.txt");
@@ -186,6 +232,23 @@ TEST(SimRunner, tramos_de_mas_de_25_dias_se_parten) {
   uint64_t passes = simRunFor(30ULL * 86400000ULL, [] { delay(3600000); });
   CHECK_EQ(passes, (uint64_t)(30 * 24));
   CHECK_EQ(millis(), (uint32_t)(30ULL * 86400000ULL));  // 2,592e9 cabe en 32 bits sin signo
+}
+
+// El reloj de software de la placa (time()) no da la vuelta; el millis() de 32 bits si,
+// a los 49,7 dias. rtcbat_sim.cpp tiene que contar con mockMillis64().
+TEST(SimRunner, el_reloj_de_software_no_da_la_vuelta_a_los_49_dias) {
+  mockSetMillis(0);
+  simClockSet(1794564000UL);  // 2026-11-13 10:00
+  simRunFor(52ULL * 86400000ULL, [] { delay(3600000); });  // 52 dias > 2^32 ms
+  CHECK_EQ(millis(), (uint32_t)((52ULL * 86400000ULL) & 0xFFFFFFFFULL));  // millis() si dio la vuelta
+  CHECK_EQ(rtcEpoch(), (uint32_t)(1794564000UL + 52UL * 86400UL));
+}
+
+TEST(SimRunner, el_reloj_de_software_sigue_cuando_millis_da_la_vuelta_con_el_reloj_puesto) {
+  mockSetMillis(0xFFFFFF00u);
+  simClockSet(1794564000UL);
+  simRunFor(3600000, [] { delay(1000); });
+  CHECK_EQ(rtcEpoch(), (uint32_t)(1794564000UL + 3600UL));
 }
 
 TEST(SimRunner, el_apagado_del_pmu_corta_el_avance) {

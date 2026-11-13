@@ -49,6 +49,9 @@ void simClockSet(uint32_t epoch);  // pone el reloj de software (0 = sin hora, c
 void simFsSetRoot(const char *dir);   // carpeta que hace de LittleFS/SD (tools/sdcard)
 void simFsHideShiny(bool hide);       // 1.75C: la imagen LittleFS no lleva ps*.bin
 
+// ---- light sleep ----
+uint32_t simLightSleeps();  // veces que el firmware ha entrado en light sleep
+
 // ---- audio ----
 int mockLastSfx();         // ultimo efecto que habria sonado (-1 = ninguno)
 uint32_t mockSfxCount();   // efectos que habrian sonado

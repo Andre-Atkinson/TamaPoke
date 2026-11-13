@@ -18,6 +18,7 @@
 
 // ---- reloj falso -----------------------------------------------------------
 uint32_t millis();
+uint64_t mockMillis64();  // los mismos ms sin dar la vuelta a los 49,7 dias (el millis() de 32 bits si)
 uint32_t micros();
 void mockSetMillis(uint32_t ms);
 void mockAdvanceMillis(uint32_t ms);

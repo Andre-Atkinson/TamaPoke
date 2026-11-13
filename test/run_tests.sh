@@ -7,6 +7,10 @@ cd "$(dirname "$0")"
 
 fail=0
 
+# las dos imagenes que escribe test_sim.cpp y lee test_tools.py: fuera las viejas, para
+# que una suite C++ que no corre no se tape con datos de una ejecucion anterior
+rm -f build/sim_png_selftest.png build/sim_png_selftest_round.png
+
 echo "== logica del firmware (pet.cpp / i18n.cpp / dex.h) =="
 make --no-print-directory run || fail=1
 
@@ -18,7 +22,7 @@ fi
 
 echo
 echo "== herramientas y ficheros generados (tools/) =="
-python3 test_tools.py || fail=1
+TAMAPOKE_RUN_TESTS=1 python3 test_tools.py || fail=1
 
 echo
 if [[ $fail -eq 0 ]]; then

@@ -146,12 +146,19 @@ int main(int argc, char **argv) {
   int lang = o.lang;
   uint32_t clock = o.clockGiven ? o.clock : 0;
   bool clockSet = o.clockGiven;
-  size_t first = 0;
-  for (; first < script.cmds.size(); first++) {
-    const SimCmd &c = script.cmds[first];
-    if (c.op == OP_LANG) { if (o.lang < 0) lang = c.a; }
-    else if (c.op == OP_CLOCK) { if (!o.clockGiven) { clock = (uint32_t)c.ms; clockSet = true; } }
-    else break;
+  // lang, clock, battery, usb y charging que van antes del primer paso que corre el
+  // firmware se aplican ya: el firmware los ve en setup()
+  size_t first = simPreBootEnd(script);
+  for (size_t i = 0; i < first; i++) {
+    const SimCmd &c = script.cmds[i];
+    switch (c.op) {
+      case OP_LANG: if (o.lang < 0) lang = c.a; break;
+      case OP_CLOCK: if (!o.clockGiven) { clock = (uint32_t)c.ms; clockSet = true; } break;
+      case OP_BATTERY: gSimPower.batPct = c.a; break;
+      case OP_USB: gSimPower.usb = c.a != 0; break;
+      case OP_CHARGING: gSimPower.charging = c.a != 0; break;
+      default: break;
+    }
   }
   if (!clockSet) simParseClock("2026-11-13 10:00", clock);
 
@@ -189,7 +196,7 @@ int main(int argc, char **argv) {
     switch (c.op) {
       case OP_LANG:
       case OP_CLOCK:
-        break;  // ya aplicados antes de arrancar (el lector rechaza los tardios)
+        break;  // el lector los rechaza despues del primer paso que corre el firmware
       case OP_BATTERY: gSimPower.batPct = c.a; break;
       case OP_USB: gSimPower.usb = c.a != 0; break;
       case OP_CHARGING: gSimPower.charging = c.a != 0; break;
@@ -264,6 +271,10 @@ int main(int argc, char **argv) {
   }
   fclose(serialLog);
   if (gSimPower.poweredOff) printf("sim: the PMU powered the board off (battery at 0%% without USB)\n");
-  if (!o.quiet) printf("sim: done at %.1f s simulated, %d screenshot(s), serial log %s\n", millis() / 1000.0, shots, logPath.c_str());
+  if (!o.quiet) {
+    printf("sim: done at %.1f s simulated, %d screenshot(s), serial log %s\n", millis() / 1000.0, shots, logPath.c_str());
+    printf("sim: %u sound effect(s) would have played (last: %d), %u light sleep(s)\n", (unsigned)mockSfxCount(),
+           mockLastSfx(), (unsigned)simLightSleeps());
+  }
   return 0;
 }

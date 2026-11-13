@@ -3,10 +3,11 @@
 # session on the Mac, writing PNG screenshots. No board, no flashing, no installs:
 # it uses the Arduino libraries arduino-cli already has (GFX Library for Arduino, U8g2).
 #
-#   tools/sim.sh --lang ja --script sim/scripts/care-page.txt --out shots/
+#   tools/sim.sh --lang ja --script care-page.txt --out shots/
 #   tools/sim.sh --board 175 --script my.txt     # the original 1.75 instead of the 1.75C
 #   tools/sim.sh --help                          # all simulator options
 #
+# --script takes a path, or the name of a script in sim/scripts/ (with or without .txt).
 # Script steps are listed in sim/script.h and the README ("Simulator").
 # ARDUINO_LIBS overrides where the Arduino libraries are found.
 set -euo pipefail
@@ -19,6 +20,16 @@ while [[ $# -gt 0 ]]; do
     --board)
       [[ $# -ge 2 ]] || { echo "sim.sh: --board needs 175c or 175" >&2; exit 2; }
       BOARD="$2"; shift 2 ;;
+    --script)
+      [[ $# -ge 2 ]] || { echo "sim.sh: --script needs a file" >&2; exit 2; }
+      # a path as given, else a script from sim/scripts/ (with or without .txt)
+      script="$2"
+      if [[ ! -e "$script" ]]; then
+        for cand in "$ROOT/sim/scripts/$script" "$ROOT/sim/scripts/$script.txt"; do
+          [[ -f "$cand" ]] && { script="$cand"; break; }
+        done
+      fi
+      ARGS+=(--script "$script"); shift 2 ;;
     *) ARGS+=("$1"); shift ;;
   esac
 done

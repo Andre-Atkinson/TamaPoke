@@ -97,9 +97,7 @@ PR with merge conflicts gets no run until they are resolved, so an empty
 `gh pr checks` there is not a CI failure.
 
 If a change affects device behaviour, say plainly in the PR whether it was
-exercised on hardware. For screens and care features, `tools/sim.sh` runs the
-real sketch on the Mac and saves screenshots (README "Simulator"); attach them
-when they help, but they are not a hardware check. Only flash it (app-only) and check it over USB serial
+exercised on hardware. Only flash it (app-only) and check it over USB serial
 (`HEALTH`, `STATS`, the periodic `HEALTH` heartbeat) when the owner has asked
 for that in this session. Host tests and CI do not prove anything about the
 panel, touch, PMU or battery. For hardware claims (registers, pins, timings,

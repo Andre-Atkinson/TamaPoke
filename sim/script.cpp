@@ -124,6 +124,16 @@ static bool onOff(const std::string &s, int32_t &v) {
   return false;
 }
 
+static bool isPrep(SimOp op) {
+  return op == OP_LANG || op == OP_CLOCK || op == OP_BATTERY || op == OP_USB || op == OP_CHARGING;
+}
+
+size_t simPreBootEnd(const SimScript &script) {
+  size_t i = 0;
+  while (i < script.cmds.size() && isPrep(script.cmds[i].op)) i++;
+  return i;
+}
+
 SimScript simParseScript(const std::string &text, const std::string &name) {
   SimScript out;
   std::istringstream in(text);
@@ -196,6 +206,10 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
             !toInt(w[4], c.d, 0, 465))
           return fail("usage: swipe X0 Y0 X1 Y1 [DURATION]");
         if (n == 6 && !simParseDuration(w[5], c.ms)) return fail("bad duration '" + w[5] + "'");
+        // 8 tramos de DUR/8: con menos de 8 sondeos tactiles del firmware (20 ms) el punto de
+        // salida no llega a leerse y el gesto sale como un toque. Por arriba, handleTouch()
+        // solo reconoce un deslizamiento si todo el gesto (DUR + ~40 ms) dura < 800 ms.
+        if (c.ms < 160) return fail("swipe duration must be at least 160ms");
       } else {
         return fail("usage: swipe left|right|up|down or swipe X0 Y0 X1 Y1 [DURATION]");
       }

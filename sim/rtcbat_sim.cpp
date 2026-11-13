@@ -1,5 +1,7 @@
 // Simulador: sustituye a rtcbat.cpp (AXP2101 + PCF85063 por XPowersLib/SensorLib).
 // Misma API (rtcbat.h); el estado sale de gSimPower y del reloj falso de millis().
+// El reloj cuenta con mockMillis64(): el millis() de 32 bits da la vuelta a los 49,7 dias
+// y el reloj de software de la placa (time()) no.
 // El reloj se comporta como el de software de la 1.75C: por debajo de 2025-01-01 no
 // hay hora, y TIME con un valor asi no lo cambia.
 #include "../rtcbat.h"
@@ -8,21 +10,23 @@
 static const uint32_t kSoftMinEpoch = 1735689600UL;  // 2025-01-01, como rtcbat.cpp
 static bool gClockSet = false;
 static uint64_t gEpochMsAtSet = 0;  // hora (ms) cuando se puso
-static uint32_t gMillisAtSet = 0;   // millis() en ese momento
+static uint64_t gMs64AtSet = 0;     // mockMillis64() en ese momento (64 bits: no da la vuelta)
 static bool gPwrLatched = false;    // bit PKEY short de INTSTS2
+
+SimPower gSimPower;  // aqui y no en simhw.cpp: asi los tests enlazan este fichero sin Arduino_GFX
 
 void simClockSet(uint32_t epoch) {
   if (epoch < kSoftMinEpoch) { gClockSet = false; return; }
   gClockSet = true;
   gEpochMsAtSet = (uint64_t)epoch * 1000ULL;
-  gMillisAtSet = millis();
+  gMs64AtSet = mockMillis64();
 }
 
 bool rtcBegin() { return false; }
 
 uint32_t rtcEpoch() {
   if (!gClockSet) return 0;
-  return (uint32_t)((gEpochMsAtSet + (uint32_t)(millis() - gMillisAtSet)) / 1000ULL);
+  return (uint32_t)((gEpochMsAtSet + (mockMillis64() - gMs64AtSet)) / 1000ULL);
 }
 
 void rtcSetEpoch(uint32_t e) {

@@ -15,7 +15,6 @@
 
 SimPanel gSimPanel;
 SimTouch gSimTouch;
-SimPower gSimPower;
 TwoWire Wire;
 
 // ---------------- panel CO5300 y bus QSPI ----------------

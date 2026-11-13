@@ -8,15 +8,18 @@
 
 // ---------------- reloj falso ----------------
 static uint32_t gMillis = 0;
+static uint64_t gMillis64 = 0;    // los mismos ms sin dar la vuelta a los 49,7 dias
 static uint32_t gMicrosFrac = 0;  // microsegundos por debajo del milisegundo actual
 uint32_t millis() { return gMillis; }
+uint64_t mockMillis64() { return gMillis64; }
 uint32_t micros() { return gMillis * 1000u + gMicrosFrac; }
-void mockSetMillis(uint32_t ms) { gMillis = ms; gMicrosFrac = 0; }
-void mockAdvanceMillis(uint32_t ms) { gMillis += ms; }
-void delay(uint32_t ms) { gMillis += ms; }
+void mockSetMillis(uint32_t ms) { gMillis = ms; gMillis64 = ms; gMicrosFrac = 0; }
+static void advance(uint32_t ms) { gMillis += ms; gMillis64 += ms; }
+void mockAdvanceMillis(uint32_t ms) { advance(ms); }
+void delay(uint32_t ms) { advance(ms); }
 void delayMicroseconds(uint32_t us) {
   gMicrosFrac += us;
-  gMillis += gMicrosFrac / 1000u;
+  advance(gMicrosFrac / 1000u);
   gMicrosFrac %= 1000u;
 }
 

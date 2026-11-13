@@ -9,7 +9,7 @@
 //   tap X Y                  toque corto en (X,Y)
 //   hold X Y DUR             mantener el dedo DUR en (X,Y)
 //   swipe left|right|up|down deslizar desde el centro
-//   swipe X0 Y0 X1 Y1 [DUR]  deslizar entre dos puntos
+//   swipe X0 Y0 X1 Y1 [DUR]  deslizar entre dos puntos (DUR >= 160ms, y < ~750ms para que cuente; 240ms)
 //   press pwr [N]            N pulsaciones cortas de PWR (3 = bloqueo de bolsillo)
 //   press boot [N]           N pulsaciones de BOOT (1 = silenciar)
 //   wait DUR                 dejar correr el firmware DUR (alias: advance)
@@ -18,6 +18,7 @@
 //
 // Duraciones: 500ms, 2s, 5m, 2h, 1d y combinaciones (1h30m); un numero solo = ms.
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 #include <string>
 #include <vector>
@@ -50,6 +51,13 @@ bool simParseClock(const std::string &s, uint32_t &epoch);
 int simLangIndex(const std::string &code);
 const char *simLangCode(int index);
 
-// Lee un guion entero. Los pasos de preparacion (lang, clock) solo valen antes del
-// primer paso que hace correr el firmware.
+// Lee un guion entero. lang y clock solo valen antes del primer paso que hace correr
+// el firmware; battery, usb y charging valen en cualquier momento, y los que van antes
+// de ese paso ya estan puestos cuando arranca el firmware.
 SimScript simParseScript(const std::string &text, const std::string &name = "script");
+
+// Indice del primer paso que hace correr el firmware (tap, hold, swipe, press, wait,
+// serial, shot): los anteriores (lang, clock, battery, usb, charging) son preparacion
+// y se aplican antes de setup(). Es el mismo corte que usa el lector para rechazar un
+// lang/clock tardio, asi que no pueden discrepar. cmds.size() si no hay ninguno.
+size_t simPreBootEnd(const SimScript &script);

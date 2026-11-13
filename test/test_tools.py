@@ -852,6 +852,9 @@ class TestSimPng(unittest.TestCase):
         import zlib
         path = os.path.join(ROOT, 'test', 'build', name)
         if not os.path.exists(path):
+            if os.environ.get('TAMAPOKE_RUN_TESTS'):
+                # run_tests.sh deletes the file, then runs the C++ suite that writes it
+                self.fail('%s was not written by the C++ suite (test_sim.cpp)' % name)
             self.skipTest('run the C++ tests first (test/run_tests.sh writes %s)' % name)
         with open(path, 'rb') as f:
             data = f.read()
