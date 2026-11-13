@@ -1,0 +1,31 @@
+# A serial RUN/BYE with the pet card open must close the card: after the ending
+# the egg choice, then the egg, show instead of the Care page over the egg.
+#   tools/sim.sh --lang en --script card-closes-on-ending --out shots/
+
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# Care page, Eggs -> Choose, then the pet runs away with the card still open
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+tap 233 288
+shot card-open
+serial RUN
+wait 1s
+shot ceremony
+wait 12s
+shot egg-choice
+
+# pick the middle egg (tap to look, tap again to choose): the egg screen, not the card
+tap 233 220
+wait 500ms
+tap 233 220
+wait 1s
+shot egg-after-pick

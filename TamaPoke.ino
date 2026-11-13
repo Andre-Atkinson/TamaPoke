@@ -1864,6 +1864,10 @@ bool render() {
     if ((int32_t)(controlToastUntil - millis()) <= 0) controlToastVisible = false;
   }
 #endif
+  // la ficha es de un bicho vivo: con huevo o ceremonia no hay nada que mostrar (un
+  // BYE/RUN por serie la deja abierta; renderCardProfile leeria DEX_TBL[-1] y, ya
+  // elegido el huevo nuevo, el boton Huevos se podria cambiar con el huevo a la vista)
+  if (cardOpen && (pet.isEgg() || pet.ceremony)) cardOpen = false;
   if (staticScreen()) {
     uint32_t k = screenKey();
     if (screenKeyValid && k == lastScreenKey) return false;
@@ -1926,7 +1930,8 @@ bool render() {
     drawHeader(T(S_EGG_HDR), inkColor(), eggMsg());
     int s = 5, x = CX - 16 * s, y = PET_CY - 16 * s;
     // con el ajuste "Huevos" en Elegir este huevo salio de la eleccion (el
-    // ajuste no se puede cambiar con un huevo en pantalla): se ve igual que alli
+    // ajuste solo se cambia en la ficha, que render() cierra con un huevo en
+    // pantalla): se ve igual que alli
     if (pet.eggPickMode == EGGPICK_ON) drawEggStyled(pet.eggRarity(), pet.eggAccent(), x, y, s);
     else drawMap(SPR_EGG, SPRITE_H, x, y, s, false);
     if (pet.eggCracks() >= 1)
