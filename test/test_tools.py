@@ -443,14 +443,35 @@ class TestBoardScripts(unittest.TestCase):
         r = self.run_tool('pet_save.sh', 'restore', '--port', self.port, '--file', save)
         self.assert_no_write(r, 'wrote a save with a bad page in the middle')
 
+    def test_restore_accepts_a_page_esp_idf_marked_corrupt(self):
+        save = self.make_save()
+        with open(save, 'r+b') as fh:
+            fh.seek(2 * 4096)
+            fh.write(b'\xf0\xff\xff\xff')   # PageState::CORRUPT
+        import hashlib
+        with open(save, 'rb') as fh, open(save + '.sha256', 'w') as sh:
+            sh.write(hashlib.sha256(fh.read()).hexdigest() + '  pet.nvs.bin\n')
+        r = self.run_tool('pet_save.sh', 'restore', '--port', self.port, '--file', save)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(any('write-flash' in c for c in self.calls()))
+
+    def test_backup_warns_when_restore_would_refuse_the_file(self):
+        dest = os.path.join(self.tmp, 'b', 'pet.nvs.bin')   # the fake reads zeros: not a page state
+        r = self.run_tool('pet_save.sh', 'backup', '--port', self.port, '--file', dest)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn('restore will refuse it', r.stderr)
+
     def test_restore_backs_up_the_current_pet_before_writing_nvs_only(self):
         save = self.make_save()
         r = self.run_tool('pet_save.sh', 'restore', '--port', self.port, '--file', save)
         self.assertEqual(r.returncode, 0, r.stderr)
         verbs = [next(a for a in c if a in ('read-flash', 'write-flash')) for c in self.calls()]
         self.assertEqual(verbs, ['read-flash', 'write-flash'], 'must back up before writing')
-        write = self.calls()[1]
+        read, write = self.calls()
         self.assertEqual([a for a in write if a.startswith('0x')], ['0x9000'])
+        self.assertEqual(write[-2:], ['0x9000', save], 'must write the requested save, not the safety copy')
+        self.assertEqual(read[read.index('--after') + 1], 'no-reset', 'the safety read must stay in the loader')
+        self.assertEqual(write[write.index('--after') + 1], 'hard-reset', 'the board must restart after the write')
         backups = os.listdir(os.path.join(self.tmp, 'backups'))
         self.assertTrue(any(b.startswith('pre-restore-') and b.endswith('.nvs.bin') for b in backups))
 
@@ -491,6 +512,24 @@ class TestBoardScripts(unittest.TestCase):
         self.assertIn('explicit --port', r.stderr)
         self.assertEqual(self.calls(), [])
 
+    def test_fw_only_also_needs_an_explicit_port(self):
+        outdir = os.path.join(self.tmp, 'out')
+        os.makedirs(outdir)
+        put(os.path.join(outdir, 'TamaPoke.ino.bin'))
+        r = self.run_tool('flash_175c.sh', '--out', outdir, '--fw-only')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('explicit --port', r.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_an_app_larger_than_app0_is_refused(self):
+        outdir = os.path.join(self.tmp, 'out')
+        os.makedirs(outdir)
+        put(os.path.join(outdir, 'TamaPoke.ino.bin'), b'\0' * (0x300000 + 1))
+        r = self.run_tool('flash_175c.sh', '--port', self.port, '--out', outdir, '--app-only')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('larger than app0', r.stderr)
+        self.assertEqual(self.calls(), [])
+
     def test_find_esptool_picks_the_newest_bundled_version(self):
         home = os.path.join(self.tmp, 'home')
         for v in ('4.9.0', '5.3.0', '5.10.0'):
@@ -521,6 +560,26 @@ class TestBoardScripts(unittest.TestCase):
         (call,) = self.calls()
         self.assertIn(boot_app0, call, 'otadata must be written from the core when the build has none')
         self.assertEqual(call[call.index(boot_app0) - 1], '0xe000')
+
+    def test_full_flash_uses_the_newest_core_whichever_folder_holds_it(self):
+        home = os.path.join(self.tmp, 'home')
+        made = {}
+        for base, ver in (('.arduino15', '3.3.10'), ('Library/Arduino15', '3.3.9')):
+            core = os.path.join(home, base, 'packages/esp32/hardware/esp32', ver, 'tools')
+            os.makedirs(os.path.join(core, 'partitions'))
+            with open(os.path.join(core, 'gen_esp32part.py'), 'w') as fh:
+                fh.write('import sys\nopen(sys.argv[-1], "wb").write(b"table")\n')
+            made[ver] = os.path.join(core, 'partitions', 'boot_app0.bin')
+            put(made[ver], ver.encode())
+        outdir = os.path.join(self.tmp, 'out')
+        os.makedirs(outdir)
+        for n in ('TamaPoke.ino.bin', 'TamaPoke.ino.bootloader.bin', 'storage.littlefs.bin'):
+            put(os.path.join(outdir, n), b'x')
+        self.env['HOME'] = home
+        r = self.run_tool('flash_175c.sh', '--port', self.port, '--out', outdir)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (call,) = self.calls()
+        self.assertIn(made['3.3.10'], call, 'picked 3.3.9 because of its folder, not its version')
 
     def test_update_stops_before_flashing_when_the_build_fails(self):
         root = os.path.join(self.tmp, 'repo')
@@ -598,7 +657,7 @@ class TestBoardPy(unittest.TestCase):
         def board_side():
             os.read(master, 64)                      # the command line
             os.write(master, b'one\ntwo\n')           # ...and no DONE
-        t = threading.Thread(target=board_side)
+        t = threading.Thread(target=board_side, daemon=True)
         t.start()
         con = self.board.Console(os.ttyname(slave))
         self.addCleanup(con.close)
@@ -609,6 +668,55 @@ class TestBoardPy(unittest.TestCase):
         self.assertEqual(lines, ['one', 'two'])
         self.assertEqual(seen, ['one', 'two'])
         self.assertLess(time.time() - started, 4, 'waited for the full timeout')
+
+    def run_cmd(self, board_side, *line):
+        import contextlib
+        import io
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, slave)
+        threading.Thread(target=board_side, args=(master,), daemon=True).start()
+        out = io.StringIO()
+        started = time.time()
+        with contextlib.redirect_stdout(out):
+            self.board.main(['--port', os.ttyname(slave), 'cmd', *line])
+        return out.getvalue().split(), time.time() - started
+
+    def test_cmd_lock_query_ends_without_done(self):
+        def board_side(master):
+            os.read(master, 64)
+            os.write(master, b'LOCK locked=0 panel_sleep=0\n')
+        out, took = self.run_cmd(board_side, 'LOCK?')
+        self.assertIn('locked=0', out)
+        self.assertLess(took, 8, 'waited for the full timeout')
+
+    def test_cmd_keeps_a_slow_reply_after_an_unsolicited_line(self):
+        # The HEALTH heartbeat can land just before a reply that follows a ~1 s NVS write.
+        def board_side(master):
+            os.read(master, 64)
+            os.write(master, b'HEALTH up=1s\n')
+            time.sleep(1.5)
+            os.write(master, b'saved\nDONE\n')
+        out, _ = self.run_cmd(board_side, 'SAVE')
+        self.assertIn('saved', out, 'the reply was cut off by the quiet-period logic')
+
+    def test_cmd_waits_for_a_reply_that_starts_late(self):
+        def board_side(master):
+            os.read(master, 64)
+            time.sleep(3.5)          # longer than the quiet period, before any output
+            os.write(master, b'saved\nDONE\n')
+        out, _ = self.run_cmd(board_side, 'SAVE')
+        self.assertIn('saved', out, 'gave up before the reply started')
+
+    def test_a_command_with_no_reply_says_so(self):
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, slave)
+        con = self.board.Console(os.ttyname(slave))
+        self.addCleanup(con.close)
+        with self.assertRaises(self.board.NoReply) as cm:
+            con.command('FOO', timeout=1, idle=3.0)
+        self.assertIn('unknown command', str(cm.exception))
 
     def test_an_unplugged_board_gives_a_message_not_a_traceback(self):
         for port in ('/dev/does-not-exist', __file__):   # missing, and not a tty

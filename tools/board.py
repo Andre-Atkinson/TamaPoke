@@ -45,6 +45,10 @@ def local_wallclock_epoch(now=None):
     return calendar.timegm(time.localtime(now))
 
 
+class NoReply(TimeoutError):
+    """The board printed nothing at all (an unknown command, or not TamaPoke)."""
+
+
 class Console:
     def __init__(self, port):
         self.fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
@@ -98,6 +102,8 @@ class Console:
                         on_line(text)
             if idle and lines and time.time() - last >= idle:
                 return lines
+        if not lines:
+            raise NoReply(f'no reply to {line!r} within {timeout:.0f} s (unknown command?)')
         raise TimeoutError(f'no DONE after {line!r} within {timeout:.0f} s; got {lines!r}')
 
 
@@ -125,6 +131,8 @@ def main(argv=None):
 
     try:
         run(args)
+    except NoReply as e:
+        sys.exit(f'board.py: {e}')
     except (TimeoutError, OSError, termios.error) as e:
         sys.exit(f'board.py: {e}. Is the board plugged in, awake, and the port free '
                  '(not open in another program)?')
@@ -153,9 +161,11 @@ def run(args):
                 for text in con.command(cmd):
                     print(text)
         else:
-            # Print as lines arrive; some commands (LOCK?, unknown ones) never
-            # print DONE, so a quiet second after output is a normal end.
-            con.command(' '.join(args.line), timeout=10, idle=1.0,
+            # Print as lines arrive. LOCK? never prints DONE, so 3 s of quiet
+            # after some output ends the call; 3 s leaves room for a reply that
+            # follows an unsolicited line (the HEALTH heartbeat) after a ~1 s
+            # NVS write. A command with no reply at all (unknown) times out.
+            con.command(' '.join(args.line), timeout=10, idle=3.0,
                         on_line=lambda t: print(t, flush=True))
     finally:
         con.close()

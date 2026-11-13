@@ -997,6 +997,22 @@ TEST(streak, un_reloj_atrasado_no_reinicia_la_racha) {
   CHECK_EQ(p.streak, (uint16_t)2);
 }
 
+// a care registered with a far-future clock (a mistyped TIME, CAREDAY tests)
+// must not freeze the streak until that date: real days take over again
+TEST(streak, una_fecha_de_cuidado_futura_no_congela_la_racha) {
+  Pet p;
+  makePet(p, 4);
+  p.setClock(20400u * 86400);
+  p.caress();
+  p.setClock(30000u * 86400);  // clock set years ahead by mistake
+  p.caress();
+  for (uint32_t d = 20401; d <= 20403; d++) {
+    p.setClock(d * 86400 + 3600);
+    p.caress();
+  }
+  CHECK_EQ(p.streak, (uint16_t)3);
+}
+
 // SAVE persists even when nothing was marked pending
 TEST(save, saveNow_escribe_aunque_no_haya_pendiente) {
   Pet p;

@@ -66,6 +66,19 @@ read_nvs() {
   ( cd "$(dirname "$dest")" && shasum -a 256 "$(basename "$dest")" > "$(basename "$dest").sha256" )
 }
 
+# Prints the first 4 KB page whose state word isn't a valid NVS page state
+# (uninitialized, active, full, freeing, corrupt), or nothing if all are valid.
+nvs_bad_page() {
+  local off word
+  for ((off = 0; off < NVS_BYTES; off += 4096)); do
+    word="$(od -An -tx1 -v -N4 -j "$off" "$1" | tr -d ' \n')"
+    case "$word" in
+      ffffffff|feffffff|fcffffff|f8ffffff|f0ffffff) ;;
+      *) echo "page at offset $off starts with $word"; return 0 ;;
+    esac
+  done
+}
+
 stamp() { date +%Y%m%d-%H%M%S; }
 
 if [[ "$ACTION" == backup ]]; then
@@ -75,6 +88,8 @@ if [[ "$ACTION" == backup ]]; then
   python3 "${ROOT}/tools/board.py" --port "$PORT" save 2>/dev/null \
     || echo "note: the board did not answer SAVE; backing up what is in flash" >&2
   read_nvs "$FILE" hard-reset
+  bad_page="$(nvs_bad_page "$FILE")"
+  [[ -z "$bad_page" ]] || echo "warning: $FILE has an unexpected NVS page ($bad_page); restore will refuse it." >&2
   echo "Backed up the pet's save to $FILE"
   exit 0
 fi
@@ -87,15 +102,11 @@ if [[ "$size" -ne "$NVS_BYTES" ]]; then
   echo "$FILE is $size bytes; a pet save is exactly $NVS_BYTES. Refusing to write it." >&2
   exit 1
 fi
-# Each 4 KB NVS page starts with its state word: erased, active, full or freeing.
-for ((off = 0; off < NVS_BYTES; off += 4096)); do
-  word="$(od -An -tx1 -v -N4 -j "$off" "$FILE" | tr -d ' \n')"
-  case "$word" in
-    ffffffff|feffffff|fcffffff|f8ffffff) ;;
-    *) echo "$FILE is not an NVS partition (page at offset $off starts with $word). Refusing to write it." >&2
-       exit 1 ;;
-  esac
-done
+bad_page="$(nvs_bad_page "$FILE")"
+if [[ -n "$bad_page" ]]; then
+  echo "$FILE is not an NVS partition ($bad_page). Refusing to write it." >&2
+  exit 1
+fi
 # Compare the hash of FILE itself with the first field of its .sha256 (not the
 # filename recorded inside it, which breaks if the pair was renamed or copied).
 if [[ -f "${FILE}.sha256" ]]; then
