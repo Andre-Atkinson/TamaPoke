@@ -3,6 +3,7 @@
 #include "shim/Arduino.h"
 #include "../pet.h"
 #include "../dex.h"
+#include "../bedtime.h"
 #include <string.h>
 
 // ---------------------------------------------------------------- helpers
@@ -258,6 +259,20 @@ TEST(tick, buen_cuidado_12h_forja_defensa) {
   CHECK_EQ(p.trDef, (uint8_t)0);
   for (int h = 0; h < 720; h++) {  // mantener todo >= 40 durante 12 h
     setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+  }
+  CHECK_EQ(p.trDef, (uint8_t)1);
+}
+
+// La racha de buen cuidado mira la felicidad ANTES de que baje ese minuto (el
+// orden del tick: goodTicks, luego drainJoy). Con joy justo en 40 antes del tick,
+// el minuto cuenta; si drainJoy corriera antes, joy valdria 39 y la racha se
+// reiniciaria cada minuto.
+TEST(tick, la_racha_ve_la_felicidad_antes_de_bajar) {
+  Pet p;
+  makePet(p, 4);
+  for (int h = 0; h < 720; h++) {
+    setStats(p, 100, 40, 100, 100);
     advance(p, 1);
   }
   CHECK_EQ(p.trDef, (uint8_t)1);
@@ -1058,6 +1073,16 @@ TEST(pace, relajado_sigue_forjando_defensa_en_12_horas) {
   CHECK_EQ(p.trDef, (uint8_t)1);
 }
 
+// Igual que el de ritmo normal: en relajado la felicidad solo baja en los minutos
+// pares, pero la racha la sigue viendo antes de bajar.
+TEST(pace, relajado_la_racha_ve_la_felicidad_antes_de_bajar) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  for (int h = 0; h < 720; h++) { setStats(p, 100, 40, 100, 100); advance(p, 1); }
+  CHECK_EQ(p.trDef, (uint8_t)1);
+}
+
 TEST(pace, relajado_sigue_contando_el_descuido_en_el_primer_minuto) {
   Pet p;
   makePet(p, 4);
@@ -1139,6 +1164,18 @@ TEST(care, los_setters_rechazan_valores_fuera_de_rango) {
   p.setBedPreset(9);
   CHECK_EQ(p.pace, (uint8_t)PACE_NORMAL);
   CHECK_EQ(p.bedPreset, (uint8_t)0);
+  // el primer valor invalido de cada ajuste (PACE_COUNT / BED_PRESETS), no solo valores lejanos
+  p.setPace(PACE_RELAXED);
+  p.setBedPreset(3);
+  p.setPace(PACE_COUNT);
+  p.setBedPreset(BED_PRESETS);
+  CHECK_EQ(p.pace, (uint8_t)PACE_NORMAL);
+  CHECK_EQ(p.bedPreset, (uint8_t)0);
+  // y el ultimo valido se acepta
+  p.setPace(PACE_COUNT - 1);
+  p.setBedPreset(BED_PRESETS - 1);
+  CHECK_EQ(p.pace, (uint8_t)(PACE_COUNT - 1));
+  CHECK_EQ(p.bedPreset, (uint8_t)(BED_PRESETS - 1));
 }
 
 TEST(care, basura_en_la_nvs_vuelve_a_los_valores_por_defecto) {
@@ -1156,6 +1193,18 @@ TEST(care, basura_en_la_nvs_vuelve_a_los_valores_por_defecto) {
   CHECK_EQ(b.speciesId, (int16_t)4);  // la mascota no se toca
   CHECK_EQ(b.pace, (uint8_t)PACE_NORMAL);
   CHECK_EQ(b.bedPreset, (uint8_t)0);
+  // el primer valor invalido (PACE_COUNT / BED_PRESETS), no solo basura lejana
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putUChar("pace", PACE_COUNT);
+    raw.putUChar("bed", BED_PRESETS);
+    raw.end();
+  }
+  Pet c;
+  c.begin();
+  CHECK_EQ(c.pace, (uint8_t)PACE_NORMAL);
+  CHECK_EQ(c.bedPreset, (uint8_t)0);
 }
 
 TEST(care, un_huevo_nuevo_conserva_los_ajustes) {

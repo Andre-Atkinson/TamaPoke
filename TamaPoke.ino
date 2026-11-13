@@ -502,7 +502,10 @@ void setup() {
                   seen > 1767225600UL ? " (desde la ultima hora guardada)" : "");
   }
   pet.syncClock(e);
-  bedSample(e);  // arrancar dentro de la ventana de dormir = dormir una vez
+  // Sin RTC (la 1.75 original sin PCF85063) e == 0, y el minuto 0 cae dentro de toda ventana:
+  // muestrear aqui dormiria al bicho en cada arranque y el bucle (que tampoco muestrea con
+  // e == 0) nunca lo despertaria.
+  if (e) bedSample(e);  // arrancar dentro de la ventana de dormir = dormir una vez
 
   audioBegin();  // ES8311 + I2S + amplificador (suena un jingle de arranque)
 
@@ -552,9 +555,16 @@ void bedSample(uint32_t epoch) {
 // animacion de evolucion abiertos NO se interrumpe: el evento queda pendiente y se
 // aplica en cuanto se cierran. Si el bicho no puede (huevo, ceremonia, eleccion de
 // inicial) pet.autoSleep/autoWake no hacen nada y el evento se descarta.
+// El teclado y el reloj no tienen caducidad: solo bloquean mientras la pantalla esta
+// encendida y sin bloquear. Si se quedaron abiertos y el panel se apago (o se bloqueo
+// en el bolsillo) el horario se aplica igual: ni renombrar (solo toca el nick) ni
+// ajustar la hora (el siguiente muestreo trata el salto como un borde mas) dependen
+// de pet.sleeping. El bano se compara con timeLeft, no en bruto: bathUntil solo se
+// pone a 0 en drawBath(), que no corre con la pantalla apagada.
 static bool bedBusy() {
-  return gameOpen || sackOpen || kbOpen || clockOpen || bathUntil || pet.evolving() || pet.eating() ||
-         timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+  bool dark = screenOff || screenIsLocked();
+  return gameOpen || sackOpen || (!dark && (kbOpen || clockOpen)) || timeLeft(bathUntil) || pet.evolving() ||
+         pet.eating() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
 }
 
 void bedApply() {
