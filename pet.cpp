@@ -268,6 +268,10 @@ void Pet::registerCare() {
   if (isEgg() || ceremony != CER_NONE) return;
   uint32_t d = today();
   if (d == 0 || d == lastCareDay) return;  // sin reloj, o ya conto hoy
+  // Clock a little behind (e.g. tools/board.py clock after drift): keep the
+  // streak. A bigger step back means lastCareDay itself is wrong (a care
+  // registered with a far-future clock), so fall through and start again.
+  if (d < lastCareDay && lastCareDay - d <= 2) return;
   if (lastCareDay == 0 || d == lastCareDay + 1) {
     streak++;
   } else {

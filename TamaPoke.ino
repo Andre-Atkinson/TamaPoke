@@ -970,6 +970,10 @@ void handleSerial() {
                   trainingCapture.tracing() ? "ON" : "OFF", (unsigned long)trainingCapture.traceDropped());
     Serial.println("DONE");
 #endif
+  } else if (line == "SAVE") {  // write pending pet changes now (tools/pet_save.sh runs it before a backup)
+    pet.saveNow();  // always: lastSeenEpoch and the 5th-tick changes may be RAM-only
+    Serial.println("saved");
+    Serial.println("DONE");
   } else if (line == "HEALTH") {
     Serial.printf("up=%lus heap=%u min=%u sd=%d mon=%d\n",
                   (unsigned long)(millis() / 1000), ESP.getFreeHeap(),

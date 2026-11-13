@@ -6,91 +6,93 @@
 # the app/LittleFS offsets are read from that same file.
 #
 # Usage:
-#   tools/flash_175c.sh --port /dev/ttyACM0           # app + bootloader + partitions + FS
-#   tools/flash_175c.sh --port /dev/ttyACM0 --fs-only
-#   tools/flash_175c.sh --port /dev/ttyACM0 --fw-only
+#   tools/flash_175c.sh  --port PORT               # bootloader + partitions + otadata + app + FS
+#   tools/flash_175c.sh [--port PORT] --app-only   # app0 only: keeps the pet, settings and sprites
+#   tools/flash_175c.sh  --port PORT  --fw-only    # everything except the sprite image
+#   tools/flash_175c.sh [--port PORT] --fs-only    # sprite image only
+# --port defaults to the only /dev/cu.usbmodem* or /dev/ttyACM* present for
+# --app-only and --fs-only. The full flash and --fw-only rewrite the bootloader
+# and partition table, so they need an explicit --port.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$(dirname "$0")/board_env.sh"
 OUT="${TAMAPOKE_OUT:-${ROOT}/../out}"
 PORT=""
-DO_FW=1
-DO_FS=1
+MODE=all
 BAUD="${BAUD:-921600}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --port) PORT="$2"; shift 2 ;;
     --out)  OUT="$2"; shift 2 ;;
-    --fs-only) DO_FW=0; DO_FS=1; shift ;;
-    --fw-only) DO_FW=1; DO_FS=0; shift ;;
+    --fs-only)  MODE=fs; shift ;;
+    --fw-only)  MODE=fw; shift ;;
+    --app-only) MODE=app; shift ;;
     --baud) BAUD="$2"; shift 2 ;;
-    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
 
-if [[ -z "$PORT" ]]; then
-  echo "Pass --port /dev/ttyACM0 (or COM3 on Windows)" >&2
+if [[ ( "$MODE" == all || "$MODE" == fw ) && -z "$PORT" ]]; then
+  echo "A full or --fw-only flash rewrites the bootloader and partition table; it needs an explicit --port." >&2
+  echo "For an update that keeps the pet and sprites use --app-only." >&2
   exit 1
 fi
-
-# Prefer the esptool that ships with the Arduino ESP32 core, then a venv.
-ESPTOOL="${ESPTOOL:-}"
-if [[ -z "$ESPTOOL" ]]; then
-  # ~/.arduino15 on Linux, ~/Library/Arduino15 on macOS
-  for c in \
-    "${HOME}/.arduino15/packages/esp32/tools/esptool_py/"*/esptool \
-    "${HOME}/.arduino15/packages/esp32/tools/esptool_py/"*/esptool.py \
-    "${HOME}/Library/Arduino15/packages/esp32/tools/esptool_py/"*/esptool \
-    "${HOME}/Library/Arduino15/packages/esp32/tools/esptool_py/"*/esptool.py \
-    "${ROOT}/.venv/bin/esptool.py" \
-    "$(command -v esptool.py || true)" \
-    "$(command -v esptool || true)"; do
-    if [[ -n "$c" && -e "$c" ]]; then ESPTOOL="$c"; break; fi
-  done
-fi
-if [[ -z "${ESPTOOL}" ]]; then
-  echo "esptool not found" >&2
-  exit 1
-fi
-
-PARTS_CSV="${ROOT}/boards/175c/partitions.csv"
-[[ -f "$PARTS_CSV" ]] || { echo "Missing $PARTS_CSV" >&2; exit 1; }
-# Offset of a partition by name, straight from the CSV.
-part_off() { awk -F, -v n="$1" '!/^#/ { gsub(/[ \t]/, ""); if ($1 == n) print $4 }' "$PARTS_CSV"; }
+PORT="$(find_port "$PORT")"
+ESPTOOL="$(find_esptool)"
 
 BOOTLOADER_OFF=0x0
 PARTITIONS_OFF=0x8000
 BOOT_APP0_OFF="$(part_off otadata)"
 APP_OFF="$(part_off app0)"
 FS_OFF="$(part_off storage)"
-[[ -n "$APP_OFF" && -n "$FS_OFF" && -n "$BOOT_APP0_OFF" ]] || { echo "Could not read offsets from $PARTS_CSV" >&2; exit 1; }
 
-args=( --chip esp32s3 --port "$PORT" --baud "$BAUD" write_flash -z --flash_mode dio --flash_freq 80m --flash_size 32MB )
+args=( --chip esp32s3 --port "$PORT" --baud "$BAUD" write-flash -z --flash-mode dio --flash-freq 80m --flash-size 32MB )
 
-if [[ "$DO_FW" -eq 1 ]]; then
+app="${OUT}/TamaPoke.ino.bin"
+if [[ "$MODE" != fs ]]; then
+  [[ -f "$app" ]] || { echo "Missing $app — run tools/build_175c.sh first (see PORTING.md)" >&2; exit 1; }
+  # The 1.75C build (PartitionScheme=custom) does not enforce app0's size, and an
+  # image larger than app0 written at its offset would run into the sprites.
+  APP_MAX=$(( $(part_size app0) ))
+  app_bytes=$(wc -c < "$app" | tr -d ' ')
+  if (( app_bytes > APP_MAX )); then
+    echo "$app is $app_bytes bytes, larger than app0 ($APP_MAX). Refusing to flash it." >&2
+    exit 1
+  fi
+fi
+
+if [[ "$MODE" == all || "$MODE" == fw ]]; then
   boot="${OUT}/TamaPoke.ino.bootloader.bin"
-  bootapp="${OUT}/TamaPoke.ino.boot_app0.bin"
-  app="${OUT}/TamaPoke.ino.bin"
-  for f in "$boot" "$app"; do
-    [[ -f "$f" ]] || { echo "Missing $f — run tools/build_175c.sh first (see PORTING.md)" >&2; exit 1; }
-  done
-  # Partition table from boards/175c/partitions.csv, using the core's own tool.
-  GEN="$(ls "${HOME}"/.arduino15/packages/esp32/hardware/esp32/*/tools/gen_esp32part.py \
-            "${HOME}"/Library/Arduino15/packages/esp32/hardware/esp32/*/tools/gen_esp32part.py 2>/dev/null | tail -n1 || true)"
-  [[ -n "$GEN" ]] || { echo "gen_esp32part.py not found (install the esp32 core)" >&2; exit 1; }
+  [[ -f "$boot" ]] || { echo "Missing $boot — run tools/build_175c.sh first (see PORTING.md)" >&2; exit 1; }
+  # The core's partition tool and its blank otadata image (boot_app0.bin),
+  # which points the bootloader at app0 as an Arduino IDE upload does.
+  # Newest core by its version directory (not the whole path, so ~/.arduino15
+  # and ~/Library/Arduino15 compete on version only).
+  CORE_TOOLS="$(ls -d "${HOME}"/.arduino15/packages/esp32/hardware/esp32/*/tools \
+                      "${HOME}"/Library/Arduino15/packages/esp32/hardware/esp32/*/tools 2>/dev/null \
+               | awk -F/ '{ print $(NF-1) "\t" $0 }' | sort -V | tail -n1 | cut -f2 || true)"
+  GEN="${CORE_TOOLS}/gen_esp32part.py"
+  [[ -n "$CORE_TOOLS" && -f "$GEN" ]] || { echo "gen_esp32part.py not found (install the esp32 core)" >&2; exit 1; }
   parts="$(mktemp "${TMPDIR:-/tmp}/tamapoke-175c-parts.XXXXXX")"
   trap 'rm -f "$parts"' EXIT
   python3 "$GEN" -q --flash-size 32MB "$PARTS_CSV" "$parts"
   args+=( "$BOOTLOADER_OFF" "$boot" "$PARTITIONS_OFF" "$parts" )
+  bootapp="${OUT}/TamaPoke.ino.boot_app0.bin"
+  [[ -f "$bootapp" ]] || bootapp="${CORE_TOOLS}/partitions/boot_app0.bin"
   if [[ -f "$bootapp" ]]; then
     args+=( "$BOOT_APP0_OFF" "$bootapp" )
+  else
+    echo "warning: boot_app0.bin not found; otadata left as it is" >&2
   fi
+fi
+
+if [[ "$MODE" != fs ]]; then
   args+=( "$APP_OFF" "$app" )
 fi
 
-if [[ "$DO_FS" -eq 1 ]]; then
+if [[ "$MODE" == all || "$MODE" == fs ]]; then
   fs="${OUT}/storage.littlefs.bin"
   if [[ ! -f "$fs" ]]; then
     fs="${ROOT}/tools/build/storage.littlefs.bin"
