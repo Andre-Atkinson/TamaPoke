@@ -41,8 +41,6 @@ const uint32_t BOOT_DOWN_MS = 100;
 const uint32_t BOOT_GAP_MS = 150;
 const uint32_t BOOT_RESOLVE_MS = 350 + 250; // BootButton::DOUBLE_MS y un frame
 
-bool gStop = false;
-
 void usage() {
   fprintf(stderr,
           "usage: tamapoke_sim [--lang CODE] [--clock \"YYYY-MM-DD HH:MM\"|none] [--script FILE]\n"
@@ -110,7 +108,6 @@ uint64_t run(uint64_t ms) {
 
 void onRestart() {
   fprintf(stderr, "sim: the firmware called ESP.restart() (WIPE); stopping here\n");
-  gStop = true;
   exit(3);
 }
 

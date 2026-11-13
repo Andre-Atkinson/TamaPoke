@@ -822,12 +822,12 @@ class TestSimExtractFonts(unittest.TestCase):
     """sim/extract_fonts.py: copia arrays de u8g2_fonts.c sin compilar el fichero entero."""
 
     SRC = (b'#include "u8g2.h"\n'
+           b'const uint8_t u8g2_font_ab[1] U8G2_FONT_SECTION("u8g2_font_ab") = "z";\n'
            b'const uint8_t u8g2_font_a[5] U8G2_FONT_SECTION("u8g2_font_a") = \n'
            b'  "ab;c"\n'
            b'  "\\42;\\0";\n'
            b'const uint8_t u8g2_font_b[2] U8G2_FONT_SECTION("u8g2_font_b") = \n'
-           b'  "\\377\\1";\n'
-           b'const uint8_t u8g2_font_ab[1] U8G2_FONT_SECTION("u8g2_font_ab") = "z";\n')
+           b'  "\\377\\1";\n')
 
     def setUp(self):
         self.mod = _load_sim_module('extract_fonts')
@@ -837,7 +837,7 @@ class TestSimExtractFonts(unittest.TestCase):
         self.assertIn('const uint8_t u8g2_font_a[5] = \n  "ab;c"\n  "\\42;\\0";', out)  # ';' dentro de la cadena
         self.assertIn('const uint8_t u8g2_font_b[2] = \n  "\\377\\1";', out)
         self.assertNotIn('U8G2_FONT_SECTION', out)
-        self.assertNotIn('u8g2_font_ab', out)  # nombre parecido: no se cuela
+        self.assertNotIn('u8g2_font_ab', out)  # nombre parecido (y antes en el fichero): no se cuela
 
     def test_un_nombre_que_no_existe_falla(self):
         with self.assertRaises(SystemExit):
@@ -872,9 +872,10 @@ class TestSimPng(unittest.TestCase):
         raw = zlib.decompress(idat)
         stride = w * 3
         self.assertEqual(len(raw), h * (stride + 1))
-        rows, prev = [], bytearray(stride)
+        rows, prev, self.filters = [], bytearray(stride), set()
         for y in range(h):
             ftype = raw[y * (stride + 1)]
+            self.filters.add(ftype)
             line = bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
             for i in range(stride):
                 if ftype == 1:
@@ -898,6 +899,7 @@ class TestSimPng(unittest.TestCase):
     def test_zlib_de_python_lee_la_imagen_pixel_a_pixel(self):
         w, h, rows = self._read('sim_png_selftest.png')
         self.assertEqual((w, h), (37, 23))
+        self.assertEqual(self.filters, {1, 2})  # filas Sub y filas Up: las dos reconstrucciones a prueba
         for y in range(h):
             for x in range(w):
                 self.assertEqual(tuple(rows[y][x * 3:x * 3 + 3]), self._rgb(self._pixel(x, y)), (x, y))

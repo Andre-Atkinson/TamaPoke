@@ -137,17 +137,12 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
   };
   while (std::getline(in, raw)) {
     lineNo++;
-    std::string line = raw;
-    size_t hash = line.find('#');
-    std::string op;
-    {
-      std::vector<std::string> w0 = words(line);
-      op = w0.empty() ? "" : w0[0];
-    }
-    // "serial" lleva el resto de la linea tal cual (un comando serie puede llevar '#')
-    if (op != "serial" && hash != std::string::npos) line = line.substr(0, hash);
+    // '#' empieza un comentario; "serial" lee el resto de la linea cruda (abajo),
+    // porque un comando serie puede llevar '#'
+    std::string line = raw.substr(0, raw.find('#'));
     std::vector<std::string> w = words(line);
     if (w.empty()) continue;
+    const std::string &op = w[0];
     SimCmd c;
     c.line = lineNo;
     size_t n = w.size();
