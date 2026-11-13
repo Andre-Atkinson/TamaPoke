@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
     --port) PORT="$2"; shift 2 ;;
     --out)  OUT="$2"; shift 2 ;;
     --no-build) BUILD=0; shift ;;
-    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -31,7 +31,7 @@ trap 'rm -f "$LOG"' EXIT
 step() {
   local show="$1"; shift
   if ! "$@" > "$LOG" 2>&1; then
-    tr '\r' '\n' < "$LOG" | grep -vE 'Writing at|Reading from' | tail -25 >&2
+    tr '\r' '\n' < "$LOG" | { grep -vE 'Writing at|Reading from' || true; } | tail -25 >&2
     echo "Stopped: $* failed. The pet is untouched by this step." >&2
     exit 1
   fi

@@ -5,13 +5,19 @@
 #
 # Usage:
 #   tools/pet_save.sh backup  [--port PORT] [--file FILE]
-#   tools/pet_save.sh restore  --file FILE [--port PORT]
+#   tools/pet_save.sh restore  --file FILE [--port PORT] [--force]
+#   (the action comes first, then the options)
 #
 # backup:  asks the running firmware to write pending changes (SAVE), then
 #          reads the partition to FILE (default: backups/pet-<date>-<time>.nvs.bin).
-# restore: first backs up what is on the board now (backups/pre-restore-...),
-#          then writes FILE back and reboots. The pet comes back as it was in
-#          FILE; anything since then is lost (it's in the pre-restore file).
+# restore: checks FILE (exactly the partition size, NVS page headers, and the
+#          .sha256 next to it; --force only waives a missing .sha256), then
+#          backs up what is on the board now (backups/pre-restore-...), writes
+#          FILE back and reboots. The pet is FILE's pet, but on boot the
+#          firmware treats the time since the backup as time spent switched off
+#          (up to 14 days: stats fall towards their floors, the pet ages, may
+#          poop), and a missed day can reset the care streak. Anything since
+#          the backup is only in the pre-restore file.
 #
 # Reads use the ROM loader (--no-stub): esptool's stub drops off USB-Serial/JTAG
 # when it sends some flash blocks back, and 20 KB is quick either way.
@@ -20,21 +26,23 @@ set -euo pipefail
 source "$(dirname "$0")/board_env.sh"
 BACKUP_DIR="${TAMAPOKE_BACKUP_DIR:-${ROOT}/backups}"
 
+USAGE="Usage: tools/pet_save.sh backup|restore [--port PORT] [--file FILE] [--force]  (the action comes first)"
 ACTION="${1:-}"; shift || true
-PORT=""; FILE=""
+PORT=""; FILE=""; FORCE=0
+case "$ACTION" in
+  backup|restore) ;;
+  -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
+  *) echo "$USAGE" >&2; exit 1 ;;
+esac
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --port) PORT="$2"; shift 2 ;;
     --file) FILE="$2"; shift 2 ;;
-    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
-    *) echo "Unknown arg: $1" >&2; exit 1 ;;
+    --force) FORCE=1; shift ;;
+    -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
+    *) echo "Unknown arg: $1" >&2; echo "$USAGE" >&2; exit 1 ;;
   esac
 done
-case "$ACTION" in
-  backup|restore) ;;
-  -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
-  *) echo "Usage: tools/pet_save.sh backup|restore [--port PORT] [--file FILE]" >&2; exit 1 ;;
-esac
 
 PORT="$(find_port "$PORT")"
 ESPTOOL="$(find_esptool)"
@@ -79,9 +87,27 @@ if [[ "$size" -ne "$NVS_BYTES" ]]; then
   echo "$FILE is $size bytes; a pet save is exactly $NVS_BYTES. Refusing to write it." >&2
   exit 1
 fi
+# Each 4 KB NVS page starts with its state word: erased, active, full or freeing.
+for ((off = 0; off < NVS_BYTES; off += 4096)); do
+  word="$(od -An -tx1 -v -N4 -j "$off" "$FILE" | tr -d ' \n')"
+  case "$word" in
+    ffffffff|feffffff|fcffffff|f8ffffff) ;;
+    *) echo "$FILE is not an NVS partition (page at offset $off starts with $word). Refusing to write it." >&2
+       exit 1 ;;
+  esac
+done
+# Compare the hash of FILE itself with the first field of its .sha256 (not the
+# filename recorded inside it, which breaks if the pair was renamed or copied).
 if [[ -f "${FILE}.sha256" ]]; then
-  ( cd "$(dirname "$FILE")" && shasum -a 256 -c "$(basename "$FILE").sha256" >/dev/null ) \
+  want="$(awk '{print $1; exit}' "${FILE}.sha256")"
+  have="$(shasum -a 256 "$FILE" | cut -d' ' -f1)"
+  [[ -n "$want" && "$want" == "$have" ]] \
     || { echo "$FILE does not match its .sha256; refusing to write it." >&2; exit 1; }
+elif [[ "$FORCE" -eq 1 ]]; then
+  echo "warning: no ${FILE}.sha256; writing it anyway (--force)" >&2
+else
+  echo "No ${FILE}.sha256 to check it against (backups made by this script have one). Refusing; pass --force to write it anyway." >&2
+  exit 1
 fi
 
 python3 "${ROOT}/tools/board.py" --port "$PORT" save >/dev/null 2>&1 || true

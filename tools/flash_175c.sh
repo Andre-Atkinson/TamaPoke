@@ -6,11 +6,13 @@
 # the app/LittleFS offsets are read from that same file.
 #
 # Usage:
-#   tools/flash_175c.sh [--port PORT]              # bootloader + partitions + otadata + app + FS
+#   tools/flash_175c.sh  --port PORT               # bootloader + partitions + otadata + app + FS
 #   tools/flash_175c.sh [--port PORT] --app-only   # app0 only: keeps the pet, settings and sprites
 #   tools/flash_175c.sh [--port PORT] --fw-only    # everything except the sprite image
 #   tools/flash_175c.sh [--port PORT] --fs-only    # sprite image only
-# --port defaults to the only /dev/cu.usbmodem* or /dev/ttyACM* present.
+# --port defaults to the only /dev/cu.usbmodem* or /dev/ttyACM* present, except
+# for the full flash (no mode flag), which rewrites the bootloader, partition
+# table and sprites and so needs an explicit --port.
 set -euo pipefail
 
 source "$(dirname "$0")/board_env.sh"
@@ -27,11 +29,16 @@ while [[ $# -gt 0 ]]; do
     --fw-only)  MODE=fw; shift ;;
     --app-only) MODE=app; shift ;;
     --baud) BAUD="$2"; shift 2 ;;
-    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
 
+if [[ "$MODE" == all && -z "$PORT" ]]; then
+  echo "A full flash (bootloader, partitions, app and sprites) needs an explicit --port." >&2
+  echo "For an update that keeps the pet and sprites use --app-only." >&2
+  exit 1
+fi
 PORT="$(find_port "$PORT")"
 ESPTOOL="$(find_esptool)"
 
@@ -41,7 +48,7 @@ BOOT_APP0_OFF="$(part_off otadata)"
 APP_OFF="$(part_off app0)"
 FS_OFF="$(part_off storage)"
 
-args=( --chip esp32s3 --port "$PORT" --baud "$BAUD" write_flash -z --flash_mode dio --flash_freq 80m --flash_size 32MB )
+args=( --chip esp32s3 --port "$PORT" --baud "$BAUD" write-flash -z --flash-mode dio --flash-freq 80m --flash-size 32MB )
 
 app="${OUT}/TamaPoke.ino.bin"
 if [[ "$MODE" != fs ]]; then
