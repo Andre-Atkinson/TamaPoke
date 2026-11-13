@@ -616,6 +616,176 @@ class TestBoardScripts(unittest.TestCase):
         self.assertTrue(os.path.exists(dest + '.sha256'))
 
 
+# Records each call's argv as one JSON line and fakes a good build: a small
+# TamaPoke.ino.bin in --output-dir and, when FAKE_PARTS is set, that partition
+# table in --build-path (what the core's prebuild hook would have copied).
+FAKE_ARDUINO_CLI = r'''#!/usr/bin/env python3
+import json, os, shutil, sys
+args = sys.argv[1:]
+with open(os.environ['FAKE_CLI_LOG'], 'a') as fh:
+    fh.write(json.dumps(args) + '\n')
+def opt(name):
+    return args[args.index(name) + 1] if name in args else None
+if opt('--output-dir'):
+    os.makedirs(opt('--output-dir'), exist_ok=True)
+    with open(os.path.join(opt('--output-dir'), 'TamaPoke.ino.bin'), 'wb') as fh:
+        fh.write(b'\0' * 1024)
+if opt('--build-path') and os.environ.get('FAKE_PARTS'):
+    os.makedirs(opt('--build-path'), exist_ok=True)
+    shutil.copy(os.environ['FAKE_PARTS'], os.path.join(opt('--build-path'), 'partitions.csv'))
+'''
+
+
+class TestBuildJobs(unittest.TestCase):
+    """build_175c.sh and the gate's original-1.75 build cap arduino-cli's
+    parallel compile jobs (its own default is every core), checked against a
+    fake arduino-cli on PATH, so nothing here really compiles."""
+
+    PARTS = os.path.join(ROOT, 'boards', '175c', 'partitions.csv')
+    # Both scripts carry their own copy of the rule; these pin both, from either
+    # side. '08' is octal to arduino-cli (and invalid), '010' would be 8 jobs.
+    GOOD_JOBS = ('1', '0', '8', '9999')
+    BAD_JOBS = ('x', '08', '010', '-1', '3 ', '2.5', '10000')
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.log = os.path.join(self.tmp, 'arduino-cli.log')
+        bindir = os.path.join(self.tmp, 'bin')
+        os.makedirs(bindir)
+        fake = os.path.join(bindir, 'arduino-cli')
+        with open(fake, 'w') as fh:
+            fh.write(FAKE_ARDUINO_CLI)
+        os.chmod(fake, 0o755)
+        # An owner's own TAMAPOKE_JOBS (or board overrides) must not leak in.
+        self.env = {k: v for k, v in os.environ.items()
+                    if k not in ('TAMAPOKE_JOBS', 'TAMAPOKE_OUT', 'FQBN_175C', 'APP_MAX_OVERRIDE')}
+        self.env.update(PATH=bindir + os.pathsep + os.environ.get('PATH', ''),
+                        FAKE_CLI_LOG=self.log, FAKE_PARTS=self.PARTS)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def fresh(self):
+        """Forget earlier subtests' calls and the gate's stand-in steps."""
+        for path in (self.log, getattr(self, 'ran', None)):
+            if path and os.path.exists(path):
+                os.remove(path)
+
+    def calls(self):
+        import json
+        if not os.path.exists(self.log):
+            return []
+        with open(self.log) as fh:
+            return [json.loads(line) for line in fh if line.strip()]
+
+    def jobs_of(self, call):
+        self.assertEqual(call.count('--jobs'), 1, call)
+        self.assertNotIn('-j', call)
+        return call[call.index('--jobs') + 1]
+
+    def build_175c(self, **env):
+        return subprocess.run([os.path.join(TOOLS, 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out')],
+                              env=dict(self.env, **env), capture_output=True, text=True, timeout=60)
+
+    def gate_root(self):
+        """A minimal repo for gate.sh: the real gate and 1.75C build script,
+        the 1.75C table, a one-line sketch, and stand-ins for the host tests,
+        the i18n check and the desktop simulator that record that they ran."""
+        root = os.path.join(self.tmp, 'repo')
+        os.makedirs(os.path.join(root, 'tools'))
+        os.makedirs(os.path.join(root, 'test'))
+        os.makedirs(os.path.join(root, 'boards', '175c'))
+        os.makedirs(os.path.join(root, 'sim', 'scripts'))
+        put(os.path.join(root, 'sim', 'scripts', 'screens.txt'))   # no `shot` lines: 0/0 screens
+        for name in ('gate.sh', 'build_175c.sh'):
+            shutil.copy2(os.path.join(TOOLS, name), os.path.join(root, 'tools', name))
+        shutil.copy2(self.PARTS, os.path.join(root, 'boards', '175c', 'partitions.csv'))
+        put(os.path.join(root, 'TamaPoke.ino'), b'void setup() {}\nvoid loop() {}\n')
+        self.ran = os.path.join(self.tmp, 'ran')
+        stub = os.path.join(root, 'test', 'run_tests.sh')
+        put(stub, f'#!/usr/bin/env bash\necho tests >> "{self.ran}"\necho "TODO OK"\n'.encode())
+        os.chmod(stub, 0o755)
+        put(os.path.join(root, 'tools', 'test_i18n_formats.py'),
+            f'open({self.ran!r}, "a").write("i18n\\n")\n'.encode())
+        sim = os.path.join(root, 'tools', 'sim.sh')
+        put(sim, f'#!/usr/bin/env bash\necho sim >> "{self.ran}"\n'.encode())
+        os.chmod(sim, 0o755)
+        return root
+
+    def gate(self, root, *args, **env):
+        return subprocess.run([os.path.join(root, 'tools', 'gate.sh'), *args],
+                              env=dict(self.env, **env), capture_output=True, text=True, timeout=120)
+
+    def test_build_175c_caps_compile_jobs_at_3_by_default(self):
+        for env in ({}, {'TAMAPOKE_JOBS': ''}):
+            with self.subTest(env=env):
+                self.fresh()
+                r = self.build_175c(**env)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn('1.75C build OK', r.stdout)
+                (call,) = self.calls()
+                self.assertEqual(call[0], 'compile')
+                self.assertEqual(self.jobs_of(call), '3')
+
+    def test_build_175c_takes_the_job_count_from_TAMAPOKE_JOBS(self):
+        for jobs in self.GOOD_JOBS:
+            with self.subTest(jobs=jobs):
+                self.fresh()
+                r = self.build_175c(TAMAPOKE_JOBS=jobs)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                (call,) = self.calls()
+                self.assertEqual(self.jobs_of(call), jobs)
+
+    def test_build_175c_refuses_a_job_count_arduino_cli_would_misread(self):
+        for bad in self.BAD_JOBS:
+            with self.subTest(bad=bad):
+                self.fresh()
+                r = self.build_175c(TAMAPOKE_JOBS=bad)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn('TAMAPOKE_JOBS', r.stderr)
+                self.assertEqual(self.calls(), [], 'arduino-cli ran with a bad job count')
+
+    def test_gate_caps_both_firmware_builds(self):
+        root = self.gate_root()
+        for env, jobs in (({}, '3'), *(({'TAMAPOKE_JOBS': j}, j) for j in self.GOOD_JOBS)):
+            with self.subTest(env=env):
+                self.fresh()
+                r = self.gate(root, **env)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertIn('GATE GREEN', r.stdout)
+                calls = self.calls()
+                fqbns = sorted(c[c.index('--fqbn') + 1].split('FlashSize=')[1].split(',')[0] for c in calls)
+                self.assertEqual(fqbns, ['16M', '32M'], 'expected the 1.75 and the 1.75C build')
+                for call in calls:
+                    self.assertEqual(self.jobs_of(call), jobs, call)
+
+    def test_gate_refuses_a_bad_job_count_before_running_anything(self):
+        root = self.gate_root()
+        for bad in self.BAD_JOBS:
+            with self.subTest(bad=bad):
+                self.fresh()
+                r = self.gate(root, TAMAPOKE_JOBS=bad)
+                self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+                self.assertIn('TAMAPOKE_JOBS', r.stderr)
+                self.assertFalse(os.path.exists(self.ran), 'the gate ran steps before checking TAMAPOKE_JOBS')
+                self.assertEqual(self.calls(), [])
+        # No builds, no compile jobs: --no-build doesn't care about the value.
+        self.fresh()
+        r = self.gate(root, '--no-build', TAMAPOKE_JOBS='08')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_build_help_documents_TAMAPOKE_JOBS_and_stops_before_the_shell_options(self):
+        for script in ('build_175c.sh', 'gate.sh'):
+            with self.subTest(script=script):
+                r = subprocess.run([os.path.join(TOOLS, script), '--help'], env=self.env,
+                                   capture_output=True, text=True, timeout=30)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn('TAMAPOKE_JOBS', r.stdout)
+                self.assertNotIn('set -', r.stdout)
+                self.assertEqual(self.calls(), [])
+
+
 class TestBoardPy(unittest.TestCase):
     def setUp(self):
         import board
@@ -734,6 +904,185 @@ class TestBoardPy(unittest.TestCase):
                 self.assertNotEqual(r.returncode, 0)
                 self.assertNotIn('Traceback', r.stderr)
                 self.assertIn('board.py:', r.stderr)
+
+
+SIM = os.path.join(ROOT, 'sim')
+
+
+def _load_sim_module(name):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('sim_' + name, os.path.join(SIM, name + '.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class TestSimGenSketch(unittest.TestCase):
+    """sim/gen_sketch.py: los prototipos que arduino-cli genera para el .ino."""
+
+    SAMPLE = (
+        '#include <Arduino.h>\n'                                  # 1
+        'struct Foo { int a; };\n'                                # 2
+        'Foo foos[2] = {\n'                                       # 3
+        '  {1}, {2},\n'                                           # 4
+        '};\n'                                                    # 5
+        'int first(int a, int b = 3) {\n'                         # 6
+        '  if (a) {\n'                                            # 7
+        '    return b;\n'                                         # 8
+        '  }\n'                                                   # 9
+        '  return later(a);\n'                                    # 10
+        '}\n'                                                     # 11
+        '#if BOARD_X\n'                                           # 12
+        'static bool onlyX() {\n'                                 # 13
+        '  return true;\n'                                        # 14
+        '}\n'                                                     # 15
+        '#else\n'                                                 # 16
+        'inline void notX() { first(1); }\n'                      # 17
+        '#endif\n'                                                # 18
+        '/* void commented() {\n'                                 # 19
+        '} */\n'                                                  # 20
+        'const char *later(int v) {\n'                            # 21
+        '  return "x";\n'                                         # 22
+        '}\n'                                                     # 23
+        'void IRAM_ATTR isr() {}\n'                               # 24
+    )
+
+    def setUp(self):
+        self.gen = _load_sim_module('gen_sketch')
+        self.lines = self.SAMPLE.splitlines(keepends=True)
+
+    def test_encuentra_las_definiciones_de_nivel_superior(self):
+        protos = [p for _, p, _ in self.gen.find_functions(self.lines)]
+        self.assertEqual(protos, ['int first(int a, int b);', 'static bool onlyX();',
+                                  'inline void notX();', 'const char *later(int v);',
+                                  'void IRAM_ATTR isr();'])
+
+    def test_los_prototipos_llevan_las_condiciones_de_su_definicion(self):
+        funcs = {p: c for _, p, c in self.gen.find_functions(self.lines)}
+        self.assertEqual(funcs['static bool onlyX();'], [['#if BOARD_X']])
+        self.assertEqual(funcs['inline void notX();'], [['#if BOARD_X', '#else']])
+        self.assertEqual(funcs['const char *later(int v);'], [])
+        self.assertEqual(self.gen.wrap('inline void notX();', [['#if BOARD_X', '#else']]),
+                         ['#if BOARD_X', '#else', 'inline void notX();', '#endif'])
+
+    def test_los_prototipos_van_antes_de_la_primera_definicion_con_line(self):
+        out = self.gen.generate('sample.ino', self.lines).splitlines()
+        path = os.path.abspath('sample.ino').replace('\\', '/')
+        self.assertEqual(out[0], '#include <Arduino.h>')
+        self.assertEqual(out[1], '#line 1 "%s"' % path)
+        self.assertEqual(out[2:7], [l.rstrip('\n') for l in self.lines[:5]])
+        self.assertEqual(out[7], 'int first(int a, int b);')
+        back = out.index('#line 6 "%s"' % path)
+        self.assertEqual(out[back + 1], 'int first(int a, int b = 3) {')
+        self.assertLess(out.index('const char *later(int v);'), back)
+        self.assertNotIn('commented', '\n'.join(out[:back]))
+
+    def test_cubre_todas_las_funciones_del_sketch_real(self):
+        with open(os.path.join(ROOT, 'TamaPoke.ino'), encoding='utf-8', errors='surrogateescape') as f:
+            lines = f.readlines()
+        names = {re.match(r'.*?(\w+)\(', p).group(1) for _, p, _ in self.gen.find_functions(lines)}
+        for must in ('setup', 'loop', 'render', 'handleTouch', 'wakeUI', 'flushUI', 'renderCardCare',
+                     'careTap', 'readTrainingTouch', 'touchIsr', 'printT', 'drawMap'):
+            self.assertIn(must, names)
+        out = self.gen.generate(os.path.join(ROOT, 'TamaPoke.ino'), lines)
+        self.assertEqual(out.count('\n#line '), 2)
+
+
+class TestSimExtractFonts(unittest.TestCase):
+    """sim/extract_fonts.py: copia arrays de u8g2_fonts.c sin compilar el fichero entero."""
+
+    SRC = (b'#include "u8g2.h"\n'
+           b'const uint8_t u8g2_font_ab[1] U8G2_FONT_SECTION("u8g2_font_ab") = "z";\n'
+           b'const uint8_t u8g2_font_a[5] U8G2_FONT_SECTION("u8g2_font_a") = \n'
+           b'  "ab;c"\n'
+           b'  "\\42;\\0";\n'
+           b'const uint8_t u8g2_font_b[2] U8G2_FONT_SECTION("u8g2_font_b") = \n'
+           b'  "\\377\\1";\n')
+
+    def setUp(self):
+        self.mod = _load_sim_module('extract_fonts')
+
+    def test_saca_los_arrays_pedidos_enteros_y_sin_secciones(self):
+        out = self.mod.extract(self.SRC, ['u8g2_font_b', 'u8g2_font_a']).decode()
+        self.assertIn('const uint8_t u8g2_font_a[5] = \n  "ab;c"\n  "\\42;\\0";', out)  # ';' dentro de la cadena
+        self.assertIn('const uint8_t u8g2_font_b[2] = \n  "\\377\\1";', out)
+        self.assertNotIn('U8G2_FONT_SECTION', out)
+        self.assertNotIn('u8g2_font_ab', out)  # nombre parecido (y antes en el fichero): no se cuela
+
+    def test_un_nombre_que_no_existe_falla(self):
+        with self.assertRaises(SystemExit):
+            self.mod.extract(self.SRC, ['u8g2_font_missing'])
+
+
+class TestSimPng(unittest.TestCase):
+    """sim/png.cpp: la imagen que escribe test_sim.cpp, leida con zlib de Python."""
+
+    def _read(self, name):
+        import struct
+        import zlib
+        path = os.path.join(ROOT, 'test', 'build', name)
+        if not os.path.exists(path):
+            if os.environ.get('TAMAPOKE_RUN_TESTS'):
+                # run_tests.sh deletes the file, then runs the C++ suite that writes it
+                self.fail('%s was not written by the C++ suite (test_sim.cpp)' % name)
+            self.skipTest('run the C++ tests first (test/run_tests.sh writes %s)' % name)
+        with open(path, 'rb') as f:
+            data = f.read()
+        self.assertEqual(data[:8], b'\x89PNG\r\n\x1a\n')
+        pos, idat = 8, b''
+        w = h = None
+        while pos < len(data):
+            n, kind = struct.unpack('>I4s', data[pos:pos + 8])
+            body = data[pos + 8:pos + 8 + n]
+            crc, = struct.unpack('>I', data[pos + 8 + n:pos + 12 + n])
+            self.assertEqual(crc, zlib.crc32(kind + body) & 0xFFFFFFFF, kind)
+            if kind == b'IHDR':
+                w, h, depth, ctype = struct.unpack('>IIBB', body[:10])
+                self.assertEqual((depth, ctype), (8, 2))
+            elif kind == b'IDAT':
+                idat += body
+            pos += 12 + n
+        raw = zlib.decompress(idat)
+        stride = w * 3
+        self.assertEqual(len(raw), h * (stride + 1))
+        rows, prev, self.filters = [], bytearray(stride), set()
+        for y in range(h):
+            ftype = raw[y * (stride + 1)]
+            self.filters.add(ftype)
+            line = bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+            for i in range(stride):
+                if ftype == 1:
+                    line[i] = (line[i] + (line[i - 3] if i >= 3 else 0)) & 0xFF
+                elif ftype == 2:
+                    line[i] = (line[i] + prev[i]) & 0xFF
+                else:
+                    self.assertEqual(ftype, 0)
+            rows.append(line)
+            prev = line
+        return w, h, rows
+
+    @staticmethod
+    def _rgb(c):
+        return (((c >> 11) & 31) * 255 // 31, ((c >> 5) & 63) * 255 // 63, (c & 31) * 255 // 31)
+
+    @staticmethod
+    def _pixel(x, y):  # el mismo patron que selftestPixel() en test_sim.cpp
+        return 0x1234 if x < 20 else (x * 2017 + y * 31 + x * y) & 0xFFFF
+
+    def test_zlib_de_python_lee_la_imagen_pixel_a_pixel(self):
+        w, h, rows = self._read('sim_png_selftest.png')
+        self.assertEqual((w, h), (37, 23))
+        self.assertEqual(self.filters, {1, 2})  # filas Sub y filas Up: las dos reconstrucciones a prueba
+        for y in range(h):
+            for x in range(w):
+                self.assertEqual(tuple(rows[y][x * 3:x * 3 + 3]), self._rgb(self._pixel(x, y)), (x, y))
+
+    def test_la_mascara_redonda_deja_negras_las_esquinas(self):
+        w, h, rows = self._read('sim_png_selftest_round.png')
+        self.assertEqual(tuple(rows[0][0:3]), (0, 0, 0))
+        self.assertEqual(tuple(rows[h - 1][(w - 1) * 3:w * 3]), (0, 0, 0))
+        cx, cy = w // 2, h // 2
+        self.assertEqual(tuple(rows[cy][cx * 3:cx * 3 + 3]), self._rgb(self._pixel(cx, cy)))
 
 
 if __name__ == '__main__':

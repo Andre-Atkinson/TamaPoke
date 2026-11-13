@@ -32,3 +32,6 @@ tools/build/
 # agent worktrees and local settings
 .claude/worktrees/
 .claude/settings.local.json
+
+# desktop simulator screenshots (tools/sim.sh, tools/sim_shots.sh)
+/shots/

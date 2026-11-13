@@ -84,6 +84,17 @@ sketch whose folder name differs from the `.ino` (every agent worktree). Never
 run the builds by hand through a `grep` pipe: it hides failures and the exit
 code becomes grep's.
 
+Both builds compile with `--jobs ${TAMAPOKE_JOBS:-3}`, one after the other
+(`tools/build_175c.sh` honours the same variable on its own). arduino-cli's
+default is every core, and several builds at once made the owner's 10-core Mac
+hot and slow. Agents keep the default and run `tools/gate.sh` as it is, with no
+hand-staged copy or patched script; the owner can raise it (`TAMAPOKE_JOBS=8
+tools/gate.sh`; `0` means every core). The cap is per build, so it does not
+bound several at once: even capped, keep to at most two firmware builds at a
+time across all agents. Check `pgrep -fl '[a]rduino-cli compile'` first and,
+if two are running, wait for one to finish (the brackets keep the pattern from
+matching a wrapper shell whose command line holds it).
+
 Never drop a warning or a skipped-test count, and read any failure in full:
 the gate prints failing assertions, and a failed run keeps its full logs in
 `test/build/gate-logs/`. A build with more sketch warnings than
