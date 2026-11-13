@@ -100,10 +100,14 @@ TouchLock autoTouch;
 static bool touchReady = false;
 // touchBringUp() still has to run: the auto touch lock ended while the pocket lock holds the
 // chip asleep, or the last touch.begin() failed and is retried every TOUCH_RETRY_MS (screen on).
+// A failed bring-up blocks the loop ~0.5 s (3 tries, 150 ms apart), so a chip that stays dead
+// gets TOUCH_RETRY_MAX attempts, then none until the next auto touch unlock.
 static bool touchBringUpPending = false;
 static bool touchRetrying = false;     // last touchBringUp() failed
 static uint32_t touchRetryFrom = 0;    // millis() when it failed
+static uint8_t touchFailures = 0;      // failed bring-ups in a row
 constexpr uint32_t TOUCH_RETRY_MS = 2000;
+constexpr uint8_t TOUCH_RETRY_MAX = 5;
 static void touchBringUp();
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
@@ -427,12 +431,14 @@ static void touchBringUp() {
     // SensorLib leaves TP_INT as plain INPUT: a floating pin that reads LOW would keep the
     // loop awake and make handleTouch probe a dead chip. Pull it up and try again later.
     pinMode(TP_INT, INPUT_PULLUP);
-    touchBringUpPending = true;
+    if (touchFailures < TOUCH_RETRY_MAX) touchFailures++;
+    touchBringUpPending = touchFailures < TOUCH_RETRY_MAX;
     touchRetrying = true;
     touchRetryFrom = millis();
     return;
   }
   touchRetrying = false;
+  touchFailures = 0;
   touch.reset();
   touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
   touch.setMirrorXY(true, true);
@@ -633,6 +639,7 @@ void loop() {
     Serial.println("touch unlock");
     touchBringUpPending = true;
     touchRetrying = false;  // first attempt right away
+    touchFailures = 0;      // and a fresh set of retries
   }
   // Only the auto touch lock puts the CST9217 to sleep; the pocket lock just detaches the ISR.
   // If the auto lock ended while the pocket lock was on, the pocket unlock brings the chip up.

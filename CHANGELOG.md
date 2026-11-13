@@ -17,7 +17,8 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   PKEY status register directly, so a failed I2C read is no longer a press.
   If the touch chip does not answer when it is brought back up, TP_INT is
   pulled up (so a floating pin cannot read as a touch), stays ignored, and the
-  bring-up is retried every 2 s while the screen is on.
+  bring-up is retried every 2 s while the screen is on, up to 5 times (each
+  failed attempt blocks about 0.5 s), then again after the next touch unlock.
 
 - **Triple-press PWR with the screen off or pocket-locked.** While a press
   sequence is pending the idle loop pauses 10 ms instead of 100 ms and does
