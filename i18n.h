@@ -62,6 +62,8 @@ enum StrId : uint8_t {
   S_NO_SPRITES, S_LOAD_SPRITES,  // aviso cuando falta el sprite en la SD
   S_HOLD_EXIT,  // 1.75C strength training: deliberate one-second exit
   S_TLOCK_OFF,  // "off" — automatic touch lock disabled
+  // ficha: pagina Care (ritmo y hora de dormir; los horarios van en digitos)
+  S_CARE, S_PACE, S_PACE_NORMAL, S_PACE_RELAXED, S_BEDTIME, S_BED_OFF,
   STR_COUNT
 };
 

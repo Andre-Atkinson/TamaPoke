@@ -35,6 +35,7 @@
 #include "bootbutton.h"
 #include "screenlock.h"
 #include "touchlock.h"
+#include "bedtime.h"
 #include "trainingcapture.h"
 #include <Preferences.h>
 
@@ -92,7 +93,11 @@ bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
-uint8_t cardPage = 0;         // 0 perfil, 1 stats+medallas
+#define CARD_PAGE_CARE 4
+#define CARD_LAST_PAGE CARD_PAGE_CARE
+uint8_t cardPage = 0;         // 0 perfil, 1 stats, 2 medallas, 3 progreso, 4 cuidados (ritmo y hora de dormir)
+BedEdge bedEdge;                 // horario de dormir: convierte la hora en eventos dormir/despertar
+BedEvent bedPending = BED_NONE;  // evento a la espera de que no haya minijuego ni dialogo abiertos
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
 
@@ -497,6 +502,7 @@ void setup() {
                   seen > 1767225600UL ? " (desde la ultima hora guardada)" : "");
   }
   pet.syncClock(e);
+  bedSample(e);  // arrancar dentro de la ventana de dormir = dormir una vez
 
   audioBegin();  // ES8311 + I2S + amplificador (suena un jingle de arranque)
 
@@ -529,6 +535,37 @@ void ensureMon() {
   if (pet.speciesId >= 1 && pet.speciesId <= DEX_COUNT) {
     pmd.load(pet.speciesId, pet.shiny);          // principal: PMD
     if (!pmd.loaded) mon.load(pet.speciesId, pet.shiny);  // respaldo: B/N
+  }
+}
+
+// ---------- horario de dormir (bedtime.h) ----------
+// Se muestrea la hora (minuto del dia, la RTC guarda hora local) cada 30 s desde el
+// bucle, donde ya se lee la RTC: sin I2C ni despertares extra. Solo los BORDES de la
+// ventana generan eventos, asi que despertar al bicho de madrugada se respeta hasta
+// la proxima hora de dormir.
+void bedSample(uint32_t epoch) {
+  BedEvent ev = bedEdge.update(pet.bedPreset, bedMinuteOfDay(epoch));
+  if (ev != BED_NONE) bedPending = ev;  // un evento nuevo sustituye a uno aun pendiente
+}
+
+// Con un minijuego, el saco, un dialogo, el teclado, el reloj, el bano, comer o la
+// animacion de evolucion abiertos NO se interrumpe: el evento queda pendiente y se
+// aplica en cuanto se cierran. Si el bicho no puede (huevo, ceremonia, eleccion de
+// inicial) pet.autoSleep/autoWake no hacen nada y el evento se descarta.
+static bool bedBusy() {
+  return gameOpen || sackOpen || kbOpen || clockOpen || bathUntil || pet.evolving() || pet.eating() ||
+         timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+}
+
+void bedApply() {
+  if (bedPending == BED_NONE || bedBusy()) return;
+  BedEvent ev = bedPending;
+  bedPending = BED_NONE;
+  if (ev == BED_SLEEP) {
+    pet.autoSleep();  // sin sonido: es de noche
+  } else if (pet.autoWake()) {
+    audioSetSleeping(false);  // el amplificador se enciende antes de encolar el sonido
+    sfxPlay(SFX_HEART);       // un solo sonido suave (sfxPlay calla si el sonido esta apagado)
   }
 }
 
@@ -621,8 +658,9 @@ void loop() {
   if (now - lastClock > 30000) {
     lastClock = now;
     uint32_t e = rtcEpoch();
-    if (e) pet.lastSeenEpoch = e;
+    if (e) { pet.lastSeenEpoch = e; bedSample(e); }
   }
+  bedApply();
 
   // latido de salud cada 5 min (para el soak test; se descarta si no hay monitor)
   static uint32_t lastHealth = 0;
@@ -876,6 +914,11 @@ void handleSerial() {
   } else if (line == "RUN") {
     pet.startRunaway();
     Serial.println("DONE");
+  } else if (line == "CARE?") {  // read-only: relaxed pace / bedtime settings and whether it is bedtime now
+    uint32_t e = rtcEpoch();
+    Serial.printf("pace=%u bed=%u inbed=%d\n", pet.pace, pet.bedPreset,
+                  e && isBedtime(pet.bedPreset, bedMinuteOfDay(e)) ? 1 : 0);
+    Serial.println("DONE");
   } else if (line == "BEEP") {
     sfxPlay(SFX_HATCH);  // prueba de audio
     Serial.println("DONE");
@@ -1124,9 +1167,9 @@ void onSwipeV(int dir) {
 void onSwipe(int dir) {
   if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
   if (gameOpen || kbOpen || clockOpen) return;
-  if (cardOpen) {  // dentro de la ficha: cambiar entre las 4 paginas
+  if (cardOpen) {  // dentro de la ficha: cambiar entre las 5 paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
-    cardPage = p < 0 ? 0 : (p > 3 ? 3 : p);
+    cardPage = p < 0 ? 0 : (p > CARD_LAST_PAGE ? CARD_LAST_PAGE : p);
     return;
   }
   if (!galleryOpen) {
@@ -1188,6 +1231,8 @@ void onTap(int16_t x, int16_t y) {
     else if (cardPage == 1 && y >= 300 && y <= 340 && x >= 96 && x <= 370) {
       cardOpen = false;            // boton ENTRENAR FUERZA
       startSack();
+    } else if (cardPage == CARD_PAGE_CARE && careTap(x, y)) {
+      // ritmo / hora de dormir: la ficha sigue abierta (careTap ya guardo y repinta)
     } else {
       cardOpen = false;
     }
@@ -1563,7 +1608,8 @@ static uint32_t screenKey() {
                         (uint32_t)pet.trAtk, (uint32_t)pet.trDef, (uint32_t)pet.trSpe, (uint32_t)pet.geneAtk,
                         (uint32_t)pet.geneDef, (uint32_t)pet.geneSpe, (uint32_t)pet.careMistakes,
                         (uint32_t)pet.fullness, (uint32_t)pet.joy, (uint32_t)pet.energy, (uint32_t)pet.hygiene,
-                        (uint32_t)pet.berryKnown, (uint32_t)pet.strHi, (uint32_t)gLang })
+                        (uint32_t)pet.berryKnown, (uint32_t)pet.strHi, (uint32_t)gLang,
+                        (uint32_t)pet.pace, (uint32_t)pet.bedPreset })
       h = mixKey(h, v);
     for (const char *c = pet.nick; *c; c++) h = mixKey(h, (uint8_t)*c);
   }
@@ -2560,18 +2606,67 @@ void renderCardProgress() {
   printT(ms);
 }
 
+// pagina 4: cuidados. Dos botones grandes que ciclan un ajuste cada uno (se guardan
+// al tocar): ritmo normal <-> relajado, y hora de dormir apagado -> 21-07 -> 22-07 -> 23-08.
+#define CARE_BTN_X 73
+#define CARE_BTN_W 320
+#define CARE_BTN_H 96
+#define CARE_PACE_Y 96
+#define CARE_BED_Y 212
+static const char *const BED_TXT[BED_PRESETS] = { "", "21:00-07:00", "22:00-07:00", "23:00-08:00" };
+
+static void drawCareBtn(int y, const char *label, const char *value) {
+  gfx->fillRoundRect(CARE_BTN_X, y, CARE_BTN_W, CARE_BTN_H, 16, UI_WHITE);
+  gfx->drawRoundRect(CARE_BTN_X, y, CARE_BTN_W, CARE_BTN_H, 16, UI_INK);
+  gfx->setTextColor(UI_TRACK);
+  setSize(2);
+  setCur(centerX(label, 2), y + 14);
+  printT(label);
+  gfx->setTextColor(UI_INK);
+  setSize(4);
+  setCur(centerX(value, 4), y + 44);
+  printT(value);
+}
+
+void renderCardCare() {
+  gfx->setTextColor(UI_INK);
+  setSize(3);
+  setCur(centerX(T(S_CARE), 3), 44);
+  printT(T(S_CARE));
+  uint8_t bed = pet.bedPreset < BED_PRESETS ? pet.bedPreset : 0;
+  drawCareBtn(CARE_PACE_Y, T(S_PACE), T(pet.pace == PACE_RELAXED ? S_PACE_RELAXED : S_PACE_NORMAL));
+  drawCareBtn(CARE_BED_Y, T(S_BEDTIME), bed ? BED_TXT[bed] : T(S_BED_OFF));
+}
+
+// toque en la pagina de cuidados: true si cayo en un boton (cicla, guarda y suena)
+bool careTap(int16_t x, int16_t y) {
+  if (x < CARE_BTN_X || x > CARE_BTN_X + CARE_BTN_W) return false;
+  if (y >= CARE_PACE_Y && y <= CARE_PACE_Y + CARE_BTN_H) {
+    pet.setPace(pet.pace == PACE_RELAXED ? PACE_NORMAL : PACE_RELAXED);
+  } else if (y >= CARE_BED_Y && y <= CARE_BED_Y + CARE_BTN_H) {
+    pet.setBedPreset((pet.bedPreset + 1) % BED_PRESETS);
+    uint32_t e = rtcEpoch();
+    if (e) bedSample(e);  // vuelve a tomar la referencia: cambiar el horario no duerme ni despierta por si solo
+  } else {
+    return false;
+  }
+  sfxPlay(SFX_TAP);
+  return true;
+}
+
 void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   if (cardPage == 0) renderCardProfile();
   else if (cardPage == 1) renderCardStats();
   else if (cardPage == 2) renderCardMedals();
-  else renderCardProgress();
+  else if (cardPage == 3) renderCardProgress();
+  else renderCardCare();
 
-  // indicador de 4 paginas + ayuda
-  for (int i = 0; i < 4; i++) {
-    if (i == cardPage) gfx->fillCircle(194 + i * 26, 374, 5, UI_INK);
-    else gfx->drawCircle(194 + i * 26, 374, 4, UI_INK);
+  // indicador de 5 paginas + ayuda
+  for (int i = 0; i <= CARD_LAST_PAGE; i++) {
+    if (i == cardPage) gfx->fillCircle(181 + i * 26, 374, 5, UI_INK);
+    else gfx->drawCircle(181 + i * 26, 374, 4, UI_INK);
   }
   gfx->setTextColor(UI_TRACK);
   setSize(2);

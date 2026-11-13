@@ -8,6 +8,23 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ## [Unreleased]
 
+### Added
+
+- **Relaxed pace.** A new *Care* page on the stat card (swipe up, then swipe
+  across to the fifth page) has a button that switches between Normal and
+  Relaxed. Relaxed makes the needs (food, energy, hygiene, joy, poops) drain at
+  half speed while the pet is awake, so it needs feeding about hourly instead of
+  every half hour. Leveling, evolution, slip-up detection, the runaway
+  countdown and sleep are unchanged, and the catch-up after a power-off is the
+  same. Off by default, saved under a new key in the pet's NVS namespace.
+- **Bedtime schedule.** The same page has a second button: Off, 21:00-07:00,
+  22:00-07:00 or 23:00-08:00. The pet goes to sleep when the window starts and
+  wakes when it ends. Only those two moments act, so waking it in the night
+  sticks until the next bedtime. It waits for a minigame, dialog, bath or
+  evolution to finish. It follows the clock you set; off by default.
+- **`CARE?` serial command** prints `pace=<n> bed=<n> inbed=<0|1>`.
+- Strings for the Care page in all eight languages.
+
 ### Fixed
 
 - **1.75C PWR button.** Key2 is only on AXP2101 PWRON. GPIO3 (net SYS_OUT) does

@@ -37,6 +37,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Sin sprites", "C\240rgalos en la SD",
     "Mant\202n: salir",
     "off",
+    "CUIDADO", "RITMO", "Normal", "Tranquilo", "A DORMIR", "Apagado",
   },
   // ---------------- EN ----------------
   {
@@ -68,6 +69,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "No sprites", "Load them onto the SD",
     "Hold to exit",
     "off",
+    "CARE", "PACE", "Normal", "Relaxed", "BEDTIME", "Off",
   },
   // ---------------- FR ----------------
   {
@@ -99,6 +101,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Pas de sprites", "Charge-les sur la SD",
     "Tenir: sortir",
     "off",
+    "SOINS", "RYTHME", "Normal", "D\202tendu", "COUCHER", "Aucun",
   },
   // ---------------- DE ----------------
   // El aleman si lleva dieresis: la fuente 5x7 del firmware es una tabla CP437
@@ -135,6 +138,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Keine Sprites", "Auf die SD laden",
     "Halten: Ende",
     "aus",
+    "PFLEGE", "TEMPO", "Normal", "Entspannt", "SCHLAFZEIT", "Aus",
   },
   // ---------------- IT ----------------
   {
@@ -166,6 +170,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Senza sprite", "Caricali sulla SD",
     "Tieni: esci",
     "off",
+    "CURE", "RITMO", "Normale", "Rilassato", "NANNA", "Spento",
   },
   // ---------------- PT ----------------
   {
@@ -197,6 +202,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Sem sprites", "Carrega-os no SD",
     "Segure: sair",
     "off",
+    "CUIDADOS", "RITMO", "Normal", "Calmo", "HORA DE DORMIR", "Desligado",
   },
   // ---------------- JA ----------------
   {
@@ -251,6 +257,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "スプライトなし", "SDにいれてください",
     "長押しで終了",
     "off",
+    "おせわ", "ペース", "ふつう", "ゆったり", "おやすみ", "なし",
   },
   // ---------------- KO ----------------
   // Los especificadores van en el MISMO ORDEN que en la fila inglesa aunque
@@ -287,6 +294,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "스프라이트 없음", "SD 카드에 넣어주세요",
     "길게 눌러 종료",
     "off",
+    "돌봄", "속도", "보통", "여유", "취침", "끔",
   },
 };
 
