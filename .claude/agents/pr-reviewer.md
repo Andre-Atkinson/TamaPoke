@@ -79,3 +79,6 @@ specific review; whoever dispatched you decides whether and how findings
 reach GitHub, and the default is silence. Do not edit code yourself, and
 do not approve or merge: those decisions belong to the main session and
 the owner.
+
+Never create issues yourself; report deferred findings to whoever dispatched
+you.

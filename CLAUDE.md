@@ -155,8 +155,14 @@ under **Review findings** (ID, severity, fixed in `<sha>`, or deferred with
 the reason). Anything deferred past the PR becomes a GitHub issue (`gh issue
 create --repo Andre-Atkinson/TamaPoke`, label `roadmap` plus an area label
 such as `care`, `power`, `ui` or `tooling`, milestone `Next` or `Later`),
-linked from the PR body. Only the main session files issues; agents report
-deferred findings back instead of filing them. If two review rounds feels
+linked from the PR body. The milestone is what ranks an issue; there is no
+`later` label. The main session adds the `in-progress` label while a session
+is designing or building an issue, and removes it when the PR merges. File
+the issue **before the PR merges**: a deferred finding counts as dispositioned
+only once its issue exists and is linked from the PR body. A PR that fixes a
+roadmap issue says `Closes #<n>` in its description. Only the main session
+files issues; agents never run `gh issue create` and report deferred findings
+back instead. If two review rounds feels
 wrong for a change (too few or too many), say so and ask the owner rather
 than exceeding the cap.
 

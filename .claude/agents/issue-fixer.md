@@ -60,6 +60,7 @@ Guardrails:
 - Never commit secrets, never force-push to `main`, never rewrite pushed
   history.
 - Don't edit files outside the task's obvious scope.
+- Never run `gh issue create`; report deferred findings to the main session.
 
 If you get stuck (the brief is ambiguous, context is missing, or a test fails
 and you can't tell why), stop and report exactly where, instead of guessing
