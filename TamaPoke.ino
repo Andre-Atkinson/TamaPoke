@@ -213,9 +213,10 @@ PwrButton pwrButton;
 ScreenLock screenLock;
 static uint8_t pwrEdges = 0;     // short PKEY presses still inside the triple window
 static uint32_t pwrEdgeAt = 0;
-static bool panelAsleep = false;
 static bool touchNeedsRelease = false;
 #endif
+// Both boards: syncPanelPower() sleeps the CO5300 on screen-off on either one.
+static bool panelAsleep = false;
 static uint8_t panelBrightness = 255;  // ultimo brillo enviado al panel (255 = forzar el primero)
 #if BOARD_AMOLED_175C
 static char controlToast[48] = "";
