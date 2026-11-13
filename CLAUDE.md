@@ -109,6 +109,22 @@ gets no CI (start a run from the Actions tab with `workflow_dispatch`), and a
 PR with merge conflicts gets no run until they are resolved, so an empty
 `gh pr checks` there is not a CI failure.
 
+`main` is protected by the repo ruleset "Protect main" (`gh api
+repos/Andre-Atkinson/TamaPoke/rulesets`). Changes reach `main` only through a
+pull request, merged with a merge commit or a squash. Rebase merges,
+force-pushes and deleting `main` are blocked. The five CI jobs must pass
+first: `Compile firmware`, `Game-logic tests (host, no board)`,
+`Generated headers up to date`, `Lint tools/ and sim/ (ruff)` and
+`i18n format-specifier consistency`. The branch does not have to be up to date
+with `main`, and no approving review is needed. Nobody can bypass it, not even
+the owner (so not any session either). A PR that `gh pr view` shows as
+`BLOCKED` usually still has a check running; the firmware compile takes about
+nine minutes. A PR that renames, adds or removes a job `name:` in
+`.github/workflows/ci.yml` needs the ruleset's required checks changed to
+match before it can merge, or a required check never reports and every PR
+stays blocked. The ruleset is a repo setting, so ask the owner before
+changing it.
+
 If a change affects device behaviour, say plainly in the PR whether it was
 exercised on hardware. Only flash it (app-only) and check it over USB serial
 (`HEALTH`, `STATS`, the periodic `HEALTH` heartbeat) when the owner has asked
