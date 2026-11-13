@@ -28,3 +28,7 @@ tools/build/
 
 # pet save backups (tools/pet_save.sh): personal, never committed
 /backups/
+
+# agent worktrees and local settings
+.claude/worktrees/
+.claude/settings.local.json
