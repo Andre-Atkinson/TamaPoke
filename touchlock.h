@@ -62,3 +62,14 @@ inline uint32_t touchLockFromSel(uint8_t sel) {
   if (sel == 4) return TOUCH_LOCK_NEVER;
   return 10000;
 }
+
+// TP_INT may be read, armed as a light-sleep wake source or have its ISR attached only
+// while the CST9217 is awake and initialised. touch.sleep() (auto lock only) makes the pin
+// open drain (input buffer off, reads LOW). The pocket lock does not sleep the chip, it
+// detaches the ISR; it still disables the pin because the chip may be asleep from the auto
+// lock underneath it and nothing re-arms TP_INT until the pocket unlock. A failed
+// touch.begin() (touchReady false) leaves the pin without a known level, so it is disabled
+// until a retry succeeds.
+inline bool touchWakeEnabled(bool pocketLocked, bool autoActive, bool touchReady) {
+  return !pocketLocked && !autoActive && touchReady;
+}

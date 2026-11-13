@@ -23,3 +23,7 @@ inline int indexedKey(uint8_t idx, bool sil) { return idx == 0xFF ? -1 : (sil ? 
 // lo mismo para los mapas de caracteres: '.' es transparente y el resto, su caracter
 // (sin signo: spriteColor() lo recibe de vuelta con (char)key)
 inline int charKey(char ch, bool sil) { return ch == '.' ? -1 : (sil ? 0 : (unsigned char)ch); }
+
+// clave de un pixel de miniatura: un indice fuera de su paleta (n entradas) leeria mas alla del
+// blob, asi que cuenta como transparente (0xFF siempre es >= n)
+inline int thumbKey(uint8_t idx, uint8_t n, bool sil) { return idx < n ? indexedKey(idx, sil) : -1; }

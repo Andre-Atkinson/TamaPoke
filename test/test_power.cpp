@@ -239,3 +239,44 @@ TEST(power, la_cpu_baja_en_reposo_y_se_queda_alta_con_usb_o_en_el_juego) {
   c.gameOpen = false;
   CHECK_EQ((int)cpuMhzFor(c), 160);
 }
+
+TEST(Power, audio_busy_covers_playback_and_queue_not_only_the_amp_hold) {
+  CHECK(!audioBusyFor(false, 0, false));
+  CHECK(audioBusyFor(true, 0, false));
+  CHECK(audioBusyFor(false, 1, false));
+  CHECK(audioBusyFor(false, 0, true));
+}
+
+TEST(Power, cpu_stays_at_240_on_usb_when_only_dimmed) {
+  PowerCtx c = ctx(100000);  // past the 90 s dim, before the 5 min near-off
+  c.usb = true;
+  CHECK_EQ((int)cpuMhzFor(c), 240);
+  c.usb = false;
+  CHECK_EQ((int)cpuMhzFor(c), 160);
+}
+
+TEST(Power, screen_off_selector_maps_both_ways_and_cycles) {
+  CHECK_EQ(powerOffFromSel(0), 60000u);
+  CHECK_EQ(powerOffFromSel(1), 30000u);
+  CHECK_EQ(powerOffFromSel(2), 15000u);
+  CHECK_EQ(powerOffFromSel(3), 0u);
+  // an out-of-range NVS value falls back to 60 s
+  CHECK_EQ(powerOffFromSel(4), 60000u);
+  CHECK_EQ(powerOffFromSel(255), 60000u);
+  CHECK_EQ((int)powerOffSel(60000), 0);
+  CHECK_EQ((int)powerOffSel(30000), 1);
+  CHECK_EQ((int)powerOffSel(15000), 2);
+  CHECK_EQ((int)powerOffSel(0), 3);
+  CHECK_EQ((int)powerOffSel(12345), 0);
+  for (uint8_t s = 0; s < 4; s++) CHECK_EQ((int)powerOffSel(powerOffFromSel(s)), (int)s);
+  // the button cycles 60 -> 30 -> 15 -> never -> 60 and stores the new selector
+  CHECK_EQ(powerOffNext(60000), 30000u);
+  CHECK_EQ(powerOffNext(30000), 15000u);
+  CHECK_EQ(powerOffNext(15000), 0u);
+  CHECK_EQ(powerOffNext(0), 60000u);
+  CHECK_EQ(powerOffNext(12345), 60000u);
+  uint32_t ms = 60000;
+  for (int i = 0; i < 4; i++) ms = powerOffNext(ms);
+  CHECK_EQ(ms, 60000u);
+  CHECK_EQ((int)powerOffSel(powerOffNext(60000)), 1);
+}

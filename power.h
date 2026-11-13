@@ -13,6 +13,19 @@
 #define POWER_DIM1_MS 90000UL   // pantalla atenuada
 #define POWER_DIM2_MS 300000UL  // pantalla casi apagada
 
+// Selector del apagado de pantalla por inactividad (ajustes, clave NVS "off"):
+// 0 = 60 s, 1 = 30 s, 2 = 15 s, 3 = nunca (0 ms). Un valor fuera de rango vale 60 s.
+inline uint32_t powerOffFromSel(uint8_t sel) {
+  return sel == 1 ? 30000UL : sel == 2 ? 15000UL : sel == 3 ? 0UL : 60000UL;
+}
+inline uint8_t powerOffSel(uint32_t ms) {
+  return ms == 30000UL ? 1 : ms == 15000UL ? 2 : ms == 0 ? 3 : 0;
+}
+// Siguiente valor al tocar el boton: 60 s -> 30 s -> 15 s -> nunca -> 60 s.
+inline uint32_t powerOffNext(uint32_t ms) {
+  return ms == 60000UL ? 30000UL : ms == 30000UL ? 15000UL : ms == 15000UL ? 0UL : 60000UL;
+}
+
 enum DimStage : uint8_t { DIM_AWAKE = 0, DIM_LOW = 1, DIM_OFF = 2 };
 
 struct PowerCtx {
@@ -125,4 +138,11 @@ inline uint32_t cpuMhzFor(const PowerCtx &c) {
 // cada cuanto se lee la bateria por I2C
 inline uint32_t powerCacheMs(const PowerCtx &c) {
   return (c.screenOff || dimStageNow(c) == DIM_OFF) ? 10000 : 2000;
+}
+
+// ---- audio (audio.cpp) ----
+// audioBusy(): no light sleep or CPU change while a sound plays, is queued or the idle
+// amplifier hold (4 s) is running.
+inline bool audioBusyFor(bool playing, uint32_t queued, bool ampHold) {
+  return playing || queued > 0 || ampHold;
 }

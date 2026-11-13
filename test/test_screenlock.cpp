@@ -89,4 +89,11 @@ TEST(ScreenLock, PkeyShortTogglesAndThreeLock) {
   n = 1; last = 0xFFFFFFF0u;
   CHECK_EQ((int)pwrShortAction(n, last, false, 0xFFFFFFF0u + B::GAP_MS, B::GAP_MS), (int)PWR_EDGE_NONE);
   CHECK_EQ((int)pwrShortAction(n, last, false, 0xFFFFFFF0u + B::GAP_MS + 1, B::GAP_MS), (int)PWR_EDGE_TOGGLE);
+  // A press that arrives after the gap, with no aging call in between, starts a new
+  // sequence: the stale first press must not count towards the triple.
+  n = 1; last = 1000;
+  CHECK_EQ((int)pwrShortAction(n, last, true, 1000 + B::GAP_MS + 1, B::GAP_MS), (int)PWR_EDGE_NONE);
+  CHECK_EQ(n, 1);
+  CHECK_EQ((int)pwrShortAction(n, last, true, 1000 + B::GAP_MS + 101, B::GAP_MS), (int)PWR_EDGE_NONE);
+  CHECK_EQ(n, 2);
 }

@@ -97,3 +97,12 @@ TEST(blit, filas_vacias_y_de_un_solo_color_o_todo_distinto) {
   forRuns(6, [&](int c) { return (int)alt[c]; }, [&](int c0, int len, int k) { CHECK_EQ(len, 1); CHECK_EQ(k, (int)alt[c0]); calls++; });
   CHECK_EQ(calls, 6);
 }
+
+TEST(blit, thumbnail_index_past_its_palette_is_transparent) {
+  CHECK_EQ(thumbKey(0, 3, false), 0);
+  CHECK_EQ(thumbKey(2, 3, false), 2);
+  CHECK_EQ(thumbKey(2, 3, true), 0);      // silhouette: one ink key
+  CHECK_EQ(thumbKey(3, 3, false), -1);    // idx == n reads one entry past the blob
+  CHECK_EQ(thumbKey(200, 3, true), -1);
+  CHECK_EQ(thumbKey(0xFF, 3, false), -1);
+}

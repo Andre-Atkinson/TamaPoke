@@ -19,10 +19,10 @@ void batPowerOff();                // apagado fisico del PMU
 bool usbPresent();
 bool usbPresentNow();             // sin cache (una lectura I2C): para decidir si se puede dormir
 
-// Extra fields on the 5-minute HEALTH line. 0 strips them.
-// -DTAMAPOKE_CHG_DEBUG=0
+// Extra charger/CPU fields and a task run-time table on the 60 s HEALTH line. Off in
+// release builds (the table is unbounded text); build with -DTAMAPOKE_CHG_DEBUG=1.
 #ifndef TAMAPOKE_CHG_DEBUG
-#define TAMAPOKE_CHG_DEBUG 1
+#define TAMAPOKE_CHG_DEBUG 0
 #endif
 #if TAMAPOKE_CHG_DEBUG
 void batFormatHealth(char *dst, size_t n);  // charger state, die temp, programmed currents

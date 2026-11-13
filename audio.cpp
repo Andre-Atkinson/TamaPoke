@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "power.h"
 #include "pin_config.h"
 #include <Arduino.h>
 #include <Wire.h>
@@ -26,15 +27,18 @@ static uint32_t gAmpHoldUntil = 0;  // un efecto pedido en reposo mantiene el am
 static bool gAmpHold = false;       // (indicador aparte: asi la comparacion no falla al dar la vuelta millis())
 static uint32_t gAmpOnAt = 0;       // cuando se encendio el amplificador
 static QueueHandle_t gQ = nullptr;
+// Codec and I2S stay powered for the life of the firmware; only the PA pin (amplifier) is
+// gated. Stopping I2S and powering the ES8311 down was tried and left the board silent after
+// an unmute on hardware, and no es8311 driver source is available to get the wake sequence
+// right, so that gating was dropped (PR body).
 static bool gI2sOn = false;
+static volatile bool gPlaying = false;  // a sound is being written to I2S (audioBusy)
 
 // El NS4150B tarda bastante mas de 8 ms en estabilizarse tras cada apagado, asi
 // que encenderlo justo antes de cada efecto se comia los cortos: el jingle de
 // arranque (440 ms) se oia y los pitidos de 35 ms no. Se deja encendido mientras
 // haya sonido y la mascota este despierta, como en el ejemplo verificado de
 // Waveshare, y solo se apaga al dormir o al silenciar.
-static bool esW(uint8_t reg, uint8_t val);
-static bool i2sStart();
 static void i2sStop();
 
 static void updateAmplifierPower() {
@@ -49,17 +53,6 @@ static void updateAmplifierPower() {
     last = want;
     if (want == HIGH) gAmpOnAt = millis();
     digitalWrite(PA, want);
-  }
-  // Idle (screen off / dim) and mute both drop the codec. Idle also stops
-  // I2S so MCLK on GPIO16 and BCLK are not toggling the whole time.
-  static int codec = -1;
-  if (!gReady) return;
-  if (run) {
-    if (!gI2sOn) i2sStart();
-    if (codec != 1) { esW(0x0D, 0xFA); esW(0x44, 0x58); codec = 1; }
-  } else {
-    if (codec != 0) { esW(0x0D, 0x00); codec = 0; }
-    i2sStop();
   }
 }
 
@@ -167,13 +160,14 @@ static void playTone(uint16_t f, uint16_t ms) {
 static void audioTask(void *) {
   uint8_t id;
   for (;;) {
-    if (xQueueReceive(gQ, &id, portMAX_DELAY) && gOn && !gSleeping && gReady &&
-        id < SFX_COUNT) {
+    if (xQueueReceive(gQ, &id, portMAX_DELAY) && gOn && !gSleeping && gReady && id < SFX_COUNT) {
       const SfxDef &d = SFX[id];
       // el NS4150B tarda mas de 8 ms en estabilizarse: si se acaba de encender, el efecto espera
       int32_t since = (int32_t)(millis() - gAmpOnAt);
+      gPlaying = true;
       if (since >= 0 && since < 50) vTaskDelay(pdMS_TO_TICKS(50 - since));
       for (uint8_t i = 0; i < d.len; i++) playTone(d.n[i].f, d.n[i].ms);
+      gPlaying = false;
     }
   }
 }
@@ -211,13 +205,16 @@ void audioBegin() {
   p.end();
 
   gReady = true;
-  updateAmplifierPower();
   gQ = xQueueCreate(8, sizeof(uint8_t));
+  updateAmplifierPower();
   xTaskCreatePinnedToCore(audioTask, "audio", 4096, nullptr, 1, nullptr, 0);
   sfxPlay(SFX_HATCH);  // jingle de arranque (confirma que suena)
 }
 
-bool audioBusy() { return gAmpHold && (int32_t)(gAmpHoldUntil - millis()) > 0; }
+bool audioBusy() {
+  return audioBusyFor(gPlaying, gQ ? uxQueueMessagesWaiting(gQ) : 0,
+                      gAmpHold && (int32_t)(gAmpHoldUntil - millis()) > 0);
+}
 
 void sfxPlay(uint8_t id) {
   if (gReady && gOn && gQ) {
@@ -259,5 +256,3 @@ void audioSetIdle(bool idle) {
   gIdle = idle;
   updateAmplifierPower();  // tambien cuando vence el mantenimiento de un aviso
 }
-
-bool audioClocksOn() { return gI2sOn; }
