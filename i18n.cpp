@@ -38,6 +38,9 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Mant\202n: salir",
     "off",
     "CUIDADO", "RITMO", "Normal", "Tranquilo", "A DORMIR", "Apagado",
+    "Toques", "Atrapa bayas", "Cuc\243-tras", "Canci\242n de bayas",
+    "Toca la bola!", "Desliza y atrapa!", "T\242came cuando salga!", "Mira y repite!",
+    "Escucha...", "Te toca!",
   },
   // ---------------- EN ----------------
   {
@@ -70,6 +73,9 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Hold to exit",
     "off",
     "CARE", "PACE", "Normal", "Relaxed", "BEDTIME", "Off",
+    "Keepy-uppy", "Berry Catch", "Peekaboo", "Berry Song",
+    "Tap the ball!", "Slide to catch!", "Tap when I pop up!", "Watch, then repeat!",
+    "Listen...", "Your turn!",
   },
   // ---------------- FR ----------------
   {
@@ -102,6 +108,9 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Tenir: sortir",
     "off",
     "SOINS", "RYTHME", "Normal", "D\202tendu", "COUCHER", "Aucun",
+    "Jongles", "Attrape-baies", "Coucou", "Chanson des baies",
+    "Touche la balle!", "Glisse pour attraper!", "Touche-moi quand je sors!", "Regarde et r\202p\212te!",
+    "\220coute...", "A toi!",
   },
   // ---------------- DE ----------------
   // El aleman si lleva dieresis: la fuente 5x7 del firmware es una tabla CP437
@@ -139,6 +148,9 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Halten: Ende",
     "aus",
     "PFLEGE", "TEMPO", "Normal", "Entspannt", "SCHLAFZEIT", "Aus",
+    "Ball hochhalten", "Beerenfang", "Kuckuck", "Beerenlied",
+    "Tipp den Ball!", "Wisch und fang!", "Tipp mich, wenn ich da bin!", "Schau zu, spiel nach!",
+    "H\224r zu...", "Du bist dran!",
   },
   // ---------------- IT ----------------
   {
@@ -171,6 +183,9 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Tieni: esci",
     "off",
     "CURE", "RITMO", "Normale", "Rilassato", "NANNA", "Spento",
+    "Palleggi", "Acchiappa bacche", "Cuc\227", "Canzone delle bacche",
+    "Tocca la palla!", "Scorri e acchiappa!", "Toccami quando spunto!", "Guarda e ripeti!",
+    "Ascolta...", "Tocca a te!",
   },
   // ---------------- PT ----------------
   {
@@ -203,6 +218,9 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Segure: sair",
     "off",
     "CUIDADOS", "RITMO", "Normal", "Calmo", "HORA DE DORMIR", "Desligado",
+    "Embaixadinhas", "Ca\207a-bagas", "Cad\210? Achou!", "M\243sica das bagas",
+    "Toque na bola!", "Deslize e pegue!", "Toque quando eu aparecer!", "Olhe e repita!",
+    "Escute...", "Sua vez!",
   },
   // ---------------- JA ----------------
   {
@@ -258,6 +276,9 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "長押しで終了",
     "off",
     "おせわ", "ペース", "ふつう", "ゆったり", "おやすみ", "なし",
+    "リフティング", "きのみキャッチ", "いないいないばあ", "きのみのうた",
+    "ボールをタッチ!", "スライドでキャッチ!", "でてきたらタッチ!", "みて まねしてね!",
+    "きいてね...", "きみのばん!",
   },
   // ---------------- KO ----------------
   // Los especificadores van en el MISMO ORDEN que en la fila inglesa aunque
@@ -295,6 +316,9 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "길게 눌러 종료",
     "off",
     "돌봄", "속도", "보통", "여유", "취침", "끔",
+    "리프팅", "열매 받기", "까꿍", "열매 노래",
+    "공을 터치!", "밀어서 받기!", "나오면 터치!", "보고 따라 해요!",
+    "들어 봐요...", "네 차례!",
   },
 };
 

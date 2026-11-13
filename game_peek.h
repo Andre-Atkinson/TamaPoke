@@ -9,8 +9,8 @@ struct PeekGame {
   // bush centres: two above, three below, all well inside the round panel
   static constexpr int16_t BX[BUSHES] = { 150, 316, 100, 233, 366 };
   static constexpr int16_t BY[BUSHES] = { 200, 200, 310, 310, 310 };
-  // hit area: the bush plus the pet's height above it
-  static constexpr int HIT_HALF_W = 60, HIT_ABOVE = 120, HIT_BELOW = 40;
+  // hit area: the bush plus the pet standing on it (most sprites are under 130 px tall)
+  static constexpr int HIT_HALF_W = 60, HIT_ABOVE = 140, HIT_BELOW = 40;
   static constexpr uint32_t FIRST_GAP_MS = 600;
   static constexpr uint32_t DUCK_AFTER_HIT_MS = 400;  // a happy nod, then it ducks
   static constexpr uint32_t RUSTLE_MS = 300;
@@ -28,12 +28,12 @@ struct PeekGame {
 
   // how long the pet stays up / hides before the next pop-up, by pop-up number
   static uint32_t upMsFor(uint8_t pop) {
-    if (pop >= POPS - 1) return 750;
-    return 1500 - 750u * pop / (POPS - 1);
+    if (pop > POPS - 1) pop = POPS - 1;
+    return 1500 - 750u * pop / (POPS - 1);  // 1500 -> 750 ms
   }
   static uint32_t gapMsFor(uint8_t pop) {
-    if (pop >= POPS - 1) return 300;
-    return 500 - 200u * pop / (POPS - 1);
+    if (pop > POPS - 1) pop = POPS - 1;
+    return 500 - 200u * pop / (POPS - 1);  // 500 -> 300 ms
   }
   static bool inBush(uint8_t b, int x, int y) {
     if (b >= BUSHES) return false;

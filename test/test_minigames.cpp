@@ -463,10 +463,12 @@ TEST(catch, la_baya_favorita_vale_doble_solo_si_ya_se_conoce) {
   uint8_t e = c.takeEvents();
   CHECK(e & GEV_HEART);
   CHECK(e & GEV_GOOD);
+  CHECK(c.loved);
   c = catchWithBerry(233, CatchGame::BLUE, CatchGame::BLUE, false);  // aun no descubierta
   c.step(85);
   CHECK_EQ(c.score, (int16_t)1);
   CHECK(!(c.takeEvents() & GEV_HEART));
+  CHECK(!c.loved);
   c = catchWithBerry(233, CatchGame::RED, CatchGame::BLUE, true);  // otra baya
   c.step(85);
   CHECK_EQ(c.score, (int16_t)1);
@@ -489,16 +491,17 @@ TEST(catch, el_bicho_va_hacia_el_dedo_a_700_px_por_segundo) {
 TEST(catch, termina_a_los_30_s_y_no_salen_mas_bayas) {
   CatchGame c;
   c.reset(2, 0, false);
-  for (int i = 0; i < 120; i++) c.step(250);
+  while (c.t < CatchGame::DURATION_MS - 100) c.step(100);
+  CHECK(!c.done());
+  for (auto &b : c.berries) b.live = false;
+  c.nextSpawn = CatchGame::DURATION_MS - 50;  // tocaria una baya justo al final
+  c.step(250);  // el ultimo paso se pasa de los 30 s
   CHECK(c.done());
-  CHECK_EQ(c.t, CatchGame::DURATION_MS);
+  CHECK_EQ(c.t, CatchGame::DURATION_MS);  // el reloj no pasa de 30 s
   CHECK_EQ(c.timeLeft(), (uint32_t)0);
   int live = 0;
   for (auto &b : c.berries) live += b.live;
-  c.step(250);
-  int after = 0;
-  for (auto &b : c.berries) after += b.live;
-  CHECK(after <= live);
+  CHECK_EQ(live, 0);  // la partida acabo: ya no sale ninguna
 }
 
 // ---------------------------------------------------------------- Peekaboo
@@ -587,8 +590,8 @@ TEST(peek, la_zona_de_toque_es_el_arbusto_y_lo_que_asoma) {
     CHECK(PeekGame::inBush(b, x - 60, y));
     CHECK(PeekGame::inBush(b, x + 60, y));
     CHECK(!PeekGame::inBush(b, x + 61, y));
-    CHECK(PeekGame::inBush(b, x, y - 120));
-    CHECK(!PeekGame::inBush(b, x, y - 121));
+    CHECK(PeekGame::inBush(b, x, y - 140));
+    CHECK(!PeekGame::inBush(b, x, y - 141));
     CHECK(PeekGame::inBush(b, x, y + 40));
     CHECK(!PeekGame::inBush(b, x, y + 41));
     // dentro de la pantalla redonda, con margen para el arbusto

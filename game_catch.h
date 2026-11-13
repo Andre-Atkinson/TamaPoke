@@ -29,6 +29,7 @@ struct CatchGame {
   uint32_t t = 0, nextSpawn = 0;
   uint32_t eatT = 0, hurtT = 0;  // game time of the last catch (0 = none yet)
   bool ate = false, hurt = false;
+  bool loved = false;  // the last berry caught was its favourite (heart)
   uint8_t fav = RED;
   bool favKnown = false;
   uint8_t events = 0;
@@ -53,8 +54,8 @@ struct CatchGame {
     t = 0;
     nextSpawn = 400;
     eatT = hurtT = 0;
-    ate = hurt = false;
-    fav = favColour < ROTTEN ? favColour : RED;
+    ate = hurt = loved = false;
+    fav = favColour < ROTTEN ? favColour : (uint8_t)RED;
     favKnown = known;
     events = 0;
   }
@@ -74,7 +75,7 @@ struct CatchGame {
       b.x = (int16_t)(X_MIN + rng.below(X_MAX - X_MIN + 1));
       b.y = SPAWN_Y;
       b.vy = fallSpeedAt(t);
-      b.kind = rng.below(100) < rottenPctAt(t) ? ROTTEN : (uint8_t)rng.below(3);
+      b.kind = rng.below(100) < rottenPctAt(t) ? (uint8_t)ROTTEN : (uint8_t)rng.below(3);
       return;
     }
   }
@@ -100,7 +101,7 @@ struct CatchGame {
           hurt = true;
           events |= GEV_BAD;
         } else {
-          bool loved = favKnown && b.kind == fav;
+          loved = favKnown && b.kind == fav;
           score += loved ? 2 : 1;
           eatT = t;
           ate = true;
