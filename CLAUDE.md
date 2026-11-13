@@ -2,12 +2,14 @@
 
 This is a fork of [socquique/TamaPoke](https://github.com/socquique/TamaPoke)
 for one device: a **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (aluminium case,
-32 MB flash, no microSD, no RTC chip, 500 mAh 3.7 V LiPo). It is a gift: the
-owner's wife looks after the pet. See `PORTING.md` for the 1.75C details.
+32 MB flash, no microSD, no RTC chip, 500 mAh 3.7 V LiPo). The pet is looked
+after day to day by a non-technical player, so features favour gentle,
+forgiving care over challenge. See `PORTING.md` for the 1.75C details.
 
 **In scope:** tamagotchi-style care features, app and power/hardware
 optimizations, tooling for this device. **Out of scope:** battles, gyms,
-trading, anything multiplayer.
+trading, anything multiplayer. The roadmap is the open GitHub issues labelled
+`roadmap` (milestones `Next` and `Later`).
 
 ## Hard rules
 
@@ -148,12 +150,15 @@ Subagents never merge, and nobody submits an approving review.
 Mutation evidence for round-1 fixes and for the main session's post-round-2
 fixes goes in the PR body (`gh pr edit`), not only in a comment.
 
-**Recording findings.** GitHub Issues are disabled on this fork. Every review
-finding's outcome goes in the PR body under **Review findings** (ID, severity,
-fixed in `<sha>`, or deferred with the reason). Anything deferred past the PR
-gets one line in `BACKLOG.md` at the repo root, with the PR link, in the same
-PR. If two review rounds feels wrong for a change (too few or
-too many), say so and ask the owner rather than exceeding the cap.
+**Recording findings.** Every review finding's outcome goes in the PR body
+under **Review findings** (ID, severity, fixed in `<sha>`, or deferred with
+the reason). Anything deferred past the PR becomes a GitHub issue (`gh issue
+create --repo Andre-Atkinson/TamaPoke`, label `roadmap` plus an area label
+such as `care`, `power`, `ui` or `tooling`, milestone `Next` or `Later`),
+linked from the PR body. Only the main session files issues; agents report
+deferred findings back instead of filing them. If two review rounds feels
+wrong for a change (too few or too many), say so and ask the owner rather
+than exceeding the cap.
 
 PR descriptions say what changed, why, how it was tested (including what was
 not tested on hardware), and list anything fixed beyond the brief under
