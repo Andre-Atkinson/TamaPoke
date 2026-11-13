@@ -14,7 +14,7 @@ and the decision above is what was built.
 
 Today, every pet after the first one hatches from one random egg made in
 `Pet::newEgg()` when a pet's story ends (farewell, release or runaway). With
-this feature, she gets **three eggs side by side** and picks one. The first
+this feature, the player gets **three eggs side by side** and picks one. The first
 game keeps the Bulbasaur / Charmander / Squirtle starter screen.
 
 The point is a small, happy choice ("I'd like a water one this time"), not a
@@ -32,7 +32,7 @@ way around the luck: which Pokémon hatches stays a surprise.
 - Egg-tier species: 48 Common (12 type colours), 28 Rare (13 colours),
   5 Legendary.
 - The starter screen blocks ticks, offline progression, swipes, bedtime and
-  the gallery while she chooses (`starterPick`, saved as NVS `stpk`).
+  the gallery while the player chooses (`starterPick`, saved as NVS `stpk`).
 - **Existing bug:** the egg screen draws "Rare egg!" / "Legendary egg!?" at
   y=316 and then paints the bottom panel over it (`TamaPoke.ino` ~1804-1813,
   since upstream a53c386), so the label never shows. This design fixes it.
@@ -45,7 +45,7 @@ way around the luck: which Pokémon hatches stays a surprise.
 |---|---|---|
 | ★ Type colour + rarity | Spots on the shell in the type's colour (green = grass, red = fire, ...); shell cream / silver / gold for Common / Rare / Legendary | Species |
 | Rarity only | Shell colour only | Species and type |
-| Type + rarity + "NEW" | As ★, plus a NEW badge if that species isn't in her Pokédex yet | Species |
+| Type + rarity + "NEW" | As ★, plus a NEW badge if that species isn't in the Pokédex yet | Species |
 | Silhouette | The Pokémon's outline | Almost none |
 
 The three eggs are always three different species, with three different type
@@ -53,14 +53,14 @@ colours when the tier allows (it always does for Common and Rare).
 
 ### 2. How the three eggs are rolled
 
-| Option | Odds of a Rare-or-better / Legendary she can pick |
+| Option | Odds of a Rare-or-better / Legendary on offer |
 |---|---|
 | ★ Same odds as today: egg 1 is today's roll (blessing, curse, care bonus all as now); eggs 2 and 3 are Common, of other types | Unchanged: 30% / 3% after a release, 55% / 10% after a farewell |
 | Three full rolls with today's odds | 66% / 9% after a release, 91% / 27% after a farewell, 98% / 36% with maximum care bonus |
 
 Either way: a runaway makes all three Common (the curse stays); the bias
 towards incomplete evolution lines stays; shininess is rolled once, hidden,
-with today's odds, and goes with whichever egg she picks.
+with today's odds, and goes with whichever egg is picked.
 
 ### 3. On or off
 
@@ -78,9 +78,9 @@ lowest button's bottom edge), the button is 320.
 
 ★ Tap an egg to look (it lifts over a glow in its type colour, and its rarity
 and "Tap again to choose" appear under the row; a still screen, no animation,
-so it costs no extra redraws); tap the same egg again to pick it. She must
+so it costs no extra redraws); tap the same egg again to pick it. The player must
 pick one: no re-roll and no backing out, and the choice waits for as long as
-she likes. Alternatives: one tap picks (like the starter screen), or tap-tap
+needed. Alternatives: one tap picks (like the starter screen), or tap-tap
 plus a "Surprise me" button that picks one of the three at random.
 
 A tap that only wakes a dark screen is already swallowed (`swallowGesture`),
@@ -90,7 +90,7 @@ so waking the watch never picks an egg.
 
 - **Time is paused while choosing**, exactly like the starter screen: no
   ticks, no offline progression on power-up, so the egg never hatches itself
-  with a species she didn't pick.
+  with a species nobody picked.
 - **Power-off mid-choice:** the three candidates are saved, and the same three
   are back after a reboot.
 - **Bedtime, sleep, touch lock:** an egg can't sleep, so bedtime does nothing;
@@ -98,7 +98,7 @@ so waking the watch never picks an egg.
   same choice. Swipes (gallery, pet card, clock) are blocked like on the
   starter screen.
 - **First game, or after WIPE:** the starter screen, never the egg choice.
-- **Serial:** `HATCH` does nothing while she is choosing (there is no egg
+- **Serial:** `HATCH` does nothing during the choice (there is no egg
   yet); `SPEC` ends the choice; `EGGS` stays read-only. No new commands;
   `CARE?` (read-only) also prints `egg=` and `picking=`.
 - **The egg screen after picking** shows the egg as it looked in the choice
