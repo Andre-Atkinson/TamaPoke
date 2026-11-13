@@ -143,9 +143,15 @@ its test, records the result and restores the file.
 
 **Merging** needs all three: the work is verified (gate, plus hardware when
 relevant), both review rounds are done with every finding fixed or
-dispositioned, and the owner has approved *that* PR in chat. Approval is
-per-PR and never standing. Once all three hold, the main session may merge.
-Subagents never merge, and nobody submits an approving review.
+dispositioned (deferred ones filed as issues), and CI is green. The owner has
+given standing approval (2026-11-13) to merge a PR as soon as all three hold,
+so don't ask for each merge. A session merges its own PR; a session started
+by another session reports "READY #<n>" to that one, which merges. Use a
+merge commit, or squash when the branch has WIP commits, and say so in one
+line. Design decisions, flashing the board, and anything else the hard rules
+reserve for the owner still need the owner's say. Subagents never merge, and
+nobody submits an approving review. Once a session's work is merged and
+nothing is pending, it can be archived.
 
 Mutation evidence for round-1 fixes and for the main session's post-round-2
 fixes goes in the PR body (`gh pr edit`), not only in a comment.
