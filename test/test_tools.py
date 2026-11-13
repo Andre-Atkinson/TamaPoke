@@ -642,6 +642,9 @@ class TestBuildJobs(unittest.TestCase):
     fake arduino-cli on PATH, so nothing here really compiles."""
 
     PARTS = os.path.join(ROOT, 'boards', '175c', 'partitions.csv')
+    # '08' is octal to arduino-cli (and invalid), '010' would be 8 jobs. Both
+    # scripts carry their own copy of the rule; these pin both.
+    BAD_JOBS = ('x', '08', '010', '-1', '3 ', '2.5', '10000')
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -724,8 +727,7 @@ class TestBuildJobs(unittest.TestCase):
                 self.assertEqual(self.jobs_of(call), jobs)
 
     def test_build_175c_refuses_a_job_count_arduino_cli_would_misread(self):
-        # '08' is octal to arduino-cli (and invalid), '010' would be 8 jobs
-        for bad in ('x', '08', '010', '-1', '3 ', '2.5', '10000'):
+        for bad in self.BAD_JOBS:
             with self.subTest(bad=bad):
                 r = self.build_175c(TAMAPOKE_JOBS=bad)
                 self.assertNotEqual(r.returncode, 0)
@@ -749,11 +751,16 @@ class TestBuildJobs(unittest.TestCase):
 
     def test_gate_refuses_a_bad_job_count_before_running_anything(self):
         root = self.gate_root()
-        r = self.gate(root, TAMAPOKE_JOBS='08')
-        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
-        self.assertIn('TAMAPOKE_JOBS', r.stderr)
-        self.assertFalse(os.path.exists(self.ran), 'the gate ran steps before checking TAMAPOKE_JOBS')
-        self.assertEqual(self.calls(), [])
+        for bad in self.BAD_JOBS:
+            with self.subTest(bad=bad):
+                for path in (self.ran, self.log):
+                    if os.path.exists(path):
+                        os.remove(path)
+                r = self.gate(root, TAMAPOKE_JOBS=bad)
+                self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+                self.assertIn('TAMAPOKE_JOBS', r.stderr)
+                self.assertFalse(os.path.exists(self.ran), 'the gate ran steps before checking TAMAPOKE_JOBS')
+                self.assertEqual(self.calls(), [])
         # No builds, no compile jobs: --no-build doesn't care about the value.
         r = self.gate(root, '--no-build', TAMAPOKE_JOBS='08')
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
