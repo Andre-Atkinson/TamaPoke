@@ -193,7 +193,7 @@ One path for all games: `Pet::playGame(game, raw)`.
 2. Convert to a normalised score: `N = raw × 15 / par`, capped at 30. Par is a
    "good game": keepy-uppy 15 (so N = raw, as today), Berry Catch 20,
    Peekaboo 14, Berry Song 6, Bubble Pop 20.
-3. Pay `playResult(N)` exactly as today.
+3. Pay the old `playResult` reward, now `Pet::playReward(N)`, exactly as today.
 
 At par the pet gets full JOY (+35), +3 SPEED and a heart. The cap at 30 only
 changes keepy-uppy games above 30 points (SPEED gain stops at +6, weight burn

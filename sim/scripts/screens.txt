@@ -63,11 +63,12 @@ tap 323 380
 tap 387 380
 swipe up
 
-# play button: the ball minigame; a tap on the header leaves it
+# play button: a random minigame (1.2 s title card, then the game); holding the
+# "Hold to exit" chip at the top for 1 s leaves it
 tap 202 404
-wait 600ms
+wait 1700ms
 shot 14-minigame
-tap 233 30
+hold 233 40 1200ms
 wait 1s
 
 # card page 2 button: strength training (1.75C: hold the button 1 s to leave)
