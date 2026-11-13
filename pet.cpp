@@ -559,7 +559,7 @@ bool Pet::autoWake() {
 
 // los ajustes "Care" se guardan solos en su clave (no pasan por save())
 void Pet::setPace(uint8_t v) {
-  pace = v < PACE_COUNT ? v : PACE_NORMAL;
+  pace = v < PACE_COUNT ? v : (uint8_t)PACE_NORMAL;
   prefs.putUChar("pace", pace);
 }
 
