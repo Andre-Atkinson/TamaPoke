@@ -2,12 +2,13 @@
 # The TamaPoke pre-PR gate, in one command with real exit codes and short output.
 #
 #   tools/gate.sh               everything
-#   tools/gate.sh --no-build    skip the two firmware builds (quick runs)
-#   TAMAPOKE_JOBS=8 tools/gate.sh   compile jobs per build: default 3, 0 = all cores
+#   tools/gate.sh --no-build    skip the firmware and simulator builds (quick runs)
+#   TAMAPOKE_JOBS=8 tools/gate.sh   compile jobs per firmware build: default 3, 0 = all cores
 #
 # Steps: host tests (+ASan/UBSan), i18n format check, no-network check over the
-# firmware sources, and both firmware builds (1.75C and the original 1.75), one
-# after the other.
+# firmware sources, both firmware builds (1.75C and the original 1.75, one after
+# the other), and the desktop simulator for both boards (tools/sim.sh, skipped
+# with --no-build).
 #
 # The firmware builds run from a staged copy of the working tree (uncommitted
 # changes included) in a folder literally named "TamaPoke": arduino-cli refuses
@@ -25,7 +26,7 @@ BUILD=1
 for a in "$@"; do
   case "$a" in
     --no-build) BUILD=0 ;;
-    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $a" >&2; exit 2 ;;
   esac
 done
@@ -150,6 +151,7 @@ if [[ "$BUILD" -eq 1 ]]; then
   if ! rsync -a \
     --exclude '/.git' --exclude '/out' --exclude '/test/build' --exclude '/backups' \
     --exclude '/.claude/worktrees' --exclude '/tools/build' --exclude '/.venv' \
+    --exclude '/sim/build' --exclude '/shots' \
     "$ROOT/" "$STAGE/"; then
     record "stage working tree for builds" 1 "rsync failed; builds skipped"
     BUILD=0
@@ -167,6 +169,28 @@ if [[ "$BUILD" -eq 1 ]]; then
   show_build "1.75" "$TMP/b175.log" $?
 else
   SUMMARY+=("SKIP  firmware builds")
+fi
+
+# ---------------------------------------------------------------- simulator
+# The desktop simulator compiles the real sketch on the host (sim/, tools/sim.sh):
+# a firmware change that breaks the host build or a screen script shows up here.
+# Skipped with --no-build like the firmware builds (it needs the same Arduino libraries).
+if [[ "$BUILD" -eq 1 ]]; then
+  echo "== desktop simulator =="
+  want="$(grep -cE '^[[:space:]]*shot[[:space:]]' sim/scripts/screens.txt)"
+  for b in 175c 175; do
+    ./tools/sim.sh --board "$b" --lang en --script sim/scripts/screens.txt --out "$TMP/sim-$b" --quiet \
+      >"$TMP/sim-$b.log" 2>&1
+    rc=$?
+    got="$(find "$TMP/sim-$b" -name '*.png' 2>/dev/null | wc -l | tr -d ' ')"
+    grep -iE 'error|fail|warning:' "$TMP/sim-$b.log" | head -n 20
+    w="$(grep -c 'warning:' "$TMP/sim-$b.log")"
+    [[ "$rc" -ne 0 ]] && tail -n 15 "$TMP/sim-$b.log"
+    if [[ "$rc" -eq 0 && "$got" -ne "$want" ]]; then rc=1; fi
+    record "simulator $b" "$rc" "$got/$want screens, $w host build warning(s)"
+  done
+else
+  SUMMARY+=("SKIP  simulator")
 fi
 
 # ---------------------------------------------------------------- summary
