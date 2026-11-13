@@ -1423,10 +1423,22 @@ static void registerRange(Pet &p, int16_t from, int16_t to) {
   for (int16_t d = from; d <= to; d++) p.dexReg[(d - 1) >> 3] |= (uint8_t)(1 << ((d - 1) & 7));
 }
 
+// comprobacion propia (no Pet::validEggChoices, que es lo que se prueba): tres
+// especies de huevo (1..151, no formas evolucionadas) y distintas
+static bool threeEggSpecies(const int16_t c[EGG_CHOICES]) {
+  for (int i = 0; i < EGG_CHOICES; i++) {
+    if (c[i] < 1 || c[i] > DEX_COUNT) return false;
+    if (DEX_TBL[c[i]].rarity == R_EVO) return false;
+    for (int j = 0; j < i; j++)
+      if (c[j] == c[i]) return false;
+  }
+  return true;
+}
+
 static bool choicesValid(const Pet &p) {
   int16_t c[EGG_CHOICES];
   for (uint8_t i = 0; i < EGG_CHOICES; i++) c[i] = p.eggChoice(i);
-  return Pet::validEggChoices(c);
+  return threeEggSpecies(c);
 }
 
 TEST(eggpick, apagado_por_defecto_un_final_da_un_solo_huevo) {
@@ -1609,7 +1621,7 @@ TEST(eggpick, tres_colores_de_tipo_distintos) {
       randomSeed(seed);
       int16_t out[EGG_CHOICES];
       p.rollEggChoices(p.pickEggSpecies(), out);
-      CHECK(Pet::validEggChoices(out));
+      CHECK(threeEggSpecies(out));
       CHECK_MSG(DEX_TBL[out[0]].accent != DEX_TBL[out[1]].accent &&
                 DEX_TBL[out[0]].accent != DEX_TBL[out[2]].accent &&
                 DEX_TBL[out[1]].accent != DEX_TBL[out[2]].accent,
@@ -1731,6 +1743,15 @@ TEST(eggpick, candidatos_invalidos_en_la_nvs_se_vuelven_a_sortear) {
     CHECK(b.awaitingEgg());
     CHECK_MSG(choicesValid(b), "lo leido de NVS se comprueba antes de usarlo");
   }
+}
+
+TEST(eggpick, el_validador_rechaza_cada_caso_malo) {
+  const int16_t bad[][EGG_CHOICES] = {
+    { 300, 4, 7 }, { 1, 2, 7 }, { 4, 4, 7 }, { -1, 4, 7 }, { 1, 4, 0 }, { 1, 4, 152 }, { 1, 7, 1 },
+  };
+  for (auto &b3 : bad) CHECK(!Pet::validEggChoices(b3));
+  const int16_t good[EGG_CHOICES] = { 151, 1, 7 };
+  CHECK(Pet::validEggChoices(good));
 }
 
 TEST(eggpick, candidatos_validos_en_la_nvs_se_respetan) {
