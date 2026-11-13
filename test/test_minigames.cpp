@@ -216,10 +216,13 @@ TEST(minigames, play_reparte_los_cuatro_juegos_antes_de_repetir) {
 TEST(minigames, en_la_portada_los_toques_no_llegan_al_juego) {
   MiniGames m;
   uint32_t now = 0;
-  m.begin(GAME_PEEK, now, 0, false);
-  CHECK(!m.touch(true, 233, 300, now));
-  CHECK(!m.touch(false, 233, 300, now + 20));
-  CHECK_EQ(m.peek.score, (uint8_t)0);
+  m.begin(GAME_KEEPY, now, 0, false);
+  for (int i = 0; i < 7; i++) m.frame(now += 85);  // 595 ms: aun en la portada
+  CHECK_EQ((int)m.flow.phase, (int)GP_TITLE);
+  int bx = (int)m.keepy.ballX, by = (int)m.keepy.ballY;
+  CHECK(!m.touch(true, bx, by, now));  // justo encima de la bola
+  CHECK(!m.touch(false, bx, by, now + 20));
+  CHECK_EQ(m.keepy.score, (uint8_t)0);
   CHECK_EQ(m.flow.lastTouch, (uint32_t)0);
 }
 
