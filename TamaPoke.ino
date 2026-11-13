@@ -185,6 +185,14 @@ static const int16_t STARTER_DEX[3] = { 1, 4, 7 };
 #define STARTER_ROW_Y 110
 #define STARTER_ROW_H 70
 #define STARTER_ROW_GAP 8
+// eleccion de huevo (ajuste Care "Huevos"): tres huevos en fila. Un toque lo
+// levanta y ensena su rareza; un segundo toque en el mismo lo elige.
+#define EGGSEL_S 4      // escala: el huevo visible mide 68x92 px
+#define EGGSEL_Y 150    // borde superior del sprite de 32x32 escalado
+#define EGGSEL_LIFT 16  // cuanto sube el huevo tocado
+#define EGGSEL_HIT 60   // medio ancho de la zona tactil de cada huevo
+static const int16_t EGGSEL_CX[EGG_CHOICES] = { 93, 233, 373 };
+int8_t eggSel = -1;     // huevo tocado una vez (-1 = ninguno); solo UI, no se guarda
 // boton-CTA de evolucion (centrado, mitad de pantalla)
 #define EVO_BTN_W 256
 #define EVO_BTN_H 64
@@ -985,6 +993,7 @@ void handleSerial() {
   } else if (line.startsWith("SPEC ")) {
     int n = line.substring(5).toInt();
     if (n >= 1 && n <= DEX_COUNT) {
+      pet.cancelEggChoice();  // con un bicho en pantalla ya no hay huevo que elegir
       pet.prevSpeciesId = pet.speciesId;
       pet.speciesId = n;
       Serial.printf("especie #%d %s\n", n, DEX_TBL[n].name);
@@ -1042,8 +1051,9 @@ void handleSerial() {
     Serial.println("DONE");
   } else if (line == "CARE?") {  // read-only: relaxed pace / bedtime settings and whether it is bedtime now
     uint32_t e = rtcEpoch();
-    Serial.printf("pace=%u bed=%u inbed=%d stale=%d\n", pet.pace, pet.bedPreset,
-                  e && isBedtime(pet.bedPreset, bedMinuteOfDay(e)) ? 1 : 0, bedEdge.stale() ? 1 : 0);
+    Serial.printf("pace=%u bed=%u inbed=%d stale=%d egg=%u picking=%d\n", pet.pace, pet.bedPreset,
+                  e && isBedtime(pet.bedPreset, bedMinuteOfDay(e)) ? 1 : 0, bedEdge.stale() ? 1 : 0,
+                  pet.eggPickMode, pet.awaitingEgg() ? 1 : 0);
     Serial.println("DONE");
   } else if (line == "BEEP") {
     sfxPlay(SFX_HATCH);  // prueba de audio
@@ -1273,7 +1283,7 @@ void handleTouch() {
 void openClock();  // prototipo
 
 void onSwipeV(int dir) {
-  if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
+  if (pet.awaitingStarter() || pet.awaitingEgg()) return;  // bloqueado mientras elige inicial o huevo
   if (gameOpen || galleryOpen || kbOpen || sackOpen || pet.ceremony) return;
   if (clockOpen) { clockOpen = false; return; }
   if (cardOpen) {
@@ -1290,7 +1300,7 @@ void onSwipeV(int dir) {
 
 // deslizar: dir +1 = hacia la derecha
 void onSwipe(int dir) {
-  if (pet.awaitingStarter()) return;  // bloqueado durante la eleccion de inicial
+  if (pet.awaitingStarter() || pet.awaitingEgg()) return;  // bloqueado mientras elige inicial o huevo
   if (gameOpen || kbOpen || clockOpen) return;
   if (cardOpen) {  // dentro de la ficha: cambiar entre las 5 paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
@@ -1336,6 +1346,10 @@ void onTap(int16_t x, int16_t y) {
         break;
       }
     }
+    return;
+  }
+  if (pet.awaitingEgg()) {  // tras un final: elegir uno de los tres huevos
+    eggSelectTap(x, y);
     return;
   }
   if (galleryOpen) {
@@ -1580,6 +1594,95 @@ void renderStarterSelect() {
   flushUI();
 }
 
+// huevo con pista: cascara segun la rareza (comun crema, raro plata, legendario
+// oro) y motas ('g' en SPR_EGG) del color del tipo. El contorno y las grietas
+// siguen en tinta. La especie no se ve.
+void drawEggStyled(uint8_t rarity, uint16_t spot, int x, int y, int s) {
+  uint16_t shell, shade;
+  if (rarity == R_LEGENDARIO) {
+    shell = C565(0xff, 0xd9, 0x5e);
+    shade = C565(0xd9, 0xa0, 0x2a);
+  } else if (rarity == R_RARO) {
+    shell = C565(0xdc, 0xe6, 0xf2);
+    shade = C565(0x9c, 0xb0, 0xcc);
+  } else {
+    shell = C565(0xf8, 0xf1, 0xe0);
+    shade = C565(0xd8, 0xcc, 0xae);
+  }
+  for (int r = 0; r < SPRITE_H; r++) {
+    const char *row = SPR_EGG[r];
+    forRuns(SPRITE_W, [&](int c) { return charKey(row[c], false); },
+            [&](int c0, int len, int k) {
+              char ch = (char)k;
+              uint16_t col = ch == 'y' ? shell : ch == 'Y' ? shade : ch == 'g' ? spot : spriteColor(ch);
+              gfx->fillRect(x + c0 * s, y + r * s, len * s, s, col);
+            });
+  }
+}
+
+static const char *eggRarityText(uint8_t rarity) {
+  return rarity == R_LEGENDARIO ? T(S_EGG_LEGEND) : rarity == R_RARO ? T(S_EGG_RARE) : T(S_EGG_COMMON);
+}
+static uint16_t eggRarityColor(uint8_t rarity) {
+  return rarity == R_LEGENDARIO ? UI_BAR_WARN : rarity == R_RARO ? 0x4C98 : inkColor();
+}
+
+// tras un final (con el ajuste Care "Huevos" en Elegir): tres huevos a elegir
+void renderEggSelect() {
+  int h = sceneHour();
+  gNight = h < 6 || h >= 20;  // un huevo no duerme: solo la hora
+  uint16_t bg = gNight ? UI_BG_NIGHT : UI_BG_DAY;
+  gfx->fillScreen(RGB565_BLACK);
+  gfx->fillCircle(CX, CY, 231, bg);
+  const char *t = T(S_CHOOSE_EGG);
+  gfx->setTextColor(inkColor());
+  setSize(2);
+  setCur(centerX(t, 2), 84);
+  printT(t);
+  for (int i = 0; i < EGG_CHOICES; i++) {
+    int16_t d = pet.eggChoice(i);
+    if (d < 1 || d > DEX_COUNT) continue;  // Pet ya lo garantiza; por si acaso
+    const DexEntry &de = DEX_TBL[d];
+    int lift = (i == eggSel) ? EGGSEL_LIFT : 0;
+    int x = EGGSEL_CX[i] - 16 * EGGSEL_S, y = EGGSEL_Y - lift;
+    // halo del tocado y despues la sombra en el suelo (se separa al levantarlo)
+    if (i == eggSel) gfx->fillCircle(EGGSEL_CX[i], y + 17 * EGGSEL_S, 58, lerp565(bg, de.accent, 3, 8));
+    gfx->fillEllipse(EGGSEL_CX[i], EGGSEL_Y + 29 * EGGSEL_S, 30 - lift / 2, 7, lerp565(bg, UI_INK, 2, 8));
+    drawEggStyled(de.rarity, de.accent, x, y, EGGSEL_S);
+  }
+  if (eggSel >= 0 && eggSel < EGG_CHOICES) {
+    int16_t d = pet.eggChoice(eggSel);
+    uint8_t r = (d >= 1 && d <= DEX_COUNT) ? DEX_TBL[d].rarity : (uint8_t)R_COMUN;
+    const char *rt = eggRarityText(r);
+    gfx->setTextColor(eggRarityColor(r));
+    setSize(2);
+    setCur(centerX(rt, 2), 300);
+    printT(rt);
+    const char *hint = T(S_EGG_TAP_AGAIN);
+    gfx->setTextColor(lerp565(inkColor(), bg, 3, 8));
+    setCur(centerX(hint, 2), 336);
+    printT(hint);
+  }
+  flushUI();
+}
+
+// toque en la eleccion de huevo: el primero levanta el huevo, el segundo lo elige
+void eggSelectTap(int16_t x, int16_t y) {
+  if (y < EGGSEL_Y - EGGSEL_LIFT || y > EGGSEL_Y + 30 * EGGSEL_S) return;
+  for (int i = 0; i < EGG_CHOICES; i++) {
+    if (abs(x - EGGSEL_CX[i]) > EGGSEL_HIT) continue;
+    if (eggSel == i) {
+      pet.chooseEgg((uint8_t)i);
+      eggSel = -1;
+      sfxPlay(SFX_HEART);  // no SFX_HATCH: ese suena al eclosionar, tres toques despues
+    } else {
+      eggSel = (int8_t)i;
+      sfxPlay(SFX_TAP);
+    }
+    return;
+  }
+}
+
 // ---------- texto: tamano y cursor (preparado para fuentes CJK) ----------
 // La fuente clasica ancla el cursor en la ESQUINA SUPERIOR del texto, y las 74
 // coordenadas Y del codigo estan escritas asi. Las fuentes U8g2 lo anclan en la
@@ -1705,7 +1808,7 @@ void printT(const char *s) {
 // Pantallas que solo cambian con un toque (o con un dato que cambia muy de vez en cuando):
 // mientras su "clave" no cambie no se repintan ni se vuelcan por QSPI.
 static bool staticScreen() {
-  if (pet.awaitingStarter()) return true;
+  if (pet.awaitingStarter() || pet.awaitingEgg()) return true;
   if (galleryOpen || gameOpen || sackOpen) return false;  // la galeria gestiona su propio repintado
   if (kbOpen || clockOpen) return true;
   return cardOpen && cardPage != 0;  // la pagina 0 tiene el retrato animado
@@ -1713,9 +1816,17 @@ static bool staticScreen() {
 static uint32_t mixKey(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
 static uint32_t screenKey() {
   uint32_t h = 2166136261u;
-  h = mixKey(h, pet.awaitingStarter() ? 1 : kbOpen ? 2 : clockOpen ? 3 : 4 + cardPage);
+  h = mixKey(h, pet.awaitingStarter() ? 1 : pet.awaitingEgg() ? 100 : kbOpen ? 2 : clockOpen ? 3 : 4 + cardPage);
   h = mixKey(h, sdEpoch);
-  if (kbOpen) {
+  if (pet.awaitingStarter()) {
+    // nada mas: la pantalla del inicial no cambia hasta elegir
+  } else if (pet.awaitingEgg()) {
+    int hr = sceneHour();
+    h = mixKey(h, (uint32_t)(eggSel + 1));
+    h = mixKey(h, (hr < 6 || hr >= 20) ? 1 : 0);
+    h = mixKey(h, gLang);
+    for (uint8_t i = 0; i < EGG_CHOICES; i++) h = mixKey(h, (uint32_t)(uint16_t)pet.eggChoice(i));
+  } else if (kbOpen) {
     h = mixKey(h, nameLen);
     for (int i = 0; i < nameLen; i++) h = mixKey(h, (uint8_t)nameBuf[i]);
   } else if (clockOpen) {
@@ -1734,7 +1845,7 @@ static uint32_t screenKey() {
                         (uint32_t)pet.geneDef, (uint32_t)pet.geneSpe, (uint32_t)pet.careMistakes,
                         (uint32_t)pet.fullness, (uint32_t)pet.joy, (uint32_t)pet.energy, (uint32_t)pet.hygiene,
                         (uint32_t)pet.berryKnown, (uint32_t)pet.strHi, (uint32_t)gLang,
-                        (uint32_t)pet.pace, (uint32_t)pet.bedPreset })
+                        (uint32_t)pet.pace, (uint32_t)pet.bedPreset, (uint32_t)pet.eggPickMode })
       h = mixKey(h, v);
     for (const char *c = pet.nick; *c; c++) h = mixKey(h, (uint8_t)*c);
   }
@@ -1753,6 +1864,10 @@ bool render() {
     if ((int32_t)(controlToastUntil - millis()) <= 0) controlToastVisible = false;
   }
 #endif
+  // la ficha es de un bicho vivo: con huevo o ceremonia no hay nada que mostrar (un
+  // BYE/RUN por serie la deja abierta; renderCardProfile leeria DEX_TBL[-1] y, ya
+  // elegido el huevo nuevo, el boton Huevos se podria cambiar con el huevo a la vista)
+  if (cardOpen && (pet.isEgg() || pet.ceremony)) cardOpen = false;
   if (staticScreen()) {
     uint32_t k = screenKey();
     if (screenKeyValid && k == lastScreenKey) return false;
@@ -1765,6 +1880,11 @@ bool render() {
     renderStarterSelect();
     return true;
   }
+  if (pet.awaitingEgg()) {  // tras un final: elegir huevo (prioridad total)
+    renderEggSelect();
+    return true;
+  }
+  eggSel = -1;  // ninguna eleccion abierta: que la siguiente empiece sin huevo tocado
   if (galleryOpen) {
     renderGallery();
     return true;
@@ -1809,24 +1929,30 @@ bool render() {
   if (pet.isEgg()) {
     drawHeader(T(S_EGG_HDR), inkColor(), eggMsg());
     int s = 5, x = CX - 16 * s, y = PET_CY - 16 * s;
-    drawMap(SPR_EGG, SPRITE_H, x, y, s, false);
+    // con el ajuste "Huevos" en Elegir este huevo salio de la eleccion (el
+    // ajuste solo se cambia en la ficha, que render() cierra con un huevo en
+    // pantalla): se ve igual que alli
+    if (pet.eggPickMode == EGGPICK_ON) drawEggStyled(pet.eggRarity(), pet.eggAccent(), x, y, s);
+    else drawMap(SPR_EGG, SPRITE_H, x, y, s, false);
     if (pet.eggCracks() >= 1)
       for (auto &c : CRACK1) gfx->fillRect(x + c[0] * s, y + c[1] * s, s, s, INK_K);
     if (pet.eggCracks() >= 2)
       for (auto &c : CRACK2) gfx->fillRect(x + c[0] * s, y + c[1] * s, s, s, INK_K);
-    if (pet.eggRarity() >= R_RARO) {
-      const char *rar = (pet.eggRarity() == R_LEGENDARIO) ? T(S_EGG_LEGEND) : T(S_EGG_RARE);
-      gfx->setTextColor(pet.eggRarity() == R_LEGENDARIO ? UI_BAR_WARN : 0x4C98);
-      setSize(2);
-      setCur(centerX(rar, 2), 316);
-      printT(rar);
-    }
     char reg[24];
     snprintf(reg, sizeof(reg), T(S_POKEDEX_FMT), pet.registeredCount());
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
+    // la etiqueta de rareza va DESPUES del panel: antes se pintaba en y=316 y el
+    // fillRect de arriba la tapaba, asi que "Huevo raro!" nunca se veia
+    if (pet.eggRarity() >= R_RARO) {
+      const char *rar = eggRarityText(pet.eggRarity());
+      gfx->setTextColor(eggRarityColor(pet.eggRarity()));
+      setSize(2);
+      setCur(centerX(rar, 2), 326);
+      printT(rar);
+    }
     gfx->setTextColor(inkColor());
     setSize(2);
-    setCur(centerX(reg, 2), 348);
+    setCur(centerX(reg, 2), 358);
     printT(reg);
   } else {
     const DexEntry &d = DEX_TBL[pet.speciesId];
@@ -2732,13 +2858,16 @@ void renderCardProgress() {
   printT(ms);
 }
 
-// pagina 4: cuidados. Dos botones grandes que ciclan un ajuste cada uno (se guardan
-// al tocar): ritmo normal <-> relajado, y hora de dormir apagado -> 21-07 -> 22-07 -> 23-08.
+// pagina 4: cuidados. Tres botones que ciclan un ajuste cada uno (se guardan al
+// tocar): ritmo normal <-> relajado, hora de dormir apagado -> 21-07 -> 22-07 ->
+// 23-08, y huevos sorpresa <-> elegir. 72 px de alto para que el tercero acabe en
+// y=324, lejos de los puntos de pagina (y=374); ahi el circulo mide 424 px.
 #define CARE_BTN_X 73
 #define CARE_BTN_W 320
-#define CARE_BTN_H 96
-#define CARE_PACE_Y 96
-#define CARE_BED_Y 212
+#define CARE_BTN_H 72
+#define CARE_PACE_Y 92
+#define CARE_BED_Y 172
+#define CARE_EGG_Y 252
 static const char *const BED_TXT[BED_PRESETS] = { "", "21:00-07:00", "22:00-07:00", "23:00-08:00" };
 
 static void drawCareBtn(int y, const char *label, const char *value) {
@@ -2746,11 +2875,11 @@ static void drawCareBtn(int y, const char *label, const char *value) {
   gfx->drawRoundRect(CARE_BTN_X, y, CARE_BTN_W, CARE_BTN_H, 16, UI_INK);
   gfx->setTextColor(UI_TRACK);
   setSize(2);
-  setCur(centerX(label, 2), y + 14);
+  setCur(centerX(label, 2), y + 8);
   printT(label);
   gfx->setTextColor(UI_INK);
   setSize(4);
-  setCur(centerX(value, 4), y + 44);
+  setCur(centerX(value, 4), y + 32);
   printT(value);
 }
 
@@ -2762,6 +2891,7 @@ void renderCardCare() {
   uint8_t bed = pet.bedPreset < BED_PRESETS ? pet.bedPreset : 0;
   drawCareBtn(CARE_PACE_Y, T(S_PACE), T(pet.pace == PACE_RELAXED ? S_PACE_RELAXED : S_PACE_NORMAL));
   drawCareBtn(CARE_BED_Y, T(S_BEDTIME), bed ? BED_TXT[bed] : T(S_BED_OFF));
+  drawCareBtn(CARE_EGG_Y, T(S_EGGS), T(pet.eggPickMode == EGGPICK_ON ? S_EGG_CHOOSE : S_EGG_SURPRISE));
 }
 
 // toque en la pagina de cuidados: true si cayo en un boton (cicla, guarda y suena)
@@ -2773,6 +2903,8 @@ bool careTap(int16_t x, int16_t y) {
     pet.setBedPreset((pet.bedPreset + 1) % BED_PRESETS);
     uint32_t e = rtcEpoch();
     if (e) bedSample(e);  // vuelve a tomar la referencia: cambiar el horario no duerme ni despierta por si solo
+  } else if (y >= CARE_EGG_Y && y <= CARE_EGG_Y + CARE_BTN_H) {
+    pet.setEggPickMode(pet.eggPickMode == EGGPICK_ON ? EGGPICK_OFF : EGGPICK_ON);  // vale para el proximo final
   } else {
     return false;
   }
