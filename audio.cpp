@@ -39,8 +39,6 @@ static volatile bool gPlaying = false;  // a sound is being written to I2S (audi
 // arranque (440 ms) se oia y los pitidos de 35 ms no. Se deja encendido mientras
 // haya sonido y la mascota este despierta, como en el ejemplo verificado de
 // Waveshare, y solo se apaga al dormir o al silenciar.
-static bool esW(uint8_t reg, uint8_t val);
-static bool i2sStart();
 static void i2sStop();
 
 static void updateAmplifierPower() {
@@ -56,9 +54,6 @@ static void updateAmplifierPower() {
     if (want == HIGH) gAmpOnAt = millis();
     digitalWrite(PA, want);
   }
-  // Only the amplifier is gated. If I2S is somehow down, bring it back.
-  if (!gReady) return;
-  if (!gI2sOn) i2sStart();
 }
 
 // ---- I2C del códec ----
@@ -85,7 +80,7 @@ static bool es8311Init() {
   if (Wire.endTransmission() != 0) return false;
 
   // open()
-  esW(0x0D, 0xFA); esW(0x44, 0x08); esW(0x44, 0x08);  // quirk de la 1a escritura (start() deja 0x0D=0x01)
+  esW(0x0D, 0xFA); esW(0x44, 0x08); esW(0x44, 0x08);  // power up + quirk de 1a escritura
   esW(0x01, 0x30); esW(0x02, 0x00); esW(0x03, 0x10); esW(0x16, 0x24);
   esW(0x04, 0x10); esW(0x05, 0x00); esW(0x0B, 0x00); esW(0x0C, 0x00);
   esW(0x10, 0x1F); esW(0x11, 0x7F);

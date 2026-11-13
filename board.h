@@ -17,7 +17,8 @@
 // xpowers_axp2101_chg_curr_t: 300 mA = 0x09 (the chip's power-on default), 400 mA = 0x0A.
 //   1.75C: 300 mA = 0.6C for its 500 mAh cell, with no battery temperature sensor (NTC)
 //          to back off a hot charge, so the factory default rate is used.
-//   1.75:  400 mA, the original setting for its 1100 mAh pack.
+//   1.75:  400 mA for its 1100 mAh pack (owner's choice; upstream never programmed ICC and
+//          left the chip default).
 // Including this header needs XPowersLib's enum in scope (rtcbat.cpp).
 #if BOARD_AMOLED_175C
 #define CHARGE_CURRENT_CODE XPOWERS_AXP2101_CHG_CUR_300MA

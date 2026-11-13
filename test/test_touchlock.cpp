@@ -61,15 +61,20 @@ TEST(TouchLock, millis_wrap_and_the_saved_selector) {
 TEST(TouchLock, tp_int_is_only_used_while_the_chip_is_awake) {
   // touch.sleep() makes TP_INT open drain and it reads LOW: polling or arming it as a
   // light-sleep wake source under the auto lock would keep the loop awake forever.
-  CHECK(touchWakeEnabled(false, false));
-  CHECK(!touchWakeEnabled(true, false));
-  CHECK(!touchWakeEnabled(false, true));
-  CHECK(!touchWakeEnabled(true, true));
+  CHECK(touchWakeEnabled(false, false, true));
+  CHECK(!touchWakeEnabled(true, false, true));
+  CHECK(!touchWakeEnabled(false, true, true));
+  CHECK(!touchWakeEnabled(true, true, true));
   TouchLock t;  // the auto lock going active is what disables it
-  CHECK(touchWakeEnabled(false, t.active));
+  CHECK(touchWakeEnabled(false, t.active, true));
   t.update(true, 0);
   t.update(true, 10000);
-  CHECK(!touchWakeEnabled(false, t.active));
+  CHECK(!touchWakeEnabled(false, t.active, true));
+  // A failed touch.begin() leaves TP_INT floating: it stays disabled whatever the locks say.
+  CHECK(!touchWakeEnabled(false, false, false));
+  CHECK(!touchWakeEnabled(true, false, false));
+  CHECK(!touchWakeEnabled(false, true, false));
+  CHECK(!touchWakeEnabled(true, true, false));
 }
 
 TEST(TouchLock, selector_three_is_zero_seconds) {

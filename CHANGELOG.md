@@ -15,6 +15,14 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   pass and never slept. The pin is now ignored (not polled, not a wake source,
   ISR detached) while either lock is on. The 1.75C PWR press is read from the
   PKEY status register directly, so a failed I2C read is no longer a press.
+  If the touch chip does not answer when it is brought back up, TP_INT is
+  pulled up (so a floating pin cannot read as a touch), stays ignored, and the
+  bring-up is retried every 2 s while the screen is on.
+
+- **Triple-press PWR with the screen off or pocket-locked.** While a press
+  sequence is pending the idle loop pauses 10 ms instead of 100 ms and does
+  not light-sleep, so the key is polled at the normal 40 ms rate and slower
+  triple presses are no longer merged into one latched edge.
 
 - **1.75C PWR button.** Key2 is only on AXP2101 PWRON. GPIO3 (net SYS_OUT) does
   not follow it, so the triple-press detector never saw the key. A short press
@@ -43,7 +51,7 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 - **LiPo charge profile on the AXP2101** (both boards). Charging is enabled at
   4.20 V. Constant current is **300 mA on the 1.75C** (the AXP2101 power-on
   default, 0.6C for its 500 mAh cell; there is no battery temperature sensor,
-  so the factory rate is used) and 400 mA on the original 1.75 (1100 mAh pack),
+  so the factory rate is used) and 400 mA on the original 1.75 (1100 mAh pack; owner's choice, upstream left the chip default),
   `CHARGE_CURRENT_*` in `board.h`. Termination is the chip default, **125 mA** (reg `0x63` =
   `0x15`): 25 mA never crossed the taper on this board, so the charger stayed
   in CV at 4.20 V and `isCharging()` stayed true. USB input limit is **900 mA**

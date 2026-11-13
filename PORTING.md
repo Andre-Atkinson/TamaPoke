@@ -118,7 +118,7 @@ work against LittleFS.
 | `boards/175c/partitions.csv` | **New.** 32 MB map above. Only used when passed explicitly. |
 | `pin_config.h` | 1.75C pins (LCD/touch reset, MCLK, PWR sense, BOOT) behind the switch; original pins unchanged. |
 | `sdmon.cpp` / `sdmon.h` | File I/O goes through `SpriteFS`: LittleFS on the 1.75C, still `SD_MMC` on the 1.75. |
-| `rtcbat.cpp` / `rtcbat.h` | 1.75C only: no PCF85063 probe, software clock, BLDO1 and the original panel rail left alone, DCDC5 off. Both boards: PKEY short-press IRQ read from `INTSTS2`, 4 s AXP power-off kept, charge current from `board.h` (`CHARGE_CURRENT_*`: 300 mA on the 1.75C, 400 mA on the original, which keeps its previous 400 mA). |
+| `rtcbat.cpp` / `rtcbat.h` | 1.75C only: no PCF85063 probe, software clock, BLDO1 and the original panel rail left alone, DCDC5 off. Both boards: PKEY short-press IRQ read from `INTSTS2`, 4 s AXP power-off kept, charge current from `board.h` (`CHARGE_CURRENT_*`: 300 mA on the 1.75C, 400 mA on the original, the owner's choice: upstream never programmed the charge current and left the chip default). The charger block is written on both boards, so the original 1.75 also gets new VBUS 900 mA, ITERM 125 mA, CHGLED type A (reg `0x69`) and button-cell charging off; none of that is verified on an original 1.75. |
 | `screenlock.cpp` / `screenlock.h` | **New.** PWR triple-press detector and lock state (pure logic, compile-time and host tests). |
 | `bootbutton.cpp` / `bootbutton.h` | **New.** BOOT single/double/long gesture detector (pure logic, tests). |
 | `trainingtouch.*` / `trainingcapture.*` | **New.** 1.75C strength-training tap policy, CST9217 report decoder and the capture worker. |
@@ -170,7 +170,7 @@ bits [3:2] = 00, set with `setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S)`).
   the BOOT button is *not* armed while locked, so a pocket-locked board wakes
   only on the timer to poll the PKEY flag.
 - Unlocking (the touch controller is brought back up first if the auto touch
-  lock had put it to sleep) sends DISPON + SLPOUT, restores brightness and shows `Unlocked` for
+  lock had put it to sleep) sends SLPOUT (`0x11`), waits 120 ms, then DISPON (`0x29`) and restores brightness (the opposite order leaves the panel dark) and shows `Unlocked` for
   1.2 s. A finger or BOOT press held through the unlock is ignored until released.
 - The lock lives in RAM only, so the board always boots unlocked. No new NVS keys.
 
@@ -218,4 +218,4 @@ y < 72 exit; the worker and trace commands are compiled out.
 
 - Panel start-up after a completely flat battery / cold AXP reset.
 - Onboard speaker level (ES8311 volume left at the 1.75 value).
-- A regression run on a real original 1.75.
+- A regression run on a real original 1.75, including its new charger writes (400 mA charge current, VBUS 900 mA, ITERM 125 mA, CHGLED type A, button-cell charging off) and the CO5300 panel sleep/wake sequence.

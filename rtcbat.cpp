@@ -81,7 +81,7 @@ bool batBegin() {
   // enableCellbatteryCharge() would restart a finished cycle.
   // CV reg 0x64 = 0x03 (4.20 V), the reset value. ICC reg 0x62 = CHARGE_CURRENT_CODE
   // (board.h: 1.75C 300 mA = 0x09, the AXP2101 reset value, since there is no NTC to
-  // limit a hot charge; original 1.75 400 mA = 0x0A for its 1100 mAh pack). ITERM reg 0x63 = 0x15 (125 mA, bit 4 enable),
+  // limit a hot charge; original 1.75 400 mA = 0x0A for its 1100 mAh pack, owner's choice; upstream left the chip default). ITERM reg 0x63 = 0x15 (125 mA, bit 4 enable),
   // also the reset value. 25 mA never let the taper current cross the threshold
   // on this board, so STATUS2 stayed "charging" at 4.20 V.
   // VBUS limit reg 0x16 = 0x02 (900 mA). 500 mA plus a charge target
