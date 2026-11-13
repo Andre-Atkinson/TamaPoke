@@ -10,6 +10,22 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Play starts a random minigame.** Four short touch games now take turns:
+  *Keepy-uppy* (the Poke Ball game), *Berry Catch* (slide to walk the pet under
+  falling berries; rotten ones cost points, its favourite berry counts double
+  once discovered), *Peekaboo* (tap the pet when it pops out of one of five
+  bushes) and *Berry Song* (repeat a growing tune on four berry pads; no timer,
+  and the pads light up so it works muted). Play deals them like a shuffled deck:
+  each game once before any repeats, never the same one twice in a row. Each
+  starts with a ~1 s title card and lasts about 25-40 s.
+- Every game pays the same reward for a good game (full JOY, +3 SPEED, a heart),
+  scaled from its own score; all of them train SPEED. Each keeps its own best
+  score, shown on the result screen and in a new row under the medals on the
+  card's Medals page. Keepy-uppy keeps its record (`ghi`); the others use new
+  keys (`mgc`, `mgp`, `mgs`), and all four are range-checked on load.
+- A game ends by itself after 15 s without a touch (paying for what was done),
+  so one left open can't keep the screen on. It pauses while the screen is off.
+
 - **Relaxed pace.** A new *Care* page on the stat card (swipe up, then swipe
   across to the fifth page) has a button that switches between Normal and
   Relaxed. Relaxed makes the needs (food, energy, hygiene, joy, poops) drain at
@@ -39,6 +55,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **Leaving a minigame** is now a "Hold: exit" button at the top of every game,
+  held for 1 s like the strength bag's on the 1.75C. Before, any tap near the
+  top quit keepy-uppy without a reward, including a tap aimed at a high ball.
+- A finger held still for 3 s during a minigame could open the "Release?"
+  dialog behind the game. Games now get the touch directly, with no long press
+  or swipes.
 - **"Rare egg!" / "Legendary egg!?" now shows on the egg screen.** It was drawn
   and then painted over by the bottom panel in the same frame, so it never
   appeared.

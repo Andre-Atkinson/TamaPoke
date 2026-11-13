@@ -60,13 +60,17 @@ enum StrId : uint8_t {
   S_EVO_Q, S_EVO_KEEP, S_FAR_Q, S_FAR_GO, S_FAR_STAY,
   S_CHOOSE_STARTER,  // titulo de la eleccion del inicial (primera vez)
   S_NO_SPRITES, S_LOAD_SPRITES,  // aviso cuando falta el sprite en la SD
-  S_HOLD_EXIT,  // 1.75C strength training: deliberate one-second exit
+  S_HOLD_EXIT,  // one-second exit hold: every Play minigame, and the strength bag on the 1.75C
   S_TLOCK_OFF,  // "off" — automatic touch lock disabled
   // ficha: pagina Care (ritmo y hora de dormir; los horarios van en digitos)
   S_CARE, S_PACE, S_PACE_NORMAL, S_PACE_RELAXED, S_BEDTIME, S_BED_OFF,
   // eleccion de huevo: titulo, pista bajo el huevo tocado, rareza comun, y el
   // boton de la pagina Care (etiqueta + sus dos valores)
   S_CHOOSE_EGG, S_EGG_TAP_AGAIN, S_EGG_COMMON, S_EGGS, S_EGG_CHOOSE, S_EGG_SURPRISE,
+  // minijuegos de Play: nombre y pista de la portada (orden de GameId), Berry Song
+  S_GAME_KEEPY, S_GAME_CATCH, S_GAME_PEEK, S_GAME_SONG,
+  S_HINT_KEEPY, S_HINT_CATCH, S_HINT_PEEK, S_HINT_SONG,
+  S_SONG_LISTEN, S_SONG_TURN,
   STR_COUNT
 };
 

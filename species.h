@@ -526,6 +526,63 @@ static const char* const SPR_ICON_CANDY[16] = {  // 16x16
   "................",
 };
 
+static const char* const SPR_ICON_ROTTEN[16] = {  // 16x16
+  "................",
+  "..s.............",
+  "...........k....",
+  "........k.k..s..",
+  ".s......k.......",
+  ".......kCk......",
+  ".....kkccckk....",
+  "....kcScccCck...",
+  "....kcccccSck...",
+  "...kccSccccCCk..",
+  "...kcccccSccCk..",
+  "....kcccccCck...",
+  "....kSccccCCk...",
+  ".....kkCCCkk....",
+  ".......kkk......",
+  "................",
+};
+
+static const char* const SPR_ICON_BUSH[16] = {  // 16x16
+  "................",
+  "................",
+  "................",
+  ".......kkk......",
+  ".....kkgggk.....",
+  "....kgggggGkk...",
+  "...kggwgggGggk..",
+  "..kgggggGGgggGk.",
+  "..kggggGggggGGk.",
+  ".kgggGgggggGGGGk",
+  ".kggggggGggGGGGk",
+  ".kGgggGGgggGGGdk",
+  "..kGGGGGGGGGddk.",
+  "...kkkdddddkkk..",
+  "......kCCk......",
+  "................",
+};
+
+static const char* const SPR_ICON_NOTE[16] = {  // 16x16
+  "................",
+  "................",
+  ".......kkkkkkk..",
+  ".......kBBBBBk..",
+  ".......kkkkkBk..",
+  ".......k....Bk..",
+  ".......k....Bk..",
+  ".......k....Bk..",
+  ".......k....Bk..",
+  ".......k..kkBk..",
+  "....kkkk.kBBBk..",
+  "...kBBBBkkBBBk..",
+  "...kBBBBk.kkk...",
+  "....kkkk........",
+  "................",
+  "................",
+};
+
 static const char* const SPR_EGG[32] = {  // 32x32
   "................................",
   "................................",

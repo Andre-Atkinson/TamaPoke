@@ -36,6 +36,8 @@
 #include "screenlock.h"
 #include "touchlock.h"
 #include "bedtime.h"
+#include "minigames.h"
+static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "trainingcapture.h"
 #include <Preferences.h>
 
@@ -128,14 +130,11 @@ bool bathPending = false;
 struct { int16_t x, y; uint8_t r, ph; } bubbles[14];
 uint32_t feedMenuUntil = 0;   // selector de comida abierto hasta este millis
 
-// minijuego "toques": mantener la pokeball en el aire
+// minijuegos de Play (minigames.h): uno al azar de la bolsa cada vez
 bool gameOpen = false;
-uint32_t gameOverUntil = 0;
-float ballX, ballY, ballVX, ballVY, gamePetX;
-uint32_t lastGameStep = 0;  // ultima llamada a stepGame(): fisica por tiempo real, no por frame
-uint8_t gameScore, gameMisses;
-float hitX, hitY;             // ultimo golpe (anillo de impacto)
-uint32_t hitTime = 0;
+MiniGames games;
+uint32_t gameOverUntil = 0;   // pantalla de resultado hasta este millis
+uint16_t gameShownScore = 0;  // puntuacion de la partida que se ensena en el resultado
 bool gameNewHi = false;
 
 // saco de entrenamiento (entrena la fuerza)
@@ -667,7 +666,7 @@ void bedApply() {
   bedPending = BED_NONE;
   if (ev == BED_SLEEP) {
     // Un juego o el saco abiertos aqui solo pueden estar a oscuras (bedBusy): se abandonan
-    // sin premio, como al tocar su cabecera. playResult() y trainStrength() se pagan al
+    // sin premio, como al mantener su boton de salir. playGame() y trainStrength() se pagan al
     // terminar la partida (que ya no llegara) y no miran pet.sleeping.
     gameOpen = false;
     if (sackOpen) {
@@ -1248,6 +1247,12 @@ void handleTouch() {
   }
 #endif
 
+  if (gameOpen) {  // el juego recibe el dedo tal cual: sin deslizar ni pulsacion larga
+    gameTouch(pressed, x, y);
+    wasPressed = pressed;
+    return;
+  }
+
   if (pressed && !wasPressed) {  // empieza el gesto
     tX0 = tXl = x;
     tY0 = tYl = y;
@@ -1377,10 +1382,7 @@ void onTap(int16_t x, int16_t y) {
     }
     return;
   }
-  if (gameOpen) {
-    gameTap(x, y);
-    return;
-  }
+  if (gameOpen) return;  // los toques del juego van por gameTouch() (handleTouch)
   if (choiceKind) {          // dialogo de decision: boton accion (arriba) / mantener (abajo)
     bool b1 = (x >= 93 && x <= 373 && y >= 206 && y <= 258);  // accion
     bool b2 = (x >= 93 && x <= 373 && y >= 268 && y <= 320);  // mantener / quedaros
@@ -1845,6 +1847,7 @@ static uint32_t screenKey() {
                         (uint32_t)pet.geneDef, (uint32_t)pet.geneSpe, (uint32_t)pet.careMistakes,
                         (uint32_t)pet.fullness, (uint32_t)pet.joy, (uint32_t)pet.energy, (uint32_t)pet.hygiene,
                         (uint32_t)pet.berryKnown, (uint32_t)pet.strHi, (uint32_t)gLang,
+                        (uint32_t)pet.gameHi, (uint32_t)pet.catchHi, (uint32_t)pet.peekHi, (uint32_t)pet.songHi,
                         (uint32_t)pet.pace, (uint32_t)pet.bedPreset, (uint32_t)pet.eggPickMode })
       h = mixKey(h, v);
     for (const char *c = pet.nick; *c; c++) h = mixKey(h, (uint8_t)*c);
@@ -2032,97 +2035,67 @@ bool render() {
   return true;
 }
 
-// ---------- minijuego: toques con la pokeball ----------
+// ---------- minijuegos de Play (logica en minigames.h) ----------
 
 void startGame() {
   if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+  uint8_t fav = 0;
+  while (fav < 2 && !pet.lovesBerry(fav)) fav++;
+  games.start(millis(), (uint32_t)random(0x7FFFFFFF) ^ micros(), fav, pet.berryKnown);
   gameOpen = true;
   gameOverUntil = 0;
-  gameScore = 0;
-  gameMisses = 0;
   gameNewHi = false;
-  hitTime = 0;
-  gamePetX = 233;
-  lastGameStep = millis();
-  respawnBall();
 }
 
-void respawnBall() {
-  ballX = 150 + random(166);
-  ballY = 96;
-  float sp = 1.6f + gameScore * 0.05f;  // mas viva segun avanzas
-  if (sp > 4.0f) sp = 4.0f;
-  ballVX = random(2) ? sp : -sp;
-  ballVY = 0;
-}
-
-void gameTap(int16_t x, int16_t y) {
-  if (gameOverUntil) return;
-  if (y < 72) {  // tocar la cabecera = abandonar sin premio
-    gameOpen = false;
+// Un informe del tactil con un juego abierto. El dedo que mantiene "salir" deja el
+// juego sin premio, como antes tocar la cabecera; el resto del toque se traga para
+// que al soltar no se resuelva como un toque en la pantalla principal.
+void gameTouch(bool pressed, int16_t x, int16_t y) {
+  bool start = pressed && !wasPressed;
+  // Un toque que empieza con la pantalla apagada o atenuada solo la despierta
+  // (como en la pantalla principal): el juego no lo ve, ni siquiera al soltar.
+  bool dark = start && (screenOff || dimStage > 0);
+  if (dark) screenOff = false;
+  if (start) {
+    holdFired = true;  // nada de este toque llega al gesto normal si el juego se cierra
+    swallowGesture = true;
+  }
+  if (gameOverUntil) {  // pantalla de resultado: solo esperar
+    if (start || (!pressed && wasPressed)) wakeUI();
     return;
   }
-  float dx = ballX - x, dy = ballY - y;
-  if (dx * dx + dy * dy < 74 * 74) {  // toque a la bola!
-    gameScore++;
-    sfxPlay(SFX_PLAY);
-    // golpe mas suave: impulso moderado que crece poco a poco con la puntuacion
-    float lift = 6.6f + (gameScore > 16 ? 3.5f : gameScore * 0.22f);
-    ballVY = -lift;
-    ballVX += dx * 0.12f;
-    if (ballVX > 6.5f) ballVX = 6.5f;
-    if (ballVX < -6.5f) ballVX = -6.5f;
-    hitX = ballX;
-    hitY = ballY;
-    hitTime = millis();
+  bool exitHeld = games.touch(pressed, x, y, millis(), dark);
+  // El dedo quieto informa cada 20 ms: solo cuenta (y despierta) al apoyar, al
+  // soltar o al moverse de verdad (games.counted); si no, Berry Song no acabaria.
+  if (start || (!pressed && wasPressed) || games.counted) wakeUI();
+  if (exitHeld) {
+    gameOpen = false;
+    holdFired = true;
+    swallowGesture = true;
+    return;
   }
+  gameSounds();  // la nota o el golpe suenan ya, no en el proximo frame
 }
 
-void stepGame() {
-  uint32_t now = millis();
-  // paso relativo a 85 ms, el periodo de frame con el que se afinaron estas
-  // constantes (ver el planificador de render en loop()): sin esto la fisica
-  // avanzaba "un paso por frame" y el juego iba mas rapido o mas lento segun
-  // lo que tardara en dibujarse el frame anterior, que depende del tamano del
-  // sprite cargado. Con un Charizard la bola caia mas despacio que con un
-  // Diglett, asi que el record no era comparable entre especies.
-  float k = lastGameStep ? (now - lastGameStep) / 85.0f : 1.0f;
-  if (k > 3.0f) k = 3.0f;  // frame anormalmente tardio: no dar un salto enorme
-  lastGameStep = now;
+// sonidos que pide el juego tras un paso o un toque
+void gameSounds() {
+  uint8_t note = games.takeNote();
+  if (note < 4) sfxPlay(SFX_NOTE0 + note);
+  uint8_t e = games.takeEvents();
+  if (e & GEV_BAD) sfxPlay(SFX_DENY);
+  if (e & GEV_WIN) sfxPlay(SFX_EVOLVE);  // las 12 notas: la fanfarria (finishGame no suena otra)
+  else if (e & GEV_HEART) sfxPlay(SFX_HEART);
+  else if ((e & GEV_GOOD) && games.game() != GAME_SONG) sfxPlay(games.game() == GAME_CATCH ? SFX_EAT : SFX_PLAY);
+}
 
-  float grav = 0.40f + gameScore * 0.013f;  // cae un poco mas rapido cada vez
-  if (grav > 0.80f) grav = 0.80f;
-  ballVY += grav * k;
-  ballX += ballVX * k;
-  ballY += ballVY * k;
-  // rebote en la pared circular
-  float dx = ballX - CX, dy = ballY - CY;
-  float d = sqrtf(dx * dx + dy * dy);
-  if (d > 205) {
-    float nx = dx / d, ny = dy / d;
-    float dot = ballVX * nx + ballVY * ny;
-    if (dot > 0) {
-      ballVX = (ballVX - 2 * dot * nx) * 0.85f;
-      ballVY = (ballVY - 2 * dot * ny) * 0.85f;
-    }
-    ballX = CX + nx * 205;
-    ballY = CY + ny * 205;
-  }
-  if (ballY > 384) {  // al suelo
-    if (++gameMisses >= 3) {
-      gameNewHi = (gameScore > pet.gameHi);
-      pet.playResult(gameScore);  // actualiza el record y da felicidad
-      sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
-      gameOverUntil = millis() + 4000;
-    } else {
-      respawnBall();
-    }
-  }
-  // el bicho la sigue por abajo
-  float chase = (ballX - gamePetX) * 0.12f;
-  if (chase > 7) chase = 7;
-  if (chase < -7) chase = -7;
-  gamePetX += chase * k;
+// fin de la partida (el juego acabo o nadie lo toco en 15 s): record y recompensa
+void finishGame() {
+  uint8_t g = games.game();
+  gameShownScore = games.score();
+  gameNewHi = gameShownScore > pet.gameBest(g);
+  pet.playGame(g, gameShownScore);
+  if (!games.won()) sfxPlay(gameNewHi && gameShownScore > 0 ? SFX_MEDAL : SFX_LEVEL);
+  gameOverUntil = millis() + 4000;
 }
 
 // ---------- saco de entrenamiento (entrena la fuerza) ----------
@@ -2278,97 +2251,277 @@ void drawGameScene() {
   gfx->fillRect(0, hor, 466, 466 - hor, soil);
 }
 
-void renderGame() {
-  // sin fillScreen(NEGRO): drawGameScene cubre los 466x466 completos. Si el
-  // DMA del flush anterior aun lee el buffer, vera contenido valido (no negro
-  // a medio pintar), que era el parpadeo a 25 fps.
-  bool night = sceneHour() < 6 || sceneHour() >= 20;
-  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+// ---------- dibujo de los minijuegos ----------
 
-  if (gameOverUntil) {
-    drawGameScene();
-    if (!timeLeft(gameOverUntil)) {
-      gameOpen = false;
-      return;
-    }
-    char buf[22];
-    snprintf(buf, sizeof(buf), T(S_SCORE_FMT), gameScore);
-    gfx->setTextColor(ink);
-    setSize(4);
-    setCur(centerX(buf, 4), 160);
-    printT(buf);
-    setSize(2);
-    if (gameNewHi && gameScore > 0) {
-      gfx->setTextColor(UI_BAR_WARN);
-      setCur(centerX(T(S_NEW_RECORD), 2), 214);
-      printT(T(S_NEW_RECORD));
-    } else {
-      char rec[20];
-      snprintf(rec, sizeof(rec), T(S_RECORD_FMT), pet.gameHi);
-      gfx->setTextColor(ink);
-      setCur(centerX(rec, 2), 214);
-      printT(rec);
-    }
-    const char *msg = gameScore >= 10 ? T(S_GREAT_JOY) : T(S_PLUS_JOY);
-    gfx->setTextColor(ink);
-    setCur(centerX(msg, 2), 250);
-    printT(msg);
-    flushUI();
-    return;
-  }
+static bool gameNight() {
+  int h = sceneHour();
+  return h < 6 || h >= 20;
+}
 
-  drawGameScene();
-  stepGame();
+// icono de cada juego (portada y fila de records de la ficha), en el orden de GameId
+static const char *const *const GAME_ICON[GAME_COUNT] = { SPR_ICON_PLAY, SPR_ICON_FOOD, SPR_ICON_BUSH,
+                                                          SPR_ICON_NOTE };
 
-  // marcador, record y vidas
-  char buf[8];
-  snprintf(buf, sizeof(buf), "%u", gameScore);
-  gfx->setTextColor(ink);
-  setSize(4);
-  setCur(centerX(buf, 4), 30);
-  printT(buf);
-  // 24 y no 12: en japones "きろく %u" son 10 bytes antes de la cifra y el
-  // record se quedaba en su primer digito ("きろく 2" con 219). Las tallas de
-  // los buffers de texto las vigila TestBuffersDeTexto en test/test_tools.py.
-  char rec[24];
-  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameHi);
-  setSize(2);
-  setCur(centerX(rec, 2), 76);
-  printT(rec);
-  for (int i = 0; i < 3; i++) {
-    if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
-    else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
-  }
-
+// el bicho dentro de un juego: su sprite PMD (sin esa accion, IDLE), si no el sprite
+// antiguo de la SD, y si tampoco hay, la Poke Ball
+void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS) {
   if (pmd.loaded) {
-    uint8_t act = (ballX > gamePetX + 4) ? PMD_WALKR : (ballX < gamePetX - 4) ? PMD_WALKL : PMD_IDLE;
     if (!pmd.has(act)) act = PMD_IDLE;
-    drawPmdAct(act, (int)gamePetX, 394, millis(), true, false, 3);
-  } else if (mon.loaded) {
+    drawPmdAct(act, cx, groundY, millis(), true, false, maxS);
+  } else if (mon.loaded && mon.frames) {
     int s = (mon.h * 2 > 130) ? 1 : 2;
     int w = mon.w * s, h = mon.h * s;
     uint16_t fm = mon.frameMs ? mon.frameMs : 100;
     uint16_t fi = (millis() / fm) % mon.frames;
     const uint8_t *fr = mon.data + (uint32_t)fi * mon.w * mon.h;
-    int px = (int)gamePetX - w / 2, py = 394 - h;
+    int px = cx - w / 2, py = groundY - h;
     for (int r = 0; r < mon.h; r++) {
       const uint8_t *row = fr + r * mon.w;
       forRuns(mon.w, [&](int c) { return indexedKey(row[c], false); },
               [&](int c0, int len, int k) { gfx->fillRect(px + c0 * s, py + r * s, len * s, s, mon.pal[k]); });
     }
+  } else {
+    drawMap(SPR_ICON_PLAY, 16, cx - 24, groundY - 48, 3, false);
   }
+}
 
+// marcador y record de este juego, debajo del boton de salir
+void drawGameHud(uint16_t ink, uint16_t score) {
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%u", score);
+  gfx->setTextColor(ink);
+  setSize(4);
+  setCur(centerX(buf, 4), 68);
+  printT(buf);
+  // 24 y no 12: en japones "きろく %u" son 10 bytes antes de la cifra y el
+  // record se quedaba en su primer digito ("きろく 2" con 219). Las tallas de
+  // los buffers de texto las vigila TestBuffersDeTexto en test/test_tools.py.
+  char rec[24];
+  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameBest(games.game()));
+  setSize(2);
+  setCur(centerX(rec, 2), 106);
+  printT(rec);
+}
+
+// barra fina de lo que queda de partida (Berry Catch: tiempo; Peekaboo: apariciones)
+void drawGameBar(uint32_t left, uint32_t total) {
+  const int bw = 200, by = 130;
+  int fw = total ? (int)((uint32_t)bw * left / total) : 0;
+  gfx->fillRoundRect(CX - bw / 2, by, bw, 10, 4, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, by, fw, 10, 4, UI_BAR_OK);
+}
+
+// "Mantener: salir", arriba en todos los juegos (como el del saco en la 1.75C). El
+// boton es claro de dia y de noche, asi que su texto va siempre en tinta oscura.
+void drawGameExit() {
+  const int ex = GameTouchRouter::EXIT_X, ey = GameTouchRouter::EXIT_Y;
+  const int ew = GameTouchRouter::EXIT_W, eh = GameTouchRouter::EXIT_H;
+  const uint32_t hold = GameTouchRouter::EXIT_HOLD_MS;
+  uint32_t held = games.input.heldMs(millis());
+  gfx->fillRoundRect(ex, ey, ew, eh, 8, UI_TRACK);
+  int progress = (int)(ew * (held > hold ? hold : held) / hold);
+  if (progress > 2) gfx->fillRoundRect(ex, ey, progress, eh, 8, UI_BAR_WARN);
+  gfx->drawRoundRect(ex, ey, ew, eh, 8, UI_INK);
+  gfx->setTextColor(UI_INK);
+  setSize(2);
+  setCur(centerX(T(S_HOLD_EXIT), 2), ey + 12);
+  printT(T(S_HOLD_EXIT));
+}
+
+// portada (~1,2 s): icono, nombre y pista
+void drawGameTitle(uint16_t ink) {
+  uint8_t g = games.game();
+  drawMap(GAME_ICON[g], 16, CX - 32, 112, 4, false);
+  const char *name = T((StrId)(S_GAME_KEEPY + g));
+  setSize(4);  // textW() mide con el tamano puesto (fuentes CJK)
+  uint8_t sz = textW(name, 4) <= 380 ? 4 : 3;
+  setSize(sz);
+  gfx->setTextColor(ink);
+  setCur(centerX(name, sz), 200);
+  printT(name);
+  const char *hint = T((StrId)(S_HINT_KEEPY + g));
+  setSize(2);
+  setCur(centerX(hint, 2), 256);
+  printT(hint);
+}
+
+void drawKeepy(uint16_t ink) {
+  const KeepyGame &k = games.keepy;
+  drawGameHud(ink, k.score);
+  for (int i = 0; i < KeepyGame::LIVES; i++) {  // vidas
+    if (i < KeepyGame::LIVES - k.misses) gfx->fillCircle(205 + i * 28, 132, 6, UI_BAR_BAD);
+    else gfx->drawCircle(205 + i * 28, 132, 6, UI_TRACK);
+  }
+  uint8_t act = (k.ballX > k.petX + 4) ? PMD_WALKR : (k.ballX < k.petX - 4) ? PMD_WALKL : PMD_IDLE;
+  drawGamePet(act, (int)k.petX, 394, 3);
   // anillo de impacto que se expande y desvanece (feedback suave del golpe)
-  uint32_t ht = millis() - hitTime;
-  if (hitTime && ht < 260) {
+  uint32_t ht = k.t - k.hitT;
+  if (k.hasHit && ht < 260) {
     int rad = 22 + (int)(ht / 6);
-    gfx->drawCircle((int)hitX, (int)hitY, rad, C565(0xff, 0xe7, 0x9f));
-    gfx->drawCircle((int)hitX, (int)hitY, rad - 2, C565(0xff, 0xd9, 0x8a));
+    gfx->drawCircle((int)k.hitX, (int)k.hitY, rad, C565(0xff, 0xe7, 0x9f));
+    gfx->drawCircle((int)k.hitX, (int)k.hitY, rad - 2, C565(0xff, 0xd9, 0x8a));
   }
+  drawMap(SPR_ICON_PLAY, 16, (int)k.ballX - 24, (int)k.ballY - 24, 3, false);  // la Poke Ball
+}
 
-  // la pokeball
-  drawMap(SPR_ICON_PLAY, 16, (int)ballX - 24, (int)ballY - 24, 3, false);
+static const char *const *const CATCH_ICON[4] = { SPR_ICON_FOOD, SPR_ICON_BERRY_B, SPR_ICON_BERRY_G,
+                                                  SPR_ICON_ROTTEN };
 
+void drawCatch(uint16_t ink) {
+  const CatchGame &c = games.catcher;
+  drawGameHud(ink, c.result());
+  drawGameBar(c.timeLeft(), CatchGame::DURATION_MS);
+  uint8_t act = c.hurting() ? PMD_HURT
+                : c.eating() ? PMD_EAT
+                : c.targetX > c.petX + 4 ? PMD_WALKR
+                : c.targetX < c.petX - 4 ? PMD_WALKL : PMD_IDLE;
+  drawGamePet(act, (int)c.petX, 394, 3);
+  if (c.eating() && c.loved) drawMap(SPR_HEART, 32, (int)c.petX + 10, 250, 2, false);
+  for (const CatchGame::Berry &b : c.berries)
+    if (b.live) drawMap(CATCH_ICON[b.kind < 4 ? b.kind : 0], 16, b.x - 24, (int)b.y - 24, 3, false);
+}
+
+// arbusto de Peekaboo: la copa va detras del bicho y el borde de delante encima
+void drawBush(int x, int y, bool front, bool night) {
+  uint16_t light = night ? C565(0x2c, 0x5c, 0x34) : C565(0x58, 0xb8, 0x68);
+  uint16_t dark = night ? C565(0x1e, 0x45, 0x26) : C565(0x3c, 0x8a, 0x4c);
+  if (!front) {
+    gfx->fillCircle(x, y - 14, 40, light);
+    gfx->fillCircle(x - 34, y + 4, 30, light);
+    gfx->fillCircle(x + 34, y + 4, 30, light);
+  } else {
+    gfx->fillCircle(x - 30, y + 18, 26, dark);
+    gfx->fillCircle(x, y + 22, 28, dark);
+    gfx->fillCircle(x + 30, y + 18, 26, dark);
+    gfx->fillRect(x - 56, y + 18, 112, 22, dark);
+  }
+}
+
+void drawPeek(uint16_t ink) {
+  const PeekGame &p = games.peek;
+  bool night = gameNight();
+  drawGameHud(ink, p.score);
+  drawGameBar(PeekGame::POPS - p.pops, PeekGame::POPS);
+  for (uint8_t b = 0; b < PeekGame::BUSHES; b++) {  // fila de arriba primero: la de abajo tapa
+    int shake = p.rustling(b) ? ((p.t / 40) % 2 ? 4 : -4) : 0;
+    int x = PeekGame::BX[b] + shake, y = PeekGame::BY[b];
+    drawBush(x, y, false, night);
+    if (p.up() && p.bush == b) {
+      // sale y se esconde en 150 ms: los pies suben desde detras del borde
+      uint32_t in = p.t - p.phaseStart, out = p.phaseEnd > p.t ? p.phaseEnd - p.t : 0;
+      uint32_t edge = in < out ? in : out;
+      int sink = edge >= 150 ? 0 : (int)(40 * (150 - edge) / 150);
+      drawGamePet(p.hit ? PMD_NOD : PMD_POSE, PeekGame::BX[b], y + 4 + sink, 3);
+    }
+    drawBush(x, y, true, night);
+  }
+}
+
+static const uint16_t SONG_COL[SongGame::PADS] = { C565(0xe8, 0x50, 0x3a), C565(0x4f, 0x93, 0xc4),
+                                                   C565(0x58, 0xb8, 0x68), C565(0xf0, 0x8a, 0xa4) };
+static const char *const *const SONG_ICON[SongGame::PADS] = { SPR_ICON_FOOD, SPR_ICON_BERRY_B,
+                                                              SPR_ICON_BERRY_G, SPR_ICON_CANDY };
+
+void drawSong(uint16_t ink) {
+  const SongGame &s = games.song;
+  bool night = gameNight();
+  const char *msg = s.playersTurn() ? T(S_SONG_TURN) : T(S_SONG_LISTEN);
+  gfx->setTextColor(ink);
+  setSize(4);  // grande si cabe (la fuente CJK divide el tamano entre 2), si no a 3
+  uint8_t sz = textW(msg, 4) <= 300 ? 4 : 3;
+  setSize(sz);
+  setCur(centerX(msg, sz), 68);
+  printT(msg);
+  char rec[24];  // ver drawGameHud
+  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameBest(GAME_SONG));
+  setSize(2);
+  setCur(centerX(rec, 2), 104);
+  printT(rec);
+  for (int i = 0; i < SongGame::TRIES; i++) {  // intentos
+    if (i < s.tries) gfx->fillCircle(205 + i * 28, 132, 6, UI_BAR_BAD);
+    else gfx->drawCircle(205 + i * 28, 132, 6, UI_TRACK);
+  }
+  uint8_t lit = s.litPad();
+  uint8_t act = s.won ? PMD_POSE
+                : s.phase == SongGame::WRONG ? PMD_SIT
+                : (s.busy() && lit != SongGame::NO_PAD) ? PMD_NOD : PMD_IDLE;  // "canta" cada nota
+  drawGamePet(act, CX, 262, 3);
+  for (uint8_t i = 0; i < SongGame::PADS; i++) {
+    int x = SongGame::PX[i], y = SongGame::PY[i];
+    bool on = lit == i;
+    int r = SongGame::PAD_R + (on ? 4 : 0);
+    // apagado: el mismo color mas palido (o mas oscuro de noche); encendido: vivo y con aro blanco
+    uint16_t col = on ? SONG_COL[i] : lerp565(SONG_COL[i], night ? UI_BG_NIGHT : UI_TRACK, 9, 16);
+    gfx->fillCircle(x, y, r, col);
+    gfx->drawCircle(x, y, r, on ? UI_WHITE : ink);
+    if (on) gfx->drawCircle(x, y, r + 2, UI_WHITE);
+    drawMap(SONG_ICON[i], 16, x - 24, y - 24, 3, false);
+  }
+}
+
+// resultado (4 s): puntuacion, record y premio
+void drawGameResult(uint16_t ink) {
+  uint8_t g = games.game();
+  const char *name = T((StrId)(S_GAME_KEEPY + g));
+  gfx->setTextColor(ink);
+  setSize(2);
+  setCur(centerX(name, 2), 120);
+  printT(name);
+  char buf[22];
+  snprintf(buf, sizeof(buf), T(S_SCORE_FMT), gameShownScore);
+  setSize(4);
+  setCur(centerX(buf, 4), 160);
+  printT(buf);
+  setSize(2);
+  if (gameNewHi && gameShownScore > 0) {
+    gfx->setTextColor(UI_BAR_WARN);
+    setCur(centerX(T(S_NEW_RECORD), 2), 214);
+    printT(T(S_NEW_RECORD));
+  } else {
+    char rec[20];
+    snprintf(rec, sizeof(rec), T(S_RECORD_FMT), pet.gameBest(g));
+    gfx->setTextColor(ink);
+    setCur(centerX(rec, 2), 214);
+    printT(rec);
+  }
+  const char *msg = gameNormScore(g, gameShownScore) >= 10 ? T(S_GREAT_JOY) : T(S_PLUS_JOY);
+  gfx->setTextColor(ink);
+  setCur(centerX(msg, 2), 250);
+  printT(msg);
+}
+
+void renderGame() {
+  // sin fillScreen(NEGRO): drawGameScene cubre los 466x466 completos. Si el
+  // DMA del flush anterior aun lee el buffer, vera contenido valido (no negro
+  // a medio pintar), que era el parpadeo a 25 fps.
+  uint16_t ink = gameNight() ? UI_INK_NIGHT : UI_INK;
+  if (!gameOverUntil) {
+    games.frame(millis());
+    if (games.busy()) wakeUI();  // la melodia suena: el tiempo no es inactividad ni apaga la pantalla
+    gameSounds();
+    if (games.over()) finishGame();
+  }
+  drawGameScene();
+  if (gameOverUntil) {
+    if (!timeLeft(gameOverUntil)) {
+      gameOpen = false;
+      return;
+    }
+    drawGameResult(ink);
+    flushUI();
+    return;
+  }
+  drawGameExit();  // antes del juego: la bola de keepy-uppy sube hasta y=28 y va por encima
+  if (games.flow.phase == GP_TITLE) {
+    drawGameTitle(ink);
+  } else {
+    switch (games.game()) {
+      case GAME_CATCH: drawCatch(ink); break;
+      case GAME_PEEK: drawPeek(ink); break;
+      case GAME_SONG: drawSong(ink); break;
+      default: drawKeepy(ink); break;
+    }
+  }
   flushUI();
 }
 
@@ -2795,6 +2948,19 @@ void renderCardMedals() {
     setSize(2);
     setCur(x + 44, y + 14);
     printT(medalDesc(i));
+  }
+
+  // records de los minijuegos de Play: icono y mejor puntuacion de cada uno
+  for (uint8_t g = 0; g < GAME_COUNT; g++) {
+    int x = 61 + g * 88, y = 322;
+    gfx->fillRoundRect(x, y, 80, 40, 10, UI_TRACK);
+    drawMap(GAME_ICON[g], 16, x + 4, y + 4, 2, false);
+    char n[8];
+    snprintf(n, sizeof(n), "%u", pet.gameBest(g));
+    gfx->setTextColor(UI_INK);
+    setSize(2);
+    setCur(x + 38 + (40 - textW(n, 2)) / 2, y + 12);
+    printT(n);
   }
 }
 

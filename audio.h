@@ -14,6 +14,10 @@ enum Sfx : uint8_t {
   SFX_DENY,     // accion no permitida
   SFX_BYE,      // despedida
   SFX_LEVEL,    // sube de nivel
+  SFX_NOTE0,    // Berry Song: baya roja (do)
+  SFX_NOTE1,    // baya azul (mi)
+  SFX_NOTE2,    // baya verde (sol)
+  SFX_NOTE3,    // caramelo (do agudo)
   SFX_COUNT
 };
 

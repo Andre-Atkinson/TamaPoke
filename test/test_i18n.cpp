@@ -279,3 +279,47 @@ TEST(i18n, los_textos_de_la_eleccion_de_huevo_caben) {
   }
   gLang = LANG_DEFAULT;
 }
+// Minijuegos de Play: los nombres y pistas de la portada. Japones solo en kana y coreano
+// solo en silabas hangul (mas espacio y la puntuacion ASCII "!.?", que las dos fuentes
+// U8g2 traen); en los idiomas latinos, que quepan: el nombre va a tamano 3 (18 px por
+// letra, 400 px) y las pistas a tamano 2 (12 px por letra, 400 px).
+static const StrId GAME_STRS[] = { S_GAME_KEEPY, S_GAME_CATCH, S_GAME_PEEK, S_GAME_SONG,
+                                   S_HINT_KEEPY, S_HINT_CATCH, S_HINT_PEEK, S_HINT_SONG,
+                                   S_SONG_LISTEN, S_SONG_TURN };
+static bool asciiPunct(uint32_t c) { return c == ' ' || c == '!' || c == '.' || c == '?'; }
+
+TEST(i18n, los_minijuegos_en_japones_van_solo_en_kana_y_en_coreano_solo_en_hangul) {
+  for (StrId id : GAME_STRS) {
+    gLang = LANG_JA;
+    for (uint32_t c : codepoints(T(id)))
+      CHECK_MSG((c >= 0x3041 && c <= 0x30FF) || asciiPunct(c), std::string("no es kana: ") + T(id));
+    gLang = LANG_KO;
+    for (uint32_t c : codepoints(T(id)))
+      CHECK_MSG((c >= 0xAC00 && c <= 0xD7A3) || asciiPunct(c), std::string("no es hangul: ") + T(id));
+  }
+  gLang = LANG_DEFAULT;
+}
+
+TEST(i18n, los_textos_de_los_minijuegos_caben_en_pantalla) {
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    if (LANG_IS_CJK(lang)) continue;  // el ancho CJK se mira en el simulador
+    gLang = (Lang)lang;
+    for (StrId id : GAME_STRS) {
+      const char *t = T(id);
+      CHECK_MSG(t && t[0], std::string("vacio en ") + LANG_NAME[lang]);
+      bool title = id <= S_GAME_SONG || id >= S_SONG_LISTEN;  // tamano 3
+      size_t max = title ? 22 : 33;
+      CHECK_MSG(strlen(t) <= max, std::string("no cabe: ") + t);
+    }
+  }
+  gLang = LANG_DEFAULT;
+}
+
+// el orden de los nombres y pistas sigue a GameId: el sketch los indexa con el juego
+TEST(i18n, nombres_y_pistas_de_los_minijuegos_siguen_el_orden_de_GameId) {
+  CHECK_EQ((int)S_GAME_CATCH - (int)S_GAME_KEEPY, (int)GAME_CATCH);
+  CHECK_EQ((int)S_GAME_PEEK - (int)S_GAME_KEEPY, (int)GAME_PEEK);
+  CHECK_EQ((int)S_GAME_SONG - (int)S_GAME_KEEPY, (int)GAME_SONG);
+  CHECK_EQ((int)S_HINT_SONG - (int)S_HINT_KEEPY, (int)GAME_SONG);
+  CHECK_EQ((int)S_HINT_KEEPY - (int)S_GAME_KEEPY, (int)GAME_COUNT);
+}
