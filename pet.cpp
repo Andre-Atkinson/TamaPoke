@@ -282,8 +282,10 @@ int16_t Pet::pickEggSpecies() {
 // los otros dos son comunes, de especie y color de tipo distintos (el color es
 // la pista que se ve en la cascara). Como pickEggSpecies, prefieren lineas
 // evolutivas incompletas; si no se puede todo a la vez, cede primero la linea
-// nueva y despues el color. Hay 48 comunes, asi que siempre sale algo.
+// nueva y despues el color. Hay 47 comunes, asi que siempre sale algo.
 void Pet::rollEggChoices(int16_t special, int16_t out[EGG_CHOICES]) {
+  // defensivo: las llamadas de newEgg() pasan una especie de huevo; load() puede
+  // pasar un eggTarget danado que no lo sea (entonces se sortea uno)
   if (special < 1 || special > DEX_COUNT || DEX_TBL[special].rarity == R_EVO)
     special = pickEggSpecies();
   out[0] = special;
@@ -301,6 +303,8 @@ void Pet::rollEggChoices(int16_t special, int16_t out[EGG_CHOICES]) {
           if (out[j] == d) taken = true;
           if (DEX_TBL[out[j]].accent == DEX_TBL[d].accent) sameColour = true;
         }
+        // `taken` es redundante con `sameColour` en las pasadas 0 y 1 (defensivo):
+        // solo cuenta en las pasadas 2 y 3, donde el color ya no se exige
         if (taken || (newColour && sameColour)) continue;
         if (newLine && !lineHasUnregistered(d)) continue;
         cand[n++] = d;
@@ -804,10 +808,11 @@ void Pet::load() {
   }
   // A pending egg choice only makes sense on an egg with no starter choice open
   // (if a damaged save has both, the starter screen wins). Candidates that are
-  // not three distinct egg species are rolled again with the same odds.
+  // not three distinct egg species are rolled again around the saved roll (eggTarget,
+  // already range-checked above), so a damaged candidate save keeps a Rare/Legendary.
   if (eggPick) {
     if (starterPick || !isEgg()) eggPick = false;
-    else if (!validEggChoices(eggCand)) rollEggChoices(pickEggSpecies(), eggCand);
+    else if (!validEggChoices(eggCand)) rollEggChoices(eggTarget, eggCand);  // conserva la tirada guardada
   }
 
   // siembra: la mascota actual cuenta como criada (guardados antiguos)

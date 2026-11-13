@@ -1644,6 +1644,35 @@ TEST(eggpick, los_comunes_prefieren_lineas_incompletas) {
   }
 }
 
+TEST(eggpick, sin_linea_nueva_cede_la_linea_antes_que_el_color) {
+  // Todo registrado salvo los comunes del color del huevo especial: los unicos
+  // comunes con la linea incompleta comparten su color, asi que la pasada 0
+  // (color nuevo y linea nueva) no encuentra nada y la pasada 1 (solo color
+  // nuevo) si. Si cediera antes el color, los extras saldrian del color del
+  // especial.
+  Pet p;
+  makePet(p, 4);
+  const int16_t special = 4;
+  registerRange(p, 1, 151);
+  int sameColour = 0;
+  for (int16_t d = 1; d <= DEX_COUNT; d++)
+    if (DEX_TBL[d].rarity == R_COMUN && DEX_TBL[d].accent == DEX_TBL[special].accent) {
+      p.dexReg[(d - 1) >> 3] &= (uint8_t)~(1 << ((d - 1) & 7));
+      sameColour++;
+    }
+  CHECK_MSG(sameColour >= 2, "hay otros comunes del mismo color sin registrar");
+  for (int seed = 1; seed <= 100; seed++) {
+    randomSeed(seed);
+    int16_t out[EGG_CHOICES];
+    p.rollEggChoices(special, out);
+    CHECK(threeEggSpecies(out));
+    CHECK_MSG(DEX_TBL[out[0]].accent != DEX_TBL[out[1]].accent &&
+              DEX_TBL[out[0]].accent != DEX_TBL[out[2]].accent &&
+              DEX_TBL[out[1]].accent != DEX_TBL[out[2]].accent,
+              "cede la linea antes que el color: tres colores distintos");
+  }
+}
+
 TEST(eggpick, el_shiny_no_cambia_y_va_con_el_elegido) {
   // misma semilla, ajuste apagado y encendido: el shiny del bicho que nace es el
   // mismo (se sortea antes que los huevos extra) elija el huevo que elija
@@ -1720,6 +1749,39 @@ TEST(eggpick, un_guardado_antiguo_sin_las_claves_sigue_como_siempre) {
   CHECK_MSG(!b.awaitingEgg(), "sin la clave el ajuste esta apagado: un huevo como siempre");
 }
 
+TEST(eggpick, un_guardado_antiguo_con_un_huevo_pendiente_sigue_como_siempre) {
+  // el guardado antiguo es un huevo por eclosionar con el ajuste apagado: sin la
+  // clave "ecpk" no puede salir una eleccion (un bicho ya nacido la limpiaria
+  // aunque el valor por defecto fuese true)
+  Pet a;
+  makePet(a, 4);
+  endLife(a, CER_RELEASE);
+  CHECK(a.isEgg());
+  CHECK(!a.awaitingEgg());
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.remove("eggch");
+    raw.remove("ecpk");
+    raw.remove("ec0");
+    raw.remove("ec1");
+    raw.remove("ec2");
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(b.isEgg());
+  CHECK_EQ(b.eggPickMode, (uint8_t)EGGPICK_OFF);
+  CHECK_MSG(!b.awaitingEgg(), "un huevo guardado sin las claves sigue siendo un huevo, sin eleccion");
+  for (int i = 0; i < 3; i++) {
+    a.eggTap();
+    b.eggTap();
+  }
+  CHECK(!a.isEgg());
+  CHECK(!b.isEgg());
+  CHECK_EQ(b.speciesId, a.speciesId);  // nace lo mismo que habria nacido
+}
+
 TEST(eggpick, candidatos_invalidos_en_la_nvs_se_vuelven_a_sortear) {
   // fuera de rango, forma evolucionada (2 IVYSAUR), repetidos, negativos
   const int16_t bad[][EGG_CHOICES] = {
@@ -1743,6 +1805,66 @@ TEST(eggpick, candidatos_invalidos_en_la_nvs_se_vuelven_a_sortear) {
     CHECK(b.awaitingEgg());
     CHECK_MSG(choicesValid(b), "lo leido de NVS se comprueba antes de usarlo");
   }
+}
+
+TEST(eggpick, candidatos_invalidos_conservan_la_tirada_guardada) {
+  // un guardado con los candidatos danados sigue ofreciendo el huevo raro o
+  // legendario que ya habia tocado, no una tirada nueva
+  Pet a;
+  makePet(a, 4);
+  a.setEggPickMode(EGGPICK_ON);
+  registerRange(a, 1, 40);  // >= 25: tambien pueden salir legendarios
+  a.lastEnd = CER_FAREWELL;
+  a.streak = 30;
+  a.bond = 100;
+  int notCommon = 0;
+  for (int seed = 1; seed <= 60; seed++) {
+    randomSeed(seed);
+    int16_t expected = a.pickEggSpecies();
+    randomSeed(seed);
+    a.newEgg();
+    CHECK(a.awaitingEgg());
+    {
+      Preferences raw;
+      raw.begin("tamapoke", false);
+      raw.putShort("ec0", 300);
+      raw.putShort("ec1", 4);
+      raw.putShort("ec2", 4);
+      raw.end();
+    }
+    Pet b;
+    b.begin();
+    CHECK(b.awaitingEgg());
+    CHECK(choicesValid(b));
+    int found = 0;
+    for (uint8_t i = 0; i < EGG_CHOICES; i++)
+      if (b.eggChoice(i) == expected) found++;
+    CHECK_MSG(found == 1, "la tirada guardada sigue entre los tres tras recomponerlos");
+    if (DEX_TBL[expected].rarity != R_COMUN) notCommon++;
+  }
+  CHECK_MSG(notCommon > 0, "el test cubre huevos raros o legendarios");
+}
+
+TEST(eggpick, una_tirada_guardada_que_no_es_de_huevo_se_sustituye) {
+  // eggT2 danado (2 IVYSAUR no es una especie de huevo) junto con candidatos
+  // danados: los tres siguen siendo huevos validos
+  Pet a;
+  makePet(a, 4);
+  a.setEggPickMode(EGGPICK_ON);
+  endLife(a, CER_RELEASE);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putShort("eggT2", 2);
+    raw.putShort("ec0", 300);
+    raw.putShort("ec1", 4);
+    raw.putShort("ec2", 4);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(b.awaitingEgg());
+  CHECK_MSG(choicesValid(b), "una tirada que no es de huevo no entra en los tres");
 }
 
 TEST(eggpick, el_validador_rechaza_cada_caso_malo) {

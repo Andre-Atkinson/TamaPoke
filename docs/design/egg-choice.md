@@ -29,7 +29,7 @@ way around the luck: which Pokémon hatches stays a surprise.
   27% (45% after a farewell) + `careBonus()`, Legendary 3% (10% after a
   farewell) + `careBonus()/3`, and only with 25 or more registered. Inside the
   tier it prefers species whose evolution line is still incomplete.
-- Egg-tier species: 48 Common (12 type colours), 28 Rare (13 colours),
+- Egg-tier species: 47 Common (12 type colours), 27 Rare (13 colours),
   5 Legendary.
 - The starter screen blocks ticks, offline progression, swipes, bedtime and
   the gallery while the player chooses (`starterPick`, saved as NVS `stpk`).
@@ -112,7 +112,7 @@ New keys only; no existing key changes meaning.
 |---|---|---|---|
 | `eggch` | UChar | 0 = Surprise, 1 = Choose | Missing or any other value: 0 (Surprise) |
 | `ecpk` | Bool | A choice is on screen | Missing: false (old saves behave exactly as today) |
-| `ec0`, `ec1`, `ec2` | Short | Candidate Pokédex numbers | If any is outside 1..151, not an egg species, or a duplicate: roll a fresh three |
+| `ec0`, `ec1`, `ec2` | Short | Candidate Pokédex numbers | If any is outside 1..151, not an egg species, or a duplicate: re-roll the other two around the saved roll (`eggTarget`), so a damaged candidate save keeps a Rare or Legendary |
 
 While a choice is open, `eggTarget` keeps the normal roll (one of the three),
 so anything that reads the egg (`eggRarity()`, `eggAccent()`) stays valid.
