@@ -48,10 +48,13 @@ trading, anything multiplayer.
   open its serial port, and don't send it anything. Each state-changing
   command needs its own request: `WIPE`, `BYE`, `RUN`, `HATCH`, `SPEC`,
   `LVL`, `NICK`, `SHINY`, `CAREDAY`, `ABANDON`, `TIME <epoch>`, `RTCSET`,
-  `GAL`, `BEEP`, `TRAINTRACE ON|OFF`, `PUT` (`tools/send_sd.py`). Read-only:
-  `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`, `LS`, `SDINFO`, `LOCK?`,
-  `TRAINTRACE?`. (From `handleSerial` in `TamaPoke.ino` and `sdSerialCommand`
-  in `sdmon.cpp`; re-check when those change.)
+  `GAL`, `BEEP`, `TRAINTRACE ON|OFF`, `SAVE` (writes pending pet changes to
+  NVS; `tools/board.py save` and `tools/pet_save.sh backup` send it), `PUT`
+  (`tools/send_sd.py`). Read-only: `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`,
+  `CARE?` (prints `pace bed inbed stale`), `LS`, `SDINFO`, `LOCK?`,
+  `TRAINTRACE?`. `LOCK?` and `TRAINTRACE` exist on the 1.75C only. (From
+  `handleSerial` in `TamaPoke.ino` and `sdSerialCommand` in `sdmon.cpp`;
+  re-check when those change.)
 - **Installing anything:** ask the owner first. Python packages only ever go
   into `.venv/`, never system-wide.
 - **Processes and history:** stop only processes and worktrees you started,
