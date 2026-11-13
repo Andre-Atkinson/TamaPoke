@@ -2,12 +2,14 @@
 
 This is a fork of [socquique/TamaPoke](https://github.com/socquique/TamaPoke)
 for one device: a **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (aluminium case,
-32 MB flash, no microSD, no RTC chip, 500 mAh 3.7 V LiPo). It is a gift: the
-owner's wife looks after the pet. See `PORTING.md` for the 1.75C details.
+32 MB flash, no microSD, no RTC chip, 500 mAh 3.7 V LiPo). The pet is looked
+after day to day by a non-technical player, so features favour gentle,
+forgiving care over challenge. See `PORTING.md` for the 1.75C details.
 
 **In scope:** tamagotchi-style care features, app and power/hardware
 optimizations, tooling for this device. **Out of scope:** battles, gyms,
-trading, anything multiplayer.
+trading, anything multiplayer. The roadmap is the open GitHub issues labelled
+`roadmap` (milestones `Next` and `Later`).
 
 ## Hard rules
 
@@ -48,10 +50,18 @@ trading, anything multiplayer.
   open its serial port, and don't send it anything. Each state-changing
   command needs its own request: `WIPE`, `BYE`, `RUN`, `HATCH`, `SPEC`,
   `LVL`, `NICK`, `SHINY`, `CAREDAY`, `ABANDON`, `TIME <epoch>`, `RTCSET`,
-  `GAL`, `BEEP`, `TRAINTRACE ON|OFF`, `PUT` (`tools/send_sd.py`). Read-only:
-  `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`, `LS`, `SDINFO`, `LOCK?`,
-  `TRAINTRACE?`. (From `handleSerial` in `TamaPoke.ino` and `sdSerialCommand`
-  in `sdmon.cpp`; re-check when those change.)
+  `GAL`, `BEEP`, `TRAINTRACE ON|OFF`, `SAVE` (writes pending pet changes to
+  NVS), `PUT`. Read-only: `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`,
+  `CARE?` (prints `pace bed inbed stale`), `LS`, `SDINFO`, `LOCK?`,
+  `TRAINTRACE?`. `LOCK?` and `TRAINTRACE` exist on the 1.75C only. These
+  scripts send state-changing commands: `tools/board.py` (`clock` sends
+  `TIME <epoch>`, `save` sends `SAVE`, `cmd` sends anything),
+  `tools/pet_save.sh` (`backup` and `restore` send `SAVE`),
+  `tools/update_175c.sh` (runs both of those, so sends `SAVE` and
+  `TIME <epoch>`) and `tools/send_sd.py` (`PUT`). The owner's request to run
+  one covers the commands it always sends; `tools/board.py cmd X` needs the
+  request that `X` itself needs. (From `handleSerial` in `TamaPoke.ino` and
+  `sdSerialCommand` in `sdmon.cpp`; re-check when those change.)
 - **Installing anything:** ask the owner first. Python packages only ever go
   into `.venv/`, never system-wide.
 - **Processes and history:** stop only processes and worktrees you started,
@@ -141,6 +151,9 @@ rounds before it is merged. Both are mandatory, and two is also the cap.
    `issue-fixer`, whose diff the main session then reviews), re-runs the gate,
    and fixes or explicitly dispositions LOW ones. Nothing gets silently dropped.
 
+If two review rounds feels wrong for a change (too few or too many), say so
+and ask the owner rather than exceeding the cap.
+
 Your own verification supplements the reviews; it never replaces them. A
 reader with no memory of writing the code catches the claims a change makes
 about itself (a comment asserting a guard that does not hold, a test that
@@ -152,19 +165,36 @@ its test, records the result and restores the file.
 
 **Merging** needs all three: the work is verified (gate, plus hardware when
 relevant), both review rounds are done with every finding fixed or
-dispositioned, and the owner has approved *that* PR in chat. Approval is
-per-PR and never standing. Once all three hold, the main session may merge.
-Subagents never merge, and nobody submits an approving review.
+dispositioned (deferred ones filed as issues), and CI is green. The owner has
+given standing approval (2026-11-13) to merge a PR as soon as all three hold,
+so don't ask for each merge. The *main session* is one the owner works in
+directly; a session started by another session is not one, and neither is an
+agent. A main session merges its own PRs and files their issues. A session
+started by another reports "READY #<n>" to the one that started it, listing
+any deferred findings, so that session can file their issues before it
+merges. Use a merge commit, or squash when the branch has WIP commits, and
+say which in the merge commit message. Design decisions, flashing the board,
+and anything else the hard rules reserve for the owner still need the
+owner's say. Subagents never merge, and nobody submits an approving review.
+Once a session's work is merged and nothing is pending, the session that
+started it (or the owner) archives it.
 
 Mutation evidence for round-1 fixes and for the main session's post-round-2
 fixes goes in the PR body (`gh pr edit`), not only in a comment.
 
-**Recording findings.** GitHub Issues are disabled on this fork. Every review
-finding's outcome goes in the PR body under **Review findings** (ID, severity,
-fixed in `<sha>`, or deferred with the reason). Anything deferred past the PR
-gets one line in `BACKLOG.md` at the repo root, with the PR link, in the same
-PR. If two review rounds feels wrong for a change (too few or
-too many), say so and ask the owner rather than exceeding the cap.
+**Recording findings.** Every review finding's outcome goes in the PR body
+under **Review findings** (ID, severity, fixed in `<sha>`, or deferred with
+the reason). Anything deferred past the PR becomes a GitHub issue (`gh issue
+create --repo Andre-Atkinson/TamaPoke`, label `roadmap` plus an area label
+such as `care`, `power`, `ui` or `tooling`, milestone `Next` or `Later`),
+linked from the PR body. The milestone is what ranks an issue; there is no
+`later` label. The main session adds the `in-progress` label while a session
+is designing or building an issue, and removes it when the PR merges. File
+the issue **before the PR merges**: a deferred finding counts as dispositioned
+only once its issue exists and is linked from the PR body. A PR that fixes a
+roadmap issue says `Closes #<n>` in its description. Only the main session
+files issues; agents never run `gh issue create` and report deferred findings
+back instead.
 
 PR descriptions say what changed, why, how it was tested (including what was
 not tested on hardware), and list anything fixed beyond the brief under
