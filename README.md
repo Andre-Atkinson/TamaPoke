@@ -412,6 +412,53 @@ sends these from a script (clock sync, status); see `PORTING.md`.
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
 
+## Simulator
+
+`tools/sim.sh` runs the real `TamaPoke.ino` on the Mac, against a simulated
+board, and saves PNG screenshots of the panel. Use it to see UI and care changes
+without flashing. It needs nothing beyond what the firmware build already uses:
+a C++ compiler, Python 3, and the GFX Library for Arduino and U8g2 libraries that
+arduino-cli installed.
+
+```bash
+tools/sim.sh --lang ja --script care-page.txt --out shots/
+tools/sim_shots.sh        # every main screen in all 8 languages -> shots/<lang>/
+```
+
+A script is one step per line (the full list is in `sim/script.h`):
+`tap X Y`, `hold X Y 3s`, `swipe left|right|up|down`, `press pwr 3`,
+`press boot`, `wait 2h`, `serial SPEC 25`, `battery 15`, `usb on`, and
+`shot NAME`. `lang` and `clock 2026-11-13 22:30` set the language and the time
+before boot; `battery`, `usb` and `charging` placed before the first step that
+runs the firmware (`tap`, `wait`, `shot`...) are also in place at boot. Each run starts a new game, with an empty NVS. Screenshots are
+466×466 with the round panel masked. The firmware's serial output goes to
+`serial.log` next to them. `--board 175` simulates the original 1.75 instead of
+the 1.75C. `--script` takes a path, or the name of a script in `sim/scripts/`
+with or without `.txt` (`care-page`). `shots/` is git-ignored. The last line of
+the run counts the sound effects that would have played and the light sleeps.
+
+**What it models:** the real firmware code: game logic, every screen, the
+Arduino_GFX drawing code and fonts (CJK included), the frame pacing, the
+firmware's dim and screen-off decisions, the touch lock, the PWR lock, the BOOT button, and the
+strength-training touch reports. It also models the sprites and thumbnails from
+`tools/sdcard/` (the 1.75C without the shiny sprites, as on the board), the NVS
+save in memory, and a clock you can fast-forward (`wait 2h` takes well under a
+second). The firmware is compiled with `char` unsigned, as on the ESP32-S3.
+
+**What it doesn't model:** battery life, charging and the battery curve (the
+percentage is whatever the script sets), touch feel and the CST9217's own
+timing, audio (sounds are counted, not played), real timing (drawing and QSPI
+take no time, and light sleep is a jump of the clock), the touch INT line
+(it is edge-only: the ISR fires on press, move and release, but the pin always
+reads high, so level checks of the pin and the `touch.sleep()` hazard of holding
+it low cannot be reproduced), and AMOLED brightness (dimming is not drawn:
+screenshots are full colour unless the panel is asleep, off or at brightness 0,
+which are saved black). It
+doesn't model PSRAM or heap limits, or NVS flash wear. The PMU, RTC, ES8311 and
+QMI8658 are stand-ins, not drivers. The host is 64-bit, so code that depends on
+the size of `long` or of a pointer can behave differently. A screen that looks
+right in the simulator still needs a check on the board.
+
 ## Roadmap
 
 - **Wild encounters / battle** — designed (see project memory): resolution by

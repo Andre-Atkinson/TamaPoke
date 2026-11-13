@@ -1,0 +1,24 @@
+# The Care page (pace and bedtime) before and after changing both settings.
+#   tools/sim.sh --lang ja --script sim/scripts/care-page.txt --out shots/
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# swipe up for the card, four swipes left to the Care page
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+shot care-default
+
+# tap Pace (Normal -> Relaxed) and Bedtime twice (Off -> 21:00-07:00 -> 22:00-07:00)
+tap 233 143
+tap 233 259
+tap 233 259
+shot care-relaxed-22h

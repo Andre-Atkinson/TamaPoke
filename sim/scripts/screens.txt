@@ -1,0 +1,90 @@
+# Every main screen, from a new game. tools/sim_shots.sh runs this in all 8
+# languages (the language comes from --lang). Coordinates are the firmware's own
+# hit boxes in TamaPoke.ino (onTap, keyboardTap, galleryTap, careTap).
+
+wait 1s
+shot 01-starter
+
+# Charmander (second row), then three taps hatch the egg
+tap 233 220
+wait 500ms
+shot 02-egg
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+shot 03-main
+
+# food button: berry/candy picker; a tap elsewhere closes it
+tap 140 390
+shot 04-feed-menu
+tap 233 150
+wait 2s
+
+# swipe up: the pet card, five pages (swipe left = next)
+swipe up
+shot 05-card-profile
+swipe left
+shot 06-card-stats
+swipe left
+shot 07-card-medals
+swipe left
+shot 08-card-progress
+swipe left
+shot 09-card-care
+swipe up
+
+# swipe down: clock and settings
+swipe down
+shot 10-settings
+swipe up
+
+# swipe right: Pokedex gallery; tap Charmander (#4) for its detail page
+swipe right
+shot 11-gallery
+tap 353 124
+wait 500ms
+shot 12-gallery-detail
+tap 233 233
+swipe right
+
+# tap the name on the card: nickname keyboard (types TAMA, then clears it)
+swipe up
+tap 233 50
+tap 131 327
+tap 67 171
+tap 67 275
+tap 67 171
+shot 13-keyboard
+tap 323 380
+tap 323 380
+tap 323 380
+tap 323 380
+tap 387 380
+swipe up
+
+# play button: the ball minigame; a tap on the header leaves it
+tap 202 404
+wait 600ms
+shot 14-minigame
+tap 233 30
+wait 1s
+
+# card page 2 button: strength training (1.75C: hold the button 1 s to leave)
+swipe up
+swipe left
+tap 233 320
+tap 233 250
+tap 233 250
+tap 233 250
+shot 15-training
+wait 11s
+shot 16-training-result
+wait 4s
+
+# light button: the pet sleeps (night scene), a second tap wakes it
+tap 264 404
+wait 1s
+shot 17-sleeping
+tap 264 404
+wait 1s
