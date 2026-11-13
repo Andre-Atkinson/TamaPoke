@@ -34,6 +34,12 @@ if [[ -f "${ROOT}/partitions.csv" ]]; then
   echo "A partitions.csv in the sketch root would override every build; remove it." >&2
   exit 1
 fi
+# Size limit for the image = app0 in the partition table (0x300000). Without it
+# the core checks against the whole flash and an oversize image would spill into
+# the sprite partition at 0x310000. APP_MAX_OVERRIDE is only for testing the guard.
+APP0_HEX="$(awk -F, '$1 ~ /^app0/ { gsub(/[ \t\r]/, "", $5); print $5 }' "$PARTS")"
+APP_MAX="${APP_MAX_OVERRIDE:-$(printf '%d' "$APP0_HEX" 2>/dev/null || true)}"
+[[ "$APP_MAX" =~ ^[0-9]+$ && "$APP_MAX" -gt 0 ]] || { echo "Could not read app0 size from $PARTS" >&2; exit 1; }
 mkdir -p "$OUT"
 BUILD="$(mktemp -d "${TMPDIR:-/tmp}/tamapoke-175c.XXXXXX")"
 trap 'rm -rf "$BUILD"' EXIT
@@ -44,6 +50,7 @@ trap 'rm -rf "$BUILD"' EXIT
 arduino-cli compile --warnings=all \
   --fqbn "$FQBN" \
   --build-path "$BUILD" \
+  --build-property "upload.maximum_size=${APP_MAX}" \
   --build-property "compiler.cpp.extra_flags=-DBOARD_AMOLED_175C=1 ${EXTRA}" \
   --build-property "recipe.hooks.prebuild.1.pattern=cp -f \"${PARTS}\" \"{build.path}/partitions.csv\"" \
   --output-dir "$OUT" \
