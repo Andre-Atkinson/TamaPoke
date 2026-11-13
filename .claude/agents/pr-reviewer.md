@@ -77,5 +77,8 @@ you could not check. Do not post anything to the PR itself (no
 `gh pr review`, no comments) unless you were explicitly told to for this
 specific review; whoever dispatched you decides whether and how findings
 reach GitHub, and the default is silence. Do not edit code yourself, and
-do not approve or merge: those decisions belong to the main session and
-the owner.
+do not approve or merge: those decisions belong to the main session
+(see **Merging** in `CLAUDE.md`).
+
+Never create issues yourself; report deferred findings to the main
+session.
