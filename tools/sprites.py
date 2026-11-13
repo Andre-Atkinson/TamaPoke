@@ -505,6 +505,72 @@ def icon_clean():
     return g.rows()
 
 
+def icon_rotten():
+    # minijuego Berry Catch: baya podrida (marron, con motas)
+    return [
+        "................",
+        "..s.............",
+        "...........k....",
+        "........k.k..s..",
+        ".s......k.......",
+        ".......kCk......",
+        ".....kkccckk....",
+        "....kcScccCck...",
+        "....kcccccSck...",
+        "...kccSccccCCk..",
+        "...kcccccSccCk..",
+        "....kcccccCck...",
+        "....kSccccCCk...",
+        ".....kkCCCkk....",
+        ".......kkk......",
+        "................",
+    ]
+
+
+def icon_bush():
+    # minijuego Peekaboo: arbusto
+    return [
+        "................",
+        "................",
+        "................",
+        ".......kkk......",
+        ".....kkgggk.....",
+        "....kgggggGkk...",
+        "...kggwgggGggk..",
+        "..kgggggGGgggGk.",
+        "..kggggGggggGGk.",
+        ".kgggGgggggGGGGk",
+        ".kggggggGggGGGGk",
+        ".kGgggGGgggGGGdk",
+        "..kGGGGGGGGGddk.",
+        "...kkkdddddkkk..",
+        "......kCCk......",
+        "................",
+    ]
+
+
+def icon_note():
+    # minijuego Berry Song: nota musical
+    return [
+        "................",
+        "................",
+        ".......kkkkkkk..",
+        ".......kBBBBBk..",
+        ".......kkkkkBk..",
+        ".......k....Bk..",
+        ".......k....Bk..",
+        ".......k....Bk..",
+        ".......k....Bk..",
+        ".......k..kkBk..",
+        "....kkkk.kBBBk..",
+        "...kBBBBkkBBBk..",
+        "...kBBBBk.kkk...",
+        "....kkkk........",
+        "................",
+        "................",
+    ]
+
+
 SPRITES = {
     "CHARMANDER": charmander(),
     "CHARMELEON": charmeleon(),
@@ -522,6 +588,9 @@ SPRITES = {
     "ICON_BERRY_B": icon_berry_blue(),
     "ICON_BERRY_G": icon_berry_green(),
     "ICON_CANDY": icon_candy(),
+    "ICON_ROTTEN": icon_rotten(),
+    "ICON_BUSH": icon_bush(),
+    "ICON_NOTE": icon_note(),
     "EGG": egg(),
     "POOP": poop(),
     "HEART": heart(),

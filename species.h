@@ -526,7 +526,6 @@ static const char* const SPR_ICON_CANDY[16] = {  // 16x16
   "................",
 };
 
-// minijuegos de Play: baya podrida (Berry Catch), arbusto (Peekaboo), nota (Berry Song)
 static const char* const SPR_ICON_ROTTEN[16] = {  // 16x16
   "................",
   "..s.............",
