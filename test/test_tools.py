@@ -736,5 +736,179 @@ class TestBoardPy(unittest.TestCase):
                 self.assertIn('board.py:', r.stderr)
 
 
+SIM = os.path.join(ROOT, 'sim')
+
+
+def _load_sim_module(name):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('sim_' + name, os.path.join(SIM, name + '.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class TestSimGenSketch(unittest.TestCase):
+    """sim/gen_sketch.py: los prototipos que arduino-cli genera para el .ino."""
+
+    SAMPLE = (
+        '#include <Arduino.h>\n'                                  # 1
+        'struct Foo { int a; };\n'                                # 2
+        'Foo foos[2] = {\n'                                       # 3
+        '  {1}, {2},\n'                                           # 4
+        '};\n'                                                    # 5
+        'int first(int a, int b = 3) {\n'                         # 6
+        '  if (a) {\n'                                            # 7
+        '    return b;\n'                                         # 8
+        '  }\n'                                                   # 9
+        '  return later(a);\n'                                    # 10
+        '}\n'                                                     # 11
+        '#if BOARD_X\n'                                           # 12
+        'static bool onlyX() {\n'                                 # 13
+        '  return true;\n'                                        # 14
+        '}\n'                                                     # 15
+        '#else\n'                                                 # 16
+        'inline void notX() { first(1); }\n'                      # 17
+        '#endif\n'                                                # 18
+        '/* void commented() {\n'                                 # 19
+        '} */\n'                                                  # 20
+        'const char *later(int v) {\n'                            # 21
+        '  return "x";\n'                                         # 22
+        '}\n'                                                     # 23
+        'void IRAM_ATTR isr() {}\n'                               # 24
+    )
+
+    def setUp(self):
+        self.gen = _load_sim_module('gen_sketch')
+        self.lines = self.SAMPLE.splitlines(keepends=True)
+
+    def test_encuentra_las_definiciones_de_nivel_superior(self):
+        protos = [p for _, p, _ in self.gen.find_functions(self.lines)]
+        self.assertEqual(protos, ['int first(int a, int b);', 'static bool onlyX();',
+                                  'inline void notX();', 'const char *later(int v);',
+                                  'void IRAM_ATTR isr();'])
+
+    def test_los_prototipos_llevan_las_condiciones_de_su_definicion(self):
+        funcs = {p: c for _, p, c in self.gen.find_functions(self.lines)}
+        self.assertEqual(funcs['static bool onlyX();'], [['#if BOARD_X']])
+        self.assertEqual(funcs['inline void notX();'], [['#if BOARD_X', '#else']])
+        self.assertEqual(funcs['const char *later(int v);'], [])
+        self.assertEqual(self.gen.wrap('inline void notX();', [['#if BOARD_X', '#else']]),
+                         ['#if BOARD_X', '#else', 'inline void notX();', '#endif'])
+
+    def test_los_prototipos_van_antes_de_la_primera_definicion_con_line(self):
+        out = self.gen.generate('sample.ino', self.lines).splitlines()
+        path = os.path.abspath('sample.ino').replace('\\', '/')
+        self.assertEqual(out[0], '#include <Arduino.h>')
+        self.assertEqual(out[1], '#line 1 "%s"' % path)
+        self.assertEqual(out[2:7], [l.rstrip('\n') for l in self.lines[:5]])
+        self.assertEqual(out[7], 'int first(int a, int b);')
+        back = out.index('#line 6 "%s"' % path)
+        self.assertEqual(out[back + 1], 'int first(int a, int b = 3) {')
+        self.assertLess(out.index('const char *later(int v);'), back)
+        self.assertNotIn('commented', '\n'.join(out[:back]))
+
+    def test_cubre_todas_las_funciones_del_sketch_real(self):
+        with open(os.path.join(ROOT, 'TamaPoke.ino'), encoding='utf-8', errors='surrogateescape') as f:
+            lines = f.readlines()
+        names = {re.match(r'.*?(\w+)\(', p).group(1) for _, p, _ in self.gen.find_functions(lines)}
+        for must in ('setup', 'loop', 'render', 'handleTouch', 'wakeUI', 'flushUI', 'renderCardCare',
+                     'careTap', 'readTrainingTouch', 'touchIsr', 'printT', 'drawMap'):
+            self.assertIn(must, names)
+        out = self.gen.generate(os.path.join(ROOT, 'TamaPoke.ino'), lines)
+        self.assertEqual(out.count('\n#line '), 2)
+
+
+class TestSimExtractFonts(unittest.TestCase):
+    """sim/extract_fonts.py: copia arrays de u8g2_fonts.c sin compilar el fichero entero."""
+
+    SRC = (b'#include "u8g2.h"\n'
+           b'const uint8_t u8g2_font_a[5] U8G2_FONT_SECTION("u8g2_font_a") = \n'
+           b'  "ab;c"\n'
+           b'  "\\42;\\0";\n'
+           b'const uint8_t u8g2_font_b[2] U8G2_FONT_SECTION("u8g2_font_b") = \n'
+           b'  "\\377\\1";\n'
+           b'const uint8_t u8g2_font_ab[1] U8G2_FONT_SECTION("u8g2_font_ab") = "z";\n')
+
+    def setUp(self):
+        self.mod = _load_sim_module('extract_fonts')
+
+    def test_saca_los_arrays_pedidos_enteros_y_sin_secciones(self):
+        out = self.mod.extract(self.SRC, ['u8g2_font_b', 'u8g2_font_a']).decode()
+        self.assertIn('const uint8_t u8g2_font_a[5] = \n  "ab;c"\n  "\\42;\\0";', out)  # ';' dentro de la cadena
+        self.assertIn('const uint8_t u8g2_font_b[2] = \n  "\\377\\1";', out)
+        self.assertNotIn('U8G2_FONT_SECTION', out)
+        self.assertNotIn('u8g2_font_ab', out)  # nombre parecido: no se cuela
+
+    def test_un_nombre_que_no_existe_falla(self):
+        with self.assertRaises(SystemExit):
+            self.mod.extract(self.SRC, ['u8g2_font_missing'])
+
+
+class TestSimPng(unittest.TestCase):
+    """sim/png.cpp: la imagen que escribe test_sim.cpp, leida con zlib de Python."""
+
+    def _read(self, name):
+        import struct
+        import zlib
+        path = os.path.join(ROOT, 'test', 'build', name)
+        if not os.path.exists(path):
+            self.skipTest('run the C++ tests first (test/run_tests.sh writes %s)' % name)
+        with open(path, 'rb') as f:
+            data = f.read()
+        self.assertEqual(data[:8], b'\x89PNG\r\n\x1a\n')
+        pos, idat = 8, b''
+        w = h = None
+        while pos < len(data):
+            n, kind = struct.unpack('>I4s', data[pos:pos + 8])
+            body = data[pos + 8:pos + 8 + n]
+            crc, = struct.unpack('>I', data[pos + 8 + n:pos + 12 + n])
+            self.assertEqual(crc, zlib.crc32(kind + body) & 0xFFFFFFFF, kind)
+            if kind == b'IHDR':
+                w, h, depth, ctype = struct.unpack('>IIBB', body[:10])
+                self.assertEqual((depth, ctype), (8, 2))
+            elif kind == b'IDAT':
+                idat += body
+            pos += 12 + n
+        raw = zlib.decompress(idat)
+        stride = w * 3
+        self.assertEqual(len(raw), h * (stride + 1))
+        rows, prev = [], bytearray(stride)
+        for y in range(h):
+            ftype = raw[y * (stride + 1)]
+            line = bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+            for i in range(stride):
+                if ftype == 1:
+                    line[i] = (line[i] + (line[i - 3] if i >= 3 else 0)) & 0xFF
+                elif ftype == 2:
+                    line[i] = (line[i] + prev[i]) & 0xFF
+                else:
+                    self.assertEqual(ftype, 0)
+            rows.append(line)
+            prev = line
+        return w, h, rows
+
+    @staticmethod
+    def _rgb(c):
+        return (((c >> 11) & 31) * 255 // 31, ((c >> 5) & 63) * 255 // 63, (c & 31) * 255 // 31)
+
+    @staticmethod
+    def _pixel(x, y):  # el mismo patron que selftestPixel() en test_sim.cpp
+        return 0x1234 if x < 20 else (x * 2017 + y * 31 + x * y) & 0xFFFF
+
+    def test_zlib_de_python_lee_la_imagen_pixel_a_pixel(self):
+        w, h, rows = self._read('sim_png_selftest.png')
+        self.assertEqual((w, h), (37, 23))
+        for y in range(h):
+            for x in range(w):
+                self.assertEqual(tuple(rows[y][x * 3:x * 3 + 3]), self._rgb(self._pixel(x, y)), (x, y))
+
+    def test_la_mascara_redonda_deja_negras_las_esquinas(self):
+        w, h, rows = self._read('sim_png_selftest_round.png')
+        self.assertEqual(tuple(rows[0][0:3]), (0, 0, 0))
+        self.assertEqual(tuple(rows[h - 1][(w - 1) * 3:w * 3]), (0, 0, 0))
+        cx, cy = w // 2, h // 2
+        self.assertEqual(tuple(rows[cy][cx * 3:cx * 3 + 3]), self._rgb(self._pixel(cx, cy)))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

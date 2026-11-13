@@ -412,6 +412,46 @@ sends these from a script (clock sync, status); see `PORTING.md`.
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
 
+## Simulator
+
+`tools/sim.sh` runs the real `TamaPoke.ino` on the Mac, against a simulated
+board, and saves PNG screenshots of the panel. Use it to see UI and care changes
+without flashing. It needs nothing beyond what the firmware build already uses:
+a C++ compiler, Python 3, and the GFX Library for Arduino and U8g2 libraries that
+arduino-cli installed.
+
+```bash
+tools/sim.sh --lang ja --script sim/scripts/care-page.txt --out shots/
+tools/sim_shots.sh        # every main screen in all 8 languages -> shots/<lang>/
+```
+
+A script is one step per line (the full list is in `sim/script.h`):
+`tap X Y`, `hold X Y 3s`, `swipe left|right|up|down`, `press pwr 3`,
+`press boot`, `wait 2h`, `serial SPEC 25`, `battery 15`, `usb on`, and
+`shot NAME`. `lang` and `clock 2026-11-13 22:30` set the language and the time
+before boot. Each run starts a new game, with an empty NVS. Screenshots are
+466×466 with the round panel masked. The firmware's serial output goes to
+`serial.log` next to them. `--board 175` simulates the original 1.75 instead of
+the 1.75C. `shots/` is git-ignored.
+
+**What it models:** the real firmware code: game logic, every screen, the
+Arduino_GFX drawing code and fonts (CJK included), the frame pacing, screen
+dimming and screen-off, the touch lock, the PWR lock, the BOOT button, and the
+strength-training touch reports. It also models the sprites and thumbnails from
+`tools/sdcard/` (the 1.75C without the shiny sprites, as on the board), the NVS
+save in memory, and a clock you can fast-forward (`wait 2h` takes well under a
+second). The firmware is compiled with `char` unsigned, as on the ESP32-S3.
+
+**What it doesn't model:** battery life, charging and the battery curve (the
+percentage is whatever the script sets), touch feel and the CST9217's own
+timing, audio (sounds are counted, not played), real timing (drawing and QSPI
+take no time, and light sleep is a jump of the clock), and AMOLED brightness
+(screenshots are always full colour, and a dark panel is saved black). It
+doesn't model PSRAM or heap limits, or NVS flash wear. The PMU, RTC, ES8311 and
+QMI8658 are stand-ins, not drivers. The host is 64-bit, so code that depends on
+the size of `long` or of a pointer can behave differently. A screen that looks
+right in the simulator still needs a check on the board.
+
 ## Roadmap
 
 - **Wild encounters / battle** — designed (see project memory): resolution by

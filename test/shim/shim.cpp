@@ -1,15 +1,24 @@
 #include "Arduino.h"
 #include "Preferences.h"
 #include "../../audio.h"
+#include <deque>
 #include <map>
 #include <vector>
 #include <stdarg.h>
 
 // ---------------- reloj falso ----------------
 static uint32_t gMillis = 0;
+static uint32_t gMicrosFrac = 0;  // microsegundos por debajo del milisegundo actual
 uint32_t millis() { return gMillis; }
-void mockSetMillis(uint32_t ms) { gMillis = ms; }
+uint32_t micros() { return gMillis * 1000u + gMicrosFrac; }
+void mockSetMillis(uint32_t ms) { gMillis = ms; gMicrosFrac = 0; }
 void mockAdvanceMillis(uint32_t ms) { gMillis += ms; }
+void delay(uint32_t ms) { gMillis += ms; }
+void delayMicroseconds(uint32_t us) {
+  gMicrosFrac += us;
+  gMillis += gMicrosFrac / 1000u;
+  gMicrosFrac %= 1000u;
+}
 
 // ---------------- random determinista ----------------
 // LCG propio: reproducible entre plataformas (no depende de rand()).
@@ -39,27 +48,118 @@ long random(long howsmall, long howbig) {
 
 // ---------------- Serial ----------------
 MockSerial Serial;
-static bool gQuiet = true;
-void mockSerialSilence(bool quiet) { gQuiet = quiet; }
-
-int MockSerial::printf(const char *fmt, ...) {
-  if (gQuiet) return 0;
-  va_list ap;
-  va_start(ap, fmt);
-  int n = vprintf(fmt, ap);
-  va_end(ap);
-  return n;
+static FILE *gSerialOut = nullptr;  // nullptr = callada (por defecto en los tests)
+static std::deque<uint8_t> gSerialIn;
+void mockSerialSilence(bool quiet) { gSerialOut = quiet ? nullptr : stdout; }
+void mockSerialOutput(FILE *f) { gSerialOut = f; }
+void mockSerialFeed(const char *text) {
+  for (const char *p = text; *p; p++) gSerialIn.push_back((uint8_t)*p);
 }
-void MockSerial::print(const char *s) { if (!gQuiet) fputs(s, stdout); }
-void MockSerial::println(const char *s) { if (!gQuiet) printf("%s\n", s); }
-void MockSerial::begin(unsigned long) {}
 
-// ---------------- audio (stubs) ----------------
+size_t MockSerial::write(uint8_t c) {
+  if (gSerialOut) fputc(c, gSerialOut);
+  return 1;
+}
+int MockSerial::available() { return (int)gSerialIn.size(); }
+int MockSerial::read() {
+  if (gSerialIn.empty()) return -1;
+  int c = gSerialIn.front();
+  gSerialIn.pop_front();
+  return c;
+}
+int MockSerial::peek() { return gSerialIn.empty() ? -1 : gSerialIn.front(); }
+// Sin espera: en placa readBytes()/readStringUntil() esperan hasta el timeout; aqui
+// la entrada ya esta entera en la cola o no va a llegar.
+size_t MockSerial::readBytes(uint8_t *buf, size_t n) {
+  size_t k = 0;
+  while (k < n && !gSerialIn.empty()) { buf[k++] = gSerialIn.front(); gSerialIn.pop_front(); }
+  return k;
+}
+String MockSerial::readStringUntil(char term) {
+  std::string s;
+  while (!gSerialIn.empty()) {
+    char c = (char)gSerialIn.front();
+    gSerialIn.pop_front();
+    if (c == term) break;
+    s += c;
+  }
+  return String(s);
+}
+
+// ---------------- pines e interrupciones ----------------
+static std::map<uint8_t, int> gPinLevel;
+static std::map<uint8_t, void (*)(void)> gPinIsr;
+void pinMode(uint8_t, uint8_t) {}
+int digitalRead(uint8_t pin) {
+  std::map<uint8_t, int>::iterator it = gPinLevel.find(pin);
+  return it == gPinLevel.end() ? HIGH : it->second;
+}
+void digitalWrite(uint8_t pin, uint8_t val) { gPinLevel[pin] = val ? HIGH : LOW; }
+void attachInterrupt(uint8_t pin, void (*isr)(void), int) { gPinIsr[pin] = isr; }
+void detachInterrupt(uint8_t pin) { gPinIsr.erase(pin); }
+void mockPinSet(uint8_t pin, int level) { gPinLevel[pin] = level ? HIGH : LOW; }
+bool mockPinIsrAttached(uint8_t pin) { return gPinIsr.count(pin) && gPinIsr[pin]; }
+bool mockPinFireIsr(uint8_t pin) {
+  if (!mockPinIsrAttached(pin)) return false;
+  gPinIsr[pin]();
+  return true;
+}
+
+// ---------------- ESP32 ----------------
+static uint32_t gCpuMhz = 240;
+bool setCpuFrequencyMhz(uint32_t mhz) { gCpuMhz = mhz; return true; }
+uint32_t getCpuFrequencyMhz() { return gCpuMhz; }
+
+EspClass ESP;
+static void (*gRestartHook)() = nullptr;
+void mockSetRestartHook(void (*hook)()) { gRestartHook = hook; }
+void EspClass::restart() {
+  if (gRestartHook) gRestartHook();
+  fprintf(stderr, "ESP.restart() on the host: stopping\n");
+  abort();
+}
+
+// ---------------- audio (sin sonido) ----------------
+// Mismo estado y mismas claves NVS que audio.cpp ("snd", "vol"), sin ES8311 ni I2S:
+// la pantalla de ajustes muestra lo mismo que en placa. Los efectos solo se cuentan.
 static bool gAudioOn = true;
-void audioBegin() {}
-void sfxPlay(uint8_t) {}
-void audioSetEnabled(bool on) { gAudioOn = on; }
+static uint8_t gAudioVol = 0;
+static bool gAudioSleeping = false;
+static int gLastSfx = -1;
+static uint32_t gSfxCount = 0;
+void audioBegin() {
+  Preferences p;
+  p.begin("tamapoke", true);
+  gAudioOn = p.getBool("snd", true);
+  gAudioVol = p.getUChar("vol", 0) % VOL_LEVELS;
+  p.end();
+}
+void sfxPlay(uint8_t id) {
+  if (!gAudioOn || gAudioSleeping || id >= SFX_COUNT) return;
+  gLastSfx = id;
+  gSfxCount++;
+}
+void audioSetEnabled(bool on) {
+  gAudioOn = on;
+  Preferences p;
+  p.begin("tamapoke", false);
+  p.putBool("snd", on);
+  p.end();
+}
 bool audioEnabled() { return gAudioOn; }
+void audioSetVolume(uint8_t level) {
+  gAudioVol = level % VOL_LEVELS;
+  Preferences p;
+  p.begin("tamapoke", false);
+  p.putUChar("vol", gAudioVol);
+  p.end();
+}
+uint8_t audioVolume() { return gAudioVol; }
+void audioSetSleeping(bool sleeping) { gAudioSleeping = sleeping; }
+bool audioBusy() { return false; }
+void audioSetIdle(bool) {}
+int mockLastSfx() { return gLastSfx; }
+uint32_t mockSfxCount() { return gSfxCount; }
 
 // ---------------- Preferences en memoria ----------------
 typedef std::map<std::string, std::vector<uint8_t> > KV;
