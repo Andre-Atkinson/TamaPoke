@@ -80,7 +80,8 @@ While **awake**, per minute:
   window starts (silently) and wakes when it ends (one soft chime if sound is on).
   Only those two moments act, so if you wake it at night it stays awake until the
   next bedtime, and if you put it to bed early it still wakes in the morning.
-  It waits until a minigame, dialog, bath or evolution is finished. Eggs, farewell
+  It waits until a minigame, dialog, bath or evolution is finished; a minigame or
+  the training bag left open with the screen off is abandoned (no prize) at bedtime. Eggs, farewell
   scenes and the starter pick are skipped. It follows the clock you set (swipe
   down): after a full power-off the 1.75C clock can be wrong until you set it, so
   after a power-off bedtime stays paused until the clock is set (clock screen, or
@@ -406,7 +407,7 @@ runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio tes
 `REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery) · `CAREDAY` ·
 `TIME <epoch>` / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
 `SAVE` (write pending pet changes now) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
-inbed=<0|1>`) · `LS` / `PUT` (SD files). `tools/board.py`
+inbed=<0|1> stale=<0|1>`, stale = bedtime paused until the clock is set) · `LS` / `PUT` (SD files). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.

@@ -21,8 +21,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   22:00-07:00 or 23:00-08:00. The pet goes to sleep when the window starts and
   wakes when it ends. Only those two moments act, so waking it in the night
   sticks until the next bedtime. It waits for a minigame, dialog, bath or
-  evolution to finish. It follows the clock you set; off by default.
-- **`CARE?` serial command** prints `pace=<n> bed=<n> inbed=<0|1>`.
+  evolution to finish; a minigame or the bag left open with the screen off is
+  abandoned without a prize at bedtime. It follows the clock you set; off by default.
+- **`CARE?` serial command** prints `pace=<n> bed=<n> inbed=<0|1> stale=<0|1>`
+  (`stale=1`: bedtime paused until the clock is set).
 - Strings for the Care page in all eight languages.
 
 ### Fixed

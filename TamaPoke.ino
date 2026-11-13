@@ -622,23 +622,40 @@ static void bedClockSet(uint32_t set) {
 // animacion de evolucion abiertos NO se interrumpe: el evento queda pendiente y se
 // aplica en cuanto se cierran. Si el bicho no puede (huevo, ceremonia, eleccion de
 // inicial) pet.autoSleep/autoWake no hacen nada y el evento se descarta.
-// El teclado y el reloj no tienen caducidad: solo bloquean mientras la pantalla esta
-// encendida y sin bloquear. Si se quedaron abiertos y el panel se apago (o se bloqueo
-// en el bolsillo) el horario se aplica igual: ni renombrar (solo toca el nick) ni
-// ajustar la hora (el siguiente muestreo trata el salto como un borde mas) dependen
-// de pet.sleeping. El bano se compara con timeLeft, no en bruto: bathUntil solo se
+// El minijuego, el saco, el teclado y el reloj no tienen caducidad con la pantalla
+// apagada (el juego y el saco solo avanzan y terminan al dibujarse): solo bloquean
+// mientras la pantalla esta encendida y sin bloquear. Si se quedaron abiertos y el
+// panel se apago (PWR o bloqueo de bolsillo) el horario se aplica igual: ni renombrar
+// (solo toca el nick) ni ajustar la hora (el siguiente muestreo trata el salto como un
+// borde mas) dependen de pet.sleeping, y al dormir el juego y el saco se abandonan sin
+// premio (bedApply). El bano se compara con timeLeft, no en bruto: bathUntil solo se
 // pone a 0 en drawBath(), que no corre con la pantalla apagada.
 static bool bedBusy() {
   bool dark = screenOff || screenIsLocked();
-  return gameOpen || sackOpen || (!dark && (kbOpen || clockOpen)) || timeLeft(bathUntil) || pet.evolving() ||
+  return (!dark && (gameOpen || sackOpen || kbOpen || clockOpen)) || timeLeft(bathUntil) || pet.evolving() ||
          pet.eating() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
 }
+
+#if BOARD_AMOLED_175C
+void leaveSack();
+#endif
 
 void bedApply() {
   if (bedPending == BED_NONE || bedBusy()) return;
   BedEvent ev = bedPending;
   bedPending = BED_NONE;
   if (ev == BED_SLEEP) {
+    // Un juego o el saco abiertos aqui solo pueden estar a oscuras (bedBusy): se abandonan
+    // sin premio, como al tocar su cabecera. playResult() y trainStrength() se pagan al
+    // terminar la partida (que ya no llegara) y no miran pet.sleeping.
+    gameOpen = false;
+    if (sackOpen) {
+#if BOARD_AMOLED_175C
+      leaveSack();
+#else
+      sackOpen = false;
+#endif
+    }
     pet.autoSleep();  // sin sonido: es de noche
   } else if (pet.autoWake()) {
     audioSetSleeping(false);  // el amplificador se enciende antes de encolar el sonido
@@ -1012,8 +1029,8 @@ void handleSerial() {
     Serial.println("DONE");
   } else if (line == "CARE?") {  // read-only: relaxed pace / bedtime settings and whether it is bedtime now
     uint32_t e = rtcEpoch();
-    Serial.printf("pace=%u bed=%u inbed=%d\n", pet.pace, pet.bedPreset,
-                  e && isBedtime(pet.bedPreset, bedMinuteOfDay(e)) ? 1 : 0);
+    Serial.printf("pace=%u bed=%u inbed=%d stale=%d\n", pet.pace, pet.bedPreset,
+                  e && isBedtime(pet.bedPreset, bedMinuteOfDay(e)) ? 1 : 0, bedEdge.stale() ? 1 : 0);
     Serial.println("DONE");
   } else if (line == "BEEP") {
     sfxPlay(SFX_HATCH);  // prueba de audio
