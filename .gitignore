@@ -25,3 +25,7 @@ tools/build/
 # local firmware export directory and Python environment
 /out/
 .venv/
+
+# agent worktrees and local settings
+.claude/worktrees/
+.claude/settings.local.json
