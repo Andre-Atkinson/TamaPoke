@@ -1,7 +1,11 @@
 name: CI
 
+# Once per change: on pull requests, and on pushes to main (the merge itself).
+# A push to a PR branch used to run the same checks twice (push + pull_request).
+# Branches without a PR don't run CI; use workflow_dispatch (Actions tab) for those.
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
