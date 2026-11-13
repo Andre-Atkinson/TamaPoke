@@ -2272,7 +2272,7 @@ void drawPeek(uint16_t ink) {
       uint32_t in = p.t - p.phaseStart, out = p.phaseEnd > p.t ? p.phaseEnd - p.t : 0;
       uint32_t edge = in < out ? in : out;
       int sink = edge >= 150 ? 0 : (int)(40 * (150 - edge) / 150);
-      drawGamePet(p.hit ? PMD_NOD : PMD_POSE, PeekGame::BX[b], y - 10 + sink, 2);
+      drawGamePet(p.hit ? PMD_NOD : PMD_POSE, PeekGame::BX[b], y + 4 + sink, 3);
     }
     drawBush(x, y, true, night);
   }
@@ -2288,8 +2288,10 @@ void drawSong(uint16_t ink) {
   bool night = gameNight();
   const char *msg = s.playersTurn() ? T(S_SONG_TURN) : T(S_SONG_LISTEN);
   gfx->setTextColor(ink);
-  setSize(3);
-  setCur(centerX(msg, 3), 68);
+  setSize(4);  // grande si cabe (la fuente CJK divide el tamano entre 2), si no a 3
+  uint8_t sz = textW(msg, 4) <= 300 ? 4 : 3;
+  setSize(sz);
+  setCur(centerX(msg, sz), 68);
   printT(msg);
   char rec[24];  // ver drawGameHud
   snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameBest(GAME_SONG));
@@ -2304,7 +2306,7 @@ void drawSong(uint16_t ink) {
   uint8_t act = s.won ? PMD_POSE
                 : s.phase == SongGame::WRONG ? PMD_SIT
                 : (s.busy() && lit != SongGame::NO_PAD) ? PMD_NOD : PMD_IDLE;  // "canta" cada nota
-  drawGamePet(act, CX, 262, 2);
+  drawGamePet(act, CX, 262, 3);
   for (uint8_t i = 0; i < SongGame::PADS; i++) {
     int x = SongGame::PX[i], y = SongGame::PY[i];
     bool on = lit == i;
