@@ -1,7 +1,10 @@
 # Design: random minigames for Play
 
-Status: **draft, waiting for the owner's decisions** (the questions are at the
-end). Nothing is built yet.
+Status: **approved.** On 2026-11-13 the owner took all six recommendations
+(see "Decisions" at the end): keepy-uppy, Berry Catch, Peekaboo and Berry Song
+in a shuffle bag; per-game records on the Medals page; the "Hold: exit" chip;
+25–40 s games with a gentle ramp; the reflex/calm mix as proposed. Bubble Pop
+is not in this release.
 
 ## Goal
 
@@ -297,7 +300,7 @@ to `pet.cpp` and touch `TamaPoke.ino` (theirs the egg screen and Care page,
 ours the game and Medals page). Different keys and regions; whichever PR lands
 second rebases.
 
-## Questions for the owner
+## Decisions (owner, 2026-11-13: all six recommendations)
 
 1. **Which games in the first release?** Recommended: keepy-uppy, Berry Catch,
    Peekaboo, Berry Song. Bubble Pop later if she likes the rotation.

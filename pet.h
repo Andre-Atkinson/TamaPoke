@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <Preferences.h>
+#include "gamecore.h"  // GameId, records and normalised scores of the Play minigames
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
 // (p. ej. 5000UL = las estadisticas caen 12x mas rapido).
@@ -80,7 +81,8 @@ public:
   uint16_t medals = 0, totalMedals = 0;
   uint16_t newMedal = 0;   // recien conseguida(s), para celebrar
   uint16_t lastMilestone = 0;  // hito de racha ya celebrado
-  uint16_t gameHi = 0;     // record del minijuego (del jugador)
+  uint16_t gameHi = 0;     // record de keepy-uppy, el minijuego original (del jugador)
+  uint16_t catchHi = 0, peekHi = 0, songHi = 0;  // records de Berry Catch, Peekaboo y Berry Song
   uint16_t strHi = 0;      // record de golpes al saco
 
   void begin();                 // carga estado de NVS (o crea el primer huevo)
@@ -93,7 +95,10 @@ public:
   bool lovesBerry(uint8_t color) const {
     return !isEgg() && (speciesId % 3) == color;  // gusto oculto por especie
   }
-  void playResult(uint8_t score);  // recompensa del minijuego (entrena VEL)
+  // fin de un minijuego de Play (gamecore.h): guarda el record de ese juego con la
+  // puntuacion tal cual y paga la recompensa de la puntuacion normalizada (entrena VEL)
+  void playGame(uint8_t game, uint16_t raw);
+  uint16_t gameBest(uint8_t game) const;  // record de un minijuego (0 si no existe)
   uint8_t trainStrength(uint16_t hits);  // saco de entrenamiento (entrena FUE)
 
   // stats de combate: base real de gen 1 x genes + nivel + entrenamiento
@@ -210,6 +215,7 @@ private:
 
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo
+  void playReward(uint8_t n);  // recompensa de un minijuego, n = 0..GAME_SCORE_CAP
   void addBond(uint8_t amt);
   void checkMedals();
   void tick();

@@ -487,17 +487,37 @@ void Pet::feedCandy() {
   save();
 }
 
-void Pet::playResult(uint8_t score) {
-  if (ceremony != CER_NONE || isEgg()) return;
-  uint8_t v = trSpe + score / 5;  // jugar entrena la velocidad
+// Fin de un minijuego de Play. Cada juego guarda su record con la puntuacion que
+// ve el jugador; la recompensa sale de la normalizada (gamecore.h), asi que una
+// buena partida paga lo mismo sea cual sea el juego que toco.
+void Pet::playGame(uint8_t game, uint16_t raw) {
+  if (ceremony != CER_NONE || isEgg() || game >= GAME_COUNT) return;
+  if (raw > GAME_REC_MAX[game]) raw = GAME_REC_MAX[game];
+  uint16_t *rec = game == GAME_CATCH ? &catchHi : game == GAME_PEEK ? &peekHi
+                : game == GAME_SONG ? &songHi : &gameHi;
+  if (raw > *rec) *rec = raw;  // nuevo record
+  playReward(gameNormScore(game, raw));
+}
+
+uint16_t Pet::gameBest(uint8_t game) const {
+  switch (game) {
+    case GAME_KEEPY: return gameHi;
+    case GAME_CATCH: return catchHi;
+    case GAME_PEEK: return peekHi;
+    case GAME_SONG: return songHi;
+    default: return 0;
+  }
+}
+
+void Pet::playReward(uint8_t n) {
+  uint8_t v = trSpe + n / 5;  // jugar entrena la velocidad
   trSpe = v > 100 ? 100 : v;
-  joy = clamp100(joy + 5 + (score > 15 ? 30 : score * 2));
-  energy = dropTo(energy, 10 + score / 2, 5);
+  joy = clamp100(joy + 5 + (n > 15 ? 30 : n * 2));
+  energy = dropTo(energy, 10 + n / 2, 5);
   fullness = dropTo(fullness, 5, 5);
-  int burn = (int)weight - score * 2;  // el ejercicio quema peso
+  int burn = (int)weight - n * 2;  // el ejercicio quema peso
   weight = burn > 0 ? burn : 0;
-  if (score >= 5) heartUntil = millis() + HEART_MS;
-  if (score > gameHi) gameHi = score;  // nuevo record
+  if (n >= 5) heartUntil = millis() + HEART_MS;
   addBond(2);
   registerCare();
   save();
@@ -640,6 +660,9 @@ void Pet::save() {
   prefs.putUShort("tmedal", totalMedals);
   prefs.putUShort("mstone", lastMilestone);
   prefs.putUShort("ghi", gameHi);
+  prefs.putUShort("mgc", catchHi);
+  prefs.putUShort("mgp", peekHi);
+  prefs.putUShort("mgs", songHi);
   prefs.putUShort("shi", strHi);
   prefs.putString("nick", nick);
 }
@@ -691,7 +714,12 @@ void Pet::load() {
   medals = prefs.getUShort("medal", 0);
   totalMedals = prefs.getUShort("tmedal", 0);
   lastMilestone = prefs.getUShort("mstone", 0);
-  gameHi = prefs.getUShort("ghi", 0);
+  // records de los minijuegos: un valor que el juego no puede dar (NVS danada o de
+  // otro firmware) se lee como 0
+  gameHi = gameRecordOk(GAME_KEEPY, prefs.getUShort("ghi", 0));
+  catchHi = gameRecordOk(GAME_CATCH, prefs.getUShort("mgc", 0));
+  peekHi = gameRecordOk(GAME_PEEK, prefs.getUShort("mgp", 0));
+  songHi = gameRecordOk(GAME_SONG, prefs.getUShort("mgs", 0));
   strHi = prefs.getUShort("shi", 0);
   prefs.getString("nick", nick, sizeof(nick));
   pace = prefs.getUChar("pace", PACE_NORMAL);

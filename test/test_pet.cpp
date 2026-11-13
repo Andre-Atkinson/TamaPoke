@@ -473,13 +473,152 @@ TEST(play, minijuego_entrena_velocidad_y_guarda_record) {
   makePet(p, 4);
   p.joy = 10;
   p.weight = 50;
-  p.playResult(20);
+  p.playGame(GAME_KEEPY, 20);
   CHECK_EQ(p.trSpe, (uint8_t)4);
   CHECK_EQ(p.joy, (uint8_t)45);   // +5 +30 por marcar mas de 15
   CHECK_EQ(p.weight, (uint8_t)10);  // 50 - 20*2
   CHECK_EQ(p.gameHi, (uint16_t)20);
-  p.playResult(5);
+  p.playGame(GAME_KEEPY, 5);
   CHECK_MSG(p.gameHi == 20, "un resultado peor no baja el record");
+}
+
+// ---------------------------------------------------------------- minijuegos de Play
+// mismo bicho y mismas stats para comparar recompensas entre juegos
+static void freshPlayer(Pet &p) {
+  makePet(p, 4);
+  setStats(p, 60, 10, 80, 50);
+  p.weight = 80;
+  p.trSpe = 10;
+}
+
+TEST(play, cada_minijuego_guarda_su_propio_record) {
+  Pet p;
+  freshPlayer(p);
+  p.playGame(GAME_CATCH, 30);
+  CHECK_EQ(p.catchHi, (uint16_t)30);
+  CHECK_MSG(p.gameHi == 0, "ghi sigue siendo solo el record de keepy-uppy");
+  p.playGame(GAME_PEEK, 9);
+  p.playGame(GAME_SONG, 7);
+  p.playGame(GAME_KEEPY, 12);
+  CHECK_EQ(p.peekHi, (uint16_t)9);
+  CHECK_EQ(p.songHi, (uint16_t)7);
+  CHECK_EQ(p.gameHi, (uint16_t)12);
+  CHECK_EQ(p.catchHi, (uint16_t)30);
+  CHECK_EQ(p.gameBest(GAME_KEEPY), (uint16_t)12);
+  CHECK_EQ(p.gameBest(GAME_CATCH), (uint16_t)30);
+  CHECK_EQ(p.gameBest(GAME_PEEK), (uint16_t)9);
+  CHECK_EQ(p.gameBest(GAME_SONG), (uint16_t)7);
+  CHECK_EQ(p.gameBest(GAME_COUNT), (uint16_t)0);
+  p.playGame(GAME_CATCH, 3);
+  CHECK_MSG(p.catchHi == 30, "una partida peor no baja el record");
+}
+
+TEST(play, a_la_par_todos_los_minijuegos_pagan_lo_mismo) {
+  for (uint8_t g = 0; g < GAME_COUNT; g++) {
+    Pet p;
+    freshPlayer(p);
+    p.playGame(g, GAME_PAR[g]);
+    std::string where = "juego " + std::to_string(g);
+    CHECK_MSG(p.joy == 45, where + ": JOY +5 +30");
+    CHECK_MSG(p.trSpe == 13, where + ": VEL +3");
+    CHECK_MSG(p.weight == 50, where + ": peso -30");
+    CHECK_MSG(p.energy == 63, where + ": ENE -(10 + 15/2)");
+    CHECK_MSG(p.showHeart(), where + ": corazon");
+  }
+}
+
+TEST(play, la_recompensa_se_topa_en_30_pero_el_record_no) {
+  Pet p;
+  freshPlayer(p);
+  p.playGame(GAME_KEEPY, 40);
+  CHECK_EQ(p.trSpe, (uint8_t)16);   // 10 + 30/5, no 10 + 40/5
+  CHECK_EQ(p.weight, (uint8_t)20);  // 80 - 30*2
+  CHECK_EQ(p.gameHi, (uint16_t)40);
+}
+
+TEST(play, un_record_imposible_se_recorta_al_maximo_del_juego) {
+  Pet p;
+  freshPlayer(p);
+  p.playGame(GAME_PEEK, 500);
+  CHECK_EQ(p.peekHi, (uint16_t)20);
+  p.playGame(GAME_SONG, 13);
+  CHECK_EQ(p.songHi, (uint16_t)12);
+  p.playGame(GAME_COUNT, 5);  // juego que no existe: nada
+  CHECK_EQ(p.gameHi, (uint16_t)0);
+}
+
+TEST(play, sin_bicho_no_hay_premio_ni_record) {
+  mockNvsReset();
+  mockSetMillis(0);
+  Pet p;
+  p.begin();
+  if (p.awaitingStarter()) p.chooseStarter(4);
+  CHECK(p.isEgg());
+  uint8_t joy = p.joy;
+  p.playGame(GAME_CATCH, 20);
+  CHECK_EQ(p.catchHi, (uint16_t)0);
+  CHECK_EQ(p.joy, joy);
+}
+
+TEST(nvs, records_de_los_minijuegos_sobreviven_al_reinicio) {
+  Pet a;
+  freshPlayer(a);
+  a.playGame(GAME_KEEPY, 21);
+  a.playGame(GAME_CATCH, 33);
+  a.playGame(GAME_PEEK, 17);
+  a.playGame(GAME_SONG, 8);
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.gameHi, (uint16_t)21);
+  CHECK_EQ(b.catchHi, (uint16_t)33);
+  CHECK_EQ(b.peekHi, (uint16_t)17);
+  CHECK_EQ(b.songHi, (uint16_t)8);
+}
+
+TEST(nvs, records_imposibles_en_la_nvs_se_leen_como_0) {
+  Pet a;
+  freshPlayer(a);
+  Preferences raw;
+  raw.begin("tamapoke", false);
+  raw.putUShort("ghi", 256);
+  raw.putUShort("mgc", 201);
+  raw.putUShort("mgp", 21);
+  raw.putUShort("mgs", 13);
+  raw.end();
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.gameHi, (uint16_t)0);
+  CHECK_EQ(b.catchHi, (uint16_t)0);
+  CHECK_EQ(b.peekHi, (uint16_t)0);
+  CHECK_EQ(b.songHi, (uint16_t)0);
+  raw.begin("tamapoke", false);  // justo en el maximo: se conservan
+  raw.putUShort("ghi", 255);
+  raw.putUShort("mgc", 200);
+  raw.putUShort("mgp", 20);
+  raw.putUShort("mgs", 12);
+  raw.end();
+  Pet c;
+  c.begin();
+  CHECK_EQ(c.gameHi, (uint16_t)255);
+  CHECK_EQ(c.catchHi, (uint16_t)200);
+  CHECK_EQ(c.peekHi, (uint16_t)20);
+  CHECK_EQ(c.songHi, (uint16_t)12);
+}
+
+TEST(nvs, sin_claves_de_minijuegos_los_records_empiezan_en_0) {
+  Pet a;
+  freshPlayer(a);  // guardado sin mgc/mgp/mgs (como uno de antes)
+  Preferences raw;
+  raw.begin("tamapoke", false);
+  raw.remove("mgc");
+  raw.remove("mgp");
+  raw.remove("mgs");
+  raw.end();
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.catchHi, (uint16_t)0);
+  CHECK_EQ(b.peekHi, (uint16_t)0);
+  CHECK_EQ(b.songHi, (uint16_t)0);
 }
 
 TEST(play, jugar_sube_felicidad_y_cansa) {
