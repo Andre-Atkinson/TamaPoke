@@ -1632,9 +1632,9 @@ void renderEggSelect() {
     const DexEntry &de = DEX_TBL[d];
     int lift = (i == eggSel) ? EGGSEL_LIFT : 0;
     int x = EGGSEL_CX[i] - 16 * EGGSEL_S, y = EGGSEL_Y - lift;
-    // sombra en el suelo: se separa al levantar el huevo
-    gfx->fillEllipse(EGGSEL_CX[i], EGGSEL_Y + 29 * EGGSEL_S, 30 - lift / 2, 7, lerp565(bg, UI_INK, 2, 8));
+    // halo del tocado y despues la sombra en el suelo (se separa al levantarlo)
     if (i == eggSel) gfx->fillCircle(EGGSEL_CX[i], y + 17 * EGGSEL_S, 58, lerp565(bg, de.accent, 3, 8));
+    gfx->fillEllipse(EGGSEL_CX[i], EGGSEL_Y + 29 * EGGSEL_S, 30 - lift / 2, 7, lerp565(bg, UI_INK, 2, 8));
     drawEggStyled(de.rarity, de.accent, x, y, EGGSEL_S);
   }
   if (eggSel >= 0 && eggSel < EGG_CHOICES) {
