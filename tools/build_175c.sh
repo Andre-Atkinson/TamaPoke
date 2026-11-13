@@ -11,6 +11,7 @@
 #   tools/build_175c.sh                      # -> ../out (or $TAMAPOKE_OUT)
 #   tools/build_175c.sh --out DIR
 #   tools/build_175c.sh --flags '-DSOME_FLAG=1'   # extra compiler flags
+#   TAMAPOKE_JOBS=8 tools/build_175c.sh      # parallel compile jobs: default 3, 0 = all cores
 # CI runs this same script, so a green CI means this command works.
 set -euo pipefail
 
@@ -19,6 +20,11 @@ OUT="${TAMAPOKE_OUT:-${ROOT}/../out}"
 EXTRA=""
 FQBN="${FQBN_175C:-esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=32M,PSRAM=opi,PartitionScheme=custom}"
 PARTS="${ROOT}/boards/175c/partitions.csv"
+# arduino-cli's own default is every core; a few builds at once made a 10-core
+# Mac hot and slow, so cap it. A plain decimal only: arduino-cli would read a
+# leading 0 as octal.
+JOBS="${TAMAPOKE_JOBS:-3}"
+JOBS_RE='^(0|[1-9][0-9]{0,3})$'
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -28,6 +34,8 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
+
+[[ "$JOBS" =~ $JOBS_RE ]] || { echo "TAMAPOKE_JOBS must be 0 (all cores) or a whole number of jobs, up to 9999; got '$JOBS'" >&2; exit 1; }
 
 [[ -f "$PARTS" ]] || { echo "Missing $PARTS" >&2; exit 1; }
 if [[ -f "${ROOT}/partitions.csv" ]]; then
@@ -51,7 +59,7 @@ trap 'rm -rf "$BUILD"' EXIT
 # The ESP32 core's first prebuild hook copies a sketch-root partitions.csv into
 # the build folder. Point that hook at the 1.75C table instead, so the table is
 # used on every build (even after arduino-cli cleans the build folder).
-arduino-cli compile --warnings=all \
+arduino-cli compile --warnings=all --jobs "$JOBS" \
   --fqbn "$FQBN" \
   --build-path "$BUILD" \
   --build-property "upload.maximum_size=${APP_MAX}" \
