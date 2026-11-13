@@ -3,9 +3,11 @@
 #
 #   tools/gate.sh               everything
 #   tools/gate.sh --no-build    skip the two firmware builds (quick runs)
+#   TAMAPOKE_JOBS=8 tools/gate.sh   compile jobs per build: default 3, 0 = all cores
 #
 # Steps: host tests (+ASan/UBSan), i18n format check, no-network check over the
-# firmware sources, and both firmware builds (1.75C and the original 1.75).
+# firmware sources, and both firmware builds (1.75C and the original 1.75), one
+# after the other.
 #
 # The firmware builds run from a staged copy of the working tree (uncommitted
 # changes included) in a folder literally named "TamaPoke": arduino-cli refuses
@@ -23,10 +25,19 @@ BUILD=1
 for a in "$@"; do
   case "$a" in
     --no-build) BUILD=0 ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $a" >&2; exit 2 ;;
   esac
 done
+
+# Parallel compile jobs for each firmware build (arduino-cli's own default is
+# every core). Checked up front so a typo fails in a second, not after the tests.
+JOBS="${TAMAPOKE_JOBS:-3}"
+JOBS_RE='^(0|[1-9][0-9]{0,3})$'
+if [[ "$BUILD" -eq 1 && ! "$JOBS" =~ $JOBS_RE ]]; then
+  echo "TAMAPOKE_JOBS must be 0 (all cores) or a whole number of jobs, up to 9999; got '$JOBS'" >&2
+  exit 2
+fi
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tamapoke-gate.XXXXXX")" || exit 2
 KEEP="$ROOT/test/build/gate-logs"   # failing runs keep their full logs here (gitignored)
@@ -145,12 +156,12 @@ if [[ "$BUILD" -eq 1 ]]; then
   fi
 fi
 if [[ "$BUILD" -eq 1 ]]; then
-  echo "== build 1.75C =="
-  (cd "$STAGE" && ./tools/build_175c.sh --out "$TMP/out175c") >"$TMP/b175c.log" 2>&1
+  echo "== build 1.75C (--jobs $JOBS) =="
+  (cd "$STAGE" && TAMAPOKE_JOBS="$JOBS" ./tools/build_175c.sh --out "$TMP/out175c") >"$TMP/b175c.log" 2>&1
   show_build "1.75C" "$TMP/b175c.log" $?
 
-  echo "== build 1.75 (original) =="
-  (cd "$STAGE" && arduino-cli compile --warnings=all \
+  echo "== build 1.75 (original, --jobs $JOBS) =="
+  (cd "$STAGE" && arduino-cli compile --warnings=all --jobs "$JOBS" \
     --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB" \
     --build-path "$TMP/b175") >"$TMP/b175.log" 2>&1
   show_build "1.75" "$TMP/b175.log" $?

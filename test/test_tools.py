@@ -616,6 +616,160 @@ class TestBoardScripts(unittest.TestCase):
         self.assertTrue(os.path.exists(dest + '.sha256'))
 
 
+# Records each call's argv as one JSON line and fakes a good build: a small
+# TamaPoke.ino.bin in --output-dir and, when FAKE_PARTS is set, that partition
+# table in --build-path (what the core's prebuild hook would have copied).
+FAKE_ARDUINO_CLI = r'''#!/usr/bin/env python3
+import json, os, shutil, sys
+args = sys.argv[1:]
+with open(os.environ['FAKE_CLI_LOG'], 'a') as fh:
+    fh.write(json.dumps(args) + '\n')
+def opt(name):
+    return args[args.index(name) + 1] if name in args else None
+if opt('--output-dir'):
+    os.makedirs(opt('--output-dir'), exist_ok=True)
+    with open(os.path.join(opt('--output-dir'), 'TamaPoke.ino.bin'), 'wb') as fh:
+        fh.write(b'\0' * 1024)
+if opt('--build-path') and os.environ.get('FAKE_PARTS'):
+    os.makedirs(opt('--build-path'), exist_ok=True)
+    shutil.copy(os.environ['FAKE_PARTS'], os.path.join(opt('--build-path'), 'partitions.csv'))
+'''
+
+
+class TestBuildJobs(unittest.TestCase):
+    """build_175c.sh and the gate's original-1.75 build cap arduino-cli's
+    parallel compile jobs (its own default is every core), checked against a
+    fake arduino-cli on PATH, so nothing here really compiles."""
+
+    PARTS = os.path.join(ROOT, 'boards', '175c', 'partitions.csv')
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.log = os.path.join(self.tmp, 'arduino-cli.log')
+        bindir = os.path.join(self.tmp, 'bin')
+        os.makedirs(bindir)
+        fake = os.path.join(bindir, 'arduino-cli')
+        with open(fake, 'w') as fh:
+            fh.write(FAKE_ARDUINO_CLI)
+        os.chmod(fake, 0o755)
+        # An owner's own TAMAPOKE_JOBS (or board overrides) must not leak in.
+        self.env = {k: v for k, v in os.environ.items()
+                    if k not in ('TAMAPOKE_JOBS', 'TAMAPOKE_OUT', 'FQBN_175C', 'APP_MAX_OVERRIDE')}
+        self.env.update(PATH=bindir + os.pathsep + os.environ.get('PATH', ''),
+                        FAKE_CLI_LOG=self.log, FAKE_PARTS=self.PARTS)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def calls(self):
+        import json
+        if not os.path.exists(self.log):
+            return []
+        with open(self.log) as fh:
+            return [json.loads(line) for line in fh if line.strip()]
+
+    def jobs_of(self, call):
+        self.assertEqual(call.count('--jobs'), 1, call)
+        self.assertNotIn('-j', call)
+        return call[call.index('--jobs') + 1]
+
+    def build_175c(self, **env):
+        return subprocess.run([os.path.join(TOOLS, 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out')],
+                              env=dict(self.env, **env), capture_output=True, text=True, timeout=60)
+
+    def gate_root(self):
+        """A minimal repo for gate.sh: the real gate and 1.75C build script,
+        the 1.75C table, a one-line sketch, and stand-ins for the host tests and
+        the i18n check that record that they ran."""
+        root = os.path.join(self.tmp, 'repo')
+        os.makedirs(os.path.join(root, 'tools'))
+        os.makedirs(os.path.join(root, 'test'))
+        os.makedirs(os.path.join(root, 'boards', '175c'))
+        for name in ('gate.sh', 'build_175c.sh'):
+            shutil.copy2(os.path.join(TOOLS, name), os.path.join(root, 'tools', name))
+        shutil.copy2(self.PARTS, os.path.join(root, 'boards', '175c', 'partitions.csv'))
+        put(os.path.join(root, 'TamaPoke.ino'), b'void setup() {}\nvoid loop() {}\n')
+        self.ran = os.path.join(self.tmp, 'ran')
+        stub = os.path.join(root, 'test', 'run_tests.sh')
+        put(stub, f'#!/usr/bin/env bash\necho tests >> "{self.ran}"\necho "TODO OK"\n'.encode())
+        os.chmod(stub, 0o755)
+        put(os.path.join(root, 'tools', 'test_i18n_formats.py'),
+            f'open({self.ran!r}, "a").write("i18n\\n")\n'.encode())
+        return root
+
+    def gate(self, root, *args, **env):
+        return subprocess.run([os.path.join(root, 'tools', 'gate.sh'), *args],
+                              env=dict(self.env, **env), capture_output=True, text=True, timeout=120)
+
+    def test_build_175c_caps_compile_jobs_at_3_by_default(self):
+        for env in ({}, {'TAMAPOKE_JOBS': ''}):
+            with self.subTest(env=env):
+                if os.path.exists(self.log):
+                    os.remove(self.log)
+                r = self.build_175c(**env)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn('1.75C build OK', r.stdout)
+                (call,) = self.calls()
+                self.assertEqual(call[0], 'compile')
+                self.assertEqual(self.jobs_of(call), '3')
+
+    def test_build_175c_takes_the_job_count_from_TAMAPOKE_JOBS(self):
+        for jobs in ('8', '0', '1'):
+            with self.subTest(jobs=jobs):
+                if os.path.exists(self.log):
+                    os.remove(self.log)
+                r = self.build_175c(TAMAPOKE_JOBS=jobs)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                (call,) = self.calls()
+                self.assertEqual(self.jobs_of(call), jobs)
+
+    def test_build_175c_refuses_a_job_count_arduino_cli_would_misread(self):
+        # '08' is octal to arduino-cli (and invalid), '010' would be 8 jobs
+        for bad in ('x', '08', '010', '-1', '3 ', '2.5', '10000'):
+            with self.subTest(bad=bad):
+                r = self.build_175c(TAMAPOKE_JOBS=bad)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn('TAMAPOKE_JOBS', r.stderr)
+                self.assertEqual(self.calls(), [], 'arduino-cli ran with a bad job count')
+
+    def test_gate_caps_both_firmware_builds(self):
+        root = self.gate_root()
+        for env, jobs in (({}, '3'), ({'TAMAPOKE_JOBS': '5'}, '5')):
+            with self.subTest(env=env):
+                if os.path.exists(self.log):
+                    os.remove(self.log)
+                r = self.gate(root, **env)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertIn('GATE GREEN', r.stdout)
+                calls = self.calls()
+                fqbns = sorted(c[c.index('--fqbn') + 1].split('FlashSize=')[1].split(',')[0] for c in calls)
+                self.assertEqual(fqbns, ['16M', '32M'], 'expected the 1.75 and the 1.75C build')
+                for call in calls:
+                    self.assertEqual(self.jobs_of(call), jobs, call)
+
+    def test_gate_refuses_a_bad_job_count_before_running_anything(self):
+        root = self.gate_root()
+        r = self.gate(root, TAMAPOKE_JOBS='08')
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn('TAMAPOKE_JOBS', r.stderr)
+        self.assertFalse(os.path.exists(self.ran), 'the gate ran steps before checking TAMAPOKE_JOBS')
+        self.assertEqual(self.calls(), [])
+        # No builds, no compile jobs: --no-build doesn't care about the value.
+        r = self.gate(root, '--no-build', TAMAPOKE_JOBS='08')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_build_help_documents_TAMAPOKE_JOBS_and_stops_before_the_shell_options(self):
+        for script in ('build_175c.sh', 'gate.sh'):
+            with self.subTest(script=script):
+                r = subprocess.run([os.path.join(TOOLS, script), '--help'], env=self.env,
+                                   capture_output=True, text=True, timeout=30)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn('TAMAPOKE_JOBS', r.stdout)
+                self.assertNotIn('set -', r.stdout)
+                self.assertEqual(self.calls(), [])
+
+
 class TestBoardPy(unittest.TestCase):
     def setUp(self):
         import board
