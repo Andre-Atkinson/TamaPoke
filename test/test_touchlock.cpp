@@ -57,3 +57,24 @@ TEST(TouchLock, millis_wrap_and_the_saved_selector) {
   CHECK_EQ(touchLockNext(TOUCH_LOCK_NEVER), 0u);
   CHECK_EQ(touchLockNext(0), 10000u);
 }
+
+TEST(TouchLock, tp_int_is_only_used_while_the_chip_is_awake) {
+  // touch.sleep() makes TP_INT open drain and it reads LOW: polling or arming it as a
+  // light-sleep wake source under the auto lock would keep the loop awake forever.
+  CHECK(touchWakeEnabled(false, false));
+  CHECK(!touchWakeEnabled(true, false));
+  CHECK(!touchWakeEnabled(false, true));
+  CHECK(!touchWakeEnabled(true, true));
+  TouchLock t;  // the auto lock going active is what disables it
+  CHECK(touchWakeEnabled(false, t.active));
+  t.update(true, 0);
+  t.update(true, 10000);
+  CHECK(!touchWakeEnabled(false, t.active));
+}
+
+TEST(TouchLock, selector_three_is_zero_seconds) {
+  CHECK_EQ(touchLockFromSel(3), 0u);
+  CHECK_EQ(touchLockFromSel(2), 60000u);
+  CHECK_EQ(touchLockFromSel(1), 30000u);
+  CHECK_EQ(touchLockFromSel(9), 10000u);
+}
