@@ -109,21 +109,27 @@ gets no CI (start a run from the Actions tab with `workflow_dispatch`), and a
 PR with merge conflicts gets no run until they are resolved, so an empty
 `gh pr checks` there is not a CI failure.
 
-`main` is protected by the repo ruleset "Protect main" (`gh api
-repos/Andre-Atkinson/TamaPoke/rulesets`). Changes reach `main` only through a
-pull request, merged with a merge commit or a squash. Rebase merges,
-force-pushes and deleting `main` are blocked. The five CI jobs must pass
-first: `Compile firmware`, `Game-logic tests (host, no board)`,
-`Generated headers up to date`, `Lint tools/ and sim/ (ruff)` and
-`i18n format-specifier consistency`. The branch does not have to be up to date
-with `main`, and no approving review is needed. Nobody can bypass it, not even
-the owner (so not any session either). A PR that `gh pr view` shows as
-`BLOCKED` usually still has a check running; the firmware compile takes about
-nine minutes. A PR that renames, adds or removes a job `name:` in
-`.github/workflows/ci.yml` needs the ruleset's required checks changed to
-match before it can merge, or a required check never reports and every PR
-stays blocked. The ruleset is a repo setting, so ask the owner before
-changing it.
+`main` is protected by the repo ruleset "Protect main". `gh api
+repos/Andre-Atkinson/TamaPoke/rules/branches/main` shows the rules in force
+and `https://github.com/Andre-Atkinson/TamaPoke/rules/27202277` is the
+owner's edit page. Changes reach `main` only through a pull request, merged
+with a merge commit or a squash. Rebase merges, force-pushes and deleting
+`main` are blocked. The five CI jobs must pass first: `Compile firmware`,
+`Game-logic tests (host, no board)`, `Generated headers up to date`,
+`Lint tools/ and sim/ (ruff)` and `i18n format-specifier consistency`. The
+branch does not have to be up to date with `main`, and no approving review is
+needed. Nobody can bypass it, not even the owner (so not any session either).
+
+A PR whose `mergeStateStatus` is `BLOCKED` (`gh pr view <n> --repo
+Andre-Atkinson/TamaPoke --json mergeStateStatus`) has a required check still
+running or failed; `gh pr checks <n> --repo Andre-Atkinson/TamaPoke` shows
+which. The firmware compile takes about ten to twelve minutes. Required checks
+match by job `name:`. A PR that renames or removes a job in
+`.github/workflows/ci.yml` stays `BLOCKED` until the ruleset's required checks
+are changed to match; once they are, every other open PR stays blocked until it
+merges `main` and CI runs again. A PR that adds a job merges normally: add the
+new name to the ruleset after it merges, or it is not enforced. The ruleset is
+a repo setting, so ask the owner before changing it.
 
 If a change affects device behaviour, say plainly in the PR whether it was
 exercised on hardware. Only flash it (app-only) and check it over USB serial
