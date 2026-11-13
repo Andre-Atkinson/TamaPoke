@@ -132,6 +132,9 @@ rounds before it is merged. Both are mandatory, and two is also the cap.
    `issue-fixer`, whose diff the main session then reviews), re-runs the gate,
    and fixes or explicitly dispositions LOW ones. Nothing gets silently dropped.
 
+If two review rounds feels wrong for a change (too few or too many), say so
+and ask the owner rather than exceeding the cap.
+
 Your own verification supplements the reviews; it never replaces them. A
 reader with no memory of writing the code catches the claims a change makes
 about itself (a comment asserting a guard that does not hold, a test that
@@ -145,13 +148,17 @@ its test, records the result and restores the file.
 relevant), both review rounds are done with every finding fixed or
 dispositioned (deferred ones filed as issues), and CI is green. The owner has
 given standing approval (2026-11-13) to merge a PR as soon as all three hold,
-so don't ask for each merge. A session merges its own PR; a session started
-by another session reports "READY #<n>" to that one, which merges. Use a
-merge commit, or squash when the branch has WIP commits, and say so in one
-line. Design decisions, flashing the board, and anything else the hard rules
-reserve for the owner still need the owner's say. Subagents never merge, and
-nobody submits an approving review. Once a session's work is merged and
-nothing is pending, it can be archived.
+so don't ask for each merge. The *main session* is one the owner works in
+directly; a session started by another session is not one, and neither is an
+agent. A main session merges its own PRs and files their issues. A session
+started by another reports "READY #<n>" to the one that started it, listing
+any deferred findings, so that session can file their issues before it
+merges. Use a merge commit, or squash when the branch has WIP commits, and
+say which in the merge commit message. Design decisions, flashing the board,
+and anything else the hard rules reserve for the owner still need the
+owner's say. Subagents never merge, and nobody submits an approving review.
+Once a session's work is merged and nothing is pending, the session that
+started it (or the owner) archives it.
 
 Mutation evidence for round-1 fixes and for the main session's post-round-2
 fixes goes in the PR body (`gh pr edit`), not only in a comment.
@@ -168,9 +175,7 @@ the issue **before the PR merges**: a deferred finding counts as dispositioned
 only once its issue exists and is linked from the PR body. A PR that fixes a
 roadmap issue says `Closes #<n>` in its description. Only the main session
 files issues; agents never run `gh issue create` and report deferred findings
-back instead. If two review rounds feels
-wrong for a change (too few or too many), say so and ask the owner rather
-than exceeding the cap.
+back instead.
 
 PR descriptions say what changed, why, how it was tested (including what was
 not tested on hardware), and list anything fixed beyond the brief under
