@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# CI only reads the repo: keep the job token read-only.
+permissions:
+  contents: read
+
 jobs:
   firmware:
     name: Compile firmware

@@ -2658,7 +2658,10 @@ void drawThumb(const uint8_t *b, int x, int y, int s, bool sil) {
   int oy = y + (GAL_CELL - h * s) / 2;
   for (int r = 0; r < h; r++) {
     const uint8_t *row = d + r * w;
-    forRuns(w, [&](int c) { return indexedKey(row[c], sil); },
+    // an index past the thumbnail's own palette (n entries) would read beyond
+    // its blob: treat it as transparent (0xFF is always >= n, so no change for
+    // well-formed files)
+    forRuns(w, [&](int c) { return row[c] < n ? indexedKey(row[c], sil) : -1; },
             [&](int c0, int len, int k) {
               uint16_t col = sil ? INK_K : (uint16_t)(pal[k * 2] | (pal[k * 2 + 1] << 8));
               gfx->fillRect(ox + c0 * s, oy + r * s, len * s, s, col);

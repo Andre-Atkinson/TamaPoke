@@ -647,6 +647,23 @@ void Pet::load() {
   gameHi = prefs.getUShort("ghi", 0);
   strHi = prefs.getUShort("shi", 0);
   prefs.getString("nick", nick, sizeof(nick));
+
+  // Range-check what came out of NVS before anything indexes with it. Normally
+  // these were written by this firmware, but a different build flashed earlier
+  // (e.g. a fork with more than 151 species) or a damaged flash page can leave
+  // a species number past DEX_TBL, which every screen reads directly.
+  fullness = clamp100(fullness);
+  joy = clamp100(joy);
+  energy = clamp100(energy);
+  hygiene = clamp100(hygiene);
+  if (poops > 3) poops = 3;
+  if (lastEnd > CER_RELEASE) lastEnd = CER_NONE;
+  if (eggTarget < 1 || eggTarget > DEX_COUNT) eggTarget = pickEggSpecies();
+  if (speciesId == 0 || speciesId < -1 || speciesId > DEX_COUNT) {
+    newEgg();  // that pet doesn't exist in this firmware: start a fresh egg
+    return;
+  }
+
   // siembra: la mascota actual cuenta como criada (guardados antiguos)
   if (speciesId >= 1) registerSpecies(speciesId);
 }
