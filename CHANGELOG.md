@@ -8,7 +8,101 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ## [Unreleased]
 
+### Fixed
+
+- **Auto touch lock no longer defeats light sleep.** A sleeping CST9217 leaves
+  TP_INT open drain, which reads low, so the idle loop saw a touch on every
+  pass and never slept. The pin is now ignored (not polled, not a wake source,
+  ISR detached) while either lock is on. The 1.75C PWR press is read from the
+  PKEY status register directly, so a failed I2C read is no longer a press.
+  If the touch chip does not answer when it is brought back up, TP_INT is
+  pulled up (so a floating pin cannot read as a touch), stays ignored, and the
+  bring-up is retried every 2 s while the screen is on, up to 5 times (each
+  failed attempt blocks about 0.5 s), then again after the next touch unlock.
+
+- **Triple-press PWR with the screen off or pocket-locked.** While a press
+  sequence is pending the idle loop pauses 10 ms instead of 100 ms and does
+  not light-sleep, so the key is polled at the normal 40 ms rate and slower
+  triple presses are no longer merged into one latched edge.
+
+- **1.75C PWR button.** Key2 is only on AXP2101 PWRON. GPIO3 (net SYS_OUT) does
+  not follow it, so the triple-press detector never saw the key. A short press
+  is now the PKEY short-press IRQ, polled and cleared over I2C. One short press
+  toggles the screen; three within 350 ms still lock it. Holding PWR for 4 s
+  is still the hardware power-off.
+
+- **QMI8658 powers down.** The 1.75C IMU sits on VCC3V3 and this firmware does
+  not read it. If the chip answers 0x05, CTRL7 is cleared (sensors off) and
+  CTRL1 is written 0x03 to stop its high-speed oscillator, which is where the
+  saving is. SensorLib's `powerDown()` sets CTRL1 bit 1 and earlier code here
+  set bit 0; no datasheet was available, so both are set. Not measured.
+
+- **AXP2101 DCDC5 off (1.75C only).** On the 1.75C schematic that converter is unconnected
+  (no inductor, output capacitor not fitted). DCDC1 stays on: it is VCC3V3
+  for the ESP32 and the panel.
+
+- **CO5300 actually sleeps when the screen is off.** Writing brightness 0
+  (reg `0x51`) leaves the panel scanning, so it stays lit. Screen-off and the
+  1.75C lock blank now send `0x51=0`, display off `0x28`, wait 120 ms, and
+  sleep-in `0x10`. Wake is sleep-out `0x11`, wait 120 ms, display on `0x29`,
+  then brightness. DCDC1 is not switched off.
+
 ### Added
+
+- **LiPo charge profile on the AXP2101** (both boards). Charging is enabled at
+  4.20 V. Constant current is **300 mA on the 1.75C** (the AXP2101 power-on
+  default, 0.6C for its 500 mAh cell; there is no battery temperature sensor,
+  so the factory rate is used) and 400 mA on the original 1.75 (1100 mAh pack; owner's choice, upstream left the chip default),
+  `CHARGE_CURRENT_*` in `board.h`. Termination is the chip default, **125 mA** (reg `0x63` =
+  `0x15`): 25 mA never crossed the taper on this board, so the charger stayed
+  in CV at 4.20 V and `isCharging()` stayed true. USB input limit is **900 mA**
+  (reg `0x16` = 2). With a 500 mA input limit the charge current plus the system
+  load can reach the limit, which puts the chip in input-current regulation, and
+  the datasheet disables termination for as long as that lasts; 900 mA avoids it. Precharge stays at
+  the 125 mA reset value. The TS pin is taken out of battery-temperature mode
+  (the 1.75C has no NTC) and the button-cell charger is forced off. Rails are
+  not retargeted. The `HEALTH` line adds charger state, die temp (`22+(7274-raw)/20`, raw
+  included; the datasheet only specifies 0.1 mV/LSB), which rails are on, and
+  CPU MHz when built with `-DTAMAPOKE_CHG_DEBUG=1`, which also prints every 60 s
+  plus FreeRTOS run-time stats. Release builds (the default, 0) print the plain
+  5-minute line.
+
+- **Battery as a number.** The clock screen cycles the header between the
+  existing icon and a percent (`87%`, with a `+` while charging). The choice
+  is saved. The default is still the icon.
+
+- **Automatic touch lock.** After the screen has been off for 10 s (the
+  default on the 1.75C; off on the original 1.75), 0 s, 30 s or 60 s, touches no longer wake it. A short PWR press
+  wakes the screen and clears the lock. The clock pill cycles those delays
+  and off. The CST9217 is put to sleep only once the lock engages, and a
+  wake re-inits it. While the lock is on the touch interrupt is detached and
+  light sleep no longer polls or arms it as a wake source (a sleeping CST9217
+  leaves TP_INT open drain, which reads low). The triple-press pocket lock is
+  unchanged.
+
+- **Screen-off timeout.** The clock screen cycles 60 s (the default on the
+  1.75C; the original 1.75 defaults to never), 30 s, 15 s and never. The panel dims at half that time and turns off at the end,
+  including while the clock, keyboard or gallery is open. USB does not disable
+  it; USB only skips light sleep. Never keeps the existing 90 s dim and 5 min
+  near-off. A minigame is left running.
+
+- **CPU frequency scaling.** 240 MHz while the pet is in use, 160 MHz once the
+  panel has dimmed or the pet is asleep, 80 MHz with the screen off or at the
+  5 min near-off step. With the default 60 s timeout that is 160 MHz from 30 s
+  (the dim) and 80 MHz from 60 s (screen off), on battery. A minigame stays at 240 MHz. USB stays at 240 MHz while
+  the screen is on, and drops to 80 MHz with the screen off, same as on battery.
+  Light sleep stays off while USB is connected, so the serial port stays up.
+  With the screen off the loop waits 100 ms instead of 20 ms.
+  Not changed while a sound is playing or queued, as a precaution: the I2S
+  source on the S3 is PLL_F160M by default, not the CPU clock.
+
+- **Codec and I2S stay on; only the amplifier is gated.** An earlier
+  version also powered the ES8311 down (REG0D) and stopped I2S while muted or
+  idle. On the real 1.75C that left the board silent after a BOOT mute then
+  unmute, and no ES8311 driver source was available to get the wake sequence
+  right, so that gating was removed: the PA pin still drops while the pet
+  sleeps, the screen is dimmed or off, or sound is muted, as before.
+  `audioBusy()` now also covers a sound that is playing or queued.
 
 - **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
   build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus

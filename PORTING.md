@@ -25,7 +25,7 @@ Sources: [1.75C pin_config.h](https://github.com/waveshareteam/ESP32-S3-Touch-AM
 | Touch reset | GPIO 40 | GPIO **2** |
 | I2S MCLK | GPIO 42 | GPIO **16** |
 | QSPI / I2C / I2S BCLK, WS, DO, DI / PA | 38, 4–7, 12; 15/14, INT 11; 9, 45, 8, 10; PA 46 | Same |
-| PWR button | AXP2101 PEK IRQ | Key2 → AXP2101 **PWRON** (4 s power-off) and **SYS_OUT → GPIO 3** (high while pressed) |
+| PWR button | AXP2101 PEK short IRQ | Key2 → AXP2101 **PWRON** only. Short press is the PKEY IRQ (polled over I2C): one press toggles the screen, three within 350 ms lock. GPIO 3 is net **SYS_OUT** and does not follow the key. Hold 4 s still powers off |
 | OLED power | AXP **BLDO1 3.3 V** | Panel J3 is on **VCC3V3 (DCDC1)**. BLDO1 is 1.2 V and BLDO2 2.8 V on this board, so BLDO1 is **not** reprogrammed. |
 | RTC PCF85063 | Present (I2C 0x51) | **Not fitted.** The firmware keeps a software clock (`time()`/`settimeofday()`), set from the clock screen; it is lost when the AXP cuts power. |
 | microSD | Yes (sprites) | **No slot**: sprites live in a LittleFS partition in flash |
@@ -118,7 +118,7 @@ work against LittleFS.
 | `boards/175c/partitions.csv` | **New.** 32 MB map above. Only used when passed explicitly. |
 | `pin_config.h` | 1.75C pins (LCD/touch reset, MCLK, PWR sense, BOOT) behind the switch; original pins unchanged. |
 | `sdmon.cpp` / `sdmon.h` | File I/O goes through `SpriteFS`: LittleFS on the 1.75C, still `SD_MMC` on the 1.75. |
-| `rtcbat.cpp` / `rtcbat.h` | 1.75C only: no PCF85063 probe, software clock, BLDO1 left alone, PEK IRQ off and GPIO 3 set up for the lock. The 4 s AXP power-off is kept. Original paths unchanged. |
+| `rtcbat.cpp` / `rtcbat.h` | 1.75C only: no PCF85063 probe, software clock, BLDO1 and the original panel rail left alone, DCDC5 off. Both boards: PKEY short-press IRQ read from `INTSTS2`, 4 s AXP power-off kept, charge current from `board.h` (`CHARGE_CURRENT_*`: 300 mA on the 1.75C, 400 mA on the original, the owner's choice: upstream never programmed the charge current and left the chip default). The charger block is written on both boards, so the original 1.75 also gets new VBUS 900 mA, ITERM 125 mA, CHGLED type A (reg `0x69`) and button-cell charging off; none of that is verified on an original 1.75. |
 | `screenlock.cpp` / `screenlock.h` | **New.** PWR triple-press detector and lock state (pure logic, compile-time and host tests). |
 | `bootbutton.cpp` / `bootbutton.h` | **New.** BOOT single/double/long gesture detector (pure logic, tests). |
 | `trainingtouch.*` / `trainingcapture.*` | **New.** 1.75C strength-training tap policy, CST9217 report decoder and the capture worker. |
@@ -146,14 +146,15 @@ download mode, as on any ESP32-S3.
 
 ## Pocket screen lock (1.75C)
 
-**Press PWR three times to lock, three more to unlock.** Each press must be
-under **600 ms**, with the next one starting within **350 ms** of the previous
-release; edges are debounced for **25 ms**. Single and double presses do
-nothing, and a hold of 600 ms or more cancels a partial triple.
+**Press PWR three times to lock, three more to unlock.** The three presses must
+land within **350 ms** of each other; a single press toggles the screen.
 
-**Hardware.** Key2 pulls AXP2101 PWRON low and, through T1 (BSS138), drives
-SYS_OUT to **GPIO 3** (high = pressed, 10 k pull-up R9). The firmware samples
-GPIO 3 every loop instead of the AXP PEK IRQ, which the 1.75C doesn't enable.
+**Hardware.** Key2 pulls AXP2101 PWRON low. GPIO 3 (net SYS_OUT) does **not**
+follow the key on this board. The firmware reads the AXP2101 PKEY short-press
+flag (`INTSTS2` bit 3) over I2C about every 40 ms; the flag latches, so a press
+during light sleep is still seen. The press is a latched event, so there is no
+press-length or 600 ms hold detection in the firmware (the `PwrButton` class in
+`screenlock.h` is only exercised by the host tests).
 **Holding PWR for about 4 s still powers the board off** (AXP register 0x27
 bits [3:2] = 00, set with `setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S)`).
 
@@ -165,12 +166,15 @@ bits [3:2] = 00, set with `setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S)`).
   DISPOFF + SLPIN. DCDC1 stays on (it also powers the ESP32).
 - No frames are sent. Auto-dim, pet events and serial feedback can't wake the
   panel. The pet, the clock, battery checks and deferred saves keep running; on
-  battery the usual 200 ms light sleep continues, with GPIO 3 as a wake source.
-- Unlocking sends DISPON + SLPOUT, restores brightness and shows `Unlocked` for
+  battery the usual 200 ms light sleep continues. Wake sources: the timer, and
+  the BOOT button is *not* armed while locked, so a pocket-locked board wakes
+  only on the timer to poll the PKEY flag.
+- Unlocking (the touch controller is brought back up first if the auto touch
+  lock had put it to sleep) sends SLPOUT (`0x11`), waits 120 ms, then DISPON (`0x29`) and restores brightness (the opposite order leaves the panel dark) and shows `Unlocked` for
   1.2 s. A finger or BOOT press held through the unlock is ignored until released.
 - The lock lives in RAM only, so the board always boots unlocked. No new NVS keys.
 
-`LOCK?` over serial prints e.g. `LOCK locked=1 panel_sleep=1 pwr=0` (read-only).
+`LOCK?` over serial prints e.g. `LOCK locked=1 panel_sleep=1` (read-only).
 `HEALTH` adds `locked=` on the 1.75C.
 
 ## Strength training (1.75C)
@@ -214,4 +218,4 @@ y < 72 exit; the worker and trace commands are compiled out.
 
 - Panel start-up after a completely flat battery / cold AXP reset.
 - Onboard speaker level (ES8311 volume left at the 1.75 value).
-- A regression run on a real original 1.75.
+- A regression run on a real original 1.75, including its new charger writes (400 mA charge current, VBUS 900 mA, ITERM 125 mA, CHGLED type A, button-cell charging off) and the CO5300 panel sleep/wake sequence.

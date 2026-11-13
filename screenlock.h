@@ -71,3 +71,18 @@ class ScreenLock {
   bool locked_ = false, shown_ = false, blank_ = false;
   uint32_t shownAt_ = 0;
 };
+
+// Completed AXP PKEY short presses. GPIO3 does not follow the key, so the
+// level machine above never sees it. Three presses inside gapMs lock; one or
+// two, once the gap has passed, toggle the screen. Call with event=false to age.
+enum PwrEdgeAction : uint8_t { PWR_EDGE_NONE, PWR_EDGE_TOGGLE, PWR_EDGE_LOCK };
+inline PwrEdgeAction pwrShortAction(uint8_t &n, uint32_t &last, bool event, uint32_t now, uint32_t gapMs) {
+  if (event) {
+    if (!n || (uint32_t)(now - last) > gapMs) n = 0;
+    last = now;
+    if (++n >= 3) { n = 0; return PWR_EDGE_LOCK; }
+    return PWR_EDGE_NONE;
+  }
+  if (n && (uint32_t)(now - last) > gapMs) { n = 0; return PWR_EDGE_TOGGLE; }
+  return PWR_EDGE_NONE;
+}

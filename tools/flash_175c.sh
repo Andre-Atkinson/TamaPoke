@@ -38,9 +38,12 @@ fi
 # Prefer the esptool that ships with the Arduino ESP32 core, then a venv.
 ESPTOOL="${ESPTOOL:-}"
 if [[ -z "$ESPTOOL" ]]; then
+  # ~/.arduino15 on Linux, ~/Library/Arduino15 on macOS
   for c in \
     "${HOME}/.arduino15/packages/esp32/tools/esptool_py/"*/esptool \
     "${HOME}/.arduino15/packages/esp32/tools/esptool_py/"*/esptool.py \
+    "${HOME}/Library/Arduino15/packages/esp32/tools/esptool_py/"*/esptool \
+    "${HOME}/Library/Arduino15/packages/esp32/tools/esptool_py/"*/esptool.py \
     "${ROOT}/.venv/bin/esptool.py" \
     "$(command -v esptool.py || true)" \
     "$(command -v esptool || true)"; do
@@ -74,9 +77,10 @@ if [[ "$DO_FW" -eq 1 ]]; then
     [[ -f "$f" ]] || { echo "Missing $f — run tools/build_175c.sh first (see PORTING.md)" >&2; exit 1; }
   done
   # Partition table from boards/175c/partitions.csv, using the core's own tool.
-  GEN="$(ls "${HOME}"/.arduino15/packages/esp32/hardware/esp32/*/tools/gen_esp32part.py 2>/dev/null | tail -n1 || true)"
+  GEN="$(ls "${HOME}"/.arduino15/packages/esp32/hardware/esp32/*/tools/gen_esp32part.py \
+            "${HOME}"/Library/Arduino15/packages/esp32/hardware/esp32/*/tools/gen_esp32part.py 2>/dev/null | tail -n1 || true)"
   [[ -n "$GEN" ]] || { echo "gen_esp32part.py not found (install the esp32 core)" >&2; exit 1; }
-  parts="$(mktemp "${TMPDIR:-/tmp}/tamapoke-175c-parts.XXXXXX.bin")"
+  parts="$(mktemp "${TMPDIR:-/tmp}/tamapoke-175c-parts.XXXXXX")"
   trap 'rm -f "$parts"' EXIT
   python3 "$GEN" -q --flash-size 32MB "$PARTS_CSV" "$parts"
   args+=( "$BOOTLOADER_OFF" "$boot" "$PARTITIONS_OFF" "$parts" )

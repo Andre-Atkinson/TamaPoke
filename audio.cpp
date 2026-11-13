@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "power.h"
 #include "pin_config.h"
 #include <Arduino.h>
 #include <Wire.h>
@@ -26,19 +27,28 @@ static uint32_t gAmpHoldUntil = 0;  // un efecto pedido en reposo mantiene el am
 static bool gAmpHold = false;       // (indicador aparte: asi la comparacion no falla al dar la vuelta millis())
 static uint32_t gAmpOnAt = 0;       // cuando se encendio el amplificador
 static QueueHandle_t gQ = nullptr;
+// Codec and I2S stay powered for the life of the firmware; only the PA pin (amplifier) is
+// gated. Stopping I2S and powering the ES8311 down was tried and left the board silent after
+// an unmute on hardware, and no es8311 driver source is available to get the wake sequence
+// right, so that gating was dropped (PR body).
+static bool gI2sOn = false;
+static volatile bool gPlaying = false;  // a sound is being written to I2S (audioBusy)
 
 // El NS4150B tarda bastante mas de 8 ms en estabilizarse tras cada apagado, asi
 // que encenderlo justo antes de cada efecto se comia los cortos: el jingle de
 // arranque (440 ms) se oia y los pitidos de 35 ms no. Se deja encendido mientras
 // haya sonido y la mascota este despierta, como en el ejemplo verificado de
 // Waveshare, y solo se apaga al dormir o al silenciar.
+static void i2sStop();
+
 static void updateAmplifierPower() {
   // gReady evita encenderlo en una placa donde el codec no arranco: ahi el
   // amplificador solo aportaria siseo, porque no va a sonar nada.
   if (gAmpHold && (int32_t)(gAmpHoldUntil - millis()) <= 0) gAmpHold = false;
   bool idleOff = gIdle && !gAmpHold;
+  bool run = gReady && gOn && !gSleeping && !idleOff;
   static int last = -1;  // solo se escribe el pin si cambia
-  int want = (gReady && gOn && !gSleeping && !idleOff) ? HIGH : LOW;
+  int want = run ? HIGH : LOW;
   if (want != last) {
     last = want;
     if (want == HIGH) gAmpOnAt = millis();
@@ -150,15 +160,34 @@ static void playTone(uint16_t f, uint16_t ms) {
 static void audioTask(void *) {
   uint8_t id;
   for (;;) {
-    if (xQueueReceive(gQ, &id, portMAX_DELAY) && gOn && !gSleeping && gReady &&
-        id < SFX_COUNT) {
+    if (xQueueReceive(gQ, &id, portMAX_DELAY) && gOn && !gSleeping && gReady && id < SFX_COUNT) {
       const SfxDef &d = SFX[id];
       // el NS4150B tarda mas de 8 ms en estabilizarse: si se acaba de encender, el efecto espera
       int32_t since = (int32_t)(millis() - gAmpOnAt);
+      gPlaying = true;
       if (since >= 0 && since < 50) vTaskDelay(pdMS_TO_TICKS(50 - since));
       for (uint8_t i = 0; i < d.len; i++) playTone(d.n[i].f, d.n[i].ms);
+      gPlaying = false;
     }
   }
+}
+
+static bool i2sStart() {
+  if (gI2sOn) return true;
+  i2s.setPins(I2S_BCK_IO, I2S_WS_IO, I2S_DO_IO, I2S_DI_IO, I2S_MCK_IO);
+  if (!i2s.begin(I2S_MODE_STD, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT,
+                 I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_BOTH)) {
+    Serial.println("I2S begin fallo");
+    return false;
+  }
+  gI2sOn = true;
+  return true;
+}
+
+static void i2sStop() {
+  if (!gI2sOn) return;
+  i2s.end();
+  gI2sOn = false;
 }
 
 void audioBegin() {
@@ -166,13 +195,8 @@ void audioBegin() {
   pinMode(PA, OUTPUT);
   digitalWrite(PA, LOW);   // hasta saber si el sonido esta activado
 
-  i2s.setPins(I2S_BCK_IO, I2S_WS_IO, I2S_DO_IO, I2S_DI_IO, I2S_MCK_IO);
-  if (!i2s.begin(I2S_MODE_STD, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT,
-                 I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_BOTH)) {
-    Serial.println("I2S begin fallo");
-    return;
-  }
-  if (!es8311Init()) { Serial.println("ES8311 no responde (audio off)"); return; }
+  if (!i2sStart()) return;
+  if (!es8311Init()) { Serial.println("ES8311 no responde (audio off)"); i2sStop(); return; }
 
   Preferences p;
   p.begin("tamapoke", true);
@@ -181,13 +205,16 @@ void audioBegin() {
   p.end();
 
   gReady = true;
-  updateAmplifierPower();
   gQ = xQueueCreate(8, sizeof(uint8_t));
+  updateAmplifierPower();
   xTaskCreatePinnedToCore(audioTask, "audio", 4096, nullptr, 1, nullptr, 0);
   sfxPlay(SFX_HATCH);  // jingle de arranque (confirma que suena)
 }
 
-bool audioBusy() { return gAmpHold && (int32_t)(gAmpHoldUntil - millis()) > 0; }
+bool audioBusy() {
+  return audioBusyFor(gPlaying, gQ ? uxQueueMessagesWaiting(gQ) : 0,
+                      gAmpHold && (int32_t)(gAmpHoldUntil - millis()) > 0);
+}
 
 void sfxPlay(uint8_t id) {
   if (gReady && gOn && gQ) {

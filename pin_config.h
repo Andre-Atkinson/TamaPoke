@@ -36,8 +36,8 @@
   #define LCD_RESET  1
   #define TP_RESET   2
   #define I2S_MCK_IO 16
-  // PWR button: Key2 → AXP2101 PWRON (4 s hardware power-off) and SYS_OUT → GPIO3
-  // (high while pressed, low while released; 10k pull-up on the board).
+  // PWR button: Key2 → AXP2101 PWRON only (short press is the PKEY IRQ, 4 s hold
+  // powers off). GPIO3 is net SYS_OUT and does not follow the key.
   // BOOT / Key1 is GPIO0 (active-low strapping pin; input only at runtime).
   #define BOOT_BUTTON_PIN   0
   #define PWR_SENSE_PIN     3

@@ -13,6 +13,19 @@
 #define POWER_DIM1_MS 90000UL   // pantalla atenuada
 #define POWER_DIM2_MS 300000UL  // pantalla casi apagada
 
+// Selector del apagado de pantalla por inactividad (ajustes, clave NVS "off"):
+// 0 = 60 s, 1 = 30 s, 2 = 15 s, 3 = nunca (0 ms). Un valor fuera de rango vale 60 s.
+inline uint32_t powerOffFromSel(uint8_t sel) {
+  return sel == 1 ? 30000UL : sel == 2 ? 15000UL : sel == 3 ? 0UL : 60000UL;
+}
+inline uint8_t powerOffSel(uint32_t ms) {
+  return ms == 30000UL ? 1 : ms == 15000UL ? 2 : ms == 0 ? 3 : 0;
+}
+// Siguiente valor al tocar el boton: 60 s -> 30 s -> 15 s -> nunca -> 60 s.
+inline uint32_t powerOffNext(uint32_t ms) {
+  return ms == 60000UL ? 30000UL : ms == 30000UL ? 15000UL : ms == 15000UL ? 0UL : 60000UL;
+}
+
 enum DimStage : uint8_t { DIM_AWAKE = 0, DIM_LOW = 1, DIM_OFF = 2 };
 
 struct PowerCtx {
@@ -24,6 +37,7 @@ struct PowerCtx {
   bool charging;
   int batPct;         // 0-100, -1 si no hay bateria
   uint8_t userDim;    // nivel de brillo elegido en ajustes: 0 = alto (el de siempre), 1 = medio, 2 = bajo
+  uint32_t offMs;     // 0 = el horario de siempre (atenua a 90 s, casi apagada a 5 min). Si no, apaga a este tiempo y atenua a la mitad
 };
 
 // niveles de brillo de ajustes (#34): porcentaje que se aplica a todos los brillos de abajo
@@ -42,6 +56,20 @@ inline uint8_t dimStageFor(uint32_t idleMs) {
   return idleMs > POWER_DIM2_MS ? DIM_OFF : idleMs > POWER_DIM1_MS ? DIM_LOW : DIM_AWAKE;
 }
 
+// offMs == 0 keeps the historical schedule so the host tests stay valid.
+inline uint8_t dimStageNow(const PowerCtx &c) {
+  uint32_t idle = c.idleMs;
+  if (!c.offMs) return dimStageFor(idle);
+  if (idle >= c.offMs) return DIM_OFF;
+  if (idle >= c.offMs / 2) return DIM_LOW;
+  return DIM_AWAKE;
+}
+
+// Apagado por inactividad. El minijuego queda fuera. El USB no lo desactiva.
+inline bool autoScreenOff(const PowerCtx &c) {
+  return c.offMs && !c.gameOpen && c.idleMs >= c.offMs;
+}
+
 // bateria baja: se ahorra mas (solo si de verdad depende de la bateria)
 inline bool batteryLow(const PowerCtx &c) { return c.batPct >= 0 && c.batPct < 20 && !c.charging && !c.usb; }
 inline bool batteryCritical(const PowerCtx &c) { return c.batPct >= 0 && c.batPct < 10 && !c.charging && !c.usb; }
@@ -50,7 +78,7 @@ inline bool batteryCritical(const PowerCtx &c) { return c.batPct >= 0 && c.batPc
 // por el nivel elegido en ajustes
 inline uint8_t brightnessFor(const PowerCtx &c) {
   if (c.screenOff) return 0;
-  uint8_t stage = dimStageFor(c.idleMs);
+  uint8_t stage = dimStageNow(c);
   uint8_t t = c.sleeping ? 25 : (c.usb ? 180 : 145);
   if (stage == DIM_LOW) t = c.sleeping ? 10 : 60;
   else if (stage == DIM_OFF) t = 8;
@@ -69,7 +97,7 @@ inline uint32_t frameIntervalMs(const PowerCtx &c) {
   if (c.screenOff) return 0;
   if (c.gameOpen) return 85;  // el juego manda: su fisica esta afinada a este periodo
   uint32_t ms;
-  uint8_t stage = dimStageFor(c.idleMs);
+  uint8_t stage = dimStageNow(c);
   if (stage == DIM_OFF) ms = 1000;
   else if (c.sleeping && c.idleMs > POWER_CALM_MS) ms = 500;  // dormido y sin tocar: casi nada se mueve
   else if (stage == DIM_LOW) ms = 250;
@@ -81,20 +109,40 @@ inline uint32_t frameIntervalMs(const PowerCtx &c) {
 // el amplificador del altavoz consume en reposo: solo se tiene encendido mientras
 // alguien puede estar jugando
 inline bool amplifierWanted(const PowerCtx &c) {
-  return !c.screenOff && !c.sleeping && dimStageFor(c.idleMs) == DIM_AWAKE;
+  return !c.screenOff && !c.sleeping && dimStageNow(c) == DIM_AWAKE;
 }
 
 // pausa del bucle principal en un pase que no dibuja
-inline uint32_t idleDelayMs(const PowerCtx &c) { return c.screenOff ? 20 : 1; }
+inline uint32_t idleDelayMs(const PowerCtx &c) { return c.screenOff ? 100 : 1; }
 
 // con la pantalla apagada, o casi apagada (5 min sin tocar), y sin USB se duerme la CPU (light
 // sleep) entre frames y sondeos; con USB no: se perderia el puerto serie de la tarjeta SD
 inline bool lightSleepAllowed(const PowerCtx &c) {
-  return !c.usb && (c.screenOff || dimStageFor(c.idleMs) == DIM_OFF);
+  return !c.usb && (c.screenOff || dimStageNow(c) == DIM_OFF);
 }
 #define POWER_SLEEP_MS 200  // duracion de cada sueno; el toque despierta antes
 
+// 240 MHz en uso, 160 atenuada, 80 con la pantalla apagada o casi apagada.
+// El minijuego se queda a 240. USB tambien, salvo con la pantalla apagada o
+// casi apagada: ahi 240 MHz calienta el chip sin dibujar nada. El light sleep
+// sigue vetado con USB (power.h): el CDC se cae durante el sueno.
+inline uint32_t cpuMhzFor(const PowerCtx &c) {
+  if (c.gameOpen) return 240;
+  uint8_t stage = dimStageNow(c);
+  if (c.screenOff || stage == DIM_OFF) return 80;
+  if (c.usb) return 240;
+  if (stage == DIM_LOW || c.sleeping) return 160;
+  return 240;
+}
+
 // cada cuanto se lee la bateria por I2C
 inline uint32_t powerCacheMs(const PowerCtx &c) {
-  return (c.screenOff || dimStageFor(c.idleMs) == DIM_OFF) ? 10000 : 2000;
+  return (c.screenOff || dimStageNow(c) == DIM_OFF) ? 10000 : 2000;
+}
+
+// ---- audio (audio.cpp) ----
+// audioBusy(): no light sleep or CPU change while a sound plays, is queued or the idle
+// amplifier hold (4 s) is running.
+inline bool audioBusyFor(bool playing, uint32_t queued, bool ampHold) {
+  return playing || queued > 0 || ampHold;
 }

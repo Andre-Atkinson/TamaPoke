@@ -936,3 +936,90 @@ TEST(save, el_autoguardado_se_marca_y_se_vuelca) {
   p.flushSave();
   CHECK(!p.savePending());
 }
+
+// Save data from a different build (e.g. a fork with more than 151 species)
+// or a damaged NVS page must not index past DEX_TBL on the next boot.
+TEST(save, out_of_range_save_data_is_sanitised_on_load) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putShort("dexn", 300);   // not a species in this firmware
+    raw.putShort("eggT2", 400);
+    raw.putUChar("poop", 200);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_MSG(b.isEgg(), "an unknown species falls back to a fresh egg");
+  CHECK(b.poops <= 3);
+  CHECK(b.fullness <= 100 && b.joy <= 100 && b.energy <= 100 && b.hygiene <= 100);
+  CHECK_EQ(b.registeredCount(), (uint16_t)1);  // the earlier Charmander is kept
+  b.eggTap();
+  b.eggTap();
+  b.eggTap();
+  CHECK(b.speciesId >= 1 && b.speciesId <= DEX_COUNT);
+}
+
+TEST(save, out_of_range_stats_and_egg_target_are_clamped) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putUChar("full", 250);
+    raw.putUChar("hyg", 180);
+    raw.putUChar("lend", 99);
+    raw.putShort("eggT2", -5);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.speciesId, (int16_t)4);  // a valid pet is left alone
+  CHECK_EQ(b.fullness, (uint8_t)100);
+  CHECK_EQ(b.hygiene, (uint8_t)100);
+  CHECK_EQ(b.lastEnd, (uint8_t)CER_NONE);
+}
+
+// A saved egg (dexn = -1) goes through the clamps without newEgg() resetting anything.
+TEST(save, an_egg_save_with_wild_values_is_clamped_field_by_field) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putShort("dexn", -1);
+    raw.putShort("eggT2", 400);
+    raw.putUChar("poop", 200);
+    raw.putUChar("joy", 255);
+    raw.putUChar("ene", 255);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(b.isEgg());
+  CHECK_EQ(b.poops, (uint8_t)3);
+  CHECK_EQ(b.joy, (uint8_t)100);
+  CHECK_EQ(b.energy, (uint8_t)100);
+  // eggTarget is private: the hatched species shows whether 400 was replaced
+  b.eggTap();
+  b.eggTap();
+  b.eggTap();
+  CHECK(b.speciesId >= 1 && b.speciesId <= DEX_COUNT);
+}
+
+TEST(save, species_zero_is_not_a_pet) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putShort("dexn", 0);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(b.isEgg());
+  CHECK(b.speciesId != 0);
+}

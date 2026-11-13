@@ -1,5 +1,6 @@
 #include "batcurve.h"
 #include "rtcbat.h"
+#include "board.h"
 #include "pin_config.h"  // define XPOWERS_CHIP_AXP2101
 #include <Wire.h>
 #include <time.h>
@@ -71,8 +72,46 @@ void rtcSetEpoch(uint32_t e) {
 bool batBegin() {
   pmuOk = pmu.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL);
   if (!pmuOk) { Serial.println("AXP2101 no detectado"); return false; }
+  pmu.enableBattDetection();
   pmu.enableBattVoltageMeasure();
+  pmu.enableVbusVoltageMeasure();
+  pmu.enableTemperatureMeasure();  // die temp ADC, reg 0x30 bit 4 (off at reset)
   pmu.setSysPowerDownVoltage(BAT_HW_CUTOFF_MV);  // respaldo: el PMU corta solo si el firmware no llega a tiempo
+  // Single-cell LiPo. Written once here, never from the loop: repeating
+  // enableCellbatteryCharge() would restart a finished cycle.
+  // CV reg 0x64 = 0x03 (4.20 V), the reset value. ICC reg 0x62 = CHARGE_CURRENT_CODE
+  // (board.h: 1.75C 300 mA = 0x09, the AXP2101 reset value, since there is no NTC to
+  // limit a hot charge; original 1.75 400 mA = 0x0A for its 1100 mAh pack, owner's choice; upstream left the chip default). ITERM reg 0x63 = 0x15 (125 mA, bit 4 enable),
+  // also the reset value. 25 mA never let the taper current cross the threshold
+  // on this board, so STATUS2 stayed "charging" at 4.20 V.
+  // VBUS limit reg 0x16 = 0x02 (900 mA). 500 mA plus a charge target
+  // near it holds the chip in input-current regulation, and the datasheet disables
+  // termination (reg 0x63 bit 4) for as long as that regulation is active.
+  // Precharge is left at the reset value, 125 mA (reg 0x61 = 0x05). The library
+  // setter only writes bits [1:0] of a 4-bit field, so a "50 mA" write becomes
+  // 150 mA. Precharge only applies below 3.0 V.
+  // 1.75C has no NTC. TS in battery-temperature mode (reg 0x50 bit 4 = 0)
+  // suspends charge when the pin is out of range. begin() already switches it
+  // to an external ADC input; say so again here. No backup cell: reg 0x18 bit 2 off.
+  // Rail voltages are not retargeted. On the 1.75C the panel is DCDC1.
+  pmu.disableTSPinMeasure();
+  pmu.enableCellbatteryCharge();
+  pmu.disableButtonBatteryCharge();
+  if (!pmu.setChargerConstantCurr(CHARGE_CURRENT_CODE))
+    Serial.println("AXP2101: could not set charge current");
+  pmu.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_125MA);
+  pmu.enableChargerTerminationLimit();
+  if (!pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2))
+    Serial.println("AXP2101: could not set 4.20 V");
+  pmu.setVbusCurrentLimit(XPOWERS_AXP2101_VBUS_CUR_LIM_900MA);
+  pmu.setChargingLedMode(XPOWERS_CHG_LED_CTRL_CHG);
+  Serial.printf("AXP2101 chg: CV=4.20V (0x64=3) ICC=%dmA (0x62=0x%02X) ITERM=125mA (0x63=0x15) IIN=900mA (0x16=2) TS=off btn=off\n",
+                CHARGE_CURRENT_MA, (unsigned)CHARGE_CURRENT_CODE);
+  Serial.println("tdie C = 22+(7274-raw)/20 (XPowers). Datasheet ADC is 0.1 mV/LSB, 0-0.8192 V, no Celsius formula.");
+#if BOARD_AMOLED_175C
+  // Only the 1.75C schematic shows DCDC5 unused: no inductor, output capacitor not fitted.
+  pmu.disableDC5();
+#endif
   return true;
 }
 
@@ -136,38 +175,80 @@ void batPowerOff() {
   mon.reset();  // si sigue vivo (p. ej. se enchufo USB justo ahora) tiene que volver a cumplirse todo el tiempo
 }
 int batMillivolts() { return pmuOk ? (int)pmu.getBattVoltage() : 0; }
+
+#if TAMAPOKE_CHG_DEBUG
+static int iccMilliamp(uint8_t code) {
+  // reg 0x62: 25*N mA for N<=8, else 200+100*(N-8).
+  if (code <= 8) return 25 * code;
+  return 200 + 100 * (code - 8);
+}
+static const char *chgStateName(int st) {
+  switch (st) {
+    case XPOWERS_AXP2101_CHG_TRI_STATE: return "tri";
+    case XPOWERS_AXP2101_CHG_PRE_STATE: return "pre";
+    case XPOWERS_AXP2101_CHG_CC_STATE: return "cc";
+    case XPOWERS_AXP2101_CHG_CV_STATE: return "cv";
+    case XPOWERS_AXP2101_CHG_DONE_STATE: return "done";
+    default: return "stop";
+  }
+}
+void batFormatHealth(char *dst, size_t n) {
+  if (!dst || !n) return;
+  if (!pmuOk) { snprintf(dst, n, "pmu=0"); return; }
+  // STATUS2[2:0] is the charger state. STATUS2[7:5]==1 is what isCharging()
+  // reports; that bit stays set through CV and clears at done/standby.
+  // There is no battery-current ADC in the public register map, so ICC/ITERM
+  // here are the programmed limits, not the live taper current.
+  int st = pmu.getChargerStatus();
+  const char *dir = pmu.isCharging() ? "chg" : pmu.isDischarge() ? "dis" : "stdby";
+  uint16_t tdieRaw = 0;
+  float tdie = pmu.getTemperature(&tdieRaw);
+  // rails= DCDC1..5, ALDO1..4, BLDO1..2, DLDO1..2 as 1/0. DCDC1 is VCC3V3.
+  snprintf(dst, n,
+           "st=%s dir=%s tdie=%.1f raw=%u vbus=%u icc=%d iterm=%d btn=%d therm=%d ilim=%d "
+           "rails=D%u%u%u%u%uA%u%u%u%uB%u%uL%u%u",
+           chgStateName(st), dir, tdie, (unsigned)tdieRaw,
+           (unsigned)pmu.getVbusVoltage(),
+           iccMilliamp(pmu.getChargerConstantCurr()),
+           25 * (pmu.getChargerTerminationCurr() & 0x0F),
+           pmu.isEnableButtonBatteryCharge() ? 1 : 0,
+           pmu.getThermalRegulationStatus() ? 1 : 0,
+           pmu.getCurrentLimitStatus() ? 1 : 0,
+           pmu.isEnableDC1() ? 1 : 0, pmu.isEnableDC2() ? 1 : 0, pmu.isEnableDC3() ? 1 : 0,
+           pmu.isEnableDC4() ? 1 : 0, pmu.isEnableDC5() ? 1 : 0,
+           pmu.isEnableALDO1() ? 1 : 0, pmu.isEnableALDO2() ? 1 : 0,
+           pmu.isEnableALDO3() ? 1 : 0, pmu.isEnableALDO4() ? 1 : 0,
+           pmu.isEnableBLDO1() ? 1 : 0, pmu.isEnableBLDO2() ? 1 : 0,
+           pmu.isEnableDLDO1() ? 1 : 0, pmu.isEnableDLDO2() ? 1 : 0);
+}
+#endif
 bool usbPresent() { refreshPower(); return cachedUsb; }
 bool usbPresentNow() { return pmuOk ? pmu.isVbusIn() : true; }
 
 void pwrSetup() {
-#if BOARD_AMOLED_175C
-  if (pmuOk) {
-    // AXP2101 register 0x27 bits [3:2] = 00: keep the 4 s hardware power-off.
-    // No PEK IRQ here: the triple press is read raw from GPIO3 (screenlock.h).
-    if (!pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S))
-      Serial.println("PWR: could not set AXP 4s shutdown; check PMU");
-    pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
-    pmu.clearIrqStatus();
-  }
-  // SYS_OUT is already pulled up on the board (R9). High = PWR held.
-  pinMode(PWR_SENSE_PIN, INPUT);
-#else
   if (!pmuOk) return;
-  pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S);
+  // PWR is the AXP2101 PKEY on both boards. Register 0x27 bits [3:2] = 00 keeps the
+  // 4 s hardware power-off. The short press is the PKEY IRQ, polled over I2C (the IRQ
+  // pin is not routed to an ESP32 GPIO on the 1.75C). GPIO3 does not follow the key.
+  if (!pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S))
+    Serial.println("PWR: could not set AXP 4s shutdown; check PMU");
   pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
   pmu.enableIRQ(XPOWERS_AXP2101_PKEY_SHORT_IRQ);
   pmu.clearIrqStatus();
-#endif
 }
 
 bool pwrShortPressed() {
-#if BOARD_AMOLED_175C
-  return false;  // raw GPIO3 goes to PwrButton in the sketch (triple press)
-#else
+  // Both boards: the status bit latches until cleared, so a press during
+  // light sleep is still seen on the next poll.
   if (!pmuOk) return false;
-  pmu.getIrqStatus();
-  bool hit = pmu.isPekeyShortPressIrq();
-  if (hit) pmu.clearIrqStatus();
-  return hit;
-#endif
+  // Read INTSTS2 directly: getIrqStatus() turns a failed I2C read into 0xFF, which
+  // would look like a press. Bit 3 is the PKEY short-press flag (XPOWERS_AXP2101_PKEY_SHORT_IRQ
+  // is _BV(11), so bit 3 of the second status register); write 1 to clear it.
+  int sts = pmu.readRegister(XPOWERS_AXP2101_INTSTS2);
+  if (sts < 0) return false;
+  if (sts & 0x08) {
+    pmu.writeRegister(XPOWERS_AXP2101_INTSTS2, 0x08);
+    return true;
+  }
+  return false;
 }

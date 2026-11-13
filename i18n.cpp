@@ -36,6 +36,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Elige tu inicial",
     "Sin sprites", "C\240rgalos en la SD",
     "Mant\202n: salir",
+    "off",
   },
   // ---------------- EN ----------------
   {
@@ -66,6 +67,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Choose your starter",
     "No sprites", "Load them onto the SD",
     "Hold to exit",
+    "off",
   },
   // ---------------- FR ----------------
   {
@@ -96,6 +98,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Choisis ton starter",
     "Pas de sprites", "Charge-les sur la SD",
     "Tenir: sortir",
+    "off",
   },
   // ---------------- DE ----------------
   // El aleman si lleva dieresis: la fuente 5x7 del firmware es una tabla CP437
@@ -131,6 +134,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "W\204hle deinen Starter",
     "Keine Sprites", "Auf die SD laden",
     "Halten: Ende",
+    "aus",
   },
   // ---------------- IT ----------------
   {
@@ -161,6 +165,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Scegli l'iniziale",
     "Senza sprite", "Caricali sulla SD",
     "Tieni: esci",
+    "off",
   },
   // ---------------- PT ----------------
   {
@@ -191,6 +196,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Escolhe o inicial",
     "Sem sprites", "Carrega-os no SD",
     "Segure: sair",
+    "off",
   },
   // ---------------- JA ----------------
   {
@@ -244,6 +250,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
 
     "スプライトなし", "SDにいれてください",
     "長押しで終了",
+    "off",
   },
   // ---------------- KO ----------------
   // Los especificadores van en el MISMO ORDEN que en la fila inglesa aunque
@@ -279,6 +286,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "스타터를 선택하세요",
     "스프라이트 없음", "SD 카드에 넣어주세요",
     "길게 눌러 종료",
+    "off",
   },
 };
 

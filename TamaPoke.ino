@@ -31,8 +31,10 @@
 #include "audio.h"
 #include "blit.h"
 #include "power.h"
+#include "panelpower.h"
 #include "bootbutton.h"
 #include "screenlock.h"
+#include "touchlock.h"
 #include "trainingcapture.h"
 #include <Preferences.h>
 
@@ -81,6 +83,32 @@ int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 
 bool screenOff = false;       // original 1.75: single PWR; 1.75C: triple-press lock
 uint8_t userDim = 0;          // nivel de brillo de ajustes (power.h): 0 alto, 1 medio, 2 bajo
+bool batAsPercent = false;    // ajustes: false = icono (el de siempre), true = "87%"
+// Defaults when the NVS keys "off"/"tlk" are absent. The 1.75C turns the screen off at 60 s
+// and locks touch 10 s later; the original 1.75 keeps its historical behaviour (never), and
+// the user can pick either in settings.
+#if BOARD_AMOLED_175C
+#define DEFAULT_POWER_OFF_MS 60000UL
+#define DEFAULT_TOUCH_LOCK_MS 10000UL
+#else
+#define DEFAULT_POWER_OFF_MS 0UL
+#define DEFAULT_TOUCH_LOCK_MS TOUCH_LOCK_NEVER
+#endif
+uint32_t powerOffMs = DEFAULT_POWER_OFF_MS;  // 0 = nunca (horario de 90 s / 5 min)
+uint32_t touchLockMs = DEFAULT_TOUCH_LOCK_MS;  // 0 = al apagarse; TOUCH_LOCK_NEVER = desactivado
+TouchLock autoTouch;
+static bool touchReady = false;
+// touchBringUp() still has to run: the auto touch lock ended while the pocket lock holds the
+// chip asleep, or the last touch.begin() failed and is retried every TOUCH_RETRY_MS (screen on).
+// A failed bring-up blocks the loop ~0.5 s (3 tries, 150 ms apart), so a chip that stays dead
+// gets TOUCH_RETRY_MAX attempts, then none until the next auto touch unlock.
+static bool touchBringUpPending = false;
+static bool touchRetrying = false;     // last touchBringUp() failed
+static uint32_t touchRetryFrom = 0;    // millis() when it failed
+static uint8_t touchFailures = 0;      // failed bring-ups in a row
+constexpr uint32_t TOUCH_RETRY_MS = 2000;
+constexpr uint8_t TOUCH_RETRY_MAX = 5;
+static void touchBringUp();
 bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
@@ -181,6 +209,7 @@ static bool takeTouchIrq() {
 }
 static TrainingCapture trainingCapture;
 static bool trainingCaptureReady = false;
+static bool trainingCaptureStarted = false;  // worker task exists (begin() runs once)
 static bool trainingNeedsRelease = false;
 #else
 void IRAM_ATTR touchIsr() { gTouchIrq = true; }
@@ -202,11 +231,13 @@ bool holdFired = false;
 // BOOT controls and small overlay; all UI/pet changes stay on the loop task.
 #if BOARD_AMOLED_175C
 BootButton bootButton;
-PwrButton pwrButton;
 ScreenLock screenLock;
-static bool panelSleeping = false;
+static uint8_t pwrEdges = 0;     // short PKEY presses still inside the triple window
+static uint32_t pwrEdgeAt = 0;
 static bool touchNeedsRelease = false;
 #endif
+// Both boards: syncPanelPower() sleeps the CO5300 on screen-off on either one.
+static bool panelAsleep = false;
 static uint8_t panelBrightness = 255;  // ultimo brillo enviado al panel (255 = forzar el primero)
 #if BOARD_AMOLED_175C
 static char controlToast[48] = "";
@@ -283,10 +314,8 @@ void pollBootButton() {
 #endif
 }
 
-// Poll every loop (not the old 250 ms PMU poll, which misses quick presses).
-void pollPwrButton() {
 #if BOARD_AMOLED_175C
-  if (!pwrButton.update(digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED, millis())) return;
+static void pwrToggleLock() {
   bool locked = screenLock.toggle();
   // Discard both a partly-entered BOOT gesture and a finger already on the glass.
   bootButton.begin(digitalRead(BOOT_BUTTON_PIN) == LOW, millis());
@@ -305,17 +334,47 @@ void pollPwrButton() {
     lastInteract = millis();
     Serial.println("PWR triple: Locked");
   } else {
-    if (panelSleeping) {
-      panel->displayOn();  // CO5300 DISPON + SLPOUT, library's 120 ms delays
-      panelSleeping = false;
-    }
+    // Wake is syncPanelPower(): 0x11, 120 ms, 0x29, then 0x51.
+    // GFX displayOn() sends 0x29 before 0x11 and leaves the panel dark.
     screenOff = false;
-    pinMode(TP_INT, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+    if (touchBringUpPending) {  // the chip is still asleep from the auto touch lock
+      touchBringUpPending = false;
+      touchBringUp();
+    } else {
+      pinMode(TP_INT, INPUT_PULLUP);
+      attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+    }
     touchNeedsRelease = true;
     gTouchIrq = true;  // one initial sample: swallow any finger held through unlock
     showControlToast("Unlocked");
     Serial.println("PWR triple: Unlocked");
+  }
+}
+#endif
+
+// Poll every loop (not the old 250 ms PMU poll, which misses quick presses).
+void pollPwrButton() {
+#if BOARD_AMOLED_175C
+  // PWR is the AXP2101 PKEY. GPIO3 does not change when the key is pressed.
+  // The IRQ is one latched bit, so two releases between two polls merge into one.
+  // Polled every 40 ms while the loop runs. Once a press sequence is pending
+  // (pwrEdges), idleWait() keeps its pause to 10 ms and skips light sleep, so the
+  // 2nd and 3rd press are seen at that rate even with the screen off or locked.
+  // The first press can wait up to one idle pause (100 ms screen off, 200 ms light
+  // sleep) before it is read; only two presses released inside that window merge.
+  static uint32_t lastPoll = 0;
+  uint32_t now = millis();
+  bool event = false;
+  if (now - lastPoll >= 40) {
+    lastPoll = now;
+    event = pwrShortPressed();
+  }
+  PwrEdgeAction act = pwrShortAction(pwrEdges, pwrEdgeAt, event, now, PwrButton::GAP_MS);
+  if (act == PWR_EDGE_LOCK) pwrToggleLock();
+  else if (act == PWR_EDGE_TOGGLE && !screenLock.locked()) {
+    Serial.println("PWR short");
+    screenOff = !screenOff;
+    if (!screenOff) wakeUI();
   }
 #else
   // Keep the original board's PEK short-press behaviour unchanged.
@@ -331,17 +390,69 @@ void pollPwrButton() {
 #endif
 }
 
-void updateScreenLock(uint32_t now) {
-#if BOARD_AMOLED_175C
-  // Leave time for the preceding canvas QSPI DMA to finish before sending commands.
-  if (screenLock.blank(now) && !panelSleeping && now - lastRender >= 100) {
-    panel->setBrightness(0);
-    panelBrightness = 0;
-    panel->displayOff();  // CO5300 DISPOFF (0x28), SLPIN (0x10); NOT shared DCDC1
-    panelSleeping = true;
-    Serial.println("Screen lock: CO5300 off/asleep; touch and BOOT ignored");
-  }
+static void runPanelProgram(const PanelStep *s, int n) {
+  uint32_t since = millis() - lastRender;
+  if (since < 30) delay(30 - since);
+  for (int i = 0; i < n; i++) {
+    if (s[i].kind == PANEL_WAIT) {
+#if TAMAPOKE_CHG_DEBUG
+      Serial.printf("panel wait %u\n", s[i].waitMs);
 #endif
+      delay(s[i].waitMs);
+    } else if (s[i].kind == PANEL_CMD) {
+#if TAMAPOKE_CHG_DEBUG
+      Serial.printf("panel cmd 0x%02X\n", s[i].a);
+#endif
+      bus->sendCommand(s[i].a);
+    } else {
+#if TAMAPOKE_CHG_DEBUG
+      Serial.printf("panel reg 0x%02X=%u\n", s[i].a, s[i].b);
+#endif
+      bus->beginWrite();
+      bus->writeC8D8(s[i].a, s[i].b);
+      bus->endWrite();
+    }
+  }
+}
+
+static void touchBringUp() {
+  detachInterrupt(digitalPinToInterrupt(TP_INT));
+  touch.setPins(TP_RESET, TP_INT);
+  touchReady = false;
+  for (int i = 0; i < 3 && !touchReady; i++) {
+    touchReady = touch.begin(Wire, 0x5A, IIC_SDA, IIC_SCL);
+    if (!touchReady) delay(150);
+  }
+#if BOARD_AMOLED_175C
+  trainingCaptureReady = touchReady && trainingCaptureStarted;
+#endif
+  if (!touchReady) {
+    Serial.println("CST9217 no detectado");
+    // SensorLib leaves TP_INT as plain INPUT: a floating pin that reads LOW would keep the
+    // loop awake and make handleTouch probe a dead chip. Pull it up and try again later.
+    pinMode(TP_INT, INPUT_PULLUP);
+    if (touchFailures < TOUCH_RETRY_MAX) touchFailures++;
+    touchBringUpPending = touchFailures < TOUCH_RETRY_MAX;
+    touchRetrying = true;
+    touchRetryFrom = millis();
+    return;
+  }
+  touchRetrying = false;
+  touchFailures = 0;
+  touch.reset();
+  touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
+  touch.setMirrorXY(true, true);
+  pinMode(TP_INT, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+}
+
+// DCDC1 is VCC3V3 for the ESP32 and the panel. Do not switch it off.
+static void syncPanelPower(bool wantSleep, uint8_t wakeBrightness) {
+  if (!panelSleepEdge(panelAsleep, wantSleep)) return;
+  PanelStep steps[6];
+  int n = wantSleep ? panelSleepProgram(steps, 6) : panelWakeProgram(steps, 6, wakeBrightness);
+  runPanelProgram(steps, n);
+  panelBrightness = wantSleep ? 0 : wakeBrightness;
 }
 
 void setup() {
@@ -354,6 +465,24 @@ void setup() {
   Serial.printf("TamaPoke fw v%s (%s)\n", FW_VERSION, BOARD_NAME);
   loadLang();  // idioma guardado (ES por defecto)
   Wire.begin(IIC_SDA, IIC_SCL);
+#if BOARD_AMOLED_175C
+  // QMI8658 is on VCC3V3 and is not used by this firmware. CTRL7=0 disables its sensors; the
+  // bigger saving is stopping the internal high-speed oscillator via CTRL1. SensorLib's
+  // powerDown() sets CTRL1 bit 1; the previous code here set bit 0. No QMI8658 datasheet is
+  // available locally to say which is the disable bit, so both are set (CTRL1=0x03).
+  // WHO_AM_I is 0x05.
+  const uint8_t qmiAddrs[] = { 0x6B, 0x6A };
+  for (uint8_t a : qmiAddrs) {
+    Wire.beginTransmission(a);
+    Wire.write(0x00);
+    if (Wire.endTransmission(false) != 0) continue;
+    if (Wire.requestFrom(a, (uint8_t)1) != 1 || Wire.read() != 0x05) continue;
+    Wire.beginTransmission(a); Wire.write(0x08); Wire.write(0x00); Wire.endTransmission();
+    Wire.beginTransmission(a); Wire.write(0x02); Wire.write(0x03); Wire.endTransmission();
+    Serial.printf("QMI8658 0x%02X power-down CTRL7=0 CTRL1=0x03\n", a);
+    break;
+  }
+#endif
   // CST9217 (tactil), AXP2101 (PMU) y PCF85063 (RTC) comparten este bus I2C.
   // Red de seguridad para PMU/RTC (SensorLib NO respeta este timeout en el
   // tactil; el cuelgue del tactil dormido se resuelve gateando por INT, ver
@@ -372,26 +501,28 @@ void setup() {
     Preferences p;
     p.begin("tamapoke", true);
     userDim = p.getUChar("bri", 0) % BRIGHT_LEVELS;
+    batAsPercent = p.getBool("bpct", false);
+    if (p.isKey("off")) {  // absent key keeps the per-board default above
+      uint8_t offSel = p.getUChar("off", 0);  // 0 = 60 s, 1 = 30 s, 2 = 15 s, 3 = nunca
+      powerOffMs = powerOffFromSel(offSel);
+    }
+    if (p.isKey("tlk"))
+      touchLockMs = touchLockFromSel(p.getUChar("tlk", 0));  // 0 = 10 s, 1 = 30 s, 2 = 60 s, 3 = 0 s, 4 = off
     p.end();
   }
+  autoTouch.delayMs = touchLockMs;
+  if (powerOffMs)
+    Serial.printf("screen-off %lu s (USB does not disable it; dims at half)\n",
+                  (unsigned long)(powerOffMs / 1000));
+  else
+    Serial.println("screen-off never (USB does not disable it)");
+  if (touchLockMs == TOUCH_LOCK_NEVER) Serial.println("touch-lock off");
+  else Serial.printf("touch-lock %lu s after screen off\n", (unsigned long)(touchLockMs / 1000));
   panel->setBrightness(180);
   applyLangFont();  // fuente del idioma guardado (clasica salvo CJK)
 
-  touch.setPins(TP_RESET, TP_INT);
-  bool touchOk = false;
-  for (int i = 0; i < 3 && !touchOk; i++) {  // a veces falla al primer intento
-    touchOk = touch.begin(Wire, 0x5A, IIC_SDA, IIC_SCL);
-    if (!touchOk) delay(150);
-  }
-  if (!touchOk) Serial.println("CST9217 no detectado");
-  // begin() deja el chip en modo comando (lee la identidad y no sale);
-  // hace falta un reset por hardware para que vuelva a reportar toques
-  touch.reset();
-  touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
-  touch.setMirrorXY(true, true);  // panel montado 180 deg; same on official 1.75C widgets demo
   // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
-  pinMode(TP_INT, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+  touchBringUp();
 
   pet.begin();
   sdBegin();
@@ -424,10 +555,10 @@ void setup() {
 #if BOARD_AMOLED_175C
   pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
   bootButton.begin(digitalRead(BOOT_BUTTON_PIN) == LOW, millis());
-  pwrButton.begin(digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED, millis());
-  Serial.println("PWR GPIO3 active high: triple=lock/unlock gap=350ms tap<600ms debounce=25ms; hold 4s=hardware off");
+  Serial.println("PWR: AXP2101 PKEY short toggles the screen, triple within 350ms locks; hold 4s=hardware off");
   Serial.println("BOOT GPIO0 ready: debounce=25ms single=mute");
-  trainingCaptureReady = touchOk && trainingCapture.begin(readTrainingTouch);
+  trainingCaptureStarted = touchReady && trainingCapture.begin(readTrainingTouch);
+  trainingCaptureReady = trainingCaptureStarted && touchReady;
   if (!trainingCaptureReady) Serial.println("Strength training: touch capture unavailable");
 #endif
   lastInteract = millis();
@@ -483,14 +614,49 @@ void loop() {
   pollBootButton();
 #endif
   ensureMon();
-#if BOARD_AMOLED_175C
-  updateScreenLock(now);
-  now = millis();  // panel sleep/wake commands include controller settling delays
-#else
+#if !BOARD_AMOLED_175C
   pollPwrButton();  // original board: same PEK short press as before
 #endif
 
-  updateBrightness(now);
+  // Apagado por inactividad en cualquier pantalla, tambien el reloj y la galeria
+  // (son estaticas: fps 0 no significa que el temporizador este parado). El USB
+  // no lo desactiva: solo impide el light sleep.
+  if (!screenOff && autoScreenOff(powerCtx(now)) && !pet.evolving() && !pet.ceremony) {
+    screenOff = true;
+    Serial.printf("screen off: idle %lu ms, timeout %lu ms, usb=%d\n",
+                  (unsigned long)idleSince(now, lastInteract),
+                  (unsigned long)powerOffMs, usbPresent() ? 1 : 0);
+  }
+  int tlockEdge = autoTouch.update(screenOff, now);
+  if (tlockEdge > 0) {
+    Serial.println("touch lock");
+    if (touchReady) {
+      touch.sleep();  // lowest-power mode; PWR wake re-inits the chip
+      // sleep() puts TP_INT in open drain: a stray falling edge would only wake the loop.
+      detachInterrupt(digitalPinToInterrupt(TP_INT));  // touchBringUp() re-attaches it
+    }
+  } else if (tlockEdge < 0) {
+    Serial.println("touch unlock");
+    touchBringUpPending = true;
+    touchRetrying = false;  // first attempt right away
+    touchFailures = 0;      // and a fresh set of retries
+  }
+  // Only the auto touch lock puts the CST9217 to sleep; the pocket lock just detaches the ISR.
+  // If the auto lock ended while the pocket lock was on, the pocket unlock brings the chip up.
+  // A failed attempt is retried at most every TOUCH_RETRY_MS and only with the screen on.
+  if (touchBringUpPending && !screenIsLocked() &&
+      (!touchRetrying || (!screenOff && (uint32_t)(millis() - touchRetryFrom) >= TOUCH_RETRY_MS))) {
+    touchBringUpPending = false;
+    touchBringUp();
+  }
+  bool wantSleep = screenOff;
+#if BOARD_AMOLED_175C
+  wantSleep = wantSleep || screenLock.blank(millis());
+#endif
+  uint8_t wakeBri = wantSleep ? 0 : brightnessFor(powerCtx(now));
+  syncPanelPower(wantSleep, wakeBri);
+  now = millis();  // the CO5300 sequence waits 120 ms per command
+  if (!panelAsleep) updateBrightness(now);
 
   // bateria al limite seguro (sin USB): se guarda la partida y se apaga el PMU antes de que la
   // celda baje mas; el RTC conserva la hora
@@ -523,18 +689,47 @@ void loop() {
 
   // latido de salud cada 5 min (para el soak test; se descarta si no hay monitor)
   static uint32_t lastHealth = 0;
-  if (now - lastHealth > 300000) {
+  uint32_t healthEvery = TAMAPOKE_CHG_DEBUG ? 60000UL : 300000UL;
+  if (now - lastHealth > healthEvery) {
     lastHealth = now;
+#if TAMAPOKE_CHG_DEBUG
+    char chg[220];
+    batFormatHealth(chg, sizeof chg);
+#endif
 #if BOARD_AMOLED_175C
-    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d locked=%d\n",
+    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d locked=%d tlock=%d"
+#if TAMAPOKE_CHG_DEBUG
+                  " cpu=%lu %s"
+#endif
+                  "\n",
                   (unsigned long)(now / 1000), ESP.getFreeHeap(), ESP.getMinFreeHeap(),
                   batPercent(), batMillivolts(), batCharging() ? 1 : 0,
-                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0, screenIsLocked() ? 1 : 0);
+                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0, screenIsLocked() ? 1 : 0,
+                  autoTouch.active ? 1 : 0
+#if TAMAPOKE_CHG_DEBUG
+                  , (unsigned long)getCpuFrequencyMhz(), chg
+#endif
+                  );
 #else
-    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d\n",
+    Serial.printf("HEALTH up=%lus heap=%u min=%u bat=%d%% mv=%d chg=%d usb=%d dim=%u off=%d tlock=%d"
+#if TAMAPOKE_CHG_DEBUG
+                  " cpu=%lu %s"
+#endif
+                  "\n",
                   (unsigned long)(now / 1000), ESP.getFreeHeap(), ESP.getMinFreeHeap(),
                   batPercent(), batMillivolts(), batCharging() ? 1 : 0,
-                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0);
+                  usbPresent() ? 1 : 0, dimStage, screenOff ? 1 : 0, autoTouch.active ? 1 : 0
+#if TAMAPOKE_CHG_DEBUG
+                  , (unsigned long)getCpuFrequencyMhz(), chg
+#endif
+                  );
+#endif
+#if TAMAPOKE_CHG_DEBUG
+    // vTaskGetRunTimeStats() writes ~40 bytes per task with no bound: size for the task count.
+    static char tasks[1024];
+    if (uxTaskGetNumberOfTasks() * 64 < sizeof tasks) vTaskGetRunTimeStats(tasks);
+    else strcpy(tasks, "(task table too large)");
+    Serial.println(tasks);
 #endif
   }
 
@@ -561,6 +756,16 @@ void loop() {
   }
   // cede la CPU en los pases que no dibujan: sin esto el loop gira a pleno rendimiento
   // entre frames; 1 ms no se nota en el tactil (se lee cada 20 ms) y el frame no se retrasa
+  // bajar la CPU en reposo. No mientras suena, por prudencia: el I2S del S3 usa PLL_F160M por
+  // defecto (clk_tree_defs.h, ESP_I2S), no la CPU.
+  if (!audioBusy()) {
+    uint32_t want = cpuMhzFor(pc);
+    static uint32_t cpuNow = 240;
+    if (want != cpuNow) {
+      setCpuFrequencyMhz(want);
+      cpuNow = want;
+    }
+  }
   if (!drewFrame) idleWait(pc);
 }
 
@@ -578,6 +783,7 @@ PowerCtx powerCtx(uint32_t now) {
   c.charging = batCharging();
   c.batPct = batPercent();
   c.userDim = userDim;
+  c.offMs = powerOffMs;
   return c;
 }
 
@@ -597,15 +803,15 @@ void wakeUI() {
 // brillo segun sueno + inactividad (proteccion del AMOLED) y bateria
 void updateBrightness(uint32_t now) {
 #if BOARD_AMOLED_175C
-  if (panelSleeping) return;  // brightness/auto-dim must never wake a sleeping panel
+  if (panelAsleep) return;  // 0x51 during SLPIN does not wake the CO5300
 #endif
   // los eventos visibles despiertan la pantalla solos
   if (!screenOff && (pet.evolving() || pet.ceremony || pet.eating() || pet.showHeart())) {
-    if (dimStageFor(idleSince(now, lastInteract)) != DIM_AWAKE) wakeUI();
+    if (dimStageNow(powerCtx(now)) != DIM_AWAKE) wakeUI();
     else lastInteract = now;
   }
   PowerCtx c = powerCtx(now);
-  dimStage = dimStageFor(c.idleMs);
+  dimStage = dimStageNow(c);
   uint8_t target = brightnessFor(c);
   if (target != panelBrightness) {
     panelBrightness = target;
@@ -620,19 +826,21 @@ void updateBrightness(uint32_t now) {
 void idleWait(PowerCtx c) {
   // no sleep during a gesture/radio operation or while QSPI DMA is in flight
   bool locked = screenIsLocked();
+  // touch.sleep() leaves TP_INT open-drain (input buffer off, reads LOW), so neither
+  // the pocket lock nor the auto touch lock may poll or arm it (touchlock.h).
+  bool touchWake = touchWakeEnabled(locked, autoTouch.active, touchReady);
   bool controlsBusy = false;
 #if BOARD_AMOLED_175C
-  // PWR must wake at its FIRST edge, then stay awake through
-  // debounce/releases/the next-click window.
-  controlsBusy = pwrButton.active() || (!locked && bootButton.active());
+  // Stay awake while a short press is still waiting to become a single or a triple.
+  // The PKEY IRQ latches across light sleep; GPIO3 is not the key.
+  controlsBusy = pwrEdges || (!locked && bootButton.active());
 #endif
   if (!controlsBusy && lightSleepAllowed(c) && millis() - lastRender >= 100 && !audioBusy()) {
     c.usb = usbPresentNow();
     if (!lightSleepAllowed(c)) { delay(idleDelayMs(c)); return; }
-    if (!locked && digitalRead(TP_INT) == LOW) { gTouchIrq = true; delay(1); return; }
+    if (touchWake && digitalRead(TP_INT) == LOW) { gTouchIrq = true; delay(1); return; }
 #if BOARD_AMOLED_175C
-    if (digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED ||
-        (!locked && digitalRead(BOOT_BUTTON_PIN) == LOW)) { delay(1); return; }
+    if (!locked && digitalRead(BOOT_BUTTON_PIN) == LOW) { delay(1); return; }
 #endif
     uint32_t ms = POWER_SLEEP_MS;
     uint32_t iv = frameIntervalMs(c);
@@ -641,24 +849,24 @@ void idleWait(PowerCtx c) {
       if ((int32_t)due < (int32_t)ms) ms = (int32_t)due > 1 ? due : 1;
     }
     esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000);
-    if (!locked) gpio_wakeup_enable((gpio_num_t)TP_INT, GPIO_INTR_LOW_LEVEL);
+    if (touchWake) gpio_wakeup_enable((gpio_num_t)TP_INT, GPIO_INTR_LOW_LEVEL);
 #if BOARD_AMOLED_175C
-    gpio_wakeup_enable((gpio_num_t)PWR_SENSE_PIN, GPIO_INTR_HIGH_LEVEL);
     if (!locked) gpio_wakeup_enable((gpio_num_t)BOOT_BUTTON_PIN, GPIO_INTR_LOW_LEVEL);
 #endif
     esp_sleep_enable_gpio_wakeup();
     esp_light_sleep_start();
 #if BOARD_AMOLED_175C
-    gpio_wakeup_disable((gpio_num_t)PWR_SENSE_PIN);
     if (!locked) gpio_wakeup_disable((gpio_num_t)BOOT_BUTTON_PIN);
 #endif
-    if (!locked) {
+    if (touchWake) {
       gpio_wakeup_disable((gpio_num_t)TP_INT);
       gpio_set_intr_type((gpio_num_t)TP_INT, GPIO_INTR_NEGEDGE);
       if (digitalRead(TP_INT) == LOW) gTouchIrq = true;
     }
     return;
   }
+  // A press sequence is pending: keep the loop at ~40 ms so pollPwrButton() sees each press.
+  if (controlsBusy) { delay(10); return; }
   delay(idleDelayMs(c));
 }
 
@@ -671,9 +879,8 @@ void handleSerial() {
   if (line.length() == 0) return;
 #if BOARD_AMOLED_175C
   if (line == "LOCK?") {
-    Serial.printf("LOCK locked=%d panel_sleep=%d pwr=%d\n", screenLock.locked() ? 1 : 0,
-                  panelSleeping ? 1 : 0,
-                  digitalRead(PWR_SENSE_PIN) == PWR_SENSE_PRESSED ? 1 : 0);
+    Serial.printf("LOCK locked=%d panel_sleep=%d\n", screenLock.locked() ? 1 : 0,
+                  panelAsleep ? 1 : 0);
     return;
   }
 #endif
@@ -861,7 +1068,7 @@ void drainTrainingTouch() {
 
 // el toque se resuelve al LEVANTAR el dedo para distinguir tap de deslizar
 void handleTouch() {
-  if (screenIsLocked()) return;  // no touch I2C transactions or actions while locked
+  if (screenIsLocked() || autoTouch.active) return;  // no touch I2C while either lock is on
 #if BOARD_AMOLED_175C
   if (trainingNeedsRelease && trainingCaptureReady) {
     // Swallow the exit contact until the legacy reader reports no point.
@@ -1411,6 +1618,9 @@ static uint32_t screenKey() {
     h = mixKey(h, audioEnabled());
     h = mixKey(h, audioVolume());
     h = mixKey(h, userDim);
+    h = mixKey(h, batAsPercent);
+    h = mixKey(h, powerOffMs);
+    h = mixKey(h, touchLockMs);
     h = mixKey(h, gLang);
   } else if (cardOpen) {
     for (uint32_t v : { (uint32_t)pet.speciesId, (uint32_t)pet.shiny, (uint32_t)pet.ageMinutes, (uint32_t)pet.streak,
@@ -2081,10 +2291,36 @@ void renderClock() {
   setCur(LANG_PILL_X + (LANG_PILL_W - textW(lp, 2)) / 2, LANG_PILL_Y + 8);
   printT(lp);
 
-  gfx->fillRoundRect(133, 340, 200, 48, 14, UI_BAR_OK);
+  const char *tl = touchLockMs == 0 ? "L0" : touchLockMs == 10000 ? "L10"
+                   : touchLockMs == 30000 ? "L30" : touchLockMs == 60000 ? "L60" : T(S_TLOCK_OFF);
+  gfx->fillRoundRect(36, 332, 80, 26, 8, UI_WHITE);
+  gfx->drawRoundRect(36, 332, 80, 26, 8, UI_INK);
+  gfx->setTextColor(UI_INK);
+  setSize(2);
+  setCur(36 + (80 - textW(tl, 2)) / 2, 338);
+  printT(tl);
+
+  static const char *const OFF_LABELS[4] = {"60s", "30s", "15s", "--"};
+  const char *ol = OFF_LABELS[powerOffSel(powerOffMs)];
+  gfx->fillRoundRect(133, 332, 90, 26, 8, UI_WHITE);
+  gfx->drawRoundRect(133, 332, 90, 26, 8, UI_INK);
+  gfx->setTextColor(UI_INK);
+  setSize(2);
+  setCur(133 + (90 - textW(ol, 2)) / 2, 338);
+  printT(ol);
+
+  const char *bl = batAsPercent ? "%" : "icon";
+  gfx->fillRoundRect(243, 332, 90, 26, 8, UI_WHITE);
+  gfx->drawRoundRect(243, 332, 90, 26, 8, UI_INK);
+  gfx->setTextColor(UI_INK);
+  setSize(2);
+  setCur(243 + (90 - textW(bl, 2)) / 2, 338);
+  printT(bl);
+
+  gfx->fillRoundRect(133, 366, 200, 36, 14, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
   setSize(3);
-  setCur(CX - 18, 352);
+  setCur(CX - 18, 374);
   printT("OK");
 
   gfx->setTextColor(UI_TRACK);
@@ -2138,7 +2374,32 @@ void clockTap(int16_t x, int16_t y) {
       return;
     }
   }
-  if (y >= 340 && y <= 388 && x >= 133 && x <= 333) { applyClock(); return; }
+  if (y >= 332 && y < 358 && x >= 36 && x < 116) {
+    touchLockMs = touchLockNext(touchLockMs);
+    autoTouch.delayMs = touchLockMs;
+    Preferences p;
+    p.begin("tamapoke", false);
+    p.putUChar("tlk", touchLockSel(touchLockMs));
+    p.end();
+    return;
+  }
+  if (y >= 332 && y < 358 && x >= 133 && x < 223) {
+    powerOffMs = powerOffNext(powerOffMs);
+    Preferences p;
+    p.begin("tamapoke", false);
+    p.putUChar("off", powerOffSel(powerOffMs));
+    p.end();
+    return;
+  }
+  if (y >= 332 && y < 358 && x >= 243 && x < 333) {
+    batAsPercent = !batAsPercent;
+    Preferences p;
+    p.begin("tamapoke", false);
+    p.putBool("bpct", batAsPercent);
+    p.end();
+    return;
+  }
+  if (y >= 366 && y <= 402 && x >= 133 && x <= 333) { applyClock(); return; }
 }
 
 // llama + numero de racha arriba a la izquierda
@@ -2468,7 +2729,8 @@ void drawThumb(const uint8_t *b, int x, int y, int s, bool sil) {
   int oy = y + (GAL_CELL - h * s) / 2;
   for (int r = 0; r < h; r++) {
     const uint8_t *row = d + r * w;
-    forRuns(w, [&](int c) { return indexedKey(row[c], sil); },
+    // thumbKey(): an index past the thumbnail's own palette (n entries) is transparent
+    forRuns(w, [&](int c) { return thumbKey(row[c], n, sil); },
             [&](int c0, int len, int k) {
               uint16_t col = sil ? INK_K : (uint16_t)(pal[k * 2] | (pal[k * 2 + 1] << 8));
               gfx->fillRect(ox + c0 * s, oy + r * s, len * s, s, col);
@@ -2577,12 +2839,21 @@ void galleryTap(int16_t x, int16_t y) {
 void drawBattery() {
   int pc = batPercent();
   if (pc < 0) return;  // sin bateria conectada
-  int x = CX - 14, y = 12, w = 24, h = 11;
   bool charging = batCharging();
   uint16_t col = charging ? UI_BAR_OK
                  : (pc >= 40) ? inkColor()
                  : (pc >= 15) ? UI_BAR_WARN
                               : UI_BAR_BAD;
+  if (batAsPercent) {
+    char s[8];
+    snprintf(s, sizeof(s), charging ? "%d%%+" : "%d%%", pc);
+    gfx->setTextColor(col);
+    setSize(2);
+    setCur(centerX(s, 2), 8);
+    printT(s);
+    return;
+  }
+  int x = CX - 14, y = 12, w = 24, h = 11;
   gfx->drawRoundRect(x, y, w, h, 2, col);
   gfx->fillRect(x + w, y + 3, 3, 5, col);  // borne
   if (charging) {

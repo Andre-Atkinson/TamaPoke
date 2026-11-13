@@ -20,6 +20,24 @@ TEST(power, idleSince_no_desborda_si_el_toque_es_posterior_al_reloj_leido) {
   CHECK(idleSince(0x90000000u, 0) == 0x90000000u);       // 28 dias sin tocar: no se confunde con un toque futuro          // vuelta del reloj de 49 dias
 }
 
+TEST(power, un_timeout_de_apagado_atenua_a_la_mitad_y_apaga_al_cumplirse) {
+  PowerCtx c = ctx(0);
+  c.offMs = 60000;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_AWAKE);
+  c.idleMs = 30000;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_LOW);
+  CHECK(!autoScreenOff(c));
+  c.idleMs = 60000;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_OFF);
+  CHECK(autoScreenOff(c));
+  c.usb = true;
+  CHECK(autoScreenOff(c));  // el USB no lo desactiva
+  c.gameOpen = true;
+  CHECK(!autoScreenOff(c));
+  c = ctx(100000);
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_LOW);  // offMs 0: el horario de siempre
+}
+
 TEST(power, los_escalones_de_atenuacion_son_los_de_siempre) {
   CHECK_EQ((int)dimStageFor(0), (int)DIM_AWAKE);
   CHECK_EQ((int)dimStageFor(90000), (int)DIM_AWAKE);
@@ -125,7 +143,7 @@ TEST(power, light_sleep_con_la_pantalla_apagada_o_casi_apagada_y_sin_usb) {
   CHECK(lightSleepAllowed(c));
   c.usb = true;
   CHECK(!lightSleepAllowed(c));
-  CHECK_EQ((int)idleDelayMs(c), 20);
+  CHECK_EQ((int)idleDelayMs(c), 100);
   c.screenOff = false;
   CHECK_EQ((int)idleDelayMs(c), 1);
 }
@@ -197,4 +215,68 @@ TEST(power, los_niveles_de_volumen_bajan_y_el_alto_es_el_de_siempre) {
   CHECK(sfxAmp(2) < sfxAmp(1));
   CHECK(sfxAmp(2) > 0);
   CHECK_EQ((int)sfxAmp(7), (int)sfxAmp(2));   // un valor raro guardado no sube el volumen
+}
+
+TEST(power, la_cpu_baja_en_reposo_y_se_queda_alta_con_usb_o_en_el_juego) {
+  PowerCtx c = ctx(0);
+  CHECK_EQ((int)cpuMhzFor(c), 240);
+  c.idleMs = 100000;
+  CHECK_EQ((int)cpuMhzFor(c), 160);
+  c.idleMs = 400000;
+  CHECK_EQ((int)cpuMhzFor(c), 80);
+  c = ctx(0);
+  c.screenOff = true;
+  CHECK_EQ((int)cpuMhzFor(c), 80);
+  c.usb = true;
+  CHECK_EQ((int)cpuMhzFor(c), 80);  // pantalla apagada: 80 tambien con USB
+  c = ctx(0);
+  c.usb = true;
+  CHECK_EQ((int)cpuMhzFor(c), 240);  // en uso, el USB se queda a 240
+  c = ctx(0);
+  c.gameOpen = true;
+  CHECK_EQ((int)cpuMhzFor(c), 240);
+  c.sleeping = true;
+  c.gameOpen = false;
+  CHECK_EQ((int)cpuMhzFor(c), 160);
+}
+
+TEST(Power, audio_busy_covers_playback_and_queue_not_only_the_amp_hold) {
+  CHECK(!audioBusyFor(false, 0, false));
+  CHECK(audioBusyFor(true, 0, false));
+  CHECK(audioBusyFor(false, 1, false));
+  CHECK(audioBusyFor(false, 0, true));
+}
+
+TEST(Power, cpu_stays_at_240_on_usb_when_only_dimmed) {
+  PowerCtx c = ctx(100000);  // past the 90 s dim, before the 5 min near-off
+  c.usb = true;
+  CHECK_EQ((int)cpuMhzFor(c), 240);
+  c.usb = false;
+  CHECK_EQ((int)cpuMhzFor(c), 160);
+}
+
+TEST(Power, screen_off_selector_maps_both_ways_and_cycles) {
+  CHECK_EQ(powerOffFromSel(0), 60000u);
+  CHECK_EQ(powerOffFromSel(1), 30000u);
+  CHECK_EQ(powerOffFromSel(2), 15000u);
+  CHECK_EQ(powerOffFromSel(3), 0u);
+  // an out-of-range NVS value falls back to 60 s
+  CHECK_EQ(powerOffFromSel(4), 60000u);
+  CHECK_EQ(powerOffFromSel(255), 60000u);
+  CHECK_EQ((int)powerOffSel(60000), 0);
+  CHECK_EQ((int)powerOffSel(30000), 1);
+  CHECK_EQ((int)powerOffSel(15000), 2);
+  CHECK_EQ((int)powerOffSel(0), 3);
+  CHECK_EQ((int)powerOffSel(12345), 0);
+  for (uint8_t s = 0; s < 4; s++) CHECK_EQ((int)powerOffSel(powerOffFromSel(s)), (int)s);
+  // the button cycles 60 -> 30 -> 15 -> never -> 60 and stores the new selector
+  CHECK_EQ(powerOffNext(60000), 30000u);
+  CHECK_EQ(powerOffNext(30000), 15000u);
+  CHECK_EQ(powerOffNext(15000), 0u);
+  CHECK_EQ(powerOffNext(0), 60000u);
+  CHECK_EQ(powerOffNext(12345), 60000u);
+  uint32_t ms = 60000;
+  for (int i = 0; i < 4; i++) ms = powerOffNext(ms);
+  CHECK_EQ(ms, 60000u);
+  CHECK_EQ((int)powerOffSel(powerOffNext(60000)), 1);
 }
