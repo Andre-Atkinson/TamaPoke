@@ -562,24 +562,31 @@ class TestBoardScripts(unittest.TestCase):
         self.assertEqual(call[call.index(boot_app0) - 1], '0xe000')
 
     def test_full_flash_uses_the_newest_core_whichever_folder_holds_it(self):
-        home = os.path.join(self.tmp, 'home')
-        made = {}
-        for base, ver in (('.arduino15', '3.3.10'), ('Library/Arduino15', '3.3.9')):
-            core = os.path.join(home, base, 'packages/esp32/hardware/esp32', ver, 'tools')
-            os.makedirs(os.path.join(core, 'partitions'))
-            with open(os.path.join(core, 'gen_esp32part.py'), 'w') as fh:
-                fh.write('import sys\nopen(sys.argv[-1], "wb").write(b"table")\n')
-            made[ver] = os.path.join(core, 'partitions', 'boot_app0.bin')
-            put(made[ver], ver.encode())
-        outdir = os.path.join(self.tmp, 'out')
-        os.makedirs(outdir)
-        for n in ('TamaPoke.ino.bin', 'TamaPoke.ino.bootloader.bin', 'storage.littlefs.bin'):
-            put(os.path.join(outdir, n), b'x')
-        self.env['HOME'] = home
-        r = self.run_tool('flash_175c.sh', '--port', self.port, '--out', outdir)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        (call,) = self.calls()
-        self.assertIn(made['3.3.10'], call, 'picked 3.3.9 because of its folder, not its version')
+        # Both arrangements: sort order of the folder names differs between
+        # BSD (macOS) and GNU sort, so one of them catches a whole-path sort.
+        for newer_in in ('.arduino15', 'Library/Arduino15'):
+            with self.subTest(newer_in=newer_in):
+                home = tempfile.mkdtemp(dir=self.tmp)
+                made = {}
+                for base in ('.arduino15', 'Library/Arduino15'):
+                    ver = '3.3.10' if base == newer_in else '3.3.9'
+                    core = os.path.join(home, base, 'packages/esp32/hardware/esp32', ver, 'tools')
+                    os.makedirs(os.path.join(core, 'partitions'))
+                    with open(os.path.join(core, 'gen_esp32part.py'), 'w') as fh:
+                        fh.write('import sys\nopen(sys.argv[-1], "wb").write(b"table")\n')
+                    made[ver] = os.path.join(core, 'partitions', 'boot_app0.bin')
+                    put(made[ver], ver.encode())
+                outdir = os.path.join(home, 'out')
+                os.makedirs(outdir)
+                for n in ('TamaPoke.ino.bin', 'TamaPoke.ino.bootloader.bin', 'storage.littlefs.bin'):
+                    put(os.path.join(outdir, n), b'x')
+                if os.path.exists(self.log):
+                    os.remove(self.log)
+                self.env['HOME'] = home
+                r = self.run_tool('flash_175c.sh', '--port', self.port, '--out', outdir)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                (call,) = self.calls()
+                self.assertIn(made['3.3.10'], call, 'picked the older core because of its folder name')
 
     def test_update_stops_before_flashing_when_the_build_fails(self):
         root = os.path.join(self.tmp, 'repo')
