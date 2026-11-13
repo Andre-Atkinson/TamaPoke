@@ -10,10 +10,12 @@ Linux; the board's USB port must not be open in another program.
   python3 tools/board.py cmd TIME         # any console command; prints the reply up to DONE
   python3 tools/board.py --port /dev/cu.usbmodem101 clock
 
-The firmware keeps local wall-clock time as if it were UTC (the clock screen
-does the same: TamaPoke.ino builds the epoch from the hour and minute you set,
-and rtcbat.cpp reads it back with gmtime_r), so `clock` sends this computer's
-local time in that form.
+The firmware keeps local wall-clock time as if it were UTC: the clock screen
+builds the epoch from the hour and minute you set and shows e/3600 % 24, and
+Pet::today() is epoch/86400. So `clock` sends this computer's local time in
+that form. (rtcbat.cpp keeps it with settimeofday on the 1.75C; on the original
+board it goes to the PCF85063 through gmtime_r and is read back through mktime
+with TZ unset.)
 """
 import argparse
 import calendar
@@ -41,6 +43,10 @@ def find_port(explicit=None):
 def local_wallclock_epoch(now=None):
     """This computer's local wall-clock time, expressed as a UTC epoch."""
     return calendar.timegm(time.localtime(now))
+
+
+class NoReply(TimeoutError):
+    """The board printed nothing at all (an unknown command, or not TamaPoke)."""
 
 
 class Console:
@@ -72,10 +78,15 @@ class Console:
             self._read(0.05)
         self.buf = b''
 
-    def command(self, line, timeout=3.0):
-        """Send one console line; return the reply lines up to (not incl.) DONE."""
-        os.write(self.fd, line.encode('ascii') + b'\n')
+    def command(self, line, timeout=3.0, on_line=None, idle=None):
+        """Send one console line; return the reply lines up to (not incl.) DONE.
+
+        on_line(text) is called as each line arrives. With idle set, a reply
+        that has started and then goes quiet for that long also ends the call
+        (for commands that never print DONE)."""
+        os.write(self.fd, line.encode('utf-8') + b'\n')
         end = time.time() + timeout
+        last = time.time()
         lines = []
         while time.time() < end:
             self._read(0.1)
@@ -86,6 +97,13 @@ class Console:
                     return lines
                 if text:
                     lines.append(text)
+                    last = time.time()
+                    if on_line:
+                        on_line(text)
+            if idle and lines and time.time() - last >= idle:
+                return lines
+        if not lines:
+            raise NoReply(f'no reply to {line!r} within {timeout:.0f} s (unknown command?)')
         raise TimeoutError(f'no DONE after {line!r} within {timeout:.0f} s; got {lines!r}')
 
 
@@ -111,6 +129,16 @@ def main(argv=None):
     c.add_argument('line', nargs='+')
     args = ap.parse_args(argv)
 
+    try:
+        run(args)
+    except NoReply as e:
+        sys.exit(f'board.py: {e}')
+    except (TimeoutError, OSError, termios.error) as e:
+        sys.exit(f'board.py: {e}. Is the board plugged in, awake, and the port free '
+                 '(not open in another program)?')
+
+
+def run(args):
     con = Console(find_port(args.port))
     try:
         con.drain()
@@ -122,6 +150,9 @@ def main(argv=None):
                 sys.exit(f'clock not set: board answered rtc={after}, wanted {target}')
             drift = '' if before is None else f' (was {before - target:+d} s)'
             print(f'Board clock set to {time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(after))}{drift}')
+            if before and before // 86400 > target // 86400:
+                print('note: that moved the clock back across midnight; care already counted '
+                      'for the later day will not count again until the clock passes it.')
         elif args.what == 'save':
             for text in con.command('SAVE'):
                 print(text)
@@ -130,8 +161,12 @@ def main(argv=None):
                 for text in con.command(cmd):
                     print(text)
         else:
-            for text in con.command(' '.join(args.line), timeout=10):
-                print(text)
+            # Print as lines arrive. LOCK? never prints DONE, so 3 s of quiet
+            # after some output ends the call; 3 s leaves room for a reply that
+            # follows an unsolicited line (the HEALTH heartbeat) after a ~1 s
+            # NVS write. A command with no reply at all (unknown) times out.
+            con.command(' '.join(args.line), timeout=10, idle=3.0,
+                        on_line=lambda t: print(t, flush=True))
     finally:
         con.close()
 

@@ -9,12 +9,15 @@ PARTS_CSV="${ROOT}/boards/175c/partitions.csv"
 # (~/.arduino15 on Linux, ~/Library/Arduino15 on macOS), else a venv or PATH.
 find_esptool() {
   if [[ -n "${ESPTOOL:-}" ]]; then echo "$ESPTOOL"; return 0; fi
-  local c
+  local c bundled
+  # The newest bundled version (sort -V on the version directory, as CORE_TOOLS does).
+  bundled="$(ls -d "${HOME}"/.arduino15/packages/esp32/tools/esptool_py/*/esptool \
+                   "${HOME}"/Library/Arduino15/packages/esp32/tools/esptool_py/*/esptool \
+                   "${HOME}"/.arduino15/packages/esp32/tools/esptool_py/*/esptool.py \
+                   "${HOME}"/Library/Arduino15/packages/esp32/tools/esptool_py/*/esptool.py 2>/dev/null \
+             | awk -F/ '{ v = $(NF-1); print v "\t" ($0 ~ /\.py$/ ? 0 : 1) "\t" $0 }' | sort -V | tail -n1 | cut -f3 || true)"
   for c in \
-    "${HOME}/.arduino15/packages/esp32/tools/esptool_py/"*/esptool \
-    "${HOME}/.arduino15/packages/esp32/tools/esptool_py/"*/esptool.py \
-    "${HOME}/Library/Arduino15/packages/esp32/tools/esptool_py/"*/esptool \
-    "${HOME}/Library/Arduino15/packages/esp32/tools/esptool_py/"*/esptool.py \
+    "$bundled" \
     "${ROOT}/.venv/bin/esptool.py" \
     "$(command -v esptool.py || true)" \
     "$(command -v esptool || true)"; do

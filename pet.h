@@ -184,6 +184,7 @@ public:
   // ultima hora real persistida; sirve para resembrar un RTC que perdio la hora
   uint32_t savedEpoch() { return prefs.getUInt("seen", 0); }
   void flushSave();
+  void saveNow() { save(); }  // la consola SAVE: escribe ya, haya o no pendiente
 
 private:
   Preferences prefs;

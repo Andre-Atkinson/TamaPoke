@@ -944,9 +944,8 @@ void handleSerial() {
     Serial.println("DONE");
 #endif
   } else if (line == "SAVE") {  // write pending pet changes now (tools/pet_save.sh runs it before a backup)
-    bool pending = pet.savePending();
-    pet.flushSave();
-    Serial.println(pending ? "saved" : "already saved");
+    pet.saveNow();  // always: lastSeenEpoch and the 5th-tick changes may be RAM-only
+    Serial.println("saved");
     Serial.println("DONE");
   } else if (line == "HEALTH") {
     Serial.printf("up=%lus heap=%u min=%u sd=%d mon=%d\n",

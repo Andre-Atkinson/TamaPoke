@@ -104,27 +104,43 @@ the one `/dev/cu.usbmodem*` (macOS) or `/dev/ttyACM*` (Linux) present.
 ```bash
 tools/update_175c.sh --out ./out          # back up the pet, build, flash the app only, set the clock
 tools/pet_save.sh backup                  # pet save -> backups/pet-<date>-<time>.nvs.bin
-tools/pet_save.sh restore --file backups/pet-....nvs.bin
+tools/pet_save.sh restore --file backups/pet-....nvs.bin   # --force if its .sha256 is missing
 python3 tools/board.py clock              # set the board clock to this computer's local time
 python3 tools/board.py status             # HEALTH + STATS
 python3 tools/board.py save               # write pending pet changes to flash now
 ```
 
 - **The pet's save** is the whole NVS partition (20 KB at `0x9000`): the pet,
-  the Pokédex, streak, medals and settings. `backup` first sends `SAVE` so the
-  firmware writes anything still pending, then reads the partition with the
+  the Pokédex, streak, medals and settings. `backup` first sends `SAVE`, which
+  makes the firmware write the pet's state to flash every time (including the
+  last-seen clock and recent changes that would otherwise wait for the next
+  periodic save), then reads the partition with the
   ROM loader (`--no-stub`). The esptool stub drops off USB-Serial/JTAG while
   sending some flash blocks back, and a 20 KB read is quick either way.
   Each backup gets a `.sha256` next to it.
-- **`restore`** refuses a file that isn't exactly 20 KB or doesn't match its
-  `.sha256`, and saves the pet that is on the board first
-  (`backups/pre-restore-...`), so a restore can itself be undone.
+- **`restore`** refuses a file that isn't exactly 20 KB, whose 4 KB pages
+  don't start with an NVS page state (erased, active, full or freeing), or
+  whose SHA-256 differs from the first field of its `.sha256` (the hash of the
+  file itself; the name written inside is ignored). A file with no `.sha256`
+  is refused unless you pass `--force`, which waives only that check. It then
+  saves the pet that is on the board (`backups/pre-restore-...`) and stops if
+  that backup fails or comes back short, so a restore can itself be undone.
+  The restored pet is the one in the file, but it is not frozen at the moment
+  of the backup: on boot the firmware counts the time since then as time the
+  device was off (up to 14 days: stats fall towards their floors, the pet
+  ages and may poop), and a missed day can reset the care streak.
 - **`backups/`** is git-ignored: pet saves are personal. Set
   `TAMAPOKE_BACKUP_DIR` to keep them somewhere else.
 - **The clock**: the 1.75C has no RTC chip, so its software clock is lost
   when the PMU cuts power (a 4 s PWR hold or a flat battery). The firmware
   stores local wall-clock time as if it were UTC (the clock screen does the
-  same), so `board.py clock` sends this computer's local time in that form.
+  same), so `board.py clock` sends this computer's local time in that form. Moving
+  the clock back across midnight is safe for the streak, but care already
+  counted for the later day will not count again until the clock passes it;
+  `board.py clock` prints a note when that happens.
+- **A full flash** (`tools/flash_175c.sh` with no mode flag) rewrites the
+  bootloader, partition table and sprites, so it needs an explicit `--port`;
+  `--app-only`, `--fw-only` and `--fs-only` still auto-detect it.
 - `board.py` uses only the Python standard library (no venv needed) and
   needs the serial port to itself: close any serial monitor first.
 

@@ -1272,3 +1272,45 @@ TEST(auto, despertar_no_actua_mientras_se_elige_inicial) {
   CHECK(!b.autoWake());
   CHECK(b.sleeping);
 }
+
+// a clock set back across midnight (board.py clock after drift) must not look
+// like a gap in care and reset the streak
+TEST(streak, un_reloj_atrasado_no_reinicia_la_racha) {
+  Pet p;
+  makePet(p, 4);
+  p.setClock(100u * 86400);
+  p.caress();
+  p.setClock(101u * 86400);
+  p.caress();
+  CHECK_EQ(p.streak, (uint16_t)2);
+  p.setClock(100u * 86400 + 3600);  // the clock goes back a day
+  p.caress();
+  CHECK_EQ(p.streak, (uint16_t)2);
+}
+
+// a care registered with a far-future clock (a mistyped TIME, CAREDAY tests)
+// must not freeze the streak until that date: real days take over again
+TEST(streak, una_fecha_de_cuidado_futura_no_congela_la_racha) {
+  Pet p;
+  makePet(p, 4);
+  p.setClock(20400u * 86400);
+  p.caress();
+  p.setClock(30000u * 86400);  // clock set years ahead by mistake
+  p.caress();
+  for (uint32_t d = 20401; d <= 20403; d++) {
+    p.setClock(d * 86400 + 3600);
+    p.caress();
+  }
+  CHECK_EQ(p.streak, (uint16_t)3);
+}
+
+// SAVE persists even when nothing was marked pending
+TEST(save, saveNow_escribe_aunque_no_haya_pendiente) {
+  Pet p;
+  makePet(p, 4);
+  p.flushSave();
+  CHECK(!p.savePending());
+  p.lastSeenEpoch = 100u * 86400 + 600;  // RAM only, nothing pending
+  p.saveNow();
+  CHECK_EQ(p.savedEpoch(), (uint32_t)(100u * 86400 + 600));
+}

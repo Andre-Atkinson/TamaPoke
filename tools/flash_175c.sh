@@ -6,11 +6,13 @@
 # the app/LittleFS offsets are read from that same file.
 #
 # Usage:
-#   tools/flash_175c.sh [--port PORT]              # bootloader + partitions + otadata + app + FS
+#   tools/flash_175c.sh  --port PORT               # bootloader + partitions + otadata + app + FS
 #   tools/flash_175c.sh [--port PORT] --app-only   # app0 only: keeps the pet, settings and sprites
-#   tools/flash_175c.sh [--port PORT] --fw-only    # everything except the sprite image
+#   tools/flash_175c.sh  --port PORT  --fw-only    # everything except the sprite image
 #   tools/flash_175c.sh [--port PORT] --fs-only    # sprite image only
-# --port defaults to the only /dev/cu.usbmodem* or /dev/ttyACM* present.
+# --port defaults to the only /dev/cu.usbmodem* or /dev/ttyACM* present for
+# --app-only and --fs-only. The full flash and --fw-only rewrite the bootloader
+# and partition table, so they need an explicit --port.
 set -euo pipefail
 
 source "$(dirname "$0")/board_env.sh"
@@ -27,11 +29,16 @@ while [[ $# -gt 0 ]]; do
     --fw-only)  MODE=fw; shift ;;
     --app-only) MODE=app; shift ;;
     --baud) BAUD="$2"; shift 2 ;;
-    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
 
+if [[ ( "$MODE" == all || "$MODE" == fw ) && -z "$PORT" ]]; then
+  echo "A full or --fw-only flash rewrites the bootloader and partition table; it needs an explicit --port." >&2
+  echo "For an update that keeps the pet and sprites use --app-only." >&2
+  exit 1
+fi
 PORT="$(find_port "$PORT")"
 ESPTOOL="$(find_esptool)"
 
@@ -41,11 +48,19 @@ BOOT_APP0_OFF="$(part_off otadata)"
 APP_OFF="$(part_off app0)"
 FS_OFF="$(part_off storage)"
 
-args=( --chip esp32s3 --port "$PORT" --baud "$BAUD" write_flash -z --flash_mode dio --flash_freq 80m --flash_size 32MB )
+args=( --chip esp32s3 --port "$PORT" --baud "$BAUD" write-flash -z --flash-mode dio --flash-freq 80m --flash-size 32MB )
 
 app="${OUT}/TamaPoke.ino.bin"
 if [[ "$MODE" != fs ]]; then
   [[ -f "$app" ]] || { echo "Missing $app — run tools/build_175c.sh first (see PORTING.md)" >&2; exit 1; }
+  # The 1.75C build (PartitionScheme=custom) does not enforce app0's size, and an
+  # image larger than app0 written at its offset would run into the sprites.
+  APP_MAX=$(( $(part_size app0) ))
+  app_bytes=$(wc -c < "$app" | tr -d ' ')
+  if (( app_bytes > APP_MAX )); then
+    echo "$app is $app_bytes bytes, larger than app0 ($APP_MAX). Refusing to flash it." >&2
+    exit 1
+  fi
 fi
 
 if [[ "$MODE" == all || "$MODE" == fw ]]; then
@@ -53,8 +68,11 @@ if [[ "$MODE" == all || "$MODE" == fw ]]; then
   [[ -f "$boot" ]] || { echo "Missing $boot — run tools/build_175c.sh first (see PORTING.md)" >&2; exit 1; }
   # The core's partition tool and its blank otadata image (boot_app0.bin),
   # which points the bootloader at app0 as an Arduino IDE upload does.
+  # Newest core by its version directory (not the whole path, so ~/.arduino15
+  # and ~/Library/Arduino15 compete on version only).
   CORE_TOOLS="$(ls -d "${HOME}"/.arduino15/packages/esp32/hardware/esp32/*/tools \
-                      "${HOME}"/Library/Arduino15/packages/esp32/hardware/esp32/*/tools 2>/dev/null | sort -V | tail -n1 || true)"
+                      "${HOME}"/Library/Arduino15/packages/esp32/hardware/esp32/*/tools 2>/dev/null \
+               | awk -F/ '{ print $(NF-1) "\t" $0 }' | sort -V | tail -n1 | cut -f2 || true)"
   GEN="${CORE_TOOLS}/gen_esp32part.py"
   [[ -n "$CORE_TOOLS" && -f "$GEN" ]] || { echo "gen_esp32part.py not found (install the esp32 core)" >&2; exit 1; }
   parts="$(mktemp "${TMPDIR:-/tmp}/tamapoke-175c-parts.XXXXXX")"
