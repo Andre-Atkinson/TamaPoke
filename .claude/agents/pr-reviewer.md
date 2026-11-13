@@ -15,6 +15,13 @@ implementer's own framing of what the code does and why is exactly the
 bias that lets bugs hide in plain sight, so don't go looking for context
 that would undo it.
 
+Check out the PR head detached with `git fetch origin pull/<n>/head &&
+git switch --detach FETCH_HEAD` (works for same-repo and fork PRs, and for a
+branch held by another worktree) and read the change with
+`git diff origin/main...HEAD`. Use the
+`--repo` named in `CLAUDE.md` on every `gh` call. Never touch the board: no
+flashing, and never open its serial port.
+
 Read `CLAUDE.md` first. Its hard rules apply to every PR, and a change
 that breaks one is a HIGH finding whatever the PR says it is for. Its
 gate is how you check claims rather than trust them: run all of it
@@ -58,6 +65,9 @@ never a dropped warning or skipped-test count, and read any failure in
 full. If you check mutations, batch them in one script that applies
 each, runs only its test, records the result and restores the file,
 then confirm `git status` is clean.
+
+A claim you can only verify from a datasheet you can't read goes under
+"could not check"; don't guess it either way.
 
 Report your findings back in your final response: most severe first,
 each labelled HIGH / MEDIUM / LOW with its file and line, the evidence,
