@@ -37,6 +37,7 @@ struct MiniGames {
       default: keepy.reset(seed); break;
     }
     flow.begin(g, now);
+    played = false;
     input.reset();
   }
 
@@ -82,6 +83,7 @@ struct MiniGames {
   // reports GT_MOVE every 20 ms and must not count, or Berry Song would never end.
   static constexpr int MOVE_PX = 8;
   bool counted = false;
+  bool played = false;  // any activity this game (see score())
   int lastX = 0, lastY = 0;
 
   bool touch(bool pressed, int x, int y, uint32_t now, bool dark = false) {
@@ -113,7 +115,10 @@ struct MiniGames {
     return false;
   }
 
+  // The raw score. A game nobody touched scores 0: in Berry Catch the pet starts
+  // in the middle and catches berries on its own, which is not the player's doing.
   uint16_t score() const {
+    if (!played) return 0;
     switch (flow.game) {
       case GAME_CATCH: return catcher.result();
       case GAME_PEEK: return peek.result();
@@ -131,6 +136,7 @@ struct MiniGames {
   }
   void count(int x, int y) {
     counted = true;
+    played = true;
     lastX = x;
     lastY = y;
     flow.touched();

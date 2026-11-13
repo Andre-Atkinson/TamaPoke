@@ -56,9 +56,15 @@ inline uint8_t dimStageFor(uint32_t idleMs) {
   return idleMs > POWER_DIM2_MS ? DIM_OFF : idleMs > POWER_DIM1_MS ? DIM_LOW : DIM_AWAKE;
 }
 
+// A minigame doesn't dim before its own idle end (GameFlow::IDLE_MS, 15 s; the sketch
+// checks they match): with the 15 s screen-off setting it dimmed at 7.5 s and the next
+// tap only woke the screen instead of reaching the game.
+#define POWER_GAME_AWAKE_MS 15000UL
+
 // offMs == 0 keeps the historical schedule so the host tests stay valid.
 inline uint8_t dimStageNow(const PowerCtx &c) {
   uint32_t idle = c.idleMs;
+  if (c.gameOpen && idle < POWER_GAME_AWAKE_MS) return DIM_AWAKE;
   if (!c.offMs) return dimStageFor(idle);
   if (idle >= c.offMs) return DIM_OFF;
   if (idle >= c.offMs / 2) return DIM_LOW;

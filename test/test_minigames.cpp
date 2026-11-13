@@ -995,3 +995,93 @@ TEST(song, al_tocar_se_ilumina_el_boton_y_suena_su_nota) {
   s.step(SongGame::PRESS_MS);
   CHECK_EQ(s.litPad(), SongGame::NO_PAD);
 }
+
+// ---------------------------------------------------------------- revision 2
+// R2-1: en Berry Catch el bicho empieza en el centro y atrapa bayas el solo; sin
+// ningun toque no es una partida suya y no puntua (ni bate el record)
+static void runToEnd(MiniGames &m, uint32_t &now) {
+  for (int i = 0; i < 2000 && !m.over(); i++) m.frame(now += 85);
+}
+
+TEST(minigames, sin_ningun_toque_la_partida_no_puntua_aunque_el_bicho_atrape_bayas) {
+  bool caughtAlone = false;
+  for (uint32_t seed = 1; seed <= 20; seed++) {
+    MiniGames m;
+    uint32_t now = 0;
+    m.rng.seedWith(seed);
+    m.begin(GAME_CATCH, now, 0, false);
+    runToEnd(m, now);
+    CHECK(m.over());
+    if (m.catcher.result() > 0) caughtAlone = true;
+    CHECK_MSG(m.score() == 0, "puntua sin tocar, semilla " + std::to_string(seed));
+  }
+  CHECK_MSG(caughtAlone, "el caso no se da: el bicho nunca atrapa nada solo");
+}
+
+TEST(minigames, con_un_solo_toque_la_partida_puntua_lo_atrapado) {
+  bool scored = false;
+  for (uint32_t seed = 1; seed <= 20 && !scored; seed++) {
+    MiniGames m;
+    uint32_t now = 0;
+    m.rng.seedWith(seed);
+    m.begin(GAME_CATCH, now, 0, false);
+    while (m.flow.phase == GP_TITLE) m.frame(now += 85);
+    m.touch(true, 233, 350, now);  // apoya y suelta en el sitio: el bicho no se mueve
+    m.touch(false, 233, 350, now + 20);
+    runToEnd(m, now);
+    CHECK_EQ(m.score(), m.catcher.result());
+    if (m.score() > 0) scored = true;
+  }
+  CHECK(scored);
+}
+
+// R2-3: en Peekaboo y Berry Song solo cuenta apoyar el dedo; deslizarlo hasta el
+// arbusto o el boton no golpea ni toca nota
+TEST(minigames, en_Peekaboo_deslizar_hasta_el_arbusto_no_golpea) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_PEEK, now, 0, false);
+  for (int i = 0; i < 400 && !m.peek.up(); i++) m.frame(now += 50);
+  CHECK(m.peek.up());
+  for (uint8_t b = 0; b < PeekGame::BUSHES; b++) CHECK(!PeekGame::inBush(b, 233, 120));
+  m.touch(true, 233, 120, now);  // apoya lejos de los arbustos
+  int bx = PeekGame::BX[m.peek.bush], by = PeekGame::BY[m.peek.bush];
+  m.touch(true, bx, by - 60, now + 20);  // y desliza hasta el que asoma
+  m.touch(true, bx, by - 60, now + 40);
+  CHECK_EQ(m.peek.score, (uint8_t)0);
+}
+
+TEST(minigames, en_Berry_Song_deslizar_hasta_un_boton_no_toca_nota) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_SONG, now, 0, false);
+  for (int i = 0; i < 400 && !m.song.playersTurn(); i++) m.frame(now += 50);
+  CHECK(m.song.playersTurn());
+  CHECK_EQ(SongGame::padAt(233, 200), SongGame::NO_PAD);
+  m.touch(true, 233, 200, now);  // apoya fuera de los botones
+  uint8_t p = m.song.seq[0];
+  m.touch(true, SongGame::PX[p], SongGame::PY[p], now + 20);  // y desliza hasta el bueno
+  m.touch(true, SongGame::PX[p], SongGame::PY[p], now + 40);
+  CHECK_EQ(m.song.k, (uint8_t)0);
+  CHECK_EQ(m.song.tries, SongGame::TRIES);
+}
+
+TEST(minigames, una_partida_sin_tocar_tras_otra_jugada_tampoco_puntua) {
+  MiniGames m;  // el sketch usa un solo MiniGames para todas las partidas
+  uint32_t now = 0;
+  m.rng.seedWith(3);
+  m.begin(GAME_CATCH, now, 0, false);
+  while (m.flow.phase == GP_TITLE) m.frame(now += 85);
+  m.touch(true, 233, 350, now);
+  m.touch(false, 233, 350, now + 20);
+  runToEnd(m, now);
+  bool caughtAlone = false;
+  for (uint32_t seed = 1; seed <= 20; seed++) {
+    m.rng.seedWith(seed);
+    m.begin(GAME_CATCH, now, 0, false);  // la siguiente, sin tocar
+    runToEnd(m, now);
+    if (m.catcher.result() > 0) caughtAlone = true;
+    CHECK_MSG(m.score() == 0, "hereda la actividad de la partida anterior");
+  }
+  CHECK(caughtAlone);
+}

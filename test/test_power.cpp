@@ -280,3 +280,24 @@ TEST(Power, screen_off_selector_maps_both_ways_and_cycles) {
   CHECK_EQ(ms, 60000u);
   CHECK_EQ((int)powerOffSel(powerOffNext(60000)), 1);
 }
+
+// R2-2 (minijuegos): con el apagado a 15 s se atenuaba a los 7,5 s en mitad de una
+// partida y el siguiente toque solo despertaba la pantalla. Un juego no se atenua
+// antes de su propio final por inactividad (15 s).
+TEST(power, un_minijuego_no_se_atenua_antes_de_su_final_por_inactividad) {
+  PowerCtx c = ctx(10000);
+  c.offMs = 15000;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_LOW);  // sin juego: a la mitad, como siempre
+  c.gameOpen = true;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_AWAKE);
+  c.idleMs = 14999;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_AWAKE);
+  c.idleMs = 15000;  // el juego ya acabo por inactividad
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_OFF);
+  c.offMs = 60000;  // con 60 s nada cambia: a los 30 s atenua
+  c.idleMs = 30000;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_LOW);
+  c.offMs = 0;  // el horario de siempre (90 s / 5 min), sin cambios
+  c.idleMs = 10000;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_AWAKE);
+}

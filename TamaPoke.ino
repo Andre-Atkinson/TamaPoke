@@ -37,6 +37,7 @@
 #include "touchlock.h"
 #include "bedtime.h"
 #include "minigames.h"
+static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "trainingcapture.h"
 #include <Preferences.h>
 
@@ -665,7 +666,7 @@ void bedApply() {
   bedPending = BED_NONE;
   if (ev == BED_SLEEP) {
     // Un juego o el saco abiertos aqui solo pueden estar a oscuras (bedBusy): se abandonan
-    // sin premio, como al tocar su cabecera. playGame() y trainStrength() se pagan al
+    // sin premio, como al mantener su boton de salir. playGame() y trainStrength() se pagan al
     // terminar la partida (que ya no llegara) y no miran pet.sleeping.
     gameOpen = false;
     if (sackOpen) {
