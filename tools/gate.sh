@@ -23,13 +23,21 @@ BUILD=1
 for a in "$@"; do
   case "$a" in
     --no-build) BUILD=0 ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $a" >&2; exit 2 ;;
   esac
 done
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tamapoke-gate.XXXXXX")" || exit 2
-trap 'rm -rf "$TMP"' EXIT
+KEEP="$ROOT/test/build/gate-logs"   # failing runs keep their full logs here (gitignored)
+keep_logs() {
+  if [[ "${FAILED:-0}" -ne 0 ]]; then
+    rm -rf "$KEEP" && mkdir -p "$KEEP" && cp "$TMP"/*.log "$KEEP"/ 2>/dev/null
+    echo "full logs of this failed run: $KEEP"
+  fi
+  rm -rf "$TMP"
+}
+trap keep_logs EXIT
 ESC="$(printf '\033')"
 
 SUMMARY=()
@@ -53,8 +61,14 @@ tail_if_empty() {  # tail_if_empty <filtered-count> <log>
 echo "== host tests (--asan) =="
 ./test/run_tests.sh --asan >"$TMP/tests.log" 2>&1
 rc=$?
+# Failing/known tests with their indented assertion lines, the "Fallos:" list,
+# summaries, and every warning or error.
 strip_ansi <"$TMP/tests.log" \
-  | grep -E 'warning|error|Warning|Error|FAIL|KNOWN|XPASS|tests, |^Ran |^OK|skipped|Sanitizer|TODO OK|HAY FALLOS' \
+  | awk '/ (FAIL|KNOWN|XPASS) /{print; d=1; next}
+         d && /^        /{print; next} {d=0}
+         /^Fallos:|^Bugs conocidos/{print; l=1; next}
+         l && /^  - /{print; next} {l=0}
+         /warning|error|Warning|Error|FAIL|tests, |^Ran |^OK|skipped|Sanitizer|TODO OK|HAY FALLOS/{print}' \
   | tee "$TMP/tests.f"
 [[ "$rc" -ne 0 ]] && tail_if_empty "$(wc -l <"$TMP/tests.f")" "$TMP/tests.log"
 record "host tests (--asan)" "$rc"
@@ -68,14 +82,21 @@ record "i18n formats" "$rc"
 # ---------------------------------------------------------------- no network
 # Hard rule: no Wi-Fi/BLE/ESP-NOW/HTTP/NTP/MQTT/OTA in the firmware. Matches
 # includes of network/radio libraries and calls that start a radio or a network
-# service. Calls that only stop/release a radio that was never started
-# (esp_wifi_stop/deinit, WiFi.mode(WIFI_OFF), btStop(), esp_bt_controller_mem_release)
-# and the esp_wifi.h / esp_bt.h headers they need are deliberately not matched.
+# service; it catches the common cases, not everything, so reviewers still read
+# the diff. Comments are scanned too (a commented-out include fails). Calls that
+# only stop/release a radio that was never started (esp_wifi_stop/deinit via
+# esp_wifi.h, btStop(), esp_bt_controller_mem_release via esp_bt.h) and those two
+# headers are deliberately not matched. (WiFi.mode(WIFI_OFF) is not usable: it
+# needs WiFi.h, which is matched.)
 echo "== no-network check =="
-NET_INC='#[[:space:]]*include[[:space:]]*[<"](WiFi|HTTPClient|HTTPUpdate|WebServer|ESPAsyncWebServer|AsyncTCP|ESPmDNS|ArduinoOTA|PubSubClient|BluetoothSerial|BLE|NimBLE|esp_now|esp_gap_ble|esp_gatt|esp_bluedroid|esp_bt_main|esp_http_client|esp_http_server|esp_https_ota|esp_sntp|esp_netif|esp_eth|lwip/|sntp)'
-NET_CALL='configTime[[:space:]]*\(|sntp_|esp_now_|esp_wifi_(init|start|connect|set_mode|scan_start)|esp_bt_controller_(init|enable)|esp_(gap_ble|gatt|ble)_|esp_http_client_|esp_https_ota|esp_sntp_|esp_netif_|esp_eth_|WiFi\.(begin|softAP)'
+NET_INC='#[[:space:]]*include[[:space:]]*[<"](WiFi|HTTPClient|HTTPUpdate|WebServer|ESPAsyncWebServer|AsyncTCP|AsyncUDP|ESPmDNS|ArduinoOTA|PubSubClient|BluetoothSerial|SimpleBLE|BLE|NimBLE|Network|ESP32_NOW|ETH\.h|DNSServer|NetBIOS|PPP\.h|Matter|RMaker|Insights|OThread|Zigbee|ESP_HostedOTA|NTPClient|AsyncMqtt|ArduinoMqtt|mqtt_client|esp_mqtt|esp_websocket|esp_now|esp_gap_ble|esp_gatt|esp_bluedroid|esp_bt_main|esp_http_client|esp_http_server|esp_https_ota|esp_sntp|esp_netif|esp_eth|lwip/|sntp|host/ble|nimble/)'
+NET_CALL='configTime[[:space:]]*\(|configTzTime[[:space:]]*\(|btStart(Mode)?[[:space:]]*\(|sntp_|esp_now_|esp_wifi_(init|start|connect|set_mode|scan_start)|esp_bt_controller_(init|enable)|esp_(gap_ble|gatt|ble)_|esp_http_client_|esp_https_ota|esp_sntp_|esp_netif_|esp_eth_|WiFi\.(begin|softAP)'
+# Everything arduino-cli compiles: sketch-root sources and anything under src/.
 NET_FILES=()
-for f in ./*.ino ./*.cpp ./*.h; do [[ -f "$f" ]] && NET_FILES+=("$f"); done
+for f in ./*.ino ./*.cpp ./*.h ./*.hpp ./*.c ./*.S; do [[ -f "$f" ]] && NET_FILES+=("$f"); done
+if [[ -d src ]]; then
+  while IFS= read -r f; do NET_FILES+=("$f"); done < <(find src -type f \( -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.S' -o -name '*.ino' \))
+fi
 grep -nE -e "$NET_INC" -e "$NET_CALL" "${NET_FILES[@]}" >"$TMP/net.out" 2>&1
 grc=$?
 if [[ "$grc" -eq 1 ]]; then
@@ -88,25 +109,42 @@ fi
 
 # ---------------------------------------------------------------- builds
 sketch_warn_re='TamaPoke/[^:]+:[0-9]+:[0-9]+: warning:'
+# Known sketch warnings per build on main (exact count; update it in the PR that
+# changes it). More than this fails the gate: only new warnings are findings.
+WARN_BASELINE="${WARN_BASELINE:-20}"
 show_build() {  # show_build <label> <log> <exit code>
   local label="$1" log="$2" rc="$3" n
+  # in build order (a sorted view separates an error from its source line);
+  # awk drops exact repeats only
   strip_ansi <"$log" \
-    | grep -iE "can't open|error|${sketch_warn_re}|Sketch uses|build OK" | sort -u >"$log.f"
+    | grep -iE "can't open|error|${sketch_warn_re}|Sketch uses|build OK" | awk '!seen[$0]++' >"$log.f"
   cat "$log.f"
-  [[ "$rc" -ne 0 ]] && tail_if_empty "$(wc -l <"$log.f")" "$log"
+  if [[ "$rc" -ne 0 ]]; then
+    tail_if_empty "$(wc -l <"$log.f")" "$log"
+    record "$label build" "$rc" "sketch warnings n/a: build failed"
+    return
+  fi
   n="$(strip_ansi <"$log" | grep -E "$sketch_warn_re" | sort -u | wc -l | tr -d ' ')"
-  echo "$label: $n sketch warning(s)"
-  record "$label build" "$rc" "$n sketch warnings"
+  echo "$label: $n sketch warning(s), baseline $WARN_BASELINE"
+  if (( n > WARN_BASELINE )); then
+    record "$label build" 1 "$n sketch warnings: +$((n - WARN_BASELINE)) NEW over baseline $WARN_BASELINE"
+  else
+    record "$label build" 0 "$n sketch warnings"
+  fi
 }
 
 if [[ "$BUILD" -eq 1 ]]; then
   STAGE="$TMP/stage/TamaPoke"
   mkdir -p "$STAGE"
-  rsync -a \
+  if ! rsync -a \
     --exclude '/.git' --exclude '/out' --exclude '/test/build' --exclude '/backups' \
     --exclude '/.claude/worktrees' --exclude '/tools/build' --exclude '/.venv' \
-    "$ROOT/" "$STAGE/"
-
+    "$ROOT/" "$STAGE/"; then
+    record "stage working tree for builds" 1 "rsync failed; builds skipped"
+    BUILD=0
+  fi
+fi
+if [[ "$BUILD" -eq 1 ]]; then
   echo "== build 1.75C =="
   (cd "$STAGE" && ./tools/build_175c.sh --out "$TMP/out175c") >"$TMP/b175c.log" 2>&1
   show_build "1.75C" "$TMP/b175c.log" $?
@@ -117,7 +155,7 @@ if [[ "$BUILD" -eq 1 ]]; then
     --build-path "$TMP/b175") >"$TMP/b175.log" 2>&1
   show_build "1.75" "$TMP/b175.log" $?
 else
-  SUMMARY+=("SKIP  firmware builds (--no-build)")
+  SUMMARY+=("SKIP  firmware builds")
 fi
 
 # ---------------------------------------------------------------- summary

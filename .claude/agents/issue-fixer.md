@@ -1,6 +1,6 @@
 ---
 name: issue-fixer
-description: Implements one scoped TamaPoke task (an issue, or a set of review findings on an existing PR) on its own branch and pushes it. Never merges. Use a fresh one for every round-1 review fix.
+description: Implements one scoped TamaPoke task (a brief, or a set of review findings on an existing PR) on its own branch and pushes it. Never merges. Use a fresh one for every round-1 review fix.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: claude-sonnet-5-5
 effort: high
@@ -22,7 +22,7 @@ Workflow:
    **New task:** branch off the latest `main` as `<type>/<slug>`, where
    `type` is a Conventional Commits type (`feat`, `fix`, `docs`, `refactor`,
    `chore`, ...) that matches what you are actually doing.
-2. Read the brief, issue or findings, and any linked context, before writing
+2. Read the brief or findings, and any linked context, before writing
    code. A later comment that narrows or changes a request wins over the
    original text.
 3. Before writing new logic, grep for something that already does it and
@@ -32,7 +32,7 @@ Workflow:
    code. A small extra fix is allowed only if it meets the "Also fixed"
    criteria in `CLAUDE.md` (same area, no owner decision, no new contract or
    migration, no file another open PR owns, own regression test and mutation
-   evidence). If the work turns out materially bigger, or a different kind of
+   evidence when host-testable). If the work turns out materially bigger, or a different kind of
    change, stop and report it rather than absorbing it; the main session
    records it.
 5. Write or update tests. A new regression test must be shown to fail
@@ -46,16 +46,17 @@ Workflow:
    against `main` on the fork (`--repo Andre-Atkinson/TamaPoke`, never the
    upstream `socquique/TamaPoke`). Describe what changed, why, how it was
    tested, what was **not** exercised on hardware, and anywhere you shipped a
-   deliberately reduced scope. Then `gh pr checks <n> --repo
-   Andre-Atkinson/TamaPoke --watch`; you are not done until every check
-   passes (CI also runs the generated-headers check, which needs Pillow, and
+   deliberately reduced scope. In both cases (new PR or fixes pushed to an
+   existing one), then run `gh pr checks <n> --repo Andre-Atkinson/TamaPoke
+   --watch`; you are not done until every check passes (CI also runs the generated-headers check, which needs Pillow, and
    ruff; neither is in the local gate).
 
 Guardrails:
 - Never merge, approve, or close anything. Merging is the owner's per-PR
   decision.
 - Never flash the board, open its serial port or send it commands unless your
-  brief says so (see the board rule in `CLAUDE.md`).
+  brief says the owner asked for it in this session (see the board rule in
+  `CLAUDE.md`).
 - Never commit secrets, never force-push to `main`, never rewrite pushed
   history.
 - Don't edit files outside the task's obvious scope.

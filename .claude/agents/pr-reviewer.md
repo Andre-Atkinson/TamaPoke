@@ -15,9 +15,10 @@ implementer's own framing of what the code does and why is exactly the
 bias that lets bugs hide in plain sight, so don't go looking for context
 that would undo it.
 
-Check out the PR head detached with `git fetch origin && git switch
---detach origin/<head>` and read the change with `git diff origin/main...HEAD`
-(a branch held by another worktree can't be checked out). Use the
+Check out the PR head detached with `git fetch origin pull/<n>/head &&
+git switch --detach FETCH_HEAD` (works for same-repo and fork PRs, and for a
+branch held by another worktree) and read the change with
+`git diff origin/main...HEAD`. Use the
 `--repo` named in `CLAUDE.md` on every `gh` call. Never touch the board: no
 flashing, and never open its serial port.
 

@@ -14,19 +14,20 @@ trading, anything multiplayer.
 - **No external comms, ever.** Do not add Wi-Fi, Bluetooth/BLE, ESP-NOW,
   HTTP(S), NTP, MQTT, network OTA, or any cloud/API call to the firmware, and
   do not pull them in from a fork. USB serial from the owner's own computer is
-  the only channel. `tools/gate.sh` enforces this over the firmware sources
-  (`*.ino`, `*.cpp`, `*.h` at the repo root): it fails on includes of
-  `WiFi*`, `HTTPClient`, `HTTPUpdate`, `WebServer`, `ESPAsyncWebServer`,
-  `AsyncTCP`, `ESPmDNS`, `ArduinoOTA`, `PubSubClient`, `BluetoothSerial`,
-  `BLE*`, `NimBLE*`, `esp_now`, `esp_gap_ble`, `esp_gatt`, `esp_http_client`,
-  `esp_https_ota`, `esp_sntp`, `esp_netif`, `esp_eth`, `lwip/`, `sntp`, and on
-  calls such as `configTime(`, `sntp_*`, `esp_now_*`,
-  `esp_wifi_(init|start|connect)`, `esp_bt_controller_(init|enable)`,
-  `WiFi.begin`, `WiFi.softAP`. Any hit is a blocking review finding.
+  the only channel. `tools/gate.sh` catches the common cases in everything
+  arduino-cli compiles (sketch-root `*.ino/*.cpp/*.h/*.hpp/*.c/*.S` and `src/`,
+  comments included): includes of Wi-Fi, HTTP, web server, mDNS, OTA, MQTT,
+  NTP, ESP-NOW, Ethernet, Matter/Zigbee/Thread/RainMaker/Insights, Bluetooth
+  and BLE/NimBLE libraries, and calls that start a radio or network service
+  (`WiFi.begin`, `btStart`, `configTime`/`configTzTime`, `esp_wifi_start`,
+  `esp_bt_controller_enable`, ...; the patterns are in `gate.sh`). It is not
+  exhaustive, so reviewers still read every diff for code that starts a radio
+  or a network service. Any hit is a blocking finding.
   *Carve-out:* calls that only stop or release a radio that is never started
-  (`esp_wifi_stop`/`esp_wifi_deinit`, `WiFi.mode(WIFI_OFF)`, `btStop()`,
-  `esp_bt_controller_mem_release`) are allowed when the PR justifies them (for
-  example power saving); the check does not flag them.
+  (`esp_wifi_stop`/`esp_wifi_deinit` via `esp_wifi.h`, `btStop()`,
+  `esp_bt_controller_mem_release` via `esp_bt.h`) are allowed when the PR
+  justifies them (for example power saving); the check does not flag them.
+  `WiFi.mode(WIFI_OFF)` is not an option: it needs `WiFi.h`, which is banned.
 - **The pet's save is sacred.** NVS namespace `tamapoke` holds it. New keys
   are fine; changing what an existing key means needs a migration and a test.
   Values loaded from NVS must be range-checked before use, in `Pet::load()`
@@ -34,11 +35,14 @@ trading, anything multiplayer.
 - **Both boards must build.** The default build is the original 1.75; ours is
   the 1.75C (`-DBOARD_AMOLED_175C=1`). Keep board-specific code behind
   `#if BOARD_AMOLED_175C`, and compile both before a PR.
-- **App-only updates keep the pet.** Write only `app0` (`0x10000`). Never
-  write `nvs` (`0x9000`) or `storage` (`0x310000`, the sprites) unless the
-  task is explicitly about them. `tools/build_175c.sh` caps the image at the
-  `app0` size (3,145,728 bytes), so an oversize build fails instead of
-  spilling into the sprite partition.
+- **App-only updates keep the pet.** Write only `app0` (`0x10000`):
+  `tools/update_175c.sh` (backup, build, app-only flash, clock) or
+  `tools/flash_175c.sh --app-only`. A full flash and `--fw-only` also rewrite
+  the bootloader and partition table, and a full flash rewrites the sprites.
+  Never write `nvs` (`0x9000`) or `storage` (`0x310000`) unless the task is
+  explicitly about them. `tools/build_175c.sh` caps the image at the `app0`
+  size (3,145,728 bytes, checked on the sections and on the `.bin`), so an
+  oversize build fails instead of spilling into the sprite partition.
 - **The board is the owner's.** Unless the owner asks in this session, don't
   flash it (`esptool`, `tools/flash_175c.sh`, `arduino-cli upload`), don't
   open its serial port, and don't send it anything. Each state-changing
@@ -48,7 +52,8 @@ trading, anything multiplayer.
   `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`, `LS`, `SDINFO`, `LOCK?`,
   `TRAINTRACE?`. (From `handleSerial` in `TamaPoke.ino` and `sdSerialCommand`
   in `sdmon.cpp`; re-check when those change.)
-- **Python:** pip installs go in `.venv/` only, never system-wide.
+- **Installing anything:** ask the owner first. Python packages only ever go
+  into `.venv/`, never system-wide.
 - **Processes and history:** stop only processes and worktrees you started,
   never another session's. Never rewrite pushed history. Always pass
   `--repo Andre-Atkinson/TamaPoke` to `gh` (never the upstream).
@@ -69,9 +74,12 @@ sketch whose folder name differs from the `.ino` (every agent worktree). Never
 run the builds by hand through a `grep` pipe: it hides failures and the exit
 code becomes grep's.
 
-Never drop a warning or a skipped-test count, and read any failure in full.
-`main` currently has about 20 known sketch warnings per build (the gate prints
-the count); only new ones are findings. `ruff check tools/` and a
+Never drop a warning or a skipped-test count, and read any failure in full:
+the gate prints failing assertions, and a failed run keeps its full logs in
+`test/build/gate-logs/`. A build with more sketch warnings than
+`WARN_BASELINE` in `gate.sh` (20, the exact count on `main` per build) fails
+the gate; only new warnings are findings, and a PR that changes the count
+updates the baseline. `ruff check tools/` and a
 generated-headers check (needs Pillow) run in CI but not in the gate: ask the
 owner before installing ruff (even into `.venv/`).
 
@@ -80,9 +88,9 @@ exercised on hardware. Only flash it (app-only) and check it over USB serial
 (`HEALTH`, `STATS`, the periodic `HEALTH` heartbeat) when the owner has asked
 for that in this session. Host tests and CI do not prove anything about the
 panel, touch, PMU or battery. For hardware claims (registers, pins, timings,
-charger limits) the library sources the firmware builds against are in
-`~/Library/Arduino15/packages/esp32/` (macOS) or `~/.arduino15` (Linux), and
-`~/Documents/Arduino/libraries/`.
+charger limits) the library sources the firmware builds against are under
+the directories `arduino-cli config dump` lists: `directories.data`
+(`packages/esp32/`, the core) and `directories.user` (`libraries/`).
 
 A new or changed regression test must be shown to **fail without the fix**:
 say in the PR what you reverted and what the test reported. One mutation per
@@ -104,7 +112,9 @@ rounds before it is merged. Both are mandatory, and two is also the cap.
 
 1. **Round 1.** Dispatch a fresh `pr-reviewer` agent (`.claude/agents/`) on
    the PR. It works read-only from the diff and the repo, reports back to the
-   main session, and posts nothing to GitHub.
+   main session, and posts nothing to GitHub. Read-only means it never pushes,
+   posts or leaves changes behind; temporary local mutation commits that it
+   resets afterwards are fine.
 2. **Round-1 fixes** go to a fresh `issue-fixer` agent (never the agent that
    wrote the code), briefed with the PR, each finding's file and line, and the
    reviewer's evidence. It pushes to the same branch.
@@ -130,14 +140,23 @@ dispositioned, and the owner has approved *that* PR in chat. Approval is
 per-PR and never standing. Once all three hold, the main session may merge.
 Subagents never merge, and nobody submits an approving review.
 
-Mutation evidence for round-1 fixes goes in the PR body (`gh pr edit`), not
-only in a comment. If two review rounds feels wrong for a change (too few or
+Mutation evidence for round-1 fixes and for the main session's post-round-2
+fixes goes in the PR body (`gh pr edit`), not only in a comment.
+
+**Recording findings.** GitHub Issues are disabled on this fork. Every review
+finding's outcome goes in the PR body under **Review findings** (ID, severity,
+fixed in `<sha>`, or deferred with the reason). Anything deferred past the PR
+gets one line in `BACKLOG.md` at the repo root, with the PR link, in the same
+PR. If two review rounds feels wrong for a change (too few or
 too many), say so and ask the owner rather than exceeding the cap.
 
 PR descriptions say what changed, why, how it was tested (including what was
 not tested on hardware), and list anything fixed beyond the brief under
 **Also fixed**. A fixer may fix something beyond the brief only when it is in
 the same area as the PR, needs no owner decision, adds no new contract or
-migration, touches no file another open PR owns, and comes with its own
-regression test and mutation evidence. Anything bigger is reported to the main
-session, which records it; findings are never silently dropped.
+migration, touches no file another open PR owns (`gh pr list --repo
+Andre-Atkinson/TamaPoke --json number,files`), and comes with its own
+regression test and mutation evidence when the behaviour is host-testable
+(otherwise say how it was checked). Anything bigger is reported to the main
+session, which records it (see **Recording findings**); findings are never
+silently dropped.
