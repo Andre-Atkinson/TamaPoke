@@ -28,6 +28,5 @@ uint8_t audioVolume();
 // amplitud de la onda cuadrada para cada nivel: unos -8 dB y -17 dB respecto al alto
 inline int16_t sfxAmp(uint8_t level) { return level == 1 ? 2000 : level >= 2 ? 700 : 5000; }
 void audioSetSleeping(bool sleeping);  // dormida: amplificador apagado
-bool audioBusy();                      // un efecto pedido en reposo aun puede estar sonando: no dormir la CPU
+bool audioBusy();                      // suena, hay un efecto en cola o el amp sigue retenido: no dormir la CPU
 void audioSetIdle(bool idle);          // sin uso: amp, codec y relojes I2S parados
-bool audioClocksOn();

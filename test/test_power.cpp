@@ -239,3 +239,31 @@ TEST(power, la_cpu_baja_en_reposo_y_se_queda_alta_con_usb_o_en_el_juego) {
   c.gameOpen = false;
   CHECK_EQ((int)cpuMhzFor(c), 160);
 }
+
+TEST(Power, audio_power_up_starts_i2s_then_fully_reinits_the_codec) {
+  // Mute -> unmute and dim -> wake: a restarted I2S alone left the board silent.
+  AudioStep s[AUDIO_PLAN_MAX];
+  CHECK_EQ(audioPowerPlan(true, false, s), 2);
+  CHECK_EQ((int)s[0], (int)AUDIO_STEP_I2S_START);   // clocks first
+  CHECK_EQ((int)s[1], (int)AUDIO_STEP_CODEC_INIT);  // then the full codec init
+  CHECK_EQ(audioPowerPlan(false, true, s), 2);
+  CHECK_EQ((int)s[0], (int)AUDIO_STEP_CODEC_SUSPEND);
+  CHECK_EQ((int)s[1], (int)AUDIO_STEP_I2S_STOP);
+  CHECK_EQ(audioPowerPlan(true, true, s), 0);
+  CHECK_EQ(audioPowerPlan(false, false, s), 0);
+}
+
+TEST(Power, audio_busy_covers_playback_and_queue_not_only_the_amp_hold) {
+  CHECK(!audioBusyFor(false, 0, false));
+  CHECK(audioBusyFor(true, 0, false));
+  CHECK(audioBusyFor(false, 1, false));
+  CHECK(audioBusyFor(false, 0, true));
+}
+
+TEST(Power, cpu_stays_at_240_on_usb_when_only_dimmed) {
+  PowerCtx c = ctx(100000);  // past the 90 s dim, before the 5 min near-off
+  c.usb = true;
+  CHECK_EQ((int)cpuMhzFor(c), 240);
+  c.usb = false;
+  CHECK_EQ((int)cpuMhzFor(c), 160);
+}

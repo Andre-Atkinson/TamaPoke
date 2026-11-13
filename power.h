@@ -126,3 +126,26 @@ inline uint32_t cpuMhzFor(const PowerCtx &c) {
 inline uint32_t powerCacheMs(const PowerCtx &c) {
   return (c.screenOff || dimStageNow(c) == DIM_OFF) ? 10000 : 2000;
 }
+
+// ---- audio power (audio.cpp) ----
+// Steps to move the speaker path between running and powered down. Pure, so the host tests
+// pin the order. Up: the I2S clocks must exist before the codec (it derives its clock from
+// BCLK), and the codec gets its FULL init again because it lost its clock while I2S was
+// stopped (starting only I2S, or poking two registers, left it silent). Down: codec first,
+// then the clocks.
+enum AudioStep : uint8_t {
+  AUDIO_STEP_I2S_START = 1, AUDIO_STEP_CODEC_INIT, AUDIO_STEP_CODEC_SUSPEND, AUDIO_STEP_I2S_STOP
+};
+#define AUDIO_PLAN_MAX 2
+// returns the number of steps written to out (0 = already in the wanted state)
+inline int audioPowerPlan(bool wantRun, bool powered, AudioStep *out) {
+  if (wantRun && !powered) { out[0] = AUDIO_STEP_I2S_START; out[1] = AUDIO_STEP_CODEC_INIT; return 2; }
+  if (!wantRun && powered) { out[0] = AUDIO_STEP_CODEC_SUSPEND; out[1] = AUDIO_STEP_I2S_STOP; return 2; }
+  return 0;
+}
+
+// audioBusy(): no light sleep or CPU change while a sound plays, is queued or the idle
+// amplifier hold (4 s) is running.
+inline bool audioBusyFor(bool playing, uint32_t queued, bool ampHold) {
+  return playing || queued > 0 || ampHold;
+}

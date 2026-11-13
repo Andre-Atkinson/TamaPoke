@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "power.h"
 #include "pin_config.h"
 #include <Arduino.h>
 #include <Wire.h>
@@ -26,7 +27,15 @@ static uint32_t gAmpHoldUntil = 0;  // un efecto pedido en reposo mantiene el am
 static bool gAmpHold = false;       // (indicador aparte: asi la comparacion no falla al dar la vuelta millis())
 static uint32_t gAmpOnAt = 0;       // cuando se encendio el amplificador
 static QueueHandle_t gQ = nullptr;
-static bool gI2sOn = false;
+// ESP_I2S has no lock and end() deletes the TX channel while write() may be using it
+// (use-after-free). gI2sMux is held by the audio task for each whole sound and by the loop
+// for each I2S/codec power change, so the two never overlap. The codec's I2C writes run on
+// the loop only (Arduino's TwoWire is not safe across tasks).
+static SemaphoreHandle_t gI2sMux = nullptr;
+static bool gI2sOn = false;        // I2S channel exists (changed only with gI2sMux held, or in audioBegin)
+static bool gPowered = false;      // I2S running and codec initialised/on
+static volatile bool gWantRun = false;  // requested state; a playing sound aborts when it clears
+static volatile bool gPlaying = false;
 
 // El NS4150B tarda bastante mas de 8 ms en estabilizarse tras cada apagado, asi
 // que encenderlo justo antes de cada efecto se comia los cortos: el jingle de
@@ -36,6 +45,7 @@ static bool gI2sOn = false;
 static bool esW(uint8_t reg, uint8_t val);
 static bool i2sStart();
 static void i2sStop();
+static bool es8311Init();
 
 static void updateAmplifierPower() {
   // gReady evita encenderlo en una placa donde el codec no arranco: ahi el
@@ -50,17 +60,28 @@ static void updateAmplifierPower() {
     if (want == HIGH) gAmpOnAt = millis();
     digitalWrite(PA, want);
   }
-  // Idle (screen off / dim) and mute both drop the codec. Idle also stops
-  // I2S so MCLK on GPIO16 and BCLK are not toggling the whole time.
-  static int codec = -1;
+  // Idle (screen off / dim) and mute both drop the codec and I2S; waking brings them back.
+  // Order matters (see audioPowerPlan): I2S first so BCLK/MCLK exist, then the FULL codec init,
+  // which is the sequence verified on this board. Only re-writing a couple of registers after
+  // an I2S restart left the codec silent: its clock (derived from BCLK) had gone away and its
+  // start sequence was never re-run.
   if (!gReady) return;
-  if (run) {
-    if (!gI2sOn) i2sStart();
-    if (codec != 1) { esW(0x0D, 0xFA); esW(0x44, 0x58); codec = 1; }
-  } else {
-    if (codec != 0) { esW(0x0D, 0x00); codec = 0; }
-    i2sStop();
+  gWantRun = run;  // makes a playing sound stop after its current chunk
+  AudioStep plan[AUDIO_PLAN_MAX];
+  int n = audioPowerPlan(run, gPowered, plan);
+  if (!n) return;
+  if (!gI2sMux || xSemaphoreTake(gI2sMux, pdMS_TO_TICKS(200)) != pdTRUE) return;  // retried on the next call
+  bool ok = true;
+  for (int i = 0; i < n && ok; i++) {
+    switch (plan[i]) {
+      case AUDIO_STEP_I2S_START: ok = i2sStart(); break;
+      case AUDIO_STEP_CODEC_INIT: ok = es8311Init(); break;
+      case AUDIO_STEP_CODEC_SUSPEND: esW(0x12, 0x02); esW(0x0D, 0xFA); break;  // DAC off, analog off
+      case AUDIO_STEP_I2S_STOP: i2sStop(); break;
+    }
   }
+  if (ok) gPowered = run;
+  xSemaphoreGive(gI2sMux);
 }
 
 // ---- I2C del códec ----
@@ -87,7 +108,7 @@ static bool es8311Init() {
   if (Wire.endTransmission() != 0) return false;
 
   // open()
-  esW(0x0D, 0xFA); esW(0x44, 0x08); esW(0x44, 0x08);  // power up + quirk de 1a escritura
+  esW(0x0D, 0xFA); esW(0x44, 0x08); esW(0x44, 0x08);  // quirk de la 1a escritura (start() deja 0x0D=0x01)
   esW(0x01, 0x30); esW(0x02, 0x00); esW(0x03, 0x10); esW(0x16, 0x24);
   esW(0x04, 0x10); esW(0x05, 0x00); esW(0x0B, 0x00); esW(0x0C, 0x00);
   esW(0x10, 0x1F); esW(0x11, 0x7F);
@@ -161,6 +182,170 @@ static void playTone(uint16_t f, uint16_t ms) {
     }
     i2s.write((uint8_t *)buf, n * 4);
     done += n;
+    if (!gWantRun) return;  // muted or idle mid-sound: let the loop take the driver
+  }
+}
+
+static void audioTask(void *) {
+  uint8_t id;
+  for (;;) {
+    if (xQueueReceive(gQ, &id, portMAX_DELAY) && gOn && !gSleeping && gReady && id < SFX_COUNT) {
+      if (xSemaphoreTake(gI2sMux, portMAX_DELAY) == pdTRUE) {
+        if (gWantRun && gPowered) {
+          const SfxDef &d = SFX[id];
+          // el NS4150B tarda mas de 8 ms en estabilizarse: si se acaba de encender, el efecto espera
+          int32_t since = (int32_t)(millis() - gAmpOnAt);
+          gPlaying = true;
+          if (since >= 0 && since < 50) vTaskDelay(pdMS_TO_TICKS(50 - since));
+          for (uint8_t i = 0; i < d.len && gWantRun; i++) playTone(d.n[i].f, d.n[i].ms);
+          gPlaying = false;
+        }
+        xSemaphoreGive(gI2sMux);
+      }
+    }
+  }
+}
+
+static bool i2sStart();
+static void i2sStop();
+static bool es8311Init();
+
+static void updateAmplifierPower() {
+  // gReady evita encenderlo en una placa donde el codec no arranco: ahi el
+  // amplificador solo aportaria siseo, porque no va a sonar nada.
+  if (gAmpHold && (int32_t)(gAmpHoldUntil - millis()) <= 0) gAmpHold = false;
+  bool idleOff = gIdle && !gAmpHold;
+  bool run = gReady && gOn && !gSleeping && !idleOff;
+  static int last = -1;  // solo se escribe el pin si cambia
+  int want = run ? HIGH : LOW;
+  if (want != last) {
+    last = want;
+    if (want == HIGH) gAmpOnAt = millis();
+    digitalWrite(PA, want);
+  }
+  // Idle (screen off / dim) and mute both drop the codec and I2S; waking brings them back.
+  // Order matters (see audioPowerPlan): I2S first so BCLK/MCLK exist, then the FULL codec init,
+  // which is the sequence verified on this board. Only re-writing a couple of registers after
+  // an I2S restart left the codec silent: its clock (derived from BCLK) had gone away and its
+  // start sequence was never re-run.
+  if (!gReady) return;
+  gWantRun = run;  // makes a playing sound stop after its current chunk
+  AudioStep plan[AUDIO_PLAN_MAX];
+  int n = audioPowerPlan(run, gPowered, plan);
+  if (!n) return;
+  if (!gI2sMux || xSemaphoreTake(gI2sMux, pdMS_TO_TICKS(200)) != pdTRUE) return;  // retried on the next call
+  bool ok = true;
+  for (int i = 0; i < n && ok; i++) {
+    switch (plan[i]) {
+      case AUDIO_STEP_I2S_START: ok = i2sStart(); break;
+      case AUDIO_STEP_CODEC_INIT: ok = es8311Init(); break;
+      case AUDIO_STEP_CODEC_SUSPEND: esW(0x12, 0x02); esW(0x0D, 0xFA); break;  // DAC off, analog off
+      case AUDIO_STEP_I2S_STOP: i2sStop(); break;
+    }
+  }
+  if (ok) gPowered = run;
+  xSemaphoreGive(gI2sMux);
+}
+
+// ---- I2C del códec ----
+static bool esW(uint8_t reg, uint8_t val) {
+  Wire.beginTransmission(ES8311_ADDR);
+  Wire.write(reg);
+  Wire.write(val);
+  return Wire.endTransmission() == 0;
+}
+static uint8_t esR(uint8_t reg) {
+  Wire.beginTransmission(ES8311_ADDR);
+  Wire.write(reg);
+  Wire.endTransmission(false);
+  Wire.requestFrom(ES8311_ADDR, 1);
+  return Wire.available() ? Wire.read() : 0;
+}
+
+// Secuencia de init VERIFICADA EN ESTA PLACA (proyecto PlaneRadar2.0, misma
+// Waveshare 1.75). Clave: reloj DERIVADO DEL BCLK (reg01=0xBF, sin MCLK externo)
+// y referencia interna que alimenta el DAC (reg44=0x58); sin esos dos el codec
+// respondia por I2C pero no salia audio. 16kHz, 16-bit, esclavo I2S.
+static bool es8311Init() {
+  Wire.beginTransmission(ES8311_ADDR);
+  if (Wire.endTransmission() != 0) return false;
+
+  // open()
+  esW(0x0D, 0xFA); esW(0x44, 0x08); esW(0x44, 0x08);  // quirk de la 1a escritura (start() deja 0x0D=0x01)
+  esW(0x01, 0x30); esW(0x02, 0x00); esW(0x03, 0x10); esW(0x16, 0x24);
+  esW(0x04, 0x10); esW(0x05, 0x00); esW(0x0B, 0x00); esW(0x0C, 0x00);
+  esW(0x10, 0x1F); esW(0x11, 0x7F);
+  esW(0x00, 0x80); esW(0x00, 0x80);                   // reset clock, esclavo
+  esW(0x01, 0xBF);                                    // clk src = BCLK (sin MCLK externo)
+  { uint8_t r = esR(0x06); r &= ~0x20; esW(0x06, r); }  // SCLK no invertido
+  esW(0x13, 0x10); esW(0x1B, 0x0A); esW(0x1C, 0x6A);
+  esW(0x44, 0x58);                                    // referencia interna -> alimenta el DAC
+
+  // config_sample(): BCLK*8 = DIG_MCLK
+  esW(0x02, 0x18); esW(0x05, 0x00); esW(0x03, 0x10); esW(0x04, 0x20);
+  { uint8_t r = esR(0x07); r &= 0xC0; esW(0x07, r); }
+  esW(0x08, 0xFF);
+  { uint8_t r = esR(0x06); r &= 0xE0; r |= 0x03; esW(0x06, r); }  // bclk_div=4
+
+  // formato I2S 16-bit
+  esW(0x09, 0x0C); esW(0x0A, 0x0C);
+
+  // start() DAC esclavo
+  esW(0x00, 0x80); esW(0x01, 0xBF); esW(0x09, 0x0C); esW(0x0A, 0x0C);
+  esW(0x17, 0xBF); esW(0x0E, 0x02); esW(0x12, 0x00); esW(0x14, 0x1A);
+  esW(0x0D, 0x01); esW(0x15, 0x40); esW(0x37, 0x08); esW(0x45, 0x00);
+
+  // volumen + unmute
+  esW(0x32, 0xBF);                                    // volumen DAC ~0 dB
+  { uint8_t r = esR(0x31); r &= 0x9F; esW(0x31, r); }  // unmute
+  return true;
+}
+
+// ---- sintetizador de tono cuadrado ----
+struct Note { uint16_t f, ms; };
+
+static const Note N_TAP[]    = {{880, 35}};
+static const Note N_EAT[]    = {{660, 45}, {0, 12}, {660, 45}};
+static const Note N_PLAY[]   = {{784, 45}, {988, 60}};
+static const Note N_HEART[]  = {{1047, 55}, {1319, 90}};
+static const Note N_HATCH[]  = {{523, 80}, {659, 80}, {784, 110}, {1047, 170}};
+static const Note N_EVOLVE[] = {{523, 80}, {659, 80}, {784, 80}, {1047, 90}, {1319, 230}};
+static const Note N_MEDAL[]  = {{784, 70}, {0, 25}, {784, 70}, {0, 25}, {1047, 200}};
+static const Note N_DENY[]   = {{300, 110}, {200, 170}};
+static const Note N_BYE[]    = {{784, 150}, {659, 150}, {523, 280}};
+static const Note N_LEVEL[]  = {{784, 70}, {1047, 130}};
+
+struct SfxDef { const Note *n; uint8_t len; };
+static const SfxDef SFX[SFX_COUNT] = {
+  {N_TAP, 1}, {N_EAT, 3}, {N_PLAY, 2}, {N_HEART, 2}, {N_HATCH, 4},
+  {N_EVOLVE, 5}, {N_MEDAL, 5}, {N_DENY, 2}, {N_BYE, 3}, {N_LEVEL, 2},
+};
+
+static int16_t buf[256 * 2];  // estéreo intercalado (L=R)
+
+// reproduce un tono (o silencio si f==0) con rampa de ataque/caida anti-click
+static void playTone(uint16_t f, uint16_t ms) {
+  int total = SAMPLE_RATE * ms / 1000;
+  int half = f ? (SAMPLE_RATE / (2 * f)) : 0;  // medio periodo en muestras
+  const int16_t amp = sfxAmp(gVol);
+  int phase = 0, done = 0;
+  bool high = true;
+  while (done < total) {
+    int n = total - done; if (n > 256) n = 256;
+    for (int i = 0; i < n; i++) {
+      int16_t s = 0;
+      if (f) {
+        s = high ? amp : -amp;
+        int idx = done + i;
+        if (idx < 64) s = (int16_t)(s * idx / 64);                 // ataque
+        else if (idx > total - 96) s = (int16_t)(s * (total - idx) / 96);  // caida
+        if (++phase >= half) { phase = 0; high = !high; }
+      }
+      buf[i * 2] = s; buf[i * 2 + 1] = s;
+    }
+    i2s.write((uint8_t *)buf, n * 4);
+    done += n;
+    if (!gWantRun) return;  // muted or idle mid-sound: let the loop take the driver
   }
 }
 
@@ -203,6 +388,7 @@ void audioBegin() {
 
   if (!i2sStart()) return;
   if (!es8311Init()) { Serial.println("ES8311 no responde (audio off)"); i2sStop(); return; }
+  gPowered = true;  // I2S running and the codec fully initialised
 
   Preferences p;
   p.begin("tamapoke", true);
@@ -211,13 +397,17 @@ void audioBegin() {
   p.end();
 
   gReady = true;
-  updateAmplifierPower();
+  gI2sMux = xSemaphoreCreateMutex();
   gQ = xQueueCreate(8, sizeof(uint8_t));
+  updateAmplifierPower();
   xTaskCreatePinnedToCore(audioTask, "audio", 4096, nullptr, 1, nullptr, 0);
   sfxPlay(SFX_HATCH);  // jingle de arranque (confirma que suena)
 }
 
-bool audioBusy() { return gAmpHold && (int32_t)(gAmpHoldUntil - millis()) > 0; }
+bool audioBusy() {
+  return audioBusyFor(gPlaying, gQ ? uxQueueMessagesWaiting(gQ) : 0,
+                      gAmpHold && (int32_t)(gAmpHoldUntil - millis()) > 0);
+}
 
 void sfxPlay(uint8_t id) {
   if (gReady && gOn && gQ) {
@@ -259,5 +449,3 @@ void audioSetIdle(bool idle) {
   gIdle = idle;
   updateAmplifierPower();  // tambien cuando vence el mantenimiento de un aviso
 }
-
-bool audioClocksOn() { return gI2sOn; }
