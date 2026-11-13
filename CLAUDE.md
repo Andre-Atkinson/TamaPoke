@@ -82,6 +82,7 @@ the gate; only new warnings are findings, and a PR that changes the count
 updates the baseline. `ruff check tools/` and a
 generated-headers check (needs Pillow) run in CI but not in the gate: ask the
 owner before installing ruff (even into `.venv/`).
+CI runs on pull requests and on pushes to `main` only; a branch with no PR gets no CI (start one from the Actions tab with workflow_dispatch).
 
 If a change affects device behaviour, say plainly in the PR whether it was
 exercised on hardware. Only flash it (app-only) and check it over USB serial
