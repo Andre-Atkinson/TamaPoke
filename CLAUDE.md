@@ -51,14 +51,15 @@ trading, anything multiplayer.
   `GAL`, `BEEP`, `TRAINTRACE ON|OFF`, `SAVE` (writes pending pet changes to
   NVS), `PUT`. Read-only: `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`,
   `CARE?` (prints `pace bed inbed stale`), `LS`, `SDINFO`, `LOCK?`,
-  `TRAINTRACE?`. `LOCK?` and `TRAINTRACE` exist on the 1.75C only. Scripts
-  that send state-changing commands count as the same request:
-  `tools/board.py` (`clock` sends `TIME <epoch>`, `save` sends `SAVE`, `cmd`
-  sends anything), `tools/pet_save.sh` (`backup` and `restore` send `SAVE`),
+  `TRAINTRACE?`. `LOCK?` and `TRAINTRACE` exist on the 1.75C only. These
+  scripts send state-changing commands: `tools/board.py` (`clock` sends
+  `TIME <epoch>`, `save` sends `SAVE`, `cmd` sends anything),
+  `tools/pet_save.sh` (`backup` and `restore` send `SAVE`),
   `tools/update_175c.sh` (runs both of those, so sends `SAVE` and
-  `TIME <epoch>`) and `tools/send_sd.py` (`PUT`). (From `handleSerial` in
-  `TamaPoke.ino` and `sdSerialCommand` in `sdmon.cpp`; re-check when those
-  change.)
+  `TIME <epoch>`) and `tools/send_sd.py` (`PUT`). The owner's request to run
+  one covers the commands it always sends; `tools/board.py cmd X` needs the
+  request that `X` itself needs. (From `handleSerial` in `TamaPoke.ino` and
+  `sdSerialCommand` in `sdmon.cpp`; re-check when those change.)
 - **Installing anything:** ask the owner first. Python packages only ever go
   into `.venv/`, never system-wide.
 - **Processes and history:** stop only processes and worktrees you started,
