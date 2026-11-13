@@ -81,8 +81,9 @@ hot and slow. Agents keep the default and run `tools/gate.sh` as it is, with no
 hand-staged copy or patched script; the owner can raise it (`TAMAPOKE_JOBS=8
 tools/gate.sh`; `0` means every core). The cap is per build, so it does not
 bound several at once: even capped, keep to at most two firmware builds at a
-time across all agents, and check `pgrep -fl '[a]rduino-cli compile'` first
-(the brackets stop pgrep from matching its own command line).
+time across all agents. Check `pgrep -fl '[a]rduino-cli compile'` first and,
+if two are running, wait for one to finish (the brackets keep the pattern from
+matching a wrapper shell whose command line holds it).
 
 Never drop a warning or a skipped-test count, and read any failure in full:
 the gate prints failing assertions, and a failed run keeps its full logs in

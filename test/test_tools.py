@@ -642,8 +642,9 @@ class TestBuildJobs(unittest.TestCase):
     fake arduino-cli on PATH, so nothing here really compiles."""
 
     PARTS = os.path.join(ROOT, 'boards', '175c', 'partitions.csv')
-    # '08' is octal to arduino-cli (and invalid), '010' would be 8 jobs. Both
-    # scripts carry their own copy of the rule; these pin both.
+    # Both scripts carry their own copy of the rule; these pin both, from either
+    # side. '08' is octal to arduino-cli (and invalid), '010' would be 8 jobs.
+    GOOD_JOBS = ('1', '0', '8', '9999')
     BAD_JOBS = ('x', '08', '010', '-1', '3 ', '2.5', '10000')
 
     def setUp(self):
@@ -663,6 +664,12 @@ class TestBuildJobs(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def fresh(self):
+        """Forget earlier subtests' calls and the gate's stand-in steps."""
+        for path in (self.log, getattr(self, 'ran', None)):
+            if path and os.path.exists(path):
+                os.remove(path)
 
     def calls(self):
         import json
@@ -707,8 +714,7 @@ class TestBuildJobs(unittest.TestCase):
     def test_build_175c_caps_compile_jobs_at_3_by_default(self):
         for env in ({}, {'TAMAPOKE_JOBS': ''}):
             with self.subTest(env=env):
-                if os.path.exists(self.log):
-                    os.remove(self.log)
+                self.fresh()
                 r = self.build_175c(**env)
                 self.assertEqual(r.returncode, 0, r.stderr)
                 self.assertIn('1.75C build OK', r.stdout)
@@ -717,10 +723,9 @@ class TestBuildJobs(unittest.TestCase):
                 self.assertEqual(self.jobs_of(call), '3')
 
     def test_build_175c_takes_the_job_count_from_TAMAPOKE_JOBS(self):
-        for jobs in ('8', '0', '1'):
+        for jobs in self.GOOD_JOBS:
             with self.subTest(jobs=jobs):
-                if os.path.exists(self.log):
-                    os.remove(self.log)
+                self.fresh()
                 r = self.build_175c(TAMAPOKE_JOBS=jobs)
                 self.assertEqual(r.returncode, 0, r.stderr)
                 (call,) = self.calls()
@@ -729,6 +734,7 @@ class TestBuildJobs(unittest.TestCase):
     def test_build_175c_refuses_a_job_count_arduino_cli_would_misread(self):
         for bad in self.BAD_JOBS:
             with self.subTest(bad=bad):
+                self.fresh()
                 r = self.build_175c(TAMAPOKE_JOBS=bad)
                 self.assertNotEqual(r.returncode, 0)
                 self.assertIn('TAMAPOKE_JOBS', r.stderr)
@@ -736,10 +742,9 @@ class TestBuildJobs(unittest.TestCase):
 
     def test_gate_caps_both_firmware_builds(self):
         root = self.gate_root()
-        for env, jobs in (({}, '3'), ({'TAMAPOKE_JOBS': '5'}, '5')):
+        for env, jobs in (({}, '3'), *(({'TAMAPOKE_JOBS': j}, j) for j in self.GOOD_JOBS)):
             with self.subTest(env=env):
-                if os.path.exists(self.log):
-                    os.remove(self.log)
+                self.fresh()
                 r = self.gate(root, **env)
                 self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
                 self.assertIn('GATE GREEN', r.stdout)
@@ -753,18 +758,14 @@ class TestBuildJobs(unittest.TestCase):
         root = self.gate_root()
         for bad in self.BAD_JOBS:
             with self.subTest(bad=bad):
-                for path in (self.ran, self.log):
-                    if os.path.exists(path):
-                        os.remove(path)
+                self.fresh()
                 r = self.gate(root, TAMAPOKE_JOBS=bad)
                 self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
                 self.assertIn('TAMAPOKE_JOBS', r.stderr)
                 self.assertFalse(os.path.exists(self.ran), 'the gate ran steps before checking TAMAPOKE_JOBS')
                 self.assertEqual(self.calls(), [])
         # No builds, no compile jobs: --no-build doesn't care about the value.
-        for path in (self.ran, self.log):
-            if os.path.exists(path):
-                os.remove(path)
+        self.fresh()
         r = self.gate(root, '--no-build', TAMAPOKE_JOBS='08')
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(self.calls(), [])
