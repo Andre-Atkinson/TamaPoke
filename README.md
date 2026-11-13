@@ -82,7 +82,10 @@ While **awake**, per minute:
   next bedtime, and if you put it to bed early it still wakes in the morning.
   It waits until a minigame, dialog, bath or evolution is finished. Eggs, farewell
   scenes and the starter pick are skipped. It follows the clock you set (swipe
-  down): after a full power-off the 1.75C clock can be wrong until you set it.
+  down): after a full power-off the 1.75C clock can be wrong until you set it, so
+  after a power-off bedtime stays paused until the clock is set (clock screen, or
+  `board.py clock`); it then acts as if the device had just started, so at 22:30 the
+  creature goes to sleep and at 14:00 nothing happens.
   Changing the setting never puts the pet to sleep or wakes it by itself.
 
 ### Eggs & who you get (spawn odds)

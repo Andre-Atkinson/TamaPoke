@@ -140,3 +140,41 @@ TEST(BedEdge, un_salto_de_reloj_cuenta_como_una_muestra_mas) {
   g.update(1, hm(20, 59));
   CHECK_EQ((int)g.update(1, hm(7, 30)), (int)BED_NONE);
 }
+
+// Reloj sembrado tras quedarse sin corriente: la hora es la ultima guardada, no la
+// real, asi que el horario se pausa hasta que alguien pone la hora.
+TEST(BedEdge, con_el_reloj_obsoleto_no_hay_eventos_ni_estado) {
+  BedEdge e;
+  e.markStale();
+  CHECK(e.stale());
+  // dentro de la ventana, fuera, y de nuevo dentro: nada
+  CHECK_EQ((int)e.update(1, hm(22, 30)), (int)BED_NONE);
+  CHECK_EQ((int)e.update(1, hm(14, 0)), (int)BED_NONE);
+  CHECK_EQ((int)e.update(1, hm(21, 0)), (int)BED_NONE);
+}
+
+TEST(BedEdge, poner_la_hora_tras_un_reloj_obsoleto_actua_como_un_arranque) {
+  // a las 22:30: duerme una vez
+  BedEdge a;
+  a.markStale();
+  a.update(1, hm(14, 0));
+  a.clockSet();
+  CHECK(!a.stale());
+  CHECK_EQ((int)a.update(1, hm(22, 30)), (int)BED_SLEEP);
+  CHECK_EQ((int)a.update(1, hm(22, 31)), (int)BED_NONE);
+  // a las 14:00: no pasa nada, y el siguiente borde actua con normalidad
+  BedEdge b;
+  b.markStale();
+  b.clockSet();
+  CHECK_EQ((int)b.update(1, hm(14, 0)), (int)BED_NONE);
+  CHECK_EQ((int)b.update(1, hm(21, 0)), (int)BED_SLEEP);
+}
+
+TEST(BedEdge, la_muestra_tras_poner_la_hora_no_hereda_el_estado_anterior) {
+  // sin el reinicio, una muestra previa dentro de la ventana taparia el SLEEP del arranque
+  BedEdge e;
+  e.update(1, hm(22, 0));  // estado previo: dentro
+  e.markStale();
+  e.clockSet();
+  CHECK_EQ((int)e.update(1, hm(22, 30)), (int)BED_SLEEP);
+}

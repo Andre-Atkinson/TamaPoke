@@ -500,6 +500,9 @@ void setup() {
     e = rtcEpoch();
     Serial.printf("RTC sin hora: sembrado en %u%s\n", seed,
                   seen > 1767225600UL ? " (desde la ultima hora guardada)" : "");
+    // la hora es la ultima guardada, no la real: pausa el horario de dormir hasta que
+    // alguien ponga la hora (pantalla del reloj o TIME), o dormiria y despertaria a deshoras
+    bedEdge.markStale();
   }
   pet.syncClock(e);
   // Sin RTC (la 1.75 original sin PCF85063) e == 0, y el minuto 0 cae dentro de toda ventana:
@@ -549,6 +552,18 @@ void ensureMon() {
 void bedSample(uint32_t epoch) {
   BedEvent ev = bedEdge.update(pet.bedPreset, bedMinuteOfDay(epoch));
   if (ev != BED_NONE) bedPending = ev;  // un evento nuevo sustituye a uno aun pendiente
+}
+
+// Alguien puso la hora (pantalla del reloj o TIME): si estaba obsoleta (sembrada tras
+// quedarse sin corriente) el horario se reanuda como si fuera un arranque. La hora
+// debe haber quedado puesta de verdad (TIME con un valor fuera de rango no cambia
+// el reloj de software de la 1.75C).
+static void bedClockSet(uint32_t set) {
+  uint32_t now = rtcEpoch();
+  if (!bedEdge.stale() || !now || (now > set ? now - set : set - now) > 5) return;
+  bedEdge.clockSet();
+  bedPending = BED_NONE;
+  bedSample(now);
 }
 
 // Con un minijuego, el saco, un dialogo, el teclado, el reloj, el bano, comer o la
@@ -882,6 +897,7 @@ void handleSerial() {
     uint32_t e = (uint32_t)line.substring(5).toInt();
     rtcSetEpoch(e);
     pet.setClock(e);
+    bedClockSet(e);
     Serial.printf("rtc=%u\n", rtcEpoch());
     Serial.println("DONE");
   } else if (line.startsWith("RTCSET ")) {  // solo RTC (simular apagados en pruebas)
@@ -2182,6 +2198,7 @@ void applyClock() {
   uint32_t e = (base / 86400) * 86400 + (uint32_t)clockH * 3600 + (uint32_t)clockM * 60;
   rtcSetEpoch(e);
   pet.setClock(e);
+  bedClockSet(e);
   clockOpen = false;
 }
 

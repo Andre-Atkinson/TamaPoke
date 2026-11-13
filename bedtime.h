@@ -51,11 +51,21 @@ enum BedEvent : uint8_t { BED_NONE = 0, BED_SLEEP, BED_WAKE };
 //  - Changing the preset re-baselines silently (no event): turning the feature
 //    on or off, or picking another window, never puts the pet to sleep or wakes
 //    it by itself; the next edge of the new window does.
-//  - A clock that jumps (set by the user, or reseeded after a power loss) is just
-//    another sample: jumping into the window sleeps, jumping out wakes.
+//  - A clock that jumps (set by the user) is just another sample: jumping into
+//    the window sleeps, jumping out wakes.
+//  - A clock that was reseeded after a power loss is NOT trustworthy (the wall
+//    time is only the last one saved): markStale() pauses the schedule, update()
+//    gives no events and keeps no state, and clockSet() (the user set the clock)
+//    resumes it as if this were a fresh boot: inside the window sleeps once,
+//    outside does nothing.
 class BedEdge {
  public:
+  void markStale() { stale_ = true; }
+  bool stale() const { return stale_; }
+  void clockSet() { stale_ = false; have_ = false; }
+
   BedEvent update(uint8_t preset, uint16_t minuteOfDay) {
+    if (stale_) return BED_NONE;
     bool in = isBedtime(preset, minuteOfDay);
     BedEvent ev = BED_NONE;
     if (!have_) {
@@ -71,6 +81,6 @@ class BedEdge {
   }
 
  private:
-  bool have_ = false, was_ = false;
+  bool have_ = false, was_ = false, stale_ = false;
   uint8_t preset_ = 0;
 };
