@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
   fclose(serialLog);
   if (gSimPower.poweredOff) printf("sim: the PMU powered the board off (battery at 0%% without USB)\n");
   if (!o.quiet) {
-    printf("sim: done at %.1f s simulated, %d screenshot(s), serial log %s\n", millis() / 1000.0, shots, logPath.c_str());
+    printf("sim: done at %.1f s simulated, %d screenshot(s), serial log %s\n", mockMillis64() / 1000.0, shots, logPath.c_str());
     printf("sim: %u sound effect(s) would have played (last: %d), %u light sleep(s)\n", (unsigned)mockSfxCount(),
            mockLastSfx(), (unsigned)simLightSleeps());
   }

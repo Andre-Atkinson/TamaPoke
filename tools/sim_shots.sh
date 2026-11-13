@@ -15,7 +15,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --out) [[ $# -ge 2 ]] || { echo "sim_shots.sh: --out needs a folder" >&2; exit 2; }; OUT="$2"; shift 2 ;;
     --board) [[ $# -ge 2 ]] || { echo "sim_shots.sh: --board needs 175c or 175" >&2; exit 2; }; BOARD="$2"; shift 2 ;;
-    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
     *) echo "sim_shots.sh: unknown option $1" >&2; exit 2 ;;
   esac
 done

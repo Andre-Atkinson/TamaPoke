@@ -172,10 +172,11 @@ if [[ "$BUILD" -eq 1 ]]; then
       >"$TMP/sim-$b.log" 2>&1
     rc=$?
     got="$(find "$TMP/sim-$b" -name '*.png' 2>/dev/null | wc -l | tr -d ' ')"
-    grep -iE 'error|fail' "$TMP/sim-$b.log" | head -n 20
+    grep -iE 'error|fail|warning:' "$TMP/sim-$b.log" | head -n 20
+    w="$(grep -c 'warning:' "$TMP/sim-$b.log")"
     [[ "$rc" -ne 0 ]] && tail -n 15 "$TMP/sim-$b.log"
     if [[ "$rc" -eq 0 && "$got" -ne "$want" ]]; then rc=1; fi
-    record "simulator $b" "$rc" "$got/$want screens"
+    record "simulator $b" "$rc" "$got/$want screens, $w host build warning(s)"
   done
 else
   SUMMARY+=("SKIP  simulator")

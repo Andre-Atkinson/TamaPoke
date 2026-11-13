@@ -184,12 +184,10 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       if (n != 3 || !toInt(w[1], c.a, 0, 465) || !toInt(w[2], c.b, 0, 465))
         return fail("usage: tap X Y (0-465)");
       c.op = OP_TAP;
-      running = true;
     } else if (op == "hold") {
       if (n != 4 || !toInt(w[1], c.a, 0, 465) || !toInt(w[2], c.b, 0, 465) || !simParseDuration(w[3], c.ms))
         return fail("usage: hold X Y DURATION");
       c.op = OP_HOLD;
-      running = true;
     } else if (op == "swipe") {
       c.op = OP_SWIPE;
       c.ms = 240;
@@ -213,7 +211,6 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       } else {
         return fail("usage: swipe left|right|up|down or swipe X0 Y0 X1 Y1 [DURATION]");
       }
-      running = true;
     } else if (op == "press") {
       if (n < 2 || n > 3) return fail("usage: press pwr|boot [COUNT]");
       if (w[1] == "pwr") c.op = OP_PRESS_PWR;
@@ -221,11 +218,9 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       else return fail("usage: press pwr|boot [COUNT]");
       c.a = 1;
       if (n == 3 && !toInt(w[2], c.a, 1, 10)) return fail("press count must be 1-10");
-      running = true;
     } else if (op == "wait" || op == "advance") {
       if (n != 2 || !simParseDuration(w[1], c.ms)) return fail("usage: " + op + " DURATION (500ms, 2s, 1h30m)");
       c.op = OP_WAIT;
-      running = true;
     } else if (op == "serial") {
       size_t at = raw.find("serial");
       std::string rest = raw.substr(at + 6);
@@ -234,7 +229,6 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       if (a == std::string::npos) return fail("usage: serial LINE");
       c.op = OP_SERIAL;
       c.text = rest.substr(a, b - a + 1);
-      running = true;
     } else if (op == "shot") {
       if (n != 2) return fail("usage: shot NAME");
       for (char ch : w[1])
@@ -242,10 +236,10 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
           return fail("shot names use letters, digits, '-', '_' and '.' only");
       c.op = OP_SHOT;
       c.text = w[1];
-      running = true;
     } else {
       return fail("unknown step '" + op + "'");
     }
+    if (!isPrep(c.op)) running = true;  // el mismo corte que simPreBootEnd()
     out.cmds.push_back(c);
   }
   return out;

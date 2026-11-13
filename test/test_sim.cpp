@@ -157,6 +157,19 @@ TEST(SimScript, sin_pasos_de_preparacion_o_sin_pasos_que_corran) {
   CHECK_EQ(simPreBootEnd(simParseScript("lang es\nbattery 5\n")), (size_t)2);  // solo preparacion
 }
 
+// cada paso que corre el firmware cierra la preparacion: un lang o clock detras se rechaza
+// (si no, main() lo ignoraria en silencio), y battery/usb/charging no la cierran
+TEST(SimScript, todos_los_pasos_que_corren_cierran_la_preparacion) {
+  const char *const RUN[] = { "tap 1 1", "hold 1 1 1s", "swipe left", "swipe 1 1 200 1 200ms",
+                              "press pwr", "press boot", "wait 1s", "advance 1s", "serial X", "shot a" };
+  for (const char *step : RUN) {
+    std::string s = std::string(step) + "\nlang ja\n";
+    CHECK_EQ(simParseScript(s, "r.txt").error, std::string("r.txt:2: lang must come before the first step that runs the firmware"));
+    CHECK_EQ(simPreBootEnd(simParseScript(std::string(step) + "\n")), (size_t)0);
+  }
+  CHECK(simParseScript("battery 5\nusb on\ncharging off\nlang ja\nclock none\n").error.empty());
+}
+
 TEST(SimScript, lang_y_clock_tras_un_paso_que_corre_se_rechazan_pero_battery_vale) {
   CHECK(!simParseScript("wait 1s\nlang ja\n").error.empty());
   CHECK(!simParseScript("wait 1s\nclock 2026-11-13 10:00\n").error.empty());
