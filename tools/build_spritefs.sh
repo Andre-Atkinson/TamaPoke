@@ -19,8 +19,10 @@ PAGE=256
 MKLITTLEFS="${MKLITTLEFS:-}"
 if [[ -z "${MKLITTLEFS}" ]]; then
   # Prefer the binary that ships with the Arduino ESP32 core
+  # ~/.arduino15 on Linux, ~/Library/Arduino15 on macOS
   for c in \
     "${HOME}/.arduino15/packages/esp32/tools/mklittlefs/"*/mklittlefs \
+    "${HOME}/Library/Arduino15/packages/esp32/tools/mklittlefs/"*/mklittlefs \
     "$(command -v mklittlefs || true)"; do
     if [[ -x "$c" ]]; then MKLITTLEFS="$c"; break; fi
   done
@@ -42,10 +44,6 @@ mkdir -p "$STAGING/mons" "$(dirname "$OUT")"
 # Normal forms + gallery thumbs only (see PORTING.md for the trade-off)
 copied=0
 missing=0
-for i in $(seq -w 1 151); do
-  n="${i#"${i%%[!0]*}"}"  # not needed, we use printf
-  :
-done
 for n in $(seq 1 151); do
   f=$(printf "p%03d.bin" "$n")
   if [[ -f "$SRC/$f" ]]; then
@@ -62,7 +60,8 @@ else
   echo "warning: thumbs.bin missing (gallery will have no thumbnails)" >&2
 fi
 
-bytes=$(du -sb "$STAGING" | awk '{print $1}')
+# Sum of file sizes (portable: macOS du has no -b)
+bytes=$(find "$STAGING" -type f -exec cat {} + | wc -c | tr -d ' ')
 echo "Staging ${copied} sprites + thumbs, ${bytes} bytes raw (limit ${IMG_SIZE})"
 if (( bytes >= IMG_SIZE )); then
   echo "Pack is larger than the LittleFS partition" >&2
