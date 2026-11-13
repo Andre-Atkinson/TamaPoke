@@ -227,6 +227,21 @@ static bool trainingNeedsRelease = false;
 #else
 void IRAM_ATTR touchIsr() { gTouchIrq = true; }
 #endif
+// The touch ISR goes on and off TP_INT only through these two. The core installs the GPIO ISR
+// service on the first attachInterrupt(); a detachInterrupt() before that logs
+// "E gpio: GPIO isr service is not installed", which touchBringUp() at boot used to print.
+// So a detach runs only while the ISR is attached.
+static bool touchIsrAttached = false;
+static void attachTouchIsr() {
+  pinMode(TP_INT, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+  touchIsrAttached = true;
+}
+static void detachTouchIsr() {
+  if (!touchIsrAttached) return;
+  detachInterrupt(digitalPinToInterrupt(TP_INT));
+  touchIsrAttached = false;
+}
 uint32_t lastRender = 0;
 uint32_t sdEpoch = 0;  // +1 cada vez que se recarga la SD (las miniaturas cambian)
 // proteccion del AMOLED: atenuado por inactividad
@@ -341,7 +356,7 @@ static void pwrToggleLock() {
   gTouchIrq = false;
   controlToastVisible = false;
   if (locked) {
-    detachInterrupt(digitalPinToInterrupt(TP_INT));
+    detachTouchIsr();
     screenOff = false;  // render only the 600 ms hint, then blank via powerCtx()
     galleryDirty = true;
     lastInteract = millis();
@@ -354,8 +369,7 @@ static void pwrToggleLock() {
       touchBringUpPending = false;
       touchBringUp();
     } else {
-      pinMode(TP_INT, INPUT_PULLUP);
-      attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+      attachTouchIsr();
     }
     touchNeedsRelease = true;
     gTouchIrq = true;  // one initial sample: swallow any finger held through unlock
@@ -429,7 +443,7 @@ static void runPanelProgram(const PanelStep *s, int n) {
 }
 
 static void touchBringUp() {
-  detachInterrupt(digitalPinToInterrupt(TP_INT));
+  detachTouchIsr();
   touch.setPins(TP_RESET, TP_INT);
   touchReady = false;
   for (int i = 0; i < 3 && !touchReady; i++) {
@@ -455,8 +469,7 @@ static void touchBringUp() {
   touch.reset();
   touch.setMaxCoordinates(LCD_WIDTH, LCD_HEIGHT);
   touch.setMirrorXY(true, true);
-  pinMode(TP_INT, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(TP_INT), touchIsr, FALLING);
+  attachTouchIsr();
 }
 
 // DCDC1 is VCC3V3 for the ESP32 and the panel. Do not switch it off.
@@ -720,7 +733,7 @@ void loop() {
     if (touchReady) {
       touch.sleep();  // lowest-power mode; PWR wake re-inits the chip
       // sleep() puts TP_INT in open drain: a stray falling edge would only wake the loop.
-      detachInterrupt(digitalPinToInterrupt(TP_INT));  // touchBringUp() re-attaches it
+      detachTouchIsr();  // touchBringUp() re-attaches it
     }
   } else if (tlockEdge < 0) {
     Serial.println("touch unlock");

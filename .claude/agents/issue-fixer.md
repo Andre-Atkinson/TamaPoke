@@ -52,14 +52,15 @@ Workflow:
    ruff; neither is in the local gate).
 
 Guardrails:
-- Never merge, approve, or close anything. Merging is the owner's per-PR
-  decision.
+- Never merge, approve, or close anything. Merging is decided by the main
+  session (see **Merging** in `CLAUDE.md`).
 - Never flash the board, open its serial port or send it commands unless your
   brief says the owner asked for it in this session (see the board rule in
   `CLAUDE.md`).
 - Never commit secrets, never force-push to `main`, never rewrite pushed
   history.
 - Don't edit files outside the task's obvious scope.
+- Never run `gh issue create`; report deferred findings to the main session.
 
 If you get stuck (the brief is ambiguous, context is missing, or a test fails
 and you can't tell why), stop and report exactly where, instead of guessing
