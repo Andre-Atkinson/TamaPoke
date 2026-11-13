@@ -762,6 +762,9 @@ class TestBuildJobs(unittest.TestCase):
                 self.assertFalse(os.path.exists(self.ran), 'the gate ran steps before checking TAMAPOKE_JOBS')
                 self.assertEqual(self.calls(), [])
         # No builds, no compile jobs: --no-build doesn't care about the value.
+        for path in (self.ran, self.log):
+            if os.path.exists(path):
+                os.remove(path)
         r = self.gate(root, '--no-build', TAMAPOKE_JOBS='08')
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(self.calls(), [])
