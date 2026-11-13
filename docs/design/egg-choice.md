@@ -1,0 +1,151 @@
+# Design: choose your egg
+
+Status: **draft, waiting for the owner's decisions** (2026-11-13).
+
+## What it is
+
+Today, every pet after the first one hatches from one random egg made in
+`Pet::newEgg()` when a pet's story ends (farewell, release or runaway). With
+this feature, she gets **three eggs side by side** and picks one. The first
+game keeps the Bulbasaur / Charmander / Squirtle starter screen.
+
+The point is a small, happy choice ("I'd like a water one this time"), not a
+way around the luck: which Pokémon hatches stays a surprise.
+
+## How it works today (verified in the code)
+
+- `newEgg()` sets `eggTarget = pickEggSpecies()`, sets `starterPick` only when
+  nothing is registered yet, and rolls `eggShiny` once (1/24 after a farewell,
+  else 1/48, minus `careBonus()`, never better than 1/8).
+- `pickEggSpecies()` rolls a tier: runaway gives Common; otherwise Rare is
+  27% (45% after a farewell) + `careBonus()`, Legendary 3% (10% after a
+  farewell) + `careBonus()/3`, and only with 25 or more registered. Inside the
+  tier it prefers species whose evolution line is still incomplete.
+- Egg-tier species: 48 Common (12 type colours), 28 Rare (13 colours),
+  5 Legendary.
+- The starter screen blocks ticks, offline progression, swipes, bedtime and
+  the gallery while she chooses (`starterPick`, saved as NVS `stpk`).
+- **Existing bug:** the egg screen draws "Rare egg!" / "Legendary egg!?" at
+  y=316 and then paints the bottom panel over it (`TamaPoke.ino` ~1804-1813,
+  since upstream a53c386), so the label never shows. This design fixes it.
+
+## Proposed design (recommendations marked ★)
+
+### 1. What each egg reveals
+
+| Option | Shows | Surprise kept |
+|---|---|---|
+| ★ Type colour + rarity | Spots on the shell in the type's colour (green = grass, red = fire, ...); shell cream / silver / gold for Common / Rare / Legendary | Species |
+| Rarity only | Shell colour only | Species and type |
+| Type + rarity + "NEW" | As ★, plus a NEW badge if that species isn't in her Pokédex yet | Species |
+| Silhouette | The Pokémon's outline | Almost none |
+
+The three eggs are always three different species, with three different type
+colours when the tier allows (it always does for Common and Rare).
+
+### 2. How the three eggs are rolled
+
+| Option | Odds of a Rare-or-better / Legendary she can pick |
+|---|---|
+| ★ Same odds as today: egg 1 is today's roll (blessing, curse, care bonus all as now); eggs 2 and 3 are Common, of other types | Unchanged: 30% / 3% after a release, 55% / 10% after a farewell |
+| Three full rolls with today's odds | 66% / 9% after a release, 91% / 27% after a farewell, 98% / 36% with maximum care bonus |
+
+Either way: a runaway makes all three Common (the curse stays); the bias
+towards incomplete evolution lines stays; shininess is rolled once, hidden,
+with today's odds, and goes with whichever egg she picks.
+
+### 3. On or off
+
+★ A third button on the Care page (with relaxed pace and bedtime): **Eggs:
+Choose / Surprise**. On by default, so the next ending after the update
+already offers the choice. Alternatives: off by default, or always on with no
+button. The Care page only opens while there is a pet, so the setting cannot
+change in the middle of a choice.
+
+The three buttons shrink from 96 to 72 px high (y = 92, 172, 252) so the page
+dots at y=374 stay clear; the round panel is 424 px wide at y=324 (the
+lowest button's bottom edge), the button is 320.
+
+### 4. Choosing
+
+★ Tap an egg to look (it lifts and wobbles, and its rarity and "Tap again to
+choose" appear under the row); tap the same egg again to pick it. She must
+pick one: no re-roll and no backing out, and the choice waits for as long as
+she likes. Alternatives: one tap picks (like the starter screen), or tap-tap
+plus a "Surprise me" button that picks one of the three at random.
+
+A tap that only wakes a dark screen is already swallowed (`swallowGesture`),
+so waking the watch never picks an egg.
+
+### 5. Edge cases (no decision needed unless you disagree)
+
+- **Time is paused while choosing**, exactly like the starter screen: no
+  ticks, no offline progression on power-up, so the egg never hatches itself
+  with a species she didn't pick.
+- **Power-off mid-choice:** the three candidates are saved, and the same three
+  are back after a reboot.
+- **Bedtime, sleep, touch lock:** an egg can't sleep, so bedtime does nothing;
+  the screen dims, turns off and touch-locks as usual and comes back to the
+  same choice. Swipes (gallery, pet card, clock) are blocked like on the
+  starter screen.
+- **First game, or after WIPE:** the starter screen, never the egg choice.
+- **Serial:** `HATCH` does nothing while she is choosing (there is no egg
+  yet); `SPEC` ends the choice; `EGGS` stays read-only. No new commands.
+
+## Save data (NVS namespace `tamapoke`)
+
+New keys only; no existing key changes meaning.
+
+| Key | Type | Meaning | Missing / invalid |
+|---|---|---|---|
+| `echo` | UChar | 0 = Surprise, 1 = Choose | Missing: the default from decision 3. Any other value: the default |
+| `ecpk` | Bool | A choice is on screen | Missing: false (old saves behave exactly as today) |
+| `ec0`, `ec1`, `ec2` | Short | Candidate Pokédex numbers | If any is outside 1..151, not an egg species, or a duplicate: roll a fresh three |
+
+While a choice is open, `eggTarget` holds candidate 0, so anything that reads
+the egg (`eggRarity()`, `EGGS`) stays valid. Picking sets `eggTarget`, clears
+`ecpk` and saves once. If `stpk` and `ecpk` are both set (corrupt save), the
+starter screen wins and the egg choice is cleared. `load()` range-checks all
+of this, as the hard rules require.
+
+## Screen (466 × 466, round)
+
+```
+            Choose an egg!                 title, size 2-3, y ≈ 68
+     .-.          .-.          .-.
+    ( o )        ( o )        ( o )        three eggs, scale 4 (68 × 88 px)
+     '-'          '-'          '-'         centres x = 93 / 233 / 373, y ≈ 214
+                 ~~~~~                     the selected egg lifts and wobbles
+             Rare egg!                     rarity of the selected egg, y ≈ 300
+         Tap again to choose               hint, y ≈ 336
+```
+
+Day or night background as on the egg screen. Rarity is shown by the shell
+colour as well as the text, so it reads at a glance in any language.
+
+## Strings (all 8 languages)
+
+New: `S_CHOOSE_EGG` (title), `S_EGG_TAP_AGAIN` (hint), `S_EGGS` (Care button
+label), `S_EGG_CHOOSE` / `S_EGG_SURPRISE` (its values), and `S_EGG_NEW` only if
+the NEW badge is chosen. "Rare egg!" and "Legendary egg!?" already exist.
+Japanese uses kana only and Korean only syllables in `unifont_t_korean2`;
+the Care-page glyph test in `test/test_i18n.cpp` is extended to the new
+strings, and Care values must fit the 300 px button at size 4.
+
+## Tests (host, each shown failing without its code)
+
+- The roll: three distinct valid egg species; distinct type colours; runaway
+  gives three Common; with ★ odds, egg 1 matches today's tier odds over many
+  seeded rolls and eggs 2-3 are Common.
+- The flow: a farewell or release with Choose on opens a choice; with
+  Surprise it gives one egg as today; the first game shows the starter screen;
+  ticks and offline time don't age or hatch the egg while choosing; picking
+  sets the egg and ends the choice; `eggTap` does nothing while choosing.
+- Persistence: save/load keeps the three candidates and the pending flag;
+  missing keys behave as today; out-of-range, non-egg and duplicate
+  candidates are re-rolled; an out-of-range `echo` falls back to the default;
+  `stpk` + `ecpk` together resolve to the starter screen.
+
+## Out of scope
+
+Choosing the exact species, re-rolls, anything multiplayer or networked.
