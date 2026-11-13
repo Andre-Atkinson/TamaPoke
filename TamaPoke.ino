@@ -1639,7 +1639,7 @@ void renderEggSelect() {
   }
   if (eggSel >= 0 && eggSel < EGG_CHOICES) {
     int16_t d = pet.eggChoice(eggSel);
-    uint8_t r = (d >= 1 && d <= DEX_COUNT) ? DEX_TBL[d].rarity : R_COMUN;
+    uint8_t r = (d >= 1 && d <= DEX_COUNT) ? DEX_TBL[d].rarity : (uint8_t)R_COMUN;
     const char *rt = eggRarityText(r);
     gfx->setTextColor(eggRarityColor(r));
     setSize(2);
