@@ -981,3 +981,29 @@ TEST(save, out_of_range_stats_and_egg_target_are_clamped) {
   CHECK_EQ(b.hygiene, (uint8_t)100);
   CHECK_EQ(b.lastEnd, (uint8_t)CER_NONE);
 }
+
+// a clock set back across midnight (board.py clock after drift) must not look
+// like a gap in care and reset the streak
+TEST(streak, un_reloj_atrasado_no_reinicia_la_racha) {
+  Pet p;
+  makePet(p, 4);
+  p.setClock(100u * 86400);
+  p.caress();
+  p.setClock(101u * 86400);
+  p.caress();
+  CHECK_EQ(p.streak, (uint16_t)2);
+  p.setClock(100u * 86400 + 3600);  // the clock goes back a day
+  p.caress();
+  CHECK_EQ(p.streak, (uint16_t)2);
+}
+
+// SAVE persists even when nothing was marked pending
+TEST(save, saveNow_escribe_aunque_no_haya_pendiente) {
+  Pet p;
+  makePet(p, 4);
+  p.flushSave();
+  CHECK(!p.savePending());
+  p.lastSeenEpoch = 100u * 86400 + 600;  // RAM only, nothing pending
+  p.saveNow();
+  CHECK_EQ(p.savedEpoch(), (uint32_t)(100u * 86400 + 600));
+}

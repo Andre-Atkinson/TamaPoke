@@ -267,7 +267,7 @@ int Pet::careBonus() const {
 void Pet::registerCare() {
   if (isEgg() || ceremony != CER_NONE) return;
   uint32_t d = today();
-  if (d == 0 || d == lastCareDay) return;  // sin reloj, o ya conto hoy
+  if (d == 0 || d <= lastCareDay) return;  // sin reloj, ya conto hoy, o el reloj se atraso
   if (lastCareDay == 0 || d == lastCareDay + 1) {
     streak++;
   } else {
