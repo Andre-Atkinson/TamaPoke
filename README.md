@@ -43,6 +43,12 @@ A quick reference to how the game really works (values straight from the code).
   of real time. Leveling is purely time-based — caring well doesn't speed it up,
   but neglect *delays evolution*.
 - It keeps **aging while powered off** (the RTC runs), catching up to **2 weeks** max.
+- **Relaxed pace** (stat card, *Care* page; off by default): while awake, the needs
+  below drain at **half speed**, so feeding is needed about hourly instead of every
+  30 minutes. Only the draining slows down. Leveling (+1 per hour), evolution
+  timing, slip-up detection, the runaway countdown, weight burn and the sleeping
+  rules are unchanged, so neglect still counts, it just takes twice as long to
+  get there. Catch-up while powered off is the same in both paces.
 
 ### The four stats (0–100)
 Needs: **FOOD**, **JOY**, **ENE** (energy), **HYG** (hygiene). Start 80 / 80 / 80 / 100.
@@ -69,6 +75,19 @@ While **awake**, per minute:
 - 👆 **Pet it:** +5 JOY + bond.
 - 🌙 **Sleep:** rest — ENE **+6/min**, needs drain ~**4× slower** with floors
   (FOOD 30 / JOY 35 / HYG 45). No poops, no slip-ups, can't run away while asleep.
+- 🛏️ **Bedtime** (stat card, *Care* page; off by default): pick 21:00–07:00,
+  22:00–07:00 or 23:00–08:00 and the creature falls asleep by itself when the
+  window starts (silently) and wakes when it ends (one soft chime if sound is on).
+  Only those two moments act, so if you wake it at night it stays awake until the
+  next bedtime, and if you put it to bed early it still wakes in the morning.
+  It waits until a minigame, dialog, bath or evolution is finished; a minigame or
+  the training bag left open with the screen off is abandoned (no prize) at bedtime. Eggs, farewell
+  scenes and the starter pick are skipped. It follows the clock you set (swipe
+  down): after a full power-off the 1.75C clock can be wrong until you set it, so
+  after a power-off bedtime stays paused until the clock is set (clock screen, or
+  `board.py clock`); it then acts as if the device had just started, so at 22:30 the
+  creature goes to sleep and at 14:00 nothing happens.
+  Changing the setting never puts the pet to sleep or wakes it by itself.
 
 ### Eggs & who you get (spawn odds)
 - **First ever pet:** you pick a starter — **Bulbasaur / Charmander / Squirtle**.
@@ -226,9 +245,10 @@ If one bottoms out it counts as a *slip-up*.
 **Touch gestures:**
 - Tap the creature = pet it (+happiness, bond).
 - Horizontal swipe = open the **Pokédex / gallery**.
-- Vertical swipe up = open the **stat card** (4 pages: Profile / Battle / Medals /
-  Progress; swipe between them; tap the name on Profile to rename; on Battle the
-  "Train strength" button opens the bag).
+- Vertical swipe up = open the **stat card** (5 pages: Profile / Battle / Medals /
+  Progress / Care; swipe between them; tap the name on Profile to rename; on Battle the
+  "Train strength" button opens the bag; on Care two big buttons cycle the pace
+  Normal ↔ Relaxed and the bedtime Off → 21–07 → 22–07 → 23–08).
 - Swipe down = **set the clock** and pick the **language** + sound on/off.
 - Long press (3 s) on the creature = **release** dialog.
 
@@ -386,7 +406,8 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
 runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio test) ·
 `REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery) · `CAREDAY` ·
 `TIME <epoch>` / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
-`SAVE` (write pending pet changes now) · `LS` / `PUT` (SD files). `tools/board.py`
+`SAVE` (write pending pet changes now) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
+inbed=<0|1> stale=<0|1>`, stale = bedtime paused until the clock is set) · `LS` / `PUT` (SD files). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.

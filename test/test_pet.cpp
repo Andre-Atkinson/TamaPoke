@@ -3,6 +3,7 @@
 #include "shim/Arduino.h"
 #include "../pet.h"
 #include "../dex.h"
+#include "../bedtime.h"
 #include <string.h>
 
 // ---------------------------------------------------------------- helpers
@@ -258,6 +259,20 @@ TEST(tick, buen_cuidado_12h_forja_defensa) {
   CHECK_EQ(p.trDef, (uint8_t)0);
   for (int h = 0; h < 720; h++) {  // mantener todo >= 40 durante 12 h
     setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+  }
+  CHECK_EQ(p.trDef, (uint8_t)1);
+}
+
+// La racha de buen cuidado mira la felicidad ANTES de que baje ese minuto (el
+// orden del tick: goodTicks, luego drainJoy). Con joy justo en 40 antes del tick,
+// el minuto cuenta; si drainJoy corriera antes, joy valdria 39 y la racha se
+// reiniciaria cada minuto.
+TEST(tick, la_racha_ve_la_felicidad_antes_de_bajar) {
+  Pet p;
+  makePet(p, 4);
+  for (int h = 0; h < 720; h++) {
+    setStats(p, 100, 40, 100, 100);
     advance(p, 1);
   }
   CHECK_EQ(p.trDef, (uint8_t)1);
@@ -980,6 +995,331 @@ TEST(save, out_of_range_stats_and_egg_target_are_clamped) {
   CHECK_EQ(b.fullness, (uint8_t)100);
   CHECK_EQ(b.hygiene, (uint8_t)100);
   CHECK_EQ(b.lastEnd, (uint8_t)CER_NONE);
+}
+
+// ---------------------------------------------------------------- ritmo relajado
+// Despierto, las necesidades bajan solo en los minutos pares (la mitad de rapido).
+// Todo lo demas del tick sigue siendo por minuto.
+TEST(pace, relajado_baja_la_mitad_que_el_normal) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  setStats(p, 100, 100, 100, 100);
+  mockForceRandom(99);  // sin cacas
+  advance(p, 10);
+  mockClearForcedRandom();
+  CHECK_EQ(p.fullness, (uint8_t)90);  // normal: 80
+  CHECK_EQ(p.energy, (uint8_t)95);    // normal: 90
+  CHECK_EQ(p.hygiene, (uint8_t)95);   // normal: 90
+  CHECK_EQ(p.joy, (uint8_t)95);       // normal: 90
+  CHECK_EQ(p.ageMinutes, (uint32_t)10);
+}
+
+// cacas (tirada y castigo de higiene), sobrepeso y extras de felicidad, a media velocidad
+TEST(pace, relajado_reduce_cacas_sobrepeso_y_extras_de_felicidad) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  setStats(p, 100, 100, 100, 100);
+  p.weight = 60;
+  mockForceRandom(0);  // siempre caca si puede
+  advance(p, 10);      // 5 caidas: cacas 1,2,3,3,3
+  mockClearForcedRandom();
+  CHECK_EQ(p.poops, (uint8_t)3);
+  CHECK_EQ(p.fullness, (uint8_t)90);
+  CHECK_EQ(p.energy, (uint8_t)90);   // -2 por caida (sobrepeso)
+  CHECK_EQ(p.hygiene, (uint8_t)47);  // 100 -5 -(4+8+12+12+12)
+  CHECK_EQ(p.joy, (uint8_t)95);
+}
+
+TEST(pace, relajado_baja_la_felicidad_extra_con_poca_comida_o_higiene) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  setStats(p, 20, 100, 100, 20);
+  mockForceRandom(99);
+  advance(p, 4);  // 2 caidas, cada una -1 -2 (comida<30) -2 (higiene<30)
+  mockClearForcedRandom();
+  CHECK_EQ(p.joy, (uint8_t)90);
+  CHECK_EQ(p.fullness, (uint8_t)16);
+  CHECK_EQ(p.hygiene, (uint8_t)18);
+}
+
+// edad, nivel, peso y racha de buen cuidado siguen por minuto en el ritmo relajado
+TEST(pace, relajado_sigue_subiendo_un_nivel_por_hora) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  CHECK_EQ(p.level(), (uint16_t)1);
+  for (int m = 0; m < 120; m++) { setStats(p, 100, 100, 100, 100); advance(p, 1); }
+  CHECK_EQ(p.ageMinutes, (uint32_t)120);
+  CHECK_EQ(p.level(), (uint16_t)3);
+}
+
+TEST(pace, relajado_sigue_quemando_peso_cada_3_minutos) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  p.weight = 30;
+  advance(p, 30);
+  CHECK_EQ(p.weight, (uint8_t)20);  // igual que en normal
+}
+
+TEST(pace, relajado_sigue_forjando_defensa_en_12_horas) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  for (int h = 0; h < 720; h++) { setStats(p, 100, 100, 100, 100); advance(p, 1); }
+  CHECK_EQ(p.trDef, (uint8_t)1);
+}
+
+// Igual que el de ritmo normal: en relajado la felicidad solo baja en los minutos
+// pares, pero la racha la sigue viendo antes de bajar.
+TEST(pace, relajado_la_racha_ve_la_felicidad_antes_de_bajar) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  for (int h = 0; h < 720; h++) { setStats(p, 100, 40, 100, 100); advance(p, 1); }
+  CHECK_EQ(p.trDef, (uint8_t)1);
+}
+
+TEST(pace, relajado_sigue_contando_el_descuido_en_el_primer_minuto) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  setStats(p, 0, 0, 0, 0);
+  advance(p, 1);  // minuto impar: no hay caida, pero el descuido se detecta igual
+  CHECK_EQ(p.careMistakes, (uint8_t)1);
+  advance(p, 50);
+  CHECK_EQ(p.careMistakes, (uint8_t)1);
+  advance(p, 11);
+  CHECK_EQ(p.careMistakes, (uint8_t)2);
+}
+
+TEST(pace, relajado_sigue_exigiendo_una_hora_de_abandono_total) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  setStats(p, 0, 0, 0, 0);
+  advance(p, RUNAWAY_TICKS - 1);
+  CHECK(!p.canRunawayNow());
+  advance(p, 1);
+  CHECK(p.canRunawayNow());
+}
+
+// descuidado de verdad llega a cometer descuidos, solo que tarda el doble
+TEST(pace, relajado_tarda_el_doble_en_llegar_al_descuido) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  setStats(p, 100, 100, 100, 100);
+  mockForceRandom(99);
+  advance(p, 89);
+  CHECK_EQ(p.careMistakes, (uint8_t)0);  // comida 12; en normal ya iria por el minuto 45
+  advance(p, 1);
+  mockClearForcedRandom();
+  CHECK_EQ(p.fullness, (uint8_t)10);
+  CHECK_EQ(p.careMistakes, (uint8_t)1);
+}
+
+TEST(pace, dormido_baja_igual_en_los_dos_ritmos) {
+  uint8_t res[2][4];
+  for (int pace = 0; pace < 2; pace++) {
+    Pet p;
+    makePet(p, 4);
+    p.setPace(pace);
+    setStats(p, 100, 100, 50, 100);
+    p.toggleLight();
+    advance(p, 60);
+    res[pace][0] = p.fullness; res[pace][1] = p.joy; res[pace][2] = p.energy; res[pace][3] = p.hygiene;
+  }
+  for (int i = 0; i < 4; i++) CHECK_EQ(res[1][i], res[0][i]);
+  CHECK_EQ(res[0][0], (uint8_t)70);  // 30 caidas de -1 cada 2 min
+  CHECK_EQ(res[0][3], (uint8_t)80);  // 20 caidas de -1 cada 3 min
+}
+
+// ---------------------------------------------------------------- ajustes Care (NVS)
+TEST(care, por_defecto_normal_y_sin_horario) {
+  Pet p;
+  makePet(p, 4);
+  CHECK_EQ(p.pace, (uint8_t)PACE_NORMAL);
+  CHECK_EQ(p.bedPreset, (uint8_t)0);
+}
+
+TEST(care, ritmo_y_horario_sobreviven_a_un_reinicio) {
+  Pet a;
+  makePet(a, 4);
+  a.setPace(PACE_RELAXED);
+  a.setBedPreset(2);
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.pace, (uint8_t)PACE_RELAXED);
+  CHECK_EQ(b.bedPreset, (uint8_t)2);
+}
+
+TEST(care, los_setters_rechazan_valores_fuera_de_rango) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(7);
+  p.setBedPreset(9);
+  CHECK_EQ(p.pace, (uint8_t)PACE_NORMAL);
+  CHECK_EQ(p.bedPreset, (uint8_t)0);
+  // el primer valor invalido de cada ajuste (PACE_COUNT / BED_PRESETS), no solo valores lejanos
+  p.setPace(PACE_RELAXED);
+  p.setBedPreset(3);
+  p.setPace(PACE_COUNT);
+  p.setBedPreset(BED_PRESETS);
+  CHECK_EQ(p.pace, (uint8_t)PACE_NORMAL);
+  CHECK_EQ(p.bedPreset, (uint8_t)0);
+  // y el ultimo valido se acepta
+  p.setPace(PACE_COUNT - 1);
+  p.setBedPreset(BED_PRESETS - 1);
+  CHECK_EQ(p.pace, (uint8_t)(PACE_COUNT - 1));
+  CHECK_EQ(p.bedPreset, (uint8_t)(BED_PRESETS - 1));
+}
+
+TEST(care, basura_en_la_nvs_vuelve_a_los_valores_por_defecto) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putUChar("pace", 200);
+    raw.putUChar("bed", 77);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.speciesId, (int16_t)4);  // la mascota no se toca
+  CHECK_EQ(b.pace, (uint8_t)PACE_NORMAL);
+  CHECK_EQ(b.bedPreset, (uint8_t)0);
+  // el primer valor invalido (PACE_COUNT / BED_PRESETS), no solo basura lejana
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putUChar("pace", PACE_COUNT);
+    raw.putUChar("bed", BED_PRESETS);
+    raw.end();
+  }
+  Pet c;
+  c.begin();
+  CHECK_EQ(c.pace, (uint8_t)PACE_NORMAL);
+  CHECK_EQ(c.bedPreset, (uint8_t)0);
+}
+
+TEST(care, un_huevo_nuevo_conserva_los_ajustes) {
+  Pet p;
+  makePet(p, 4);
+  p.setPace(PACE_RELAXED);
+  p.setBedPreset(3);
+  p.newEgg();
+  CHECK_EQ(p.pace, (uint8_t)PACE_RELAXED);
+  CHECK_EQ(p.bedPreset, (uint8_t)3);
+  Pet q;
+  q.begin();
+  CHECK_EQ(q.pace, (uint8_t)PACE_RELAXED);
+  CHECK_EQ(q.bedPreset, (uint8_t)3);
+}
+
+// ---------------------------------------------------------------- dormir/despertar por horario
+TEST(auto, dormir_y_despertar_cambian_el_estado_y_lo_guardan) {
+  Pet p;
+  makePet(p, 4);
+  CHECK(!p.sleeping);
+  CHECK(p.autoSleep());
+  CHECK(p.sleeping);
+  Pet b;
+  b.begin();
+  CHECK_MSG(b.sleeping, "dormir por horario se guarda como el boton de luz");
+  CHECK(p.autoWake());
+  CHECK(!p.sleeping);
+  Pet c;
+  c.begin();
+  CHECK(!c.sleeping);
+}
+
+TEST(auto, no_hace_nada_si_ya_esta_en_ese_estado) {
+  Pet p;
+  makePet(p, 4);
+  CHECK(!p.autoWake());  // despierto: nada que despertar
+  CHECK(!p.sleeping);
+  CHECK(p.autoSleep());
+  CHECK(!p.autoSleep());  // ya dormido
+  CHECK(p.sleeping);
+}
+
+TEST(auto, dormir_no_actua_en_un_huevo) {
+  mockNvsReset();
+  Pet p;
+  p.begin();
+  p.chooseStarter(4);  // huevo, ya eligio inicial
+  CHECK(p.isEgg());
+  CHECK(!p.autoSleep());
+  CHECK(!p.sleeping);
+}
+
+TEST(auto, dormir_no_actua_durante_una_ceremonia) {
+  Pet p;
+  makePet(p, 4);
+  p.startRunaway();
+  CHECK(p.ceremony != CER_NONE);
+  CHECK(!p.autoSleep());
+  CHECK(!p.sleeping);
+}
+
+// la eleccion de inicial se carga de la NVS aunque no sea un huevo (datos raros)
+TEST(auto, dormir_no_actua_mientras_se_elige_inicial) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putBool("stpk", true);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(!b.isEgg());
+  CHECK(b.awaitingStarter());
+  CHECK(!b.autoSleep());
+  CHECK(!b.sleeping);
+}
+
+TEST(auto, despertar_no_actua_durante_una_ceremonia) {
+  Pet p;
+  makePet(p, 4);
+  p.sleeping = true;
+  p.startRunaway();
+  CHECK(!p.autoWake());
+  CHECK(p.sleeping);
+}
+
+TEST(auto, despertar_no_actua_en_un_huevo) {
+  mockNvsReset();
+  Pet e;
+  e.begin();
+  e.chooseStarter(4);
+  e.sleeping = true;  // estado imposible en juego: la guarda tiene que aguantar igual
+  CHECK(e.isEgg());
+  CHECK(!e.autoWake());
+  CHECK(e.sleeping);
+}
+
+TEST(auto, despertar_no_actua_mientras_se_elige_inicial) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putBool("stpk", true);
+    raw.putBool("sleep", true);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK(!b.isEgg() && b.sleeping && b.awaitingStarter());
+  CHECK(!b.autoWake());
+  CHECK(b.sleeping);
 }
 
 // a clock set back across midnight (board.py clock after drift) must not look

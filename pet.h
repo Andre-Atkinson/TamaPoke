@@ -15,6 +15,10 @@
 #define FAREWELL_AGE_MIN (3UL * 24 * 60)   // se despide a los 3 dias de juego (en forma final)
 #define RUNAWAY_TICKS 60                   // se escapa tras 1 h con TODO a cero
 
+// ritmo de cuidado (ajuste "Care", NVS "pace"): normal o relajado (las necesidades
+// bajan a la mitad de velocidad mientras esta despierto)
+enum : uint8_t { PACE_NORMAL = 0, PACE_RELAXED = 1, PACE_COUNT = 2 };
+
 // milisegundos que faltan hasta `deadline` (0 si ya paso, o si deadline==0:
 // "temporizador inactivo"). Todos los temporizadores del juego (dialogos,
 // animaciones) se guardan como un instante absoluto "deadline = millis() +
@@ -98,6 +102,16 @@ public:
   uint16_t speStat() const;
   void play();
   void toggleLight();  // dormir / despertar
+  // horario de dormir: solo actuan si se puede (no huevo, ni ceremonia, ni eleccion
+  // de inicial, ni ya en ese estado). Devuelven true si cambiaron algo. Dormir es
+  // silencioso; el sonido al despertar lo decide el sketch.
+  bool autoSleep();
+  bool autoWake();
+  // ajustes "Care" persistentes (NVS "pace" y "bed"); valores fuera de rango = 0
+  uint8_t pace = PACE_NORMAL;  // 0 normal, 1 relajado
+  uint8_t bedPreset = 0;       // 0 apagado, 1..3 ver bedtime.h
+  void setPace(uint8_t v);
+  void setBedPreset(uint8_t v);
   void clean();
   void caress();  // tocar al bicho
   void eggTap();  // tocar el huevo: 3 toques y eclosiona
@@ -199,6 +213,8 @@ private:
   void addBond(uint8_t amt);
   void checkMedals();
   void tick();
+  void drainBody();  // parte del goteo de necesidades (comida, energia, caca, higiene)
+  void drainJoy();   // ...y la felicidad (depende de comida e higiene ya bajadas)
   void hatch();
   void registerSpecies(int16_t dex);
   void save();

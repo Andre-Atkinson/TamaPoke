@@ -222,3 +222,44 @@ TEST(i18n, setLang_rechaza_valores_fuera_de_rango) {
   CHECK_EQ((int)gLang, (int)LANG_FR);
   gLang = LANG_DEFAULT;
 }
+
+// La pagina Care: las fuentes CJK del firmware son subconjuntos (unifont_t_japanese3 tiene
+// pocos kanji, unifont_t_korean2 solo hangul comun), asi que el japones va solo en kana y
+// el coreano solo en silabas hangul. Los codigos concretos se comprobaron contra los datos
+// de U8g2 a mano; este test impide que se cuele un kanji o un simbolo raro.
+static std::vector<uint32_t> codepoints(const char *s) {
+  std::vector<uint32_t> out;
+  for (const unsigned char *p = (const unsigned char *)s; *p;) {
+    uint32_t c = *p;
+    int n = c < 0x80 ? 1 : c < 0xE0 ? 2 : c < 0xF0 ? 3 : 4;
+    c = n == 1 ? c : n == 2 ? c & 0x1F : n == 3 ? c & 0x0F : c & 0x07;
+    for (int i = 1; i < n; i++) c = (c << 6) | (p[i] & 0x3F);
+    out.push_back(c);
+    p += n;
+  }
+  return out;
+}
+
+TEST(i18n, la_pagina_care_en_japones_va_solo_en_kana_y_en_coreano_solo_en_hangul) {
+  const StrId care[] = { S_CARE, S_PACE, S_PACE_NORMAL, S_PACE_RELAXED, S_BEDTIME, S_BED_OFF };
+  for (StrId id : care) {
+    gLang = LANG_JA;
+    for (uint32_t c : codepoints(T(id)))
+      CHECK_MSG((c >= 0x3041 && c <= 0x30FF) || c == ' ', std::string("no es kana: ") + T(id));
+    gLang = LANG_KO;
+    for (uint32_t c : codepoints(T(id)))
+      CHECK_MSG((c >= 0xAC00 && c <= 0xD7A3) || c == ' ', std::string("no es hangul: ") + T(id));
+  }
+  gLang = LANG_DEFAULT;
+}
+
+// las etiquetas de la pagina Care van en botones de 320 px a tamano 4 (24 px por letra)
+TEST(i18n, los_valores_de_la_pagina_care_caben_en_el_boton) {
+  const StrId vals[] = { S_PACE_NORMAL, S_PACE_RELAXED, S_BED_OFF };
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    if (LANG_IS_CJK(lang)) continue;  // el ancho CJK solo se puede ver en la placa
+    gLang = (Lang)lang;
+    for (StrId id : vals) CHECK_MSG(strlen(T(id)) * 24 <= 300, std::string("demasiado ancho: ") + T(id));
+  }
+  gLang = LANG_DEFAULT;
+}

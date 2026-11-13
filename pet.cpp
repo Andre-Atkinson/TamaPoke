@@ -1,6 +1,7 @@
 #include "pet.h"
 #include "dex.h"
 #include "audio.h"
+#include "bedtime.h"
 
 void Pet::begin() {
   prefs.begin("tamapoke", false);
@@ -138,16 +139,17 @@ void Pet::tick() {
 
   if (ageMinutes % MINUTES_PER_LEVEL == 0) sfxPlay(SFX_LEVEL);  // subio de nivel (despierto)
 
-  fullness = clamp100(fullness - 2);
-  energy = clamp100(energy - 1);
-  if (fullness > 40 && poops < 3 && random(100) < 15) poops++;
-
-  hygiene = clamp100(hygiene - 1 - 4 * poops);
-  // el sobrepeso da pereza: la energia cae el doble
-  if (weight > 50) energy = clamp100(energy - 1);
+  // Goteo de necesidades. Ritmo normal: cada minuto. Ritmo relajado: solo los
+  // minutos pares (la mitad de rapido). Todo lo demas de este tick (edad, peso,
+  // racha de buen cuidado, descuidos, abandono, medallas, guardado) sigue siendo
+  // por minuto en ambos ritmos, y la progresion offline (syncClock) no cambia.
+  bool drain = pace != PACE_RELAXED || ageMinutes % 2 == 0;
+  if (drain) drainBody();
   if (weight > 0 && ageMinutes % 3 == 0) weight--;
 
   // la disciplina forja la defensa: 12 h seguidas bien cuidado = +1 DEF
+  // (va entre la caida de comida/higiene y la de felicidad, como siempre: lowestStat
+  // incluye la felicidad, y moverlo cambiaria el ritmo normal)
   if (lowestStat() >= 40) {
     if (++goodTicks >= 720) {
       goodTicks = 0;
@@ -157,10 +159,7 @@ void Pet::tick() {
     goodTicks = 0;
   }
 
-  int dJoy = -1;
-  if (fullness < 30) dJoy -= 2;
-  if (hygiene < 30) dJoy -= 2;
-  joy = clamp100(joy + dJoy);
+  if (drain) drainJoy();
 
   // Descuido: dejar una estadistica por los suelos cuenta como error de
   // cuidado (con enfriamiento para no contar el mismo descuido cada minuto)
@@ -189,6 +188,23 @@ void Pet::tick() {
   // autoguardado periodico: NO escribir a flash aqui (corre dentro del loop,
   // mientras se anima); solo marcar y dejar que el loop lo vuelque al atenuar
   if (++ticksSinceSave >= 5) pendingSave = true;
+}
+
+void Pet::drainBody() {
+  fullness = clamp100(fullness - 2);
+  energy = clamp100(energy - 1);
+  if (fullness > 40 && poops < 3 && random(100) < 15) poops++;
+
+  hygiene = clamp100(hygiene - 1 - 4 * poops);
+  // el sobrepeso da pereza: la energia cae el doble
+  if (weight > 50) energy = clamp100(energy - 1);
+}
+
+void Pet::drainJoy() {
+  int dJoy = -1;
+  if (fullness < 30) dJoy -= 2;
+  if (hygiene < 30) dJoy -= 2;
+  joy = clamp100(joy + dJoy);
 }
 
 // vuelca el guardado periodico pendiente (lo llama el loop en un momento sin
@@ -529,6 +545,33 @@ void Pet::toggleLight() {
   save();
 }
 
+// dormir/despertar por horario: mismas condiciones que el boton (no huevo, no
+// ceremonia) mas no estar eligiendo inicial; sin sonido (es de noche)
+bool Pet::autoSleep() {
+  if (ceremony != CER_NONE || starterPick || isEgg() || sleeping) return false;
+  sleeping = true;
+  save();
+  return true;
+}
+
+bool Pet::autoWake() {
+  if (ceremony != CER_NONE || starterPick || isEgg() || !sleeping) return false;
+  sleeping = false;
+  save();
+  return true;
+}
+
+// los ajustes "Care" se guardan solos en su clave (no pasan por save())
+void Pet::setPace(uint8_t v) {
+  pace = v < PACE_COUNT ? v : (uint8_t)PACE_NORMAL;
+  prefs.putUChar("pace", pace);
+}
+
+void Pet::setBedPreset(uint8_t v) {
+  bedPreset = v < BED_PRESETS ? v : 0;
+  prefs.putUChar("bed", bedPreset);
+}
+
 void Pet::clean() {
   if (ceremony != CER_NONE) return;
   poops = 0;
@@ -651,6 +694,8 @@ void Pet::load() {
   gameHi = prefs.getUShort("ghi", 0);
   strHi = prefs.getUShort("shi", 0);
   prefs.getString("nick", nick, sizeof(nick));
+  pace = prefs.getUChar("pace", PACE_NORMAL);
+  bedPreset = prefs.getUChar("bed", 0);
 
   // Range-check what came out of NVS before anything indexes with it. Normally
   // these were written by this firmware, but a different build flashed earlier
@@ -662,6 +707,8 @@ void Pet::load() {
   hygiene = clamp100(hygiene);
   if (poops > 3) poops = 3;
   if (lastEnd > CER_RELEASE) lastEnd = CER_NONE;
+  if (pace >= PACE_COUNT) pace = PACE_NORMAL;
+  if (bedPreset >= BED_PRESETS) bedPreset = 0;
   if (eggTarget < 1 || eggTarget > DEX_COUNT) eggTarget = pickEggSpecies();
   if (speciesId == 0 || speciesId < -1 || speciesId > DEX_COUNT) {
     newEgg();  // that pet doesn't exist in this firmware: start a fresh egg
