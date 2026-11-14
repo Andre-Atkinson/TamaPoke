@@ -1036,6 +1036,29 @@ class TestBuildCache(FakeArduinoCliCase):
                 p.wait()
         self.assertFalse(os.path.exists(build + '.lock'), 'kept after the build was stopped')
 
+    def test_the_cache_of_a_removed_checkout_is_deleted(self):
+        # A build folder takes about 1.5 GB: a removed worktree must not leave its own behind.
+        roots, caches = {}, {}
+        for name in ('kept', 'removed', 'busy', 'later'):
+            roots[name] = self.gate_root(name)
+            caches[name] = os.path.dirname(os.path.dirname(self.opt(self.gate_calls(roots[name])[0], '--build-path')))
+        base = os.path.dirname(caches['kept'])
+        stray = os.path.join(base, 'not-ours')   # no record of a checkout: never ours to delete
+        os.makedirs(stray)
+        self.hold(os.path.join(caches['busy'], 'gate'), self.owner_of(os.getpid()))   # a run still going
+        for name in ('removed', 'busy'):
+            shutil.rmtree(roots[name])
+        self.build_path()   # a build in any checkout prunes: here build_175c.sh in this one
+        self.assertFalse(os.path.exists(caches['removed']), "a removed checkout's cache was kept")
+        self.assertTrue(os.path.exists(caches['kept']))
+        self.assertTrue(os.path.exists(caches['busy']), 'deleted while a run held its lock')
+        self.assertTrue(os.path.exists(stray), 'deleted a folder with no record of its checkout')
+        # the gate prunes too
+        shutil.rmtree(roots['later'])
+        self.gate_calls(roots['kept'])
+        self.assertFalse(os.path.exists(caches['later']), "the gate kept a removed checkout's cache")
+        self.assertTrue(os.path.exists(caches['busy']))
+
     def test_the_gate_stages_into_one_folder_that_mirrors_the_tree(self):
         root = self.gate_root()
         put(os.path.join(root, 'gone.cpp'))

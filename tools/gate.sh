@@ -58,7 +58,9 @@ fi
 . "$ROOT/tools/build_cache.sh"
 trap tp_unlock_all EXIT
 if [[ "$BUILD" -eq 1 ]]; then
-  CACHE="$(tp_cache_dir "$ROOT")/gate"
+  CACHE="$(tp_cache_dir "$ROOT")"
+  tp_cache_prune "$CACHE" "$ROOT" || exit 2
+  CACHE="$CACHE/gate"
   tp_lock "$CACHE" || exit 2
 fi
 

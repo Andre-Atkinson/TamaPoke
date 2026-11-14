@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourced by tools/build_175c.sh and tools/gate.sh; not run on its own.
 #
 # Persistent firmware build folders, so a rebuild only recompiles what changed
@@ -9,10 +10,13 @@
 #     gate/stage/TamaPoke/      the gate's staged copy of the working tree (what the build reads)
 #     gate/build-175c/          the gate's 1.75C build
 #     gate/build-175/           the gate's original-1.75 build
+#     checkout                  the checkout's path
 #
 # <cache> is ~/Library/Caches/tamapoke on macOS and ${XDG_CACHE_HOME:-~/.cache}/tamapoke
-# elsewhere. Any of these folders can be deleted at any time; the next build is
-# then a full one, as with --clean.
+# elsewhere. A build folder takes about 1.5 GB, so the folders of a checkout
+# that no longer exists (a removed worktree) are deleted by the next build in
+# any checkout (tp_cache_prune). Any of them can also be deleted by hand while
+# no build uses it; the next build is then a full one, as with --clean.
 #
 # Each folder is used by one run at a time: tp_lock takes <folder>.lock (a mkdir
 # lock, since macOS has no flock) and tp_unlock_all, run from the caller's EXIT
@@ -40,6 +44,32 @@ tp_cache_dir() {  # tp_cache_dir <checkout root>: print its cache folder
 # The start time of a running process, or nothing if there is no such process.
 tp_proc_start() { ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//; s/ *$//'; }
 
+tp_lock_is_live() {  # tp_lock_is_live <lock folder>: its owner still runs (or is still writing it)
+  local owner pid
+  owner="$(cat "$1/owner" 2>/dev/null)"
+  pid="${owner%% *}"
+  [[ ! "$pid" =~ ^[0-9]+$ || "$pid $(tp_proc_start "$pid")" == "$owner" ]]
+}
+
+# Record which checkout <cache folder> belongs to, and delete the cache folders
+# of checkouts that no longer exist. A folder with no record, or with a lock
+# whose owner still runs, is left alone.
+tp_cache_prune() {  # tp_cache_prune <cache folder of this checkout> <checkout root>
+  local mine="$1" root="$2" dir checkout lock live
+  mkdir -p "$mine" && printf '%s\n' "$root" >"$mine/checkout" || return 1
+  for dir in "$(dirname "$mine")"/*; do
+    [[ -d "$dir" && "$dir" != "$mine" ]] || continue
+    checkout="$(cat "$dir/checkout" 2>/dev/null)"
+    [[ -n "$checkout" && ! -e "$checkout" ]] || continue
+    live=0
+    for lock in "$dir"/*.lock "$dir"/*/*.lock; do
+      if [[ -d "$lock" ]] && tp_lock_is_live "$lock"; then live=1; fi
+    done
+    if [[ "$live" -eq 0 ]]; then rm -rf "$dir"; fi
+  done
+  return 0
+}
+
 TP_LOCKS=()
 tp_lock() {  # tp_lock <folder>: take <folder>.lock, or say who holds it and return 1
   local lock="$1.lock" me owner pid
@@ -51,8 +81,7 @@ tp_lock() {  # tp_lock <folder>: take <folder>.lock, or say who holds it and ret
     # The owner is gone if no process has its pid and start time. Only one run
     # may clear it (the .stale folder is the turnstile), and only if the owner
     # did not change meanwhile.
-    if [[ "$pid" =~ ^[0-9]+$ && "$pid $(tp_proc_start "$pid")" != "$owner" ]] \
-       && mkdir "$lock.stale" 2>/dev/null; then
+    if ! tp_lock_is_live "$lock" && mkdir "$lock.stale" 2>/dev/null; then
       if [[ "$(cat "$lock/owner" 2>/dev/null)" == "$owner" ]]; then
         rm -rf "$lock"
         echo "Removed a stale lock, $lock: its owner (pid $pid) is no longer running." >&2

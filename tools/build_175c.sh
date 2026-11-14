@@ -64,7 +64,11 @@ APP_MAX="${APP_MAX_OVERRIDE:-$APP0_SIZE}"
 
 # shellcheck source=build_cache.sh
 . "${ROOT}/tools/build_cache.sh"
-[[ -n "$BUILD" ]] || BUILD="$(tp_cache_dir "$ROOT")/build-175c"
+if [[ -z "$BUILD" ]]; then
+  CACHE="$(tp_cache_dir "$ROOT")"
+  tp_cache_prune "$CACHE" "$ROOT" || exit 1
+  BUILD="$CACHE/build-175c"
+fi
 trap tp_unlock_all EXIT
 tp_lock "$BUILD" || exit 1
 tp_prepare_build "$BUILD" "$ROOT" "$CLEAN"
