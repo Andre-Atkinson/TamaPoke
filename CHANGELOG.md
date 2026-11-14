@@ -13,11 +13,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 - **Touch gestures on the creature.** Besides a tap (a pat, at once as before):
   a double tap makes it hop; stroking back and forth over it pats it about once
   a second while you go on; six quick taps in a row tickle it into giggles, and
-  carrying on past twelve gets a gentle huff (it turns away, no pat, no stat
-  change); resting a finger on it for a quarter of a second, then sliding
-  sideways, makes it walk after the finger. Each gesture counts as one pat
-  (+5 JOY, +1 bond) under the same daily bond limit as the rest of the care, so
-  gestures never earn more than tapping. They work only on the main screen with
+  from the twelfth quick tap on it gives a gentle huff instead (it turns away, no
+  pat, no stat change); resting a finger on it for a quarter of a second, then
+  sliding sideways, makes it walk after the finger. Each pat a gesture gives
+  counts like a tap (+5 JOY, +1 bond) under the same daily bond limit as the rest
+  of the care, so gestures never earn more than tapping. They work only on the main screen with
   the creature awake; taps, the release long-press, the touch locks and the
   strength-training taps behave as before, and so do swipes that move at once.
   One change: a sideways slide that starts with a short pause on the creature

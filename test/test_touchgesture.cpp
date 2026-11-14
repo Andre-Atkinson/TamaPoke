@@ -303,6 +303,16 @@ TEST(TouchGesture, moving_during_the_rest_rules_the_drag_out) {
   CHECK_EQ(f.count(TOUCH_DRAG_START), 0);
 }
 
+TEST(TouchGesture, moving_down_during_the_rest_rules_the_drag_out_too) {
+  TG g;
+  Finger f(g);
+  f.down(200, 220);
+  f.moveTo(200, 250, 100);  // 30 px down, before the rest is over
+  f.rest(300);
+  f.moveTo(245, 250, 200);  // then 45 px sideways (more than down): would be a drag
+  CHECK_EQ(f.count(TOUCH_DRAG_START), 0);
+}
+
 TEST(TouchGesture, the_rest_must_last_DRAG_REST_MS) {
   TG g;
   Finger f(g);

@@ -702,7 +702,7 @@ static void bedClockSet(uint32_t set) {
 // pone a 0 en drawBath(), que no corre con la pantalla apagada.
 //
 // careBusy() is the part that does not depend on the screen: bedBusy() and the attention
-// calls (attnLoop) both wait while it holds.
+// calls (attnLoop) both wait while it holds, and the pet gestures are off (petGestureGate).
 static bool careBusy() {
   return timeLeft(bathUntil) || pet.evolving() || pet.eating() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) ||
          (choiceKind && timeLeft(choiceUntil));
@@ -1369,7 +1369,9 @@ static PetGestureGate petGestureGate() {
   g.bathing = timeLeft(bathUntil);
   g.choosing = pet.awaitingStarter() || pet.awaitingEgg();
   g.otherScreen = galleryOpen || cardOpen || kbOpen || clockOpen || gameOpen || sackOpen;
-  g.dialog = timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+  // careBusy() covers the timed dialogs (and the bath, evolution and a meal again), so a
+  // dialog it learns later turns the gestures off too
+  g.dialog = careBusy();
   return g;
 }
 
@@ -4373,7 +4375,7 @@ const char *statusMsg() {
   if (bathUntil) return "Splish splash!";  // onomatopeya universal
   if (pet.sleeping) return "Zzz...";
   if (pet.eating()) return T(S_EATING);
-  if (pet.showHeart()) return T(S_LIKES);
+  if (heartShown(millis())) return T(S_LIKES);  // not over a huff (#21)
   // the same need the "!" bubble shows (attnShown), so the text and the bubble can't disagree
   switch (attnShown(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene))) {
     case ATTN_FOOD: return T(S_HUNGRY);
