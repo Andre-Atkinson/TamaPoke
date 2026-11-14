@@ -3,6 +3,8 @@
 #
 #   tools/gate.sh               everything
 #   tools/gate.sh --no-build    skip the simulator and the firmware builds (quick runs)
+#   tools/gate.sh --no-firmware skip only the firmware builds (for reviewers, who take
+#                               those from CI's "Compile firmware"); the simulator runs
 #   tools/gate.sh --clean       firmware builds from scratch: reuse nothing from earlier runs
 #   TAMAPOKE_JOBS=8 tools/gate.sh   compile jobs per firmware build: default 3, 0 = all cores
 #
@@ -28,18 +30,21 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 2
 
-BUILD=1
+BUILD=1      # the simulator and the firmware builds
+FIRMWARE=1   # the firmware builds alone
 CLEAN=0
 for a in "$@"; do
   case "$a" in
     --no-build) BUILD=0 ;;
+    --no-firmware) FIRMWARE=0 ;;
     --clean) CLEAN=1 ;;
     -h|--help) awk 'NR > 1 && /^set -/ { exit } NR > 1' "$0"; exit 0 ;;
     *) echo "Unknown arg: $a" >&2; exit 2 ;;
   esac
 done
-if [[ "$BUILD" -eq 0 && "$CLEAN" -eq 1 ]]; then
-  echo "--clean is for the firmware builds, which --no-build skips; pass one or the other" >&2
+if [[ "$BUILD" -eq 0 ]]; then FIRMWARE=0; fi
+if [[ "$FIRMWARE" -eq 0 && "$CLEAN" -eq 1 ]]; then
+  echo "--clean is for the firmware builds, which --no-build and --no-firmware skip; pass one or the other" >&2
   exit 2
 fi
 
@@ -47,7 +52,7 @@ fi
 # every core). Checked up front so a typo fails in a second, not after the tests.
 JOBS="${TAMAPOKE_JOBS:-3}"
 JOBS_RE='^(0|[1-9][0-9]{0,3})$'
-if [[ "$BUILD" -eq 1 && ! "$JOBS" =~ $JOBS_RE ]]; then
+if [[ "$FIRMWARE" -eq 1 && ! "$JOBS" =~ $JOBS_RE ]]; then
   echo "TAMAPOKE_JOBS must be 0 (all cores) or a whole number of jobs, up to 9999; got '$JOBS'" >&2
   exit 2
 fi
@@ -56,8 +61,11 @@ fi
 # before any step runs, so a second gate in this checkout stops at once.
 # shellcheck source=build_cache.sh
 . "$ROOT/tools/build_cache.sh"
+# The sketch-warning count and WARN_BASELINE, shared with CI's firmware builds.
+# shellcheck source=sketch_warnings.sh
+. "$ROOT/tools/sketch_warnings.sh"
 trap tp_unlock_all EXIT
-if [[ "$BUILD" -eq 1 ]]; then
+if [[ "$FIRMWARE" -eq 1 ]]; then
   CACHE="$(tp_cache_dir "$ROOT")"
   tp_cache_prune "$CACHE" "$ROOT" || exit 2
   CACHE="$CACHE/gate"
@@ -167,36 +175,31 @@ else
 fi
 
 # ---------------------------------------------------------------- builds
-sketch_warn_re='TamaPoke/[^:]+:[0-9]+:[0-9]+: warning:'
-# Known sketch warnings per build on main (exact count; update it in the PR that
-# changes it). More than this fails the gate: only new warnings are findings.
-# arduino-cli prints a warning only when it compiles the file, so the builds
-# compile every sketch file on every run (tools/build_cache.sh): the count is
-# the whole sketch's, incremental build or not. Core and library warnings,
-# which incremental builds do not repeat, never counted.
-WARN_BASELINE="${WARN_BASELINE:-20}"
+# Sketch warnings are counted by tools/sketch_warnings.sh (WARN_BASELINE lives
+# there), the same code CI's firmware builds run.
 show_build() {  # show_build <label> <log> <exit code>
-  local label="$1" log="$2" rc="$3" n
+  local label="$1" log="$2" rc="$3" wrc
   # in build order (a sorted view separates an error from its source line);
   # awk drops exact repeats only
   strip_ansi <"$log" \
-    | grep -iE "can't open|error|${sketch_warn_re}|Sketch uses|build OK" | awk '!seen[$0]++' >"$log.f"
+    | grep -iE "can't open|error|${TP_SKETCH_WARN_RE}|Sketch uses|build OK" | awk '!seen[$0]++' >"$log.f"
   cat "$log.f"
   if [[ "$rc" -ne 0 ]]; then
     tail_if_empty "$(wc -l <"$log.f")" "$log"
     record "$label build" "$rc" "sketch warnings n/a: build failed"
     return
   fi
-  n="$(strip_ansi <"$log" | grep -E "$sketch_warn_re" | sort -u | wc -l | tr -d ' ')"
-  echo "$label: $n sketch warning(s), baseline $WARN_BASELINE"
-  if (( n > WARN_BASELINE )); then
-    record "$label build" 1 "$n sketch warnings: +$((n - WARN_BASELINE)) NEW over baseline $WARN_BASELINE"
-  else
-    record "$label build" 0 "$n sketch warnings"
-  fi
+  tp_sketch_warnings "$log" >"$log.w"
+  wrc=$?
+  echo "$label: $(cat "$log.w")"
+  case "$wrc" in
+    0) record "$label build" 0 "$TP_WARN_COUNT sketch warnings" ;;
+    1) record "$label build" 1 "$TP_WARN_COUNT sketch warnings: +$((TP_WARN_COUNT - TP_WARN_BASELINE)) NEW over baseline $TP_WARN_BASELINE" ;;
+    *) record "$label build" "$wrc" "sketch warnings could not be counted" ;;
+  esac
 }
 
-if [[ "$BUILD" -eq 1 ]]; then
+if [[ "$FIRMWARE" -eq 1 ]]; then
   # Mirror the working tree into the same folder every run: rsync keeps the
   # mtimes, and --delete/--delete-excluded drop whatever is no longer there.
   # Folders the firmware build never reads stay out. arduino-cli rebuilds
@@ -218,10 +221,10 @@ if [[ "$BUILD" -eq 1 ]]; then
     --exclude '/out' --exclude '/backups' --exclude '/shots' \
     "$ROOT/" "$STAGE/"; then
     record "stage working tree for builds" 1 "rsync failed; builds skipped"
-    BUILD=0
+    FIRMWARE=0
   fi
 fi
-if [[ "$BUILD" -eq 1 ]]; then
+if [[ "$FIRMWARE" -eq 1 ]]; then
   CLEAN_ARG=()
   how="--jobs $JOBS"
   if [[ "$CLEAN" -eq 1 ]]; then CLEAN_ARG=(--clean); how="$how, --clean"; fi
