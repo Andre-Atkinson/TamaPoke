@@ -73,6 +73,7 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
 ```bash
 tools/gate.sh              # everything; real exit codes, one summary line per step
 tools/gate.sh --no-build   # quick runs: skips the firmware builds and the desktop simulator
+tools/gate.sh --no-firmware  # reviewers: skips only the firmware builds (CI builds those)
 ```
 
 Reviewers run less than this; see **Reviewers take the firmware builds from
@@ -104,9 +105,10 @@ matching a wrapper shell whose command line holds it).
 Never drop a warning or a skipped-test count, and read any failure in full:
 the gate prints failing assertions, and a failed run keeps its full logs in
 `test/build/gate-logs/`. A build with more sketch warnings than
-`WARN_BASELINE` in `gate.sh` (20, the exact count on `main` per build) fails
-the gate; only new warnings are findings, and a PR that changes the count
-updates the baseline. `ruff check tools/` and a
+`WARN_BASELINE` in `tools/sketch_warnings.sh` (20, the exact count on `main`
+per build) fails the gate and CI's `Compile firmware`, which count them with
+that same script; only new warnings are findings, and a PR that changes the
+count updates the baseline. `ruff check tools/` and a
 generated-headers check (needs Pillow) run in CI but not in the gate: ask the
 owner before installing ruff (even into `.venv/`).
 
@@ -195,24 +197,16 @@ rounds before it is merged. Both are mandatory, and two is also the cap.
 most two builds at a time, parallel sessions queued behind them. A
 `pr-reviewer`:
 
-- **Runs** `tools/gate.sh --no-build`, then the desktop simulator for both
-  boards, which `--no-build` skips and CI does not run. The simulator uses the
-  host compiler, so it is not a firmware build and is outside the two-builds
-  limit. Run exactly this, and report any `warning:` lines it prints:
-
-  ```bash
-  out="$(mktemp -d)"   # fresh and empty, outside the worktree
-  want="$(grep -cE '^[[:space:]]*shot[[:space:]]' sim/scripts/screens.txt)"
-  for b in 175c 175; do
-    tools/sim.sh --board "$b" --lang en --script sim/scripts/screens.txt \
-      --out "$out/$b" --quiet || echo "simulator $b FAILED"
-    echo "simulator $b: $(find "$out/$b" -name '*.png' | wc -l | tr -d ' ') of $want screens"
-  done
-  ```
-
+- **Runs** `tools/gate.sh --no-firmware`: everything in the gate except the
+  firmware builds, so it includes the desktop simulator for both boards, which
+  CI does not run. The simulator uses the host compiler, so it is not a
+  firmware build and is outside the two-builds limit. Report the summary
+  lines (they include each board's screen count and host warning count) and
+  any `warning:` lines it prints.
 - **Checks CI** for the firmware builds: `gh pr checks <n> --repo
   Andre-Atkinson/TamaPoke` must list `Compile firmware` as passing, which also
-  means both builds fit `app0`. If it is missing, still running or failed, the
+  means both builds fit `app0` and neither has more sketch warnings than
+  `WARN_BASELINE`. If it is missing, still running or failed, the
   reviewer says so in its report, with the status shown, instead of building
   to find out. That command shows no SHA, so the reviewer confirms that
   `gh pr view <n> --repo Andre-Atkinson/TamaPoke --json headRefOid` matches the
@@ -226,11 +220,6 @@ most two builds at a time, parallel sessions queued behind them. A
   ESP32 core or libraries rather than the test shims. 1.75C-only code the
   simulator compiles is checked with `--board 175c` first. A local build stays
   within the two-builds limit.
-- **Doesn't re-check `WARN_BASELINE`.** CI compiles both boards but doesn't
-  count sketch warnings, so only full-gate runs check the count: the author's,
-  the round-1 fixer's and the main session's. When round 1 finds nothing and
-  the main session wrote the PR, nothing re-checks it independently until CI
-  counts warnings too.
 
 If two review rounds feels wrong for a change (too few or too many), say so
 and ask the owner rather than exceeding the cap.
