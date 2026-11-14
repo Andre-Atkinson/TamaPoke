@@ -45,6 +45,7 @@ static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright unt
 #include "app.h"
 #include "gameui.h"
 #include "scene.h"
+#include "screens.h"
 #include "serialcmd.h"
 #include "uitext.h"
 #include <Preferences.h>
