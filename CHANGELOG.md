@@ -110,8 +110,18 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   egg=<0|1> picking=<0|1>` (`stale=1`: bedtime paused until the clock is set;
   `egg=1`: Eggs set to Choose; `picking=1`: the three-egg choice is on screen).
 - Strings for the Care page and the egg choice in all eight languages.
+- Simulator: `sim/scripts/every-screen.txt` reaches what `screens.txt` does not
+  (evolution, the dialogs, every minigame, the biomes, the endings, BOOT and PWR),
+  so two builds can be compared screen by screen in all 8 languages.
 
 ### Changed
+
+- **`TamaPoke.ino` is being split into modules** (#41), moving code without
+  changing it: the serial console is now `serialcmd.cpp` and the text helpers
+  `uitext.cpp`, with `app.h` declaring what the sketch shares with them. The
+  tables in `dex.h` and `species.h` are `inline` instead of `static`, so each
+  is stored once however many files use it: the firmware is 2,400 bytes smaller.
+  Nothing changes on the screen or on the serial port.
 
 - **Clear power pills on the settings screen** (#11). The touch lock, screen-off
   and battery pills showed raw codes (`L10`, `60s`, `--`, `icon`, `%`). Each now
