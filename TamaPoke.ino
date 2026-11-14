@@ -35,6 +35,7 @@
 #include "bootbutton.h"
 #include "screenlock.h"
 #include "touchlock.h"
+#include "settingslayout.h"
 #include "bedtime.h"
 #include "clockprompt.h"
 #include "attention.h"
@@ -169,6 +170,8 @@ int flashIdxForDex(int16_t dex) {
 
 #define CX 233  // centro de la pantalla redonda
 #define CY 233
+// settingslayout.h lays the settings pills out around its own copy of the centre
+static_assert(CX == SET_PANEL_C && CY == SET_PANEL_C, "settingslayout.h assumes the panel centre is (CX, CY)");
 #define PET_CY 202  // centro vertical del sprite
 
 static const uint16_t INK_K = 0x18C4;  // spriteColor('k')
@@ -1996,6 +1999,8 @@ static uint32_t screenKey() {
     h = mixKey(h, audioVolume());
     h = mixKey(h, userDim);
     h = mixKey(h, batAsPercent);
+    h = mixKey(h, (uint32_t)batPercent());  // the battery pill previews the live level
+    h = mixKey(h, batCharging());
     h = mixKey(h, powerOffMs);
     h = mixKey(h, touchLockMs);
     h = mixKey(h, gLang);
@@ -2757,15 +2762,7 @@ void drawClockBtn(int x, int y, const char *l) {
   printT(l);
 }
 
-// pildoras de idioma centradas en y; rellena la activa
-#define LANG_PILL_Y 296
-#define LANG_PILL_H 30
-#define LANG_PILL_X 336          // pildora de idioma (cicla LANG_COUNT al tocar)
-#define LANG_PILL_W 96
-#define SND_PILL_X 34           // pildora de sonido (cicla alto, medio, bajo y apagado)
-#define SND_PILL_W 96
-#define BRI_PILL_X 183          // pildora de brillo, centrada (cicla los niveles al tocar)
-#define BRI_PILL_W 100
+// the pills' and the OK button's rects are in settingslayout.h (shared with clockTap)
 static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT", "JA", "KO" };
 
 // tres barras crecientes (brillo, volumen); las `lit` primeras van rellenas
@@ -2774,6 +2771,108 @@ static void drawLevelBars(int x, int lit) {
     int bh = 8 + i * 5, bx = x + i * 14, by = LANG_PILL_Y + LANG_PILL_H - 6 - bh;
     if (i < lit) gfx->fillRect(bx, by, 9, bh, UI_BAR_OK);
     gfx->drawRect(bx, by, 9, bh, UI_INK);
+  }
+}
+
+// battery colour: green while charging, else `ink` down to 40 %, then amber, then red
+static uint16_t batteryColor(int pc, bool charging, uint16_t ink) {
+  return charging ? UI_BAR_OK : pc >= 40 ? ink : pc >= 15 ? UI_BAR_WARN : UI_BAR_BAD;
+}
+
+// The battery glyph from (x, y): a w x h body with the level (or a bolt while charging) and
+// a terminal on its right. The header draws it 24 x 11; the battery pill draws it larger,
+// and every length scales from the 11 px design (at h = 11 nothing changes). From h = 14
+// the outline is 2 px thick, so the bigger glyph keeps the weight of the pill's other icons.
+static void drawBatteryGlyph(int x, int y, int w, int h, int pc, bool charging, uint16_t col, uint16_t bolt) {
+  auto s = [h](int v) { return (v * h + 5) / 11; };  // a length at h = 11, scaled to h
+  int th = h >= 14 ? 2 : 1;
+  for (int i = 0; i < th; i++) gfx->drawRoundRect(x + i, y + i, w - 2 * i, h - 2 * i, 2, col);
+  gfx->fillRect(x + w, y + s(3), s(3), s(5), col);  // borne
+  if (charging) {
+    // rayo de carga (zigzag) en vez de la barra de nivel
+    int bx = x + w / 2;
+    gfx->fillTriangle(bx + s(3), y + s(1), bx - s(4), y + s(6), bx + s(1), y + s(6), bolt);
+    gfx->fillTriangle(bx - s(1), y + s(5), bx + s(4), y + s(5), bx - s(3), y + s(10), bolt);
+  } else {
+    int in = th + 1;  // the level sits 1 px inside the outline
+    int fw = (w - 2 * in) * pc / 100;
+    if (fw > 0) gfx->fillRect(x + in, y + in, fw, h - 2 * in, col);
+  }
+}
+#define PILL_BAT_W 34  // the battery pill's glyph body; its terminal adds (3 * 16 + 5) / 11 = 4 px
+#define PILL_BAT_H 16
+
+// Power pill icons, drawn in UI_INK on the white pill, about 20 px tall around `cy`.
+// A padlock 16 px wide; open (shackle lifted, right leg out) when the touch lock is off.
+#define PADLOCK_W 16
+static void drawPadlock(int x, int cy, bool open) {
+  int sy = open ? cy - 15 : cy - 11;  // shackle: two nested round rects, 2 px thick
+  gfx->drawRoundRect(x + 3, sy, 10, 16, 5, UI_INK);
+  gfx->drawRoundRect(x + 4, sy + 1, 8, 14, 4, UI_INK);
+  if (open) gfx->fillRect(x + 10, cy - 6, 4, 4, UI_WHITE);  // the right leg stops short of the body
+  gfx->fillRoundRect(x, cy - 2, PADLOCK_W, 12, 2, UI_INK);  // body
+  gfx->fillCircle(x + 8, cy + 2, 2, UI_WHITE);              // keyhole
+  gfx->fillRect(x + 7, cy + 2, 2, 5, UI_WHITE);
+}
+
+// A display on its stand, 22 px wide, with a dark face: the screen that goes off.
+#define SCREEN_ICON_W 22
+static void drawScreenIcon(int x, int cy) {
+  gfx->fillRoundRect(x, cy - 10, SCREEN_ICON_W, 16, 3, UI_INK);
+  gfx->drawRect(x + 2, cy - 8, SCREEN_ICON_W - 4, 12, UI_WHITE);  // bezel line
+  gfx->fillRect(x + 9, cy + 6, 4, 3, UI_INK);                      // stand
+  gfx->fillRect(x + 5, cy + 8, 12, 2, UI_INK);
+}
+
+// An icon `iconW` px wide and `text` side by side, centred in `r` (text size 2): prints
+// the text and returns the icon's left x.
+static int pillIconText(const SetRect &r, int iconW, const char *text) {
+  const int gap = 8;
+  int x = r.x + (r.w - (iconW + gap + textW(text, 2))) / 2;
+  setCur(x + iconW + gap, r.y + (r.h - 14) / 2);
+  printT(text);
+  return x;
+}
+
+// The power pills (#11): an icon plus a number, like the sound and brightness pills
+// above them. The rects are settingslayout.h's, the same ones clockTap() hit-tests.
+// "off" (T(S_TLOCK_OFF)) is the only word, and so the only translated label.
+static void drawPowerPills() {
+  for (int i = 0; i < POWER_PILL_COUNT; i++) {
+    SetRect r = powerPillRect(i);
+    gfx->fillRoundRect(r.x, r.y, r.w, r.h, 10, UI_WHITE);
+    gfx->drawRoundRect(r.x, r.y, r.w, r.h, 10, UI_INK);
+  }
+  gfx->setTextColor(UI_INK);
+  setSize(2);
+  char s[12];
+
+  // touch lock: seconds after the screen goes off ("0s": as it goes off)
+  SetRect r = powerPillRect(PILL_TOUCH_LOCK);
+  bool lockOn = secondsLabel(s, sizeof(s), touchLockMs, TOUCH_LOCK_NEVER);
+  int ix = pillIconText(r, PADLOCK_W, lockOn ? s : T(S_TLOCK_OFF));
+  drawPadlock(ix, r.y + r.h / 2 + 1, !lockOn);
+
+  // screen off: seconds without a touch; "off" = never (it still dims, power.h)
+  r = powerPillRect(PILL_SCREEN_OFF);
+  bool offOn = secondsLabel(s, sizeof(s), powerOffMs, 0);
+  ix = pillIconText(r, SCREEN_ICON_W, offOn ? s : T(S_TLOCK_OFF));
+  drawScreenIcon(ix, r.y + r.h / 2);
+
+  // battery: a preview of the header, its glyph or its percent, with the live level
+  r = powerPillRect(PILL_BATTERY);
+  int pc = batPercent();
+  bool charging = pc >= 0 && batCharging();
+  // no reading: faint grey, so it reads as "nothing to show" rather than a flat (red) battery
+  uint16_t col = pc < 0 ? UI_TRACK : batteryColor(pc, charging, UI_INK);
+  if (batAsPercent) {
+    batteryPctLabel(s, sizeof(s), pc, charging);
+    gfx->setTextColor(col);
+    setCur(r.x + (r.w - textW(s, 2)) / 2, r.y + (r.h - 14) / 2);
+    printT(s);
+  } else {  // with no reading (pc < 0) an empty grey outline
+    drawBatteryGlyph(r.x + (r.w - PILL_BAT_W - 4) / 2, r.y + (r.h - PILL_BAT_H) / 2, PILL_BAT_W, PILL_BAT_H,
+                     pc < 0 ? 0 : pc, charging, col, UI_INK);
   }
 }
 
@@ -2793,7 +2892,8 @@ void renderClock() {
   snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
   gfx->setTextColor(asking ? UI_BAR_BAD : UI_INK);
   setSize(7);
-  setCur(CX - 105, 108);
+  // CX - 105 in Latin; in CJK only about centred (centerX ignores the text x offset)
+  setCur(centerX(t, 7), 108);
   printT(t);
 
   drawClockBtn(104, 190, "-");  // hora -
@@ -2849,36 +2949,12 @@ void renderClock() {
   setCur(LANG_PILL_X + (LANG_PILL_W - textW(lp, 2)) / 2, LANG_PILL_Y + 8);
   printT(lp);
 
-  const char *tl = touchLockMs == 0 ? "L0" : touchLockMs == 10000 ? "L10"
-                   : touchLockMs == 30000 ? "L30" : touchLockMs == 60000 ? "L60" : T(S_TLOCK_OFF);
-  gfx->fillRoundRect(36, 332, 80, 26, 8, UI_WHITE);
-  gfx->drawRoundRect(36, 332, 80, 26, 8, UI_INK);
-  gfx->setTextColor(UI_INK);
-  setSize(2);
-  setCur(36 + (80 - textW(tl, 2)) / 2, 338);
-  printT(tl);
+  drawPowerPills();
 
-  static const char *const OFF_LABELS[4] = {"60s", "30s", "15s", "--"};
-  const char *ol = OFF_LABELS[powerOffSel(powerOffMs)];
-  gfx->fillRoundRect(133, 332, 90, 26, 8, UI_WHITE);
-  gfx->drawRoundRect(133, 332, 90, 26, 8, UI_INK);
-  gfx->setTextColor(UI_INK);
-  setSize(2);
-  setCur(133 + (90 - textW(ol, 2)) / 2, 338);
-  printT(ol);
-
-  const char *bl = batAsPercent ? "%" : "icon";
-  gfx->fillRoundRect(243, 332, 90, 26, 8, UI_WHITE);
-  gfx->drawRoundRect(243, 332, 90, 26, 8, UI_INK);
-  gfx->setTextColor(UI_INK);
-  setSize(2);
-  setCur(243 + (90 - textW(bl, 2)) / 2, 338);
-  printT(bl);
-
-  gfx->fillRoundRect(133, 366, 200, 36, 14, UI_BAR_OK);
+  gfx->fillRoundRect(OK_BTN.x, OK_BTN.y, OK_BTN.w, OK_BTN.h, 14, UI_BAR_OK);
   gfx->setTextColor(UI_BG_DAY);
   setSize(3);
-  setCur(CX - 18, 374);
+  setCur(centerX("OK", 3), OK_BTN.y + 8);  // CX - 18 with the Latin font
   printT("OK");
 
   gfx->setTextColor(UI_TRACK);
@@ -2903,36 +2979,35 @@ void clockTap(int16_t x, int16_t y) {
     else if (x >= 318 && x < 376) clockM = (clockM + 1) % 60;
     return;
   }
-  if (y >= LANG_PILL_Y && y <= LANG_PILL_Y + LANG_PILL_H) {
-    if (x >= SND_PILL_X && x < SND_PILL_X + SND_PILL_W) {  // cicla sonido: alto, medio, bajo, apagado
-      if (!audioEnabled()) {
-        audioSetVolume(0);
-        audioSetEnabled(true);
-      } else if (audioVolume() + 1 < VOL_LEVELS) {
-        audioSetVolume(audioVolume() + 1);
-      } else {
-        audioSetEnabled(false);
-      }
-      if (audioEnabled()) sfxPlay(SFX_TAP);    // se oye el nivel nuevo
-      return;
+  if (SND_PILL.contains(x, y)) {  // cicla sonido: alto, medio, bajo, apagado
+    if (!audioEnabled()) {
+      audioSetVolume(0);
+      audioSetEnabled(true);
+    } else if (audioVolume() + 1 < VOL_LEVELS) {
+      audioSetVolume(audioVolume() + 1);
+    } else {
+      audioSetEnabled(false);
     }
-    if (x >= BRI_PILL_X && x < BRI_PILL_X + BRI_PILL_W) {  // cicla brillo: alto, medio, bajo
-      userDim = (userDim + 1) % BRIGHT_LEVELS;
-      Preferences p;
-      p.begin("tamapoke", false);
-      p.putUChar("bri", userDim);
-      p.end();
-      sfxPlay(SFX_TAP);
-      return;
-    }
-    if (x >= LANG_PILL_X && x < LANG_PILL_X + LANG_PILL_W) {  // cicla idioma
-      setLang((Lang)((gLang + 1) % LANG_COUNT));
-      applyLangFont();  // la fuente cambia con el idioma
-      sfxPlay(SFX_TAP);
-      return;
-    }
+    if (audioEnabled()) sfxPlay(SFX_TAP);    // se oye el nivel nuevo
+    return;
   }
-  if (y >= 332 && y < 358 && x >= 36 && x < 116) {
+  if (BRI_PILL.contains(x, y)) {  // cicla brillo: alto, medio, bajo
+    userDim = (userDim + 1) % BRIGHT_LEVELS;
+    Preferences p;
+    p.begin("tamapoke", false);
+    p.putUChar("bri", userDim);
+    p.end();
+    sfxPlay(SFX_TAP);
+    return;
+  }
+  if (LANG_PILL.contains(x, y)) {  // cicla idioma
+    setLang((Lang)((gLang + 1) % LANG_COUNT));
+    applyLangFont();  // la fuente cambia con el idioma
+    sfxPlay(SFX_TAP);
+    return;
+  }
+  PowerPill pill = powerPillAt(x, y);
+  if (pill == PILL_TOUCH_LOCK) {
     touchLockMs = touchLockNext(touchLockMs);
     autoTouch.delayMs = touchLockMs;
     Preferences p;
@@ -2941,7 +3016,7 @@ void clockTap(int16_t x, int16_t y) {
     p.end();
     return;
   }
-  if (y >= 332 && y < 358 && x >= 133 && x < 223) {
+  if (pill == PILL_SCREEN_OFF) {
     powerOffMs = powerOffNext(powerOffMs);
     Preferences p;
     p.begin("tamapoke", false);
@@ -2949,7 +3024,7 @@ void clockTap(int16_t x, int16_t y) {
     p.end();
     return;
   }
-  if (y >= 332 && y < 358 && x >= 243 && x < 333) {
+  if (pill == PILL_BATTERY) {
     batAsPercent = !batAsPercent;
     Preferences p;
     p.begin("tamapoke", false);
@@ -2957,7 +3032,7 @@ void clockTap(int16_t x, int16_t y) {
     p.end();
     return;
   }
-  if (y >= 366 && y <= 402 && x >= 133 && x <= 333) { applyClock(); return; }
+  if (OK_BTN.contains(x, y)) { applyClock(); return; }
 }
 
 // Clock badge (clockprompt.h) while the clock was reseeded and not set: a clock face with
@@ -3487,32 +3562,17 @@ void drawBattery() {
   int pc = batPercent();
   if (pc < 0) return;  // sin bateria conectada
   bool charging = batCharging();
-  uint16_t col = charging ? UI_BAR_OK
-                 : (pc >= 40) ? inkColor()
-                 : (pc >= 15) ? UI_BAR_WARN
-                              : UI_BAR_BAD;
+  uint16_t col = batteryColor(pc, charging, inkColor());
   if (batAsPercent) {
     char s[8];
-    snprintf(s, sizeof(s), charging ? "%d%%+" : "%d%%", pc);
+    batteryPctLabel(s, sizeof(s), pc, charging);
     gfx->setTextColor(col);
     setSize(2);
     setCur(centerX(s, 2), 8);
     printT(s);
     return;
   }
-  int x = CX - 14, y = 12, w = 24, h = 11;
-  gfx->drawRoundRect(x, y, w, h, 2, col);
-  gfx->fillRect(x + w, y + 3, 3, 5, col);  // borne
-  if (charging) {
-    // rayo de carga (zigzag) en vez de la barra de nivel
-    uint16_t bolt = C565(0xff, 0xd9, 0x4a);
-    int bx = x + w / 2;
-    gfx->fillTriangle(bx + 3, y + 1, bx - 4, y + 6, bx + 1, y + 6, bolt);
-    gfx->fillTriangle(bx - 1, y + 5, bx + 4, y + 5, bx - 3, y + 10, bolt);
-  } else {
-    int fw = (w - 4) * pc / 100;
-    if (fw > 0) gfx->fillRect(x + 2, y + 2, fw, h - 4, col);
-  }
+  drawBatteryGlyph(CX - 14, 12, 24, 11, pc, charging, col, C565(0xff, 0xd9, 0x4a));
 }
 
 void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
