@@ -61,7 +61,11 @@ void rtcSetEpoch(uint32_t e) {
   softSetEpoch(e);
   return;
 #endif
-  if (!rtcOk) return;
+  // The PCF85063 keeps a two-digit year (SensorLib reads it back as 2000-2099) and
+  // rtcEpoch() reads nothing before 2025. Outside that a set would leave it on a wrong
+  // year (TIME 5 reads back as 2070), which the loop then copies into the pet's saved
+  // time within 30 s (#45). Ignore such a value, as the 1.75C soft clock does.
+  if (!rtcOk || e < 1735689600UL || e >= 4102444800UL) return;  // [2025-01-01, 2100-01-01)
   time_t tt = e;
   struct tm tmv;
   gmtime_r(&tt, &tmv);

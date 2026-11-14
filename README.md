@@ -488,7 +488,8 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
 `SHINY` · `NICK <x>` · `BYE` / `RUN` (farewell / runaway) · `ABANDON` (force the
 runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio test) ·
 `REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery) · `CAREDAY` ·
-`TIME <epoch>` / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
+`TIME <epoch>` (sets the clock and the pet's saved time; a time the clock does not take
+gets `ERR clock not set: ...` and changes nothing) / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
 `SAVE` (write pending pet changes now) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
 inbed=<0|1> stale=<0|1> egg=<0|1> picking=<0|1>`, stale = bedtime paused until the clock
 is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on screen) · `LS` / `PUT` (SD files). `tools/board.py`

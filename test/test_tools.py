@@ -640,6 +640,35 @@ class TestBoardScripts(unittest.TestCase):
             self.assertIn('--clean', fh.read().split('\n'), 'update_175c.sh builds incrementally')
         self.assertFalse(any('write-flash' in c for c in self.calls()))
 
+    def test_update_says_why_the_clock_was_not_set(self):
+        # A refused TIME (#45) must fail the update with the board's reason, not "did not
+        # answer". board.py is a stub, and `sleep` a no-op so the ten retries take no time.
+        root = os.path.join(self.tmp, 'repo')
+        shutil.copytree(TOOLS, os.path.join(root, 'tools'), ignore=shutil.ignore_patterns('build', '__pycache__'))
+        shutil.copytree(os.path.join(ROOT, 'boards'), os.path.join(root, 'boards'))
+        reason = "clock not set; the board said: ERR clock not set: it did not take 5; " \
+                 "the pet's saved time is unchanged"
+        with open(os.path.join(root, 'tools', 'board.py'), 'w') as fh:
+            fh.write('import sys\n'
+                     f'sys.exit({reason!r} if "clock" in sys.argv else 1)\n')
+        bindir = os.path.join(self.tmp, 'bin')
+        os.makedirs(bindir)
+        with open(os.path.join(bindir, 'sleep'), 'w') as fh:
+            fh.write('#!/bin/sh\nexit 0\n')
+        os.chmod(os.path.join(bindir, 'sleep'), 0o755)
+        outdir = os.path.join(self.tmp, 'out')
+        os.makedirs(outdir)
+        put(os.path.join(outdir, 'TamaPoke.ino.bin'))
+        env = dict(self.env, PATH=bindir + os.pathsep + self.env['PATH'])
+        r = subprocess.run([os.path.join(root, 'tools', 'update_175c.sh'), '--port', self.port,
+                            '--out', outdir, '--no-build'],
+                           env=env, capture_output=True, text=True, timeout=60)
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertTrue(any('write-flash' in c for c in self.calls()), r.stderr)
+        self.assertIn(reason, r.stderr)
+        self.assertNotIn('did not answer on', r.stderr)
+        self.assertNotIn('Update done', r.stdout)
+
     def test_backup_reads_the_nvs_partition_with_the_rom_loader(self):
         dest = os.path.join(self.tmp, 'b', 'pet.nvs.bin')
         r = self.run_tool('pet_save.sh', 'backup', '--port', self.port, '--file', dest)
@@ -1581,6 +1610,38 @@ class TestBoardPy(unittest.TestCase):
                 self.assertNotEqual(r.returncode, 0)
                 self.assertNotIn('Traceback', r.stderr)
                 self.assertIn('board.py:', r.stderr)
+
+    def run_clock(self, refusal):
+        """board.py clock against a board whose clock reads 2026-11-13 10:00 and does
+        not take the time sent; `refusal` is what it prints before rtc= (#45)."""
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, slave)
+        sent = []
+
+        def board_side():
+            os.read(master, 64)                                   # TIME
+            os.write(master, b'rtc=1794564000\nDONE\n')
+            sent.append(os.read(master, 64))                      # TIME <now>
+            os.write(master, refusal + b'rtc=1794564000\nDONE\n')
+        t = threading.Thread(target=board_side, daemon=True)
+        t.start()
+        with self.assertRaises(SystemExit) as cm:
+            self.board.main(['--port', os.ttyname(slave), 'clock'])
+        t.join(5)
+        self.assertTrue(sent and sent[0].startswith(b'TIME '), sent)
+        self.assertIsInstance(cm.exception.code, str, 'a refused TIME must exit non-zero')
+        return cm.exception.code
+
+    def test_clock_fails_with_the_boards_reason_when_the_clock_refuses_the_time(self):
+        msg = self.run_clock(b"ERR clock not set: it did not take 5; "
+                             b"the pet's saved time is unchanged\n")
+        self.assertIn("ERR clock not set: it did not take 5; the pet's saved time is unchanged", msg)
+
+    def test_clock_fails_when_an_older_firmware_reads_back_another_time(self):
+        # firmware from before #45 prints no ERR line: the rtc= it reads back gives it away
+        msg = self.run_clock(b'')
+        self.assertIn('clock not set: board answered rtc=1794564000', msg)
 
 
 SIM = os.path.join(ROOT, 'sim')

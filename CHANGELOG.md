@@ -149,6 +149,17 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **A time the clock does not take no longer reaches the pet's save.** Serial
+  `TIME` saved the time it was sent as the pet's last-seen time even when the
+  clock ignored it (a stray `TIME 5`, a mistyped epoch), so the next boot could
+  count the gap to the real time as up to two weeks offline. Now the save and
+  the bedtime clock follow only a time the clock took; otherwise `TIME` answers
+  `ERR clock not set: ...` and changes nothing. The clock screen's OK works the
+  same way. On the original 1.75 a time before 2025 or after 2099 no longer
+  reaches the PCF85063 (it kept a two-digit year, so 1970 read back as 2070).
+  `tools/update_175c.sh` now says why the clock was not set instead of "did not
+  answer".
+
 - **Leaving a minigame** is now a "Hold: exit" button at the top of every game,
   held for 1 s like the strength bag's on the 1.75C. Before, any tap near the
   top quit keepy-uppy without a reward, including a tap aimed at a high ball.
