@@ -604,6 +604,22 @@ class TestBoardScripts(unittest.TestCase):
         self.assertFalse(any('write-flash' in c for c in self.calls()), 'flashed after a failed build')
         self.assertTrue(any('read-flash' in c for c in self.calls()), 'the pet should be backed up first')
 
+    def test_update_builds_the_image_it_flashes_from_scratch(self):
+        # The board's image must not reuse objects from an earlier (incremental) build.
+        root = os.path.join(self.tmp, 'repo')
+        shutil.copytree(TOOLS, os.path.join(root, 'tools'), ignore=shutil.ignore_patterns('build', '__pycache__'))
+        shutil.copytree(os.path.join(ROOT, 'boards'), os.path.join(root, 'boards'))
+        args = os.path.join(self.tmp, 'build-args')
+        with open(os.path.join(root, 'tools', 'build_175c.sh'), 'w') as fh:
+            fh.write(f'#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "{args}"\nexit 1\n')
+        r = subprocess.run([os.path.join(root, 'tools', 'update_175c.sh'), '--port', self.port,
+                            '--out', os.path.join(self.tmp, 'out')],
+                           env=self.env, capture_output=True, text=True, timeout=60)
+        self.assertNotEqual(r.returncode, 0)
+        with open(args) as fh:
+            self.assertIn('--clean', fh.read().split('\n'), 'update_175c.sh builds incrementally')
+        self.assertFalse(any('write-flash' in c for c in self.calls()))
+
     def test_backup_reads_the_nvs_partition_with_the_rom_loader(self):
         dest = os.path.join(self.tmp, 'b', 'pet.nvs.bin')
         r = self.run_tool('pet_save.sh', 'backup', '--port', self.port, '--file', dest)
@@ -831,16 +847,23 @@ class TestBuildCache(FakeArduinoCliCase):
 
     @staticmethod
     def owner_of(pid):
-        """What tools/build_cache.sh records for a running process."""
-        start = subprocess.run(['ps', '-o', 'lstart=', '-p', str(pid)],
-                               capture_output=True, text=True).stdout.strip()
+        """What tools/build_cache.sh records for a running process (its start
+        time in UTC and the C locale)."""
+        start = subprocess.run(['ps', '-o', 'lstart=', '-p', str(pid)], capture_output=True, text=True,
+                               env=dict(os.environ, LC_ALL='C', TZ='UTC0')).stdout.strip()
         return f'{pid} {start}'
 
     @staticmethod
-    def hold(folder, owner):
+    def hold(folder, owner, age=0):
+        """A lock on <folder> as another run would leave it; owner None means
+        it has no owner recorded, age backdates it by that many seconds."""
         shutil.rmtree(folder + '.lock', ignore_errors=True)
         os.makedirs(folder + '.lock')
-        put(os.path.join(folder + '.lock', 'owner'), (owner + '\n').encode())
+        if owner is not None:
+            put(os.path.join(folder + '.lock', 'owner'), (owner + '\n').encode())
+        if age:
+            then = time.time() - age
+            os.utime(folder + '.lock', (then, then))
 
     def build_path(self, **env):
         """The 1.75C build folder build_175c.sh uses for this checkout."""
@@ -977,6 +1000,12 @@ class TestBuildCache(FakeArduinoCliCase):
         self.assertEqual(self.calls(), [], 'built in a folder another run holds')
         with open(os.path.join(build + '.lock', 'owner')) as fh:
             self.assertEqual(fh.read().strip(), owner, "another run's lock was touched")
+        # a lock just taken, its owner not written yet
+        self.hold(build, None)
+        r = self.build_175c()
+        self.assertNotEqual(r.returncode, 0, 'built in a folder a run is just taking')
+        self.assertIn('not recorded yet', r.stderr)
+        self.assertEqual(self.calls(), [])
         # one gate at a time per checkout: refused before any step runs
         root = self.gate_root()
         gate_dir = os.path.dirname(self.opt(self.gate_calls(root)[0], '--build-path'))
@@ -996,16 +1025,40 @@ class TestBuildCache(FakeArduinoCliCase):
         gone = subprocess.Popen(['true'])
         gone.wait()
         build = self.build_path()
-        for owner in (f'{gone.pid} Thu Jan  1 00:00:00 1970',          # no such process any more
-                      f'{os.getpid()} Thu Jan  1 00:00:00 1970'):      # its pid now belongs to another process
+        for owner, age in ((f'{gone.pid} Thu Jan  1 00:00:00 1970', 0),       # no such process any more
+                           (f'{os.getpid()} Thu Jan  1 00:00:00 1970', 0),   # its pid now belongs to another process
+                           (None, 120)):        # its taker died before writing the owner, two minutes ago
             with self.subTest(owner=owner):
-                self.hold(build, owner)
+                self.hold(build, owner, age)
                 self.fresh()
                 r = self.build_175c()
                 self.assertEqual(r.returncode, 0, r.stderr)
                 self.assertIn('Removed a stale lock', r.stderr)
                 self.assertEqual(len(self.calls()), 1)
                 self.assertFalse(os.path.exists(build + '.lock'))
+
+    def test_the_lock_holds_whatever_the_locale_or_time_zone(self):
+        # ps prints a start time in the caller's locale and time zone: a run from
+        # Terminal (say en_GB) and one from an agent's shell (C) must still see
+        # the same owner. Two real runs; the second must be refused.
+        import signal
+        build = self.build_path()
+        holder = subprocess.Popen([os.path.join(TOOLS, 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out')],
+                                  env=dict(self.env, FAKE_SLEEP='30', LC_ALL='en_GB.UTF-8', TZ='XYZ-9'),
+                                  start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            deadline = time.time() + 20
+            while not self.calls() and time.time() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(len(self.calls()), 1, 'the first run never started compiling')
+            r = self.build_175c(LC_ALL='C', TZ='UTC0')
+            self.assertNotEqual(r.returncode, 0, 'took over the lock of a run that is still compiling')
+            self.assertIn('in use by another run', r.stderr)
+            self.assertEqual(len(self.calls()), 1, 'two runs compiled in one build folder')
+        finally:
+            os.killpg(holder.pid, signal.SIGTERM)
+            holder.wait(timeout=20)
+        self.assertFalse(os.path.exists(build + '.lock'))
 
     def test_the_lock_is_given_back_however_the_run_ends(self):
         import signal

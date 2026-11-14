@@ -22,7 +22,8 @@
 # lock, since macOS has no flock) and tp_unlock_all, run from the caller's EXIT
 # trap, gives it back. A lock whose owner is gone (killed with SIGKILL, or a
 # reboot) is taken over; the owner is recorded as its pid plus that process's
-# start time, so a reused pid does not keep a dead lock alive.
+# start time (in UTC and the C locale), so a reused pid does not keep a dead
+# lock alive. A lock with no owner recorded is taken over after a minute.
 #
 # Works with macOS's bash 3.2 and BSD tools, and with Linux.
 
@@ -42,13 +43,21 @@ tp_cache_dir() {  # tp_cache_dir <checkout root>: print its cache folder
 }
 
 # The start time of a running process, or nothing if there is no such process.
-tp_proc_start() { ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//; s/ *$//'; }
+# ps prints it in the caller's locale and time zone, which differ between, say,
+# an agent's shell and Terminal: pin both, so every run writes and reads one form.
+tp_proc_start() { LC_ALL=C TZ=UTC0 ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//; s/ *$//'; }
 
-tp_lock_is_live() {  # tp_lock_is_live <lock folder>: its owner still runs (or is still writing it)
+tp_lock_is_live() {  # tp_lock_is_live <lock folder>: its owner still runs
   local owner pid
   owner="$(cat "$1/owner" 2>/dev/null)"
   pid="${owner%% *}"
-  [[ ! "$pid" =~ ^[0-9]+$ || "$pid $(tp_proc_start "$pid")" == "$owner" ]]
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    [[ "$pid $(tp_proc_start "$pid")" == "$owner" ]]
+  else
+    # No owner yet: a run is between taking the lock and writing it, or was
+    # killed right there. Give it a minute.
+    [[ -n "$(find "$1" -maxdepth 0 -mmin -1 2>/dev/null)" ]]
+  fi
 }
 
 # Record which checkout <cache folder> belongs to, and delete the cache folders
