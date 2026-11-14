@@ -2445,6 +2445,15 @@ TEST(evochime, again_at_a_new_level) {
   CHECK(c.update(true, 17));
 }
 
+// the sketch keeps one EvoChime from boot: the next pet starts again at level 1
+TEST(evochime, a_new_pet_chimes_at_the_same_level_again) {
+  EvoChime c;
+  CHECK(c.update(true, 16));
+  CHECK(!c.update(false, 16));  // released with the button still showing
+  for (uint16_t lv = 1; lv < 16; lv++) CHECK(!c.update(false, lv));  // the new pet grows
+  CHECK(c.update(true, 16));
+}
+
 TEST(evochime, needs_the_button_to_appear) {
   EvoChime c;
   CHECK(c.update(true, 16));

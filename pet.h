@@ -269,6 +269,9 @@ struct EvoChime {
   bool wasReady = false;
   uint16_t chimedLevel = 0;  // 0 = none yet (levels start at 1)
   bool update(bool ready, uint16_t level) {
+    // a pet's age only goes forward: a lower level is a new pet (the egg after an
+    // ending), which chimes at that level again
+    if (level < chimedLevel) chimedLevel = 0;
     bool chime = ready && !wasReady && level != chimedLevel;
     if (chime) chimedLevel = level;
     wasReady = ready;
