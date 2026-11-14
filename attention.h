@@ -134,7 +134,7 @@ struct AttnAction {
                     // (screenOff), so the auto touch lock, if on, keeps holding
   // Both open the sketch's "showing" window (attnShowUntil): full brightness, no auto-off
   // and no dimming until it ends, and no touch is recorded (lastInteract is left alone), so
-  // idle-based features (charging self-care, #36) keep counting from her last real touch.
+  // idle-based features (self-care while charging, #24) keep counting from her last real touch.
   bool closeViews;  // go back to the pet screen first (drops an unsaved clock edit or a
                     // half-typed name, both left behind when the screen timed out)
 };

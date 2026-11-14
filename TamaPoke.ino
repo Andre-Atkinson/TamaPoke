@@ -708,7 +708,8 @@ void bedApply() {
 // Pet::tick() is seen on the same pass, with no extra wakeup.
 //
 // A call opens a "showing" window of ATTN_PEEK_MS (attnShowUntil) and does NOT count as a
-// touch: lastInteract is left alone (a later feature waits for 10 untouched minutes, #36).
+// touch: lastInteract is left alone (self-care while charging, #24, reads idleSince(now,
+// lastInteract) at the top of loop() and waits for 10 untouched minutes).
 // powerCtx() reads the window as "just touched" (idle 0, panel on), so the screen is lit
 // at full brightness, drawn at 10 fps, with no auto-off, no dimming and no light sleep for
 // its length; when it ends the real idle applies again (dim, or off, or dark).
