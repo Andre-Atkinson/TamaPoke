@@ -72,7 +72,22 @@ While **awake**, per minute:
 - ⚽ **Play / minigames:** +JOY, −ENE; a random one of four short games (keepy-uppy, Berry Catch, Peekaboo, Berry Song). Each trains **SPEED** and burns weight, and keeps its own best score.
 - 🥊 **Training bag:** trains **STRENGTH** (~4 hits = 1 pt, cap +18/session), tires it.
 - 🫧 **Bath:** clears poops, HYG → 100.
-- 👆 **Pet it:** +5 JOY + bond.
+- 👆 **Pet it:** tap it for +5 JOY + bond. It also knows a few touches, and each
+  one counts as a single pat (the daily bond limit is shared with everything else):
+  - **double tap:** it hops;
+  - **stroke** back and forth over it: it enjoys it (one pat a second or so while
+    you keep stroking);
+  - **tickle** (six quick taps in a row): it giggles; keep going and it turns away
+    with a little huff, which costs nothing but gives no pat;
+  - **hold** your finger on it for a moment, then **slide** sideways: it walks
+    after your finger.
+
+  Gestures work on the main screen with the creature awake, not on an egg or while
+  a menu or dialog is open. A swipe, a tap or the long-press (release) starting on
+  the creature works as before, with one catch: a sideways slide that starts with a
+  short pause (a quarter of a second) on the creature makes it walk after your
+  finger instead of opening the Pokédex. To open the Pokédex, swipe without
+  pausing, or start the swipe off the creature.
 - 🌙 **Sleep:** rest — ENE **+6/min**, needs drain ~**4× slower** with floors
   (FOOD 30 / JOY 35 / HYG 45). No poops, no slip-ups, can't run away while asleep.
 - 🛏️ **Bedtime** (stat card, *Care* page; off by default): pick 21:00–07:00,
