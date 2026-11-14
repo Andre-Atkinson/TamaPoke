@@ -495,7 +495,8 @@ TEST(SimWindow, la_velocidad_multiplica_el_tiempo_simulado) {
 TEST(SimWindow, en_pausa_no_corre_nada_y_al_seguir_no_hay_rafaga) {
   mockSetMillis(0);
   PaceRun run;
-  run.frame(16000, false, 2);
+  run.frame(16000, false, 200);  // una pasada que se pasa: deuda negativa justo antes de pausar
+  CHECK(run.p.debtUs < 0);
   simPaceSetPaused(run.p, true);
   uint32_t t = millis();
   for (int i = 0; i < 50; i++) {
@@ -505,7 +506,7 @@ TEST(SimWindow, en_pausa_no_corre_nada_y_al_seguir_no_hay_rafaga) {
   CHECK_EQ(millis(), t);
   simPaceSetPaused(run.p, false);
   SimPaceResult r = run.frame(16000, false, 2);
-  CHECK_RANGE((long)r.simMs, 14, 18);  // un fotograma, no los 10 s de pausa
+  CHECK_RANGE((long)r.simMs, 14, 18);  // un fotograma, sin deuda vieja ni los 10 s de pausa
 }
 
 TEST(SimWindow, un_fotograma_parado_no_salta_mas_de_250_ms_de_pared) {
