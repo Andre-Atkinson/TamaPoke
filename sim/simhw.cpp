@@ -60,6 +60,7 @@ void Arduino_CO5300::draw16bitRGBBitmap(int16_t x, int16_t y, uint16_t *bitmap, 
 // Con el chip dormido (touch.sleep()) no hay informes, ni INT, ni respuesta I2C.
 void simTouchSet(bool down, int16_t x, int16_t y) {
   bool changed = down != gSimTouch.down || (down && (x != gSimTouch.x || y != gSimTouch.y));
+  if (down && !gSimTouch.down) gSimTouch.readSincePress = false;  // a new press
   gSimTouch.down = down;
   if (down) { gSimTouch.x = x; gSimTouch.y = y; }
   if (changed && gSimTouch.ready && !gSimTouch.asleep) mockPinFireIsr(TP_INT);
@@ -75,6 +76,12 @@ uint8_t TouchDrvCST92xx::getPoint(int16_t *x, int16_t *y, uint8_t) {
   if (!gSimTouch.ready || gSimTouch.asleep || !gSimTouch.down) return 0;
   *x = gSimTouch.x;
   *y = gSimTouch.y;
+  gSimTouch.contactReads++;
+  if (!gSimTouch.readSincePress) {
+    gSimTouch.readSincePress = true;
+    gSimTouch.firstReadX = gSimTouch.x;
+    gSimTouch.firstReadY = gSimTouch.y;
+  }
   return 1;
 }
 

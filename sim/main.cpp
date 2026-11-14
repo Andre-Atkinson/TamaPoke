@@ -10,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include "boot.h"
+#include "interactive.h"
 #include "png.h"
 #include "runner.h"
 #include "script.h"
@@ -31,7 +32,7 @@ struct Options {
 
 // Tiempos de los gestos (ms de reloj falso). Los umbrales de handleTouch(): un toque
 // dura < 1500 ms y se mueve < 40 px; un deslizamiento > 80 px en < 800 ms.
-const uint32_t TAP_DOWN_MS = 80;
+// (lo que dura un toque, SIM_TAP_DOWN_MS, esta en interactive.h: lo comparte la ventana)
 const uint32_t SETTLE_MS = 400;      // tras soltar: el gesto se resuelve y se dibuja otro frame
 const uint32_t PWR_SPACING_MS = 120; // entre pulsaciones de PWR: el bucle sondea el PKEY cada 40 ms
 const uint32_t PWR_RESOLVE_MS = 350 + 250;  // PwrButton::GAP_MS y un frame
@@ -176,7 +177,7 @@ int main(int argc, char **argv) {
       case OP_CHARGING: gSimPower.charging = c.a != 0; break;
       case OP_TAP:
         simTouchSet(true, (int16_t)c.a, (int16_t)c.b);
-        run(TAP_DOWN_MS);
+        run(SIM_TAP_DOWN_MS);
         simTouchSet(false, 0, 0);
         run(SETTLE_MS);
         break;

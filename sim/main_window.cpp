@@ -148,21 +148,24 @@ struct Selftest {
     }
     push(e);
   }
-  void key(SDL_Keycode sym, bool down, bool repeat = false) {
+  void key(SDL_Keycode sym, bool down, bool repeat = false, uint16_t mod = 0) {
     SDL_Event e;
     SDL_zero(e);
     e.type = down ? SDL_KEYDOWN : SDL_KEYUP;
     e.key.keysym.sym = sym;
+    e.key.keysym.mod = mod;
     e.key.state = down ? SDL_PRESSED : SDL_RELEASED;
     e.key.repeat = repeat ? 1 : 0;
     push(e);
   }
   // a key press and release, then a short run
-  void tapKey(SDL_Keycode sym, uint32_t ms = 50) {
-    key(sym, true);
-    key(sym, false);
+  void tapKey(SDL_Keycode sym, uint32_t ms = 50, uint16_t mod = 0) {
+    key(sym, true, false, mod);
+    key(sym, false, false, mod);
     run(ms);
   }
+  // one frame of `wallMs` of wall time (a frame is 50 ms in run())
+  void frame(uint32_t wallMs) { winFrame(app, wallMs * 1000, false); }
 };
 
 // colour of one rendered pixel (logical 1:1 window): 0xRRGGBB
@@ -269,6 +272,73 @@ int runSelftest(WinApp &app, const Options &o, FILE *serialOut, const std::strin
   t.run(100);
   t.check(!gSimTouch.down, "the finger stayed down after the drag");
 
+  // ---- a click is not lost between two reads. The 466x466 window is at 2x: (600,400) is (300,200).
+  {
+    // a press and its release pushed together (a trackpad tap): the firmware still reads the contact
+    uint32_t reads = gSimTouch.contactReads;
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+    t.run(50);
+    t.check(gSimTouch.contactReads > reads, "a press and release in one batch never reached the firmware");
+    t.run(500);
+    t.check(!gSimTouch.down, "the finger stayed down after a quick click");
+    // a press and a move pushed together: the firmware's first read is where the press began
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+    t.mouse(SDL_MOUSEMOTION, 640, 440);
+    t.mouse(SDL_MOUSEBUTTONUP, 640, 440);
+    t.run(50);
+    t.check(gSimTouch.firstReadX == 300 && gSimTouch.firstReadY == 200,
+            "the firmware's first read of a press was not where the press began");
+    t.run(500);
+    t.check(!gSimTouch.down, "the finger stayed down after a press and move in one batch");
+    // a release soon after the press waits until the finger has been down SIM_TAP_DOWN_MS (80 ms) of simulated time
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+    t.run(50);
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+    reads = gSimTouch.contactReads;
+    t.run(50);
+    t.check(gSimTouch.contactReads > reads, "a release 50 ms after the press was applied before the finger had been down 80 ms");
+    t.check(!gSimTouch.down, "the finger stayed down after a deferred release");
+    t.run(500);
+    // the pointer moving after the button went up (before the release is applied) does not drag the finger
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+    t.run(50);
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+    t.mouse(SDL_MOUSEMOTION, 700, 500);
+    t.run(50);
+    t.check(gSimTouch.x == 300 && gSimTouch.y == 200, "the pointer moving after the release dragged the finger");
+    t.run(500);
+    // a release that is waiting is cancelled by focus loss and by pause, and the next press is held by its own button
+    for (int how = 0; how < 2; how++) {  // 0: focus loss, 1: pause
+      t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+      t.frame(10);
+      t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+      if (how == 0) {
+        SDL_Event e;
+        SDL_zero(e);
+        e.type = SDL_WINDOWEVENT;
+        e.window.windowID = SDL_GetWindowID(app.window);
+        e.window.event = SDL_WINDOWEVENT_FOCUS_LOST;
+        t.push(e);
+      } else {
+        t.key(SDLK_SPACE, true);
+      }
+      t.frame(10);
+      t.check(!gSimTouch.down, how == 0 ? "focus loss left a waiting release pending" : "pause left a waiting release pending");
+      if (how == 1) {
+        t.key(SDLK_SPACE, false);
+        t.tapKey(SDLK_SPACE, 0);  // resume
+        t.check(!app.pace.paused, "Space did not resume");
+      }
+      t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);  // held for far longer than 80 ms: nothing may lift it
+      t.run(300);
+      t.check(gSimTouch.down, "a press after a cancelled release was lifted without its button going up");
+      t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+      t.run(500);
+      t.check(!gSimTouch.down, "the finger stayed down after the button went up");
+    }
+  }
+
   // ---- keys = buttons. BOOT is on GPIO0, low while held.
   t.key(SDLK_b, true);
   t.run(100);
@@ -302,10 +372,21 @@ int runSelftest(WinApp &app, const Options &o, FILE *serialOut, const std::strin
   t.run(500);
   t.check(millis() == before, "time moved while paused");
   t.check(!gSimTouch.down, "a mouse press was accepted while paused");
+  t.key(SDLK_b, true);  // the buttons are as dead as the touch; the other keys still work
+  t.run(100);
+  t.check(digitalRead(0) == HIGH, "B pressed BOOT while paused");
+  t.key(SDLK_b, false);
+  t.tapKey(SDLK_p, 0);
+  t.tapKey(SDLK_RIGHTBRACKET, 0);
+  t.check(app.pace.speedIndex == 1, "] did nothing while paused");
+  t.tapKey(SDLK_LEFTBRACKET, 0);
+  t.check(app.pace.speedIndex == 0, "[ did nothing while paused");
   t.tapKey(SDLK_SPACE, 0);
   t.check(!app.pace.paused, "Space did not resume");
   t.run(500);
   t.check(millis() - before >= 400, "time did not move after resuming");
+  t.run(1000);
+  t.check(simPanelVisible(), "P while paused reached the firmware as a PWR press after resuming");
   t.mouse(SDL_MOUSEBUTTONUP, 466, 466);
 
   // ---- losing focus lets go of everything held (no key-up or mouse-up will arrive)
@@ -323,6 +404,19 @@ int runSelftest(WinApp &app, const Options &o, FILE *serialOut, const std::strin
   }
   t.run(100);
   t.check(!gSimTouch.down && digitalRead(0) == HIGH, "losing focus left the finger or BOOT held");
+
+  // ---- a touch wakes the firmware from a light sleep at once: input forgives a negative debt
+  {
+    app.pace.debtUs = -5000000;  // the last pass slept 5 s past what was owed
+    uint32_t m0 = millis();
+    t.run(50);
+    t.check(millis() == m0, "a negative debt did not hold the firmware back");
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+    t.run(50);
+    t.check(millis() > m0, "a touch did not forgive a negative debt");
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+    t.run(500);
+  }
 
   // ---- speed, power toggles, battery
   t.tapKey(SDLK_RIGHTBRACKET, 0);
@@ -376,9 +470,34 @@ int runSelftest(WinApp &app, const Options &o, FILE *serialOut, const std::strin
     }
   }
 
-  // ---- quit: Q, the window's close button, the system's quit
+  // ---- a minimized or hidden window is not drawn, and the firmware keeps running
+  {
+    SDL_HideWindow(app.window);
+    uint32_t drawn = app.framesRendered, m0 = millis();
+    t.run(100);
+    t.check(app.framesRendered == drawn && app.framesSkipped > 0, "a hidden window was still drawn");
+    t.check(millis() > m0, "the firmware stopped while the window was hidden");
+    SDL_ShowWindow(app.window);
+    t.run(50);
+    t.check(app.framesRendered > drawn, "the window was not drawn again once shown");
+  }
+
+  // ---- Cmd, Ctrl and Alt combinations belong to the system, not to the simulator
+  t.key(SDLK_b, true, false, KMOD_LGUI);
+  t.run(100);
+  t.check(digitalRead(0) == HIGH, "Cmd-B pressed BOOT");
+  t.key(SDLK_b, false);
+  t.tapKey(SDLK_q, 0, KMOD_LCTRL);
+  t.check(!app.quit, "Ctrl-Q quit");
+  t.tapKey(SDLK_q, 0, KMOD_LALT);
+  t.check(!app.quit, "Alt-Q quit");
+
+  // ---- quit: Q, Esc, the window's close button, the system's quit
   t.tapKey(SDLK_q, 0);
   t.check(app.quit, "Q did not quit");
+  app.quit = false;
+  t.tapKey(SDLK_ESCAPE, 0);
+  t.check(app.quit, "Esc did not quit");
   app.quit = false;
   {
     SDL_Event e;
@@ -480,9 +599,11 @@ int main(int argc, char **argv) {
       last = now;
       winFrame(app, deltaUs, true);
       if (o.quitAfterMs && (SDL_GetPerformanceCounter() - start) * 1000ULL / freq >= o.quitAfterMs) app.quit = true;
-      // vsync may not pace us (hidden window, software renderer): never spin
+      // vsync may not pace us (hidden window, software renderer): wait out the rest of a
+      // ~60 Hz frame, so it never renders and uploads the panel faster than that
+      const uint64_t frameUs = 16667;
       uint64_t spentUs = (SDL_GetPerformanceCounter() - now) * 1000000ULL / freq;
-      if (spentUs < 4000) SDL_Delay((uint32_t)((4000 - spentUs + 999) / 1000));
+      if (spentUs < frameUs) SDL_Delay((uint32_t)((frameUs - spentUs + 999) / 1000));
     }
   }
   winDestroy(app);

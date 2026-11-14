@@ -60,10 +60,11 @@ WIN_OBJS := $(addprefix $(BUILD)/win/,$(WIN_SRCS:.cpp=.o))
 
 # SDL2 only for the window. Recursive variables: sdl2-config runs only when the window
 # target is built, so a machine without SDL2 builds `all` as before. The headers go in
-# with -isystem, so SDL cannot add warnings to ours; SDL2main is left out (main_window.cpp
-# defines SDL_MAIN_HANDLED and calls SDL_SetMainReady()).
-SDL_CFLAGS = $(shell sdl2-config --cflags | sed 's/-I/-isystem /g')
-SDL_LIBS   = $(shell sdl2-config --libs | sed 's/-lSDL2main//')
+# with -isystem, so SDL cannot add warnings to ours; SDL2main is left out (window.h
+# defines SDL_MAIN_HANDLED and window.cpp calls SDL_SetMainReady()). Without sdl2-config
+# the shell's error is hidden: check-sdl says what is missing, once.
+SDL_CFLAGS = $(shell sdl2-config --cflags 2>/dev/null | sed 's/-I/-isystem /g')
+SDL_LIBS   = $(shell sdl2-config --libs 2>/dev/null | sed 's/-lSDL2main//')
 
 .PHONY: all window clean check-libs check-sdl
 all: check-libs $(BIN)
@@ -75,6 +76,9 @@ check-libs:
 
 check-sdl:
 	@sdl2-config --version >/dev/null 2>&1 || { echo "sim: SDL2 not found (no sdl2-config): the window needs it. Ask the owner before installing it." >&2; exit 1; }
+
+# check-sdl first, also under -j, so a machine without SDL2 only sees its message
+$(WIN_OBJS) $(WINBIN): | check-sdl
 
 $(BIN): $(OBJS)
 	$(CXX) -o $@ $(OBJS)

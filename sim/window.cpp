@@ -58,6 +58,7 @@ void say(const WinApp &a, const char *fmt, ...) {
 void fingerUp(WinApp &a) {
   if (!a.fingerDown) return;
   a.fingerDown = false;
+  a.releasePending = false;
   simTouchSet(false, 0, 0);
   a.inputThisFrame = true;
 }
@@ -67,6 +68,19 @@ void bootUp(WinApp &a) {
   a.bootHeld = false;
   simBootButton(false);
   a.inputThisFrame = true;
+}
+
+// The button went up. The finger lifts at once if it has been down long enough for the
+// firmware (which polls the chip every 20 ms) to have seen it; otherwise it lifts in
+// winFrame() once SIM_TAP_DOWN_MS of simulated time have passed. Pause and focus loss lift
+// it at once (fingerUp).
+void mouseUp(WinApp &a) {
+  if (!a.fingerDown) return;
+  if (mockMillis64() - a.downAtMs < SIM_TAP_DOWN_MS) {
+    a.releasePending = true;
+    return;
+  }
+  fingerUp(a);
 }
 
 void markTitleStale(WinApp &a) { a.titleDueUs = 0; }
@@ -170,15 +184,19 @@ void handleMouse(WinApp &a, const SDL_Event &e) {
   if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
     int x = e.button.x, y = e.button.y;
     bool onPanel = a.opt.square ? (x >= 0 && y >= 0 && x < SIM_W && y < SIM_H) : simInGlass(x, y);
-    if (!onPanel || a.fingerDown) return;  // a press that starts off the glass is not a touch
+    // a press that starts off the glass is not a touch; a second press while the last click
+    // still waits to be released is ignored (a double click that fast is not a human one)
+    if (!onPanel || a.fingerDown) return;
     a.fingerDown = true;
+    a.downAtMs = mockMillis64();
     simTouchSet(true, (int16_t)x, (int16_t)y);
     a.inputThisFrame = true;
-  } else if (e.type == SDL_MOUSEMOTION && a.fingerDown) {
+    a.touchStarted = true;
+  } else if (e.type == SDL_MOUSEMOTION && a.fingerDown && !a.releasePending) {
     simTouchSet(true, (int16_t)simClampCoord(e.motion.x), (int16_t)simClampCoord(e.motion.y));
     a.inputThisFrame = true;
   } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-    fingerUp(a);
+    mouseUp(a);
   }
 }
 
@@ -311,7 +329,17 @@ void winHandleEvent(WinApp &a, const SDL_Event &e) {
 
 void winFrame(WinApp &a, uint32_t wallDeltaUs, bool readStdin) {
   SDL_Event e;
-  while (SDL_PollEvent(&e)) winHandleEvent(a, e);
+  // SDL_PumpEvents + SDL_PeepEvents rather than SDL_PollEvent: a poll loop that is left early
+  // (below) would leave SDL's poll sentinel in the queue, and everything that arrives after it
+  // would wait a whole frame more
+  SDL_PumpEvents();
+  while (SDL_PeepEvents(&e, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT) > 0) {
+    winHandleEvent(a, e);
+    if (a.touchStarted) {  // the firmware must read this contact before a move or release changes it
+      a.touchStarted = false;
+      break;  // the rest of the batch stays queued for the next frame
+    }
+  }
   if (readStdin) pumpStdin(a);
 
   const uint64_t freq = SDL_GetPerformanceFrequency();
@@ -322,12 +350,15 @@ void winFrame(WinApp &a, uint32_t wallDeltaUs, bool readStdin) {
   simPaceFrame(a.pace, wallDeltaUs, a.inputThisFrame, [] { loop(); }, [] { return gSimPower.poweredOff; },
                spentUs);
   a.inputThisFrame = false;
+  if (a.releasePending && mockMillis64() - a.downAtMs >= SIM_TAP_DOWN_MS) fingerUp(a);  // the click's release
   if (gSimPower.poweredOff) {
     a.quit = true;
     a.quitReason = "the PMU powered the board off (battery at 0% without USB)";
   }
 
   a.wallUs += wallDeltaUs;
-  render(a);
+  // a minimized or hidden window is not drawn (nobody sees it); the firmware keeps running
+  if (SDL_GetWindowFlags(a.window) & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN)) a.framesSkipped++;
+  else render(a);
   refreshTitle(a);
 }

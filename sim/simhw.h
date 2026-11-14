@@ -26,6 +26,10 @@ struct SimTouch {
   int16_t x = 0, y = 0;    // coordenadas de la UI (466x466, como las da el driver ya espejado)
   bool asleep = false;     // touch.sleep(): no contesta por I2C hasta el siguiente begin()
   bool ready = false;      // begin() correcto
+  // what the firmware has read (getPoint() calls that found a contact), for the window's selftest
+  uint32_t contactReads = 0;
+  int16_t firstReadX = 0, firstReadY = 0;  // the contact the first read after the latest press saw
+  bool readSincePress = false;
 };
 extern SimTouch gSimTouch;
 // mueve el dedo; dispara el INT del CST9217 (la ISR del firmware) si el chip esta despierto

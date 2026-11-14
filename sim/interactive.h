@@ -20,6 +20,13 @@ int simSpeedStep(int index, int dir);
 // battery) counts as 0.
 int simBatteryStep(int pct, int dir);
 
+// ---------------------------------------------------------------- touch
+// How long a tap holds the finger down, in simulated milliseconds: the scripted runner
+// (main.cpp, `tap`) holds it this long, and the window does not let go of a click sooner,
+// so a quick click is not lost between two reads. The firmware polls the touch chip every
+// 20 ms and a tap lasts under 1500 ms and moves under 40 px (handleTouch()).
+static const uint32_t SIM_TAP_DOWN_MS = 80;
+
 // ---------------------------------------------------------------- glass
 // Is the pixel inside the round glass? Same circle as the PNG writer's round crop
 // (png.cpp: the circle inscribed in the panel), judged on the pixel's centre.

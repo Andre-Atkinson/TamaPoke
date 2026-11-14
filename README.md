@@ -532,7 +532,10 @@ actually reached. A dimmed panel is drawn darker (the firmware's dim levels), an
 screen that is off or asleep is drawn black. `--square` drops the round glass,
 `--quit-after 2m` closes the window after that much real time, and `--help` lists the
 rest. It runs the firmware in real time, so a light sleep makes a click wait at most
-200 ms of simulated time at 1×; any click or key skips that wait.
+200 ms of simulated time at 1×; a touch, `P` or `B` skips that wait. A click is held for
+at least 80 ms of simulated time, so a quick tap or trackpad click is not lost. The
+terminal takes ordinary commands only: `PUT`'s raw payload cannot go through it (the
+line splitter drops NUL bytes and lines over 256 characters, and splits at CR and LF).
 
 `tools/gate.sh` builds the window and runs `--selftest` for both boards when SDL2 is
 there (SDL's dummy video driver, no display needed): it pushes synthetic mouse and key

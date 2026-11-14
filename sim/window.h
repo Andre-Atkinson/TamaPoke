@@ -34,6 +34,9 @@ struct WinApp {
 
   // input state
   bool fingerDown = false;           // a mouse press that started on the glass is held
+  bool releasePending = false;       // the button is up but the finger stays down until it has been down SIM_TAP_DOWN_MS
+  bool touchStarted = false;         // a press became the finger during this event batch
+  uint64_t downAtMs = 0;             // simulated time (mockMillis64) the finger went down
   bool bootHeld = false;             // B is held
   bool inputThisFrame = false;       // a touch or button event came in since the last frame
 
@@ -44,6 +47,7 @@ struct WinApp {
   std::string lastShot;
   uint64_t wallUs = 0;               // wall time seen by winFrame()
   uint64_t titleDueUs = 0;
+  uint32_t framesSkipped = 0;        // frames not drawn because the window was minimized or hidden
   bool noBudget = false;             // selftest: no wall budget per frame (a busy host must not change the result)
 };
 
@@ -52,6 +56,10 @@ bool winCreate(WinApp &a, bool vsync, std::string &err);
 void winDestroy(WinApp &a);
 
 // One SDL event: mouse = finger, keys = buttons and controls. The only place input is handled.
+// A click is not lost between two reads: winFrame() stops reading events after one that
+// puts the finger down (the firmware runs with that contact first, then the rest of the
+// batch is handled), and a release waits until the finger has been down SIM_TAP_DOWN_MS of
+// simulated time.
 void winHandleEvent(WinApp &a, const SDL_Event &e);
 
 // One frame: queued events, stdin lines (readStdin), the firmware for the wall time that
