@@ -48,7 +48,8 @@ void handleSerial() {
     if (setWallClock(pet, e, bedClockSet)) {
       if (clockOpen) loadClockFields(rtcEpoch());  // the open screen shows the time just set
     } else {  // nothing changes, not even what the player is editing on the clock screen
-      Serial.printf("ERR clock not set: it did not take %u; the pet's saved time is unchanged\n", e);
+      Serial.printf("ERR clock not set: it did not take %lu; the pet's saved time is unchanged\n",
+                    (unsigned long)e);
     }
     Serial.printf("rtc=%u\n", rtcEpoch());
     Serial.println("DONE");
