@@ -43,6 +43,7 @@ static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright unt
 #include "trainingcapture.h"
 #include "app.h"
 #include "gameui.h"
+#include "idlelife.h"
 #include "scene.h"
 #include "screens.h"
 #include "serialcmd.h"
@@ -552,6 +553,7 @@ void ensureMon() {
   beh.mode = 0;
   beh.until = 0;
   beh.fast = false;
+  idleReset();  // the idle planner starts over with the new sprite (#22)
   petReact.kind = REACT_NONE;
   if (pet.speciesId >= 1 && pet.speciesId <= DEX_COUNT) {
     pmd.load(pet.speciesId, pet.shiny);          // principal: PMD
@@ -701,6 +703,7 @@ void attnLoop(uint32_t now) {
   if (a.wait) return;  // asked again next pass; dropped if the need recovers or the pet goes away
 
   attnArm.done();
+  idleInterrupt(now);  // whatever the pet was doing by itself stops (#22)
   if (a.closeViews) attnCloseViews();
   if (a.peek || a.brighten) {
     attnShowUntil = now + ATTN_PEEK_MS;
@@ -957,6 +960,7 @@ void wakeUI() {
   bool slow = !iv || iv > 100;  // pantalla apagada o ritmo lento: se dibuja ya, sin esperar al frame
   lastInteract = now;
   attnShowUntil = 0;  // a real touch ends a call's window (idle is 0 anyway)
+  idleInterrupt(now);  // the pet stops what it was doing by itself and looks up (#22)
   // el frame forzado respeta los 85 ms entre redibujados (si no, solapa el DMA del anterior)
   if (slow) lastRender = (now - lastRender >= 85) ? 0 : lastRender - 15;
   audioSetIdle(false);
@@ -1129,6 +1133,16 @@ static PetGestureGate petGestureGate() {
   // dialog it learns later turns the gestures off too
   g.dialog = careBusy();
   return g;
+}
+
+// The main screen shows the pet awake and lit with nothing over it: the idle planner's full
+// repertoire, its emotes and perks run only then (#22, idlelife.cpp). The pet gestures' gate
+// (no egg, ceremony, sleep, meal, bath, evolution, choice, other screen or dialog), with
+// "dark" meaning a screen that is off, locked or dimmed instead of the touch's wake-only flag.
+bool petSceneFree() {
+  PetGestureGate g = petGestureGate();
+  g.dark = screenOff || screenIsLocked() || dimStage != DIM_AWAKE;
+  return petGesturesLive(g);
 }
 
 // A touch onTap() would give to the pet: in the pet zone and not on the evolve, runaway or

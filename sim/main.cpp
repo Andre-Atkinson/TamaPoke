@@ -16,6 +16,7 @@
 #include "script.h"
 #include "simhw.h"
 #include "../board.h"
+#include "../idlelife.h"
 
 void setup();
 void loop();
@@ -229,6 +230,10 @@ int main(int argc, char **argv) {
         run(50);
         break;
       }
+      case OP_IDLE:
+        idleForceNext((uint8_t)c.a);
+        run(SETTLE_MS);
+        break;
       case OP_SHOT: {
         std::string path = o.out + "/" + c.text + ".png";
         if (!pngWriteRgb565(path, simShownPixels(), SIM_W, SIM_H, !o.square)) {

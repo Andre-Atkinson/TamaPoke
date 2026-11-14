@@ -1,6 +1,7 @@
 // Simulador de escritorio (sim/): lectura de guiones, avance del reloj falso y el
 // escritor de PNG. La parte que corre el firmware se prueba con tools/sim.sh.
 #include "framework.h"
+#include "../idleplan.h"
 #include "../sim/interactive.h"
 #include "../sim/png.h"
 #include "../sim/runner.h"
@@ -165,7 +166,8 @@ TEST(SimScript, sin_pasos_de_preparacion_o_sin_pasos_que_corran) {
 // (si no, main() lo ignoraria en silencio), y battery/usb/charging no la cierran
 TEST(SimScript, todos_los_pasos_que_corren_cierran_la_preparacion) {
   const char *const RUN[] = { "tap 1 1", "hold 1 1 1s", "swipe left", "swipe 1 1 200 1 200ms",
-                              "press pwr", "press boot", "wait 1s", "advance 1s", "serial X", "shot a" };
+                              "press pwr", "press boot", "wait 1s", "advance 1s", "serial X", "shot a",
+                              "idle doze" };
   for (const char *step : RUN) {
     std::string s = std::string(step) + "\nlang ja\n";
     CHECK_EQ(simParseScript(s, "r.txt").error, std::string("r.txt:2: lang must come before the first step that runs the firmware"));
@@ -238,6 +240,24 @@ TEST(SimRunner, cero_no_corre_ninguna_pasada) {
 }
 
 // pmu ok|none (#24): the firmware asks the AXP2101 once, in setup(), so it is boot-only
+// "idle ACT" (#22): the next idle activity, by its name in IDLE_ACT_NAMES
+TEST(SimScript, idle_names_an_activity) {
+  SimScript s = simParseScript("idle stand\nidle doze\nidle seek\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)3);
+  if (s.cmds.size() != 3) return;
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_IDLE);
+  CHECK_EQ(s.cmds[0].a, (int32_t)IDLE_STAND);
+  CHECK_EQ(s.cmds[1].a, (int32_t)IDLE_DOZE);
+  CHECK_EQ(s.cmds[2].a, (int32_t)IDLE_SEEK);
+  for (int i = 0; i < IDLE_ACTS; i++)
+    CHECK_EQ(simParseScript(std::string("idle ") + IDLE_ACT_NAMES[i] + "\n").cmds[0].a, (int32_t)i);
+  CHECK_EQ(simParseScript("wait 1s\nidle nap\n", "r.txt").error,
+           std::string("r.txt:2: usage: idle stand|look|walk|rest|doze|hop|ball|gesture|seek"));
+  CHECK(!simParseScript("idle\n").error.empty());
+  CHECK(!simParseScript("idle doze hop\n").error.empty());
+}
+
 TEST(SimScript, pmu_is_a_boot_step) {
   SimScript s = simParseScript("pmu none\nusb on\nwait 1s\n");
   CHECK_EQ(s.error, std::string(""));

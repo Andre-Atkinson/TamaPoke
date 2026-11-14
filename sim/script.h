@@ -17,6 +17,9 @@
 //   wait DUR                 dejar correr el firmware DUR (alias: advance)
 //   serial LINEA             mandar una linea por la consola serie (HATCH, SPEC 25...)
 //   shot NOMBRE              guardar NOMBRE.png con lo que muestra el panel
+//   idle ACT                 the pet's next idle activity (#22: stand look walk rest doze hop
+//                            ball gesture seek), at once on a free, lit main screen; ignored
+//                            if its sprite can't show it. Only the simulator has this.
 //
 // Duraciones: 500ms, 2s, 5m, 2h, 1d y combinaciones (1h30m); un numero solo = ms.
 #pragma once
@@ -28,7 +31,7 @@
 enum SimOp : uint8_t {
   OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING, OP_PMU,
   OP_TAP, OP_HOLD, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
-  OP_WAIT, OP_SERIAL, OP_SHOT,
+  OP_WAIT, OP_SERIAL, OP_SHOT, OP_IDLE,
 };
 
 struct SimCmd {

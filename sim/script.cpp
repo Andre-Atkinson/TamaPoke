@@ -1,4 +1,5 @@
 #include "script.h"
+#include "../idleplan.h"  // IDLE_ACT_NAMES
 #include <ctype.h>
 #include <stdlib.h>
 #include <sstream>
@@ -236,6 +237,13 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       if (a == std::string::npos) return fail("usage: serial LINE");
       c.op = OP_SERIAL;
       c.text = rest.substr(a, b - a + 1);
+    } else if (op == "idle") {
+      c.a = -1;
+      for (int i = 0; n == 2 && i < IDLE_ACTS; i++)
+        if (w[1] == IDLE_ACT_NAMES[i]) c.a = i;
+      if (c.a < 0) return fail("usage: idle stand|look|walk|rest|doze|hop|ball|gesture|seek");
+      c.op = OP_IDLE;
+      c.text = w[1];
     } else if (op == "shot") {
       if (n != 2) return fail("usage: shot NAME");
       for (char ch : w[1])

@@ -143,6 +143,27 @@ While **awake**, per minute:
     time the clock hasn't been set since a power-off): no chirp and no light.
   - No calls while it sleeps, as an egg, while choosing a starter or an egg, or during
     a farewell or a run-away.
+- 🐾 **A life of its own:** left alone on a lit screen, the creature keeps itself busy.
+  Every few seconds it picks something to do: stand, look around, stroll, rest a
+  while, doze, hop, chase and kick a ball about, strike a pose (the few species that
+  have one), or, when FOOD is under 40, walk over to the food button and wish for
+  food. How it feels sets the odds: tired (ENE under 50) it dozes and rests more,
+  happy (JOY over 70) it hops and plays more, chubby (weight over 60) it rests more,
+  and at night (20:00–06:00) while it's still up it dozes more (an unset clock
+  counts as daytime). A small thought bubble
+  over its head shows a ♥, a ♪, a ?, a "…", a sweat drop, z's or the food icon.
+  - A **doze** is a short daytime nap (8–15 s): the sleep pose, but the day scene,
+    the buttons and the status line stay as they are, and any touch wakes it at once.
+    The light button still means bed.
+  - A finished doze gives **+3 ENE** and a finished ball game **+3 JOY**, at most
+    **+6 of each an hour**, so they never replace your care. Nothing ever lowers a
+    stat, and it isn't your care: no streak, bond or medal. The hourly limit starts
+    over if the board restarts.
+  - Any touch, PWR or BOOT, a call, or another screen stops what it was doing: it
+    looks up for a moment, then carries on.
+  - Only on the main screen with the creature awake and happy and nothing over it.
+    Once the screen dims it just strolls, gestures or stands, as before, with no
+    bubbles, ball or perks; with the screen off nothing runs at all.
     A call waits while a minigame, the training bag, a dialog, the card, gallery,
     clock or keyboard is open on a lit screen, and comes once you are back.
 
@@ -348,7 +369,8 @@ witness it), each opening a two-option dialog:
   Pokédex grid + detail view**): behaviour sprites — `tools/pack_pmd.py` packs
   actions (Idle, Walk L/R, Sleep, Eat, Hurt, Attack, Pose, Nod, DeepBreath) into
   the multi-action **TPK2** format (`/mons/pNNN.bin`). The engine in `scene.cpp`
-  makes the creature wander, gesture, curl up to sleep, chew and wince. Anchored by
+  makes the creature wander, gesture, doze, hop, chase a ball, curl up to sleep, chew
+  and wince (idle activities: `idleplan.h`, `idlelife.cpp`). Anchored by
   the feet (lowest content row), not the canvas. The Pokédex thumbnails
   (`thumbs.bin`, TPTH) are derived from these by `tools/make_thumbs.py`.
 - **In-house workshop** (`tools/sprites.py`): 9 primitive-drawn sprites as a
@@ -516,8 +538,9 @@ screen by screen.
 
 A script is one step per line (the full list is in `sim/script.h`):
 `tap X Y`, `hold X Y 3s`, `swipe left|right|up|down`, `press pwr 3`,
-`press boot`, `wait 2h`, `serial SPEC 25`, `battery 15`, `usb on`, and
-`shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
+`press boot`, `wait 2h`, `serial SPEC 25`, `battery 15`, `usb on`,
+`idle doze` (the creature's next idle activity, simulator only; see
+`sim/scripts/idle-life.txt`) and `shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
 doesn't answer) set the language, the time and the PMU before boot, and only
 there (`clock none`: no time, as after a power-off; see `sim/scripts/clock-prompt.txt`);
 `battery`, `usb` and `charging` placed before the first step that

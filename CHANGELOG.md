@@ -10,6 +10,20 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **A life of its own.** Left alone on a lit screen, the creature keeps itself
+  busy: every few seconds it stands, looks around, strolls, rests, dozes, hops,
+  chases and kicks a ball, strikes a pose (where its species has one) or, when
+  hungry, walks to the food button and wishes for food. Tired, happy, chubby or up
+  at night, it leans toward the fitting activities. A small thought bubble over
+  its head shows a heart, a note, a question mark, dots, a sweat drop, z's or the
+  food icon. A doze is a short daytime nap that any touch ends at once, with the
+  day scene and every button as they are. A finished doze gives +3 ENE and a
+  finished ball game +3 JOY, at most +6 of each an hour; nothing lowers a stat and
+  it is not your care (no streak, bond or medal). Any touch, PWR, BOOT, a call or
+  another screen interrupts it. Once the screen dims the creature strolls,
+  gestures or stands as before, with no bubbles, ball or perks. Nothing new is
+  saved. Idea from Mu-Muu/TamaPoke, re-implemented offline.
+
 - **Touch gestures on the creature.** Besides a tap (a pat, at once as before):
   a double tap makes it hop; stroking back and forth over it pats it about once
   a second while you go on; six quick taps in a row tickle it into giggles, and

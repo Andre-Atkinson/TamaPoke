@@ -106,3 +106,5 @@ uint8_t reactAct(uint8_t kind);
 bool reacting(uint32_t now);
 void reactOffset(uint32_t now, bool animated, int &dx, int &dy);
 bool petFollowing(uint32_t now);
+// the main screen is free and fully lit: the idle planner's full repertoire (#22)
+bool petSceneFree();

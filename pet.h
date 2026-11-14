@@ -142,6 +142,11 @@ public:
   // the last touch. A PMU that never answered counts as unplugged, because the
   // firmware's usbPresent() reports true in that case. RAM only, never saved.
   void setCharger(bool pmuOk, bool usb, uint32_t idleMs);
+  // A finished doze or ball game on the main screen (#22, idleplan.h): a little energy or
+  // joy, already capped per hour by the caller. Never lowers anything, and is not the
+  // player's care: no streak, bond, heart or save of its own (the periodic one keeps it).
+  // Nothing as an egg, asleep, during a ceremony or a starter or egg choice.
+  void idlePerk(uint8_t energyUp, uint8_t joyUp);
   void startFarewell();  // tambien usable desde la consola serie (BYE)
   void startRunaway();   // tambien usable desde la consola serie (RUN)
 
