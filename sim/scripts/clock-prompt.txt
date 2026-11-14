@@ -1,0 +1,35 @@
+# Asking for the time after a power-off (#10). The clock has no time at boot, as on the
+# 1.75C after the AXP2101 cut power: setup() seeds it and the clock screen asks once.
+#   tools/sim.sh --lang ja --script clock-prompt --out shots/
+clock none
+
+# new game: the starter choice comes first, then the clock screen asks (the time in red)
+wait 1s
+shot 1-starter
+tap 233 220
+wait 1s
+shot 2-asks
+# swipe up skips it: the egg screen keeps a clock badge
+swipe up
+shot 3-egg-badge
+# hatch; RTCSET moves the clock without setting it (a daytime scene, still asking)
+serial HATCH
+serial RTCSET 1767268800
+wait 40s
+shot 4-pet-badge
+# the screen dimmed while waiting, and a touch on a dim screen only wakes it; then the
+# badge opens the clock screen again, and OK sets the time and the badge goes
+tap 233 40
+tap 76 125
+shot 5-asks-again
+# a serial TIME while the clock screen is open (update_175c.sh sends it a second after the
+# reboot): the screen must now show that time (10:00), and OK must keep it, not put the
+# time that was on screen before back
+serial TIME 1794564000
+wait 1s
+shot 5b-time-sent
+tap 233 384
+wait 1s
+serial TIME
+wait 1s
+shot 6-set

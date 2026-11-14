@@ -33,6 +33,7 @@ enum StrId : uint8_t {
   S_SCORE_FMT, S_GREAT_JOY, S_PLUS_JOY,
   // reloj / ajustes
   S_SET_TIME, S_HOUR, S_MIN, S_CLOCK_CANCEL, S_LANG_LABEL,
+  S_CLOCK_ASK,  // clock screen title while the clock is stale (reseeded after a power-off)
   // celebracion
   S_MEDAL_BANNER, S_GREAT, S_STREAK_DAYS_FMT,
   // ficha: perfil

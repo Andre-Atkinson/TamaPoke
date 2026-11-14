@@ -84,8 +84,8 @@ While **awake**, per minute:
   the training bag left open with the screen off is abandoned (no prize) at bedtime. Eggs, farewell
   scenes, the starter pick and the egg choice are skipped. It follows the clock you set (swipe
   down): after a full power-off the 1.75C clock can be wrong until you set it, so
-  after a power-off bedtime stays paused until the clock is set (clock screen, or
-  `board.py clock`); it then acts as if the device had just started, so at 22:30 the
+  after a power-off bedtime stays paused until the clock is set (clock screen, which
+  opens by itself to ask, or `board.py clock`); it then acts as if the device had just started, so at 22:30 the
   creature goes to sleep and at 14:00 nothing happens.
   Changing the setting never puts the pet to sleep or wakes it by itself.
 - 🔌 **Self-care while charging** (always on): plugged into USB and untouched for
@@ -301,7 +301,9 @@ If one bottoms out it counts as a *slip-up*.
   Progress / Care; swipe between them; tap the name on Profile to rename; on Battle the
   "Train strength" button opens the bag; on Care two big buttons cycle the pace
   Normal ↔ Relaxed and the bedtime Off → 21–07 → 22–07 → 23–08).
-- Swipe down = **set the clock** and pick the **language** + sound on/off.
+- Swipe down = **set the clock** and pick the **language** + sound on/off. After a full
+  power-off the clock screen opens by itself once to ask for the time; skip it (swipe up)
+  and a small clock badge in the sky opens it again until the time is set.
 - Long press (3 s) on the creature = **release** dialog.
 
 **Physical PWR button:** short = screen on/off · long (4 s) = full power-off
@@ -487,7 +489,8 @@ A script is one step per line (the full list is in `sim/script.h`):
 `press boot`, `wait 2h`, `serial SPEC 25`, `battery 15`, `usb on`, and
 `shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
 doesn't answer) set the language, the time and the PMU before boot, and only
-there; `battery`, `usb` and `charging` placed before the first step that
+there (`clock none`: no time, as after a power-off; see `sim/scripts/clock-prompt.txt`);
+`battery`, `usb` and `charging` placed before the first step that
 runs the firmware (`tap`, `wait`, `shot`...) are also in place at boot. Each run starts a new game, with an empty NVS. Screenshots are
 466×466 with the round panel masked. The firmware's serial output goes to
 `serial.log` next to them. `--board 175` simulates the original 1.75 instead of

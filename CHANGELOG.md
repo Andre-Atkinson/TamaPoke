@@ -10,6 +10,18 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **The clock asks for the time after a power-off.** With no time at boot (the
+  1.75C after a flat battery or a 4 s PWR hold; the original 1.75 when its RTC
+  lost backup power) the clock restarts from the last saved time, so it is wrong.
+  The clock screen now opens by itself once, after the starter or egg choice, a
+  farewell, an evolution or an open dialog, titled "WHAT TIME?" with that old
+  time in red. OK sets it (the time shown counts, changed or not); swiping up
+  skips it and leaves a small clock badge in the sky, left of the pet, on the pet
+  and egg screens; a tap on it opens the clock screen again. Setting the time any
+  way (OK, serial `TIME`, `tools/update_175c.sh`) removes both. A crash or
+  watchdog reboot keeps the clock marked as not set (in RTC memory, no new save
+  key), so bedtime stays paused and the badge stays until the time is set.
+
 - **Attention calls.** When food, joy, energy or hygiene first drops below 25
   (the red bar), the creature calls once: a new soft two-note chirp (if sound is
   on) and a "!" speech bubble beside it with the icon of the button that helps.

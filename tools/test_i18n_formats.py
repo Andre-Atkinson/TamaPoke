@@ -91,6 +91,22 @@ def extract_table(source, var_name, count):
     return [STRING_RE.findall(block) for block in lang_blocks]
 
 
+def check_korean_syllables(var_name, texts, label_for):
+    """Every hangul syllable must be one of the 2,350 in KS X 1001, the
+    only ones the Korean U8g2 font has. A syllable is in KS X 1001
+    exactly when EUC-KR encodes it in two bytes (Python's EUC-KR codec
+    also encodes the other syllables, through a longer make-up
+    sequence, so "encodes without error" proves nothing)."""
+    errors = []
+    for idx, text in enumerate(texts):
+        for ch in text:
+            if '\uac00' <= ch <= '\ud7a3' and len(ch.encode('euc_kr')) != 2:
+                errors.append(
+                    f'{var_name}[KO][{label_for(idx)}] has {ch} '
+                    f'(U+{ord(ch):04X}), not in KS X 1001: {text}')
+    return errors
+
+
 def check_table(source, var_name, expected_len, label_for):
     """Validate one [LANG_COUNT][N] table. Returns error strings."""
     errors = []
@@ -102,6 +118,9 @@ def check_table(source, var_name, expected_len, label_for):
                 f'expected {expected_len}')
     if errors:
         return errors  # zip() below assumes equal-length rows
+
+    errors += check_korean_syllables(
+        var_name, rows[LANGS.index('KO')], label_for)
 
     for idx, texts in enumerate(zip(*rows)):
         specs = {tuple(SPEC_RE.findall(t)) for t in texts}

@@ -323,3 +323,28 @@ TEST(i18n, nombres_y_pistas_de_los_minijuegos_siguen_el_orden_de_GameId) {
   CHECK_EQ((int)S_HINT_SONG - (int)S_HINT_KEEPY, (int)GAME_SONG);
   CHECK_EQ((int)S_HINT_KEEPY - (int)S_GAME_KEEPY, (int)GAME_COUNT);
 }
+
+// full-width "？" and "！": the Japanese questions use them (japanese3 has both glyphs)
+static bool fullWidthPunct(uint32_t c) { return c == 0xFF1F || c == 0xFF01; }
+
+// Clock screen title while the clock is stale (#10): size 3 (18 px per letter) at y=44,
+// where the round panel is 272 px wide, so at most 14 letters (252 px). Japanese only in
+// kana and Korean only in hangul syllables (plus space, "?" and, in Japanese, the
+// full-width "？"), because the CJK fonts are subsets. This only checks the script; that every Korean syllable is one the font has
+// (the 2,350 of KS X 1001) is checked for all Korean strings by tools/test_i18n_formats.py.
+TEST(i18n, the_clock_prompt_title_fits_and_is_kana_or_hangul_only) {
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    const char *t = T(S_CLOCK_ASK);
+    CHECK_MSG(t && t[0], std::string("empty in ") + LANG_NAME[lang]);
+    if (!LANG_IS_CJK(lang)) CHECK_MSG(strlen(t) <= 14, std::string("too wide: ") + t);
+  }
+  gLang = LANG_JA;
+  for (uint32_t c : codepoints(T(S_CLOCK_ASK)))
+    CHECK_MSG((c >= 0x3041 && c <= 0x30FF) || asciiPunct(c) || fullWidthPunct(c),
+              std::string("not kana: ") + T(S_CLOCK_ASK));
+  gLang = LANG_KO;
+  for (uint32_t c : codepoints(T(S_CLOCK_ASK)))
+    CHECK_MSG((c >= 0xAC00 && c <= 0xD7A3) || asciiPunct(c), std::string("not hangul: ") + T(S_CLOCK_ASK));
+  gLang = LANG_DEFAULT;
+}
