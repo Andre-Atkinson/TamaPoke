@@ -13,6 +13,9 @@
 #include "trainingcapture.h"
 #endif
 
+#define CX 233  // centro de la pantalla redonda
+#define CY 233
+
 extern Arduino_Canvas *gfx;  // the whole frame, in PSRAM; flushUI() sends it to the panel
 extern Pet pet;
 extern SdMon mon;            // the black-and-white sprite (no PMD sprite on the SD)
