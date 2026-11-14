@@ -10,6 +10,24 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Attention calls.** When food, joy, energy or hygiene first drops below 25
+  (the red bar), the creature calls once: a new soft two-note chirp (if sound is
+  on) and a "!" speech bubble beside it with the icon of the button that helps.
+  The same need calls again only once it is back to 40 or more. The bubble stays
+  while the need is low, silently. A call lights a screen that turned off by
+  itself, or brightens a dimmed one, for 15 s, then the normal dimming and
+  screen-off timers apply again; it does not count as a touch. On a screen that
+  turned off by itself touch stays locked if the auto touch lock is on (PWR or
+  BOOT turns the screen on for real; with the touch lock off, or not engaged
+  yet, a touch does). A card, gallery, clock or keyboard left open goes back to
+  the creature on a timed-out screen, and on a lit screen untouched for 5
+  minutes (screen-off set to never); a screen turned off with PWR stays dark
+  (chirp only); the pocket lock gets nothing. Quiet hours (the bedtime
+  window, or 22:00-07:00 with bedtime off, and while the clock is unset after a
+  power-off) are silent and dark. No calls while it sleeps, as an egg, while
+  choosing a starter or an egg, or during a farewell or a run-away; a call waits for a minigame, dialog or other screen to close. No
+  new NVS keys.
+
 - **Play starts a random minigame.** Four short touch games now take turns:
   *Keepy-uppy* (the Poke Ball game), *Berry Catch* (slide to walk the pet under
   falling berries; rotten ones cost points, its favourite berry counts double
