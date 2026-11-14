@@ -123,7 +123,7 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   choice, the pet card, clock and settings, the keyboard, the gallery)
   `screens.cpp`, with `app.h` declaring what the sketch shares with them.
   `TamaPoke.ino` keeps setup, the loop, the hardware, power, the care glue, touch
-  and the choice of screen: 1,770 lines instead of 4,399. The tables in `dex.h`
+  and the choice of screen: 1,766 lines instead of 4,399. The tables in `dex.h`
   and `species.h` are `inline` instead of `static`, so each is stored once
   however many files use it: the firmware is about 2.6 KB smaller. Nothing
   changes on the screen or on the serial port.
