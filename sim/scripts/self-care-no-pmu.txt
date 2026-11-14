@@ -1,0 +1,19 @@
+# Self-care while charging (#24) with an AXP2101 that never answers at boot: the
+# firmware's usbPresent() then reports USB as present, but self-care treats an unknown
+# supply as unplugged, so after 40 untouched minutes the needs are still low and
+# serial.log has no "self-care:" line.
+#   tools/sim.sh --script self-care-no-pmu --out shots/self-care-no-pmu
+
+pmu none
+usb on
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+wait 40m
+serial STATS

@@ -41,6 +41,9 @@ struct SimPower {
   bool charging = false;
   bool usb = false;
   bool poweredOff = false;  // batPowerOff(): el AXP corto la alimentacion
+  // false: the AXP2101 doesn't answer at boot (batBegin() fails). Then, like
+  // rtcbat.cpp, USB reads as plugged in and there is no battery reading.
+  bool pmuOk = true;
 };
 extern SimPower gSimPower;
 void simClockSet(uint32_t epoch);  // pone el reloj de software (0 = sin hora, como tras un corte)
