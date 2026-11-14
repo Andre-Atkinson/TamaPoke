@@ -35,6 +35,7 @@
 #include "bootbutton.h"
 #include "screenlock.h"
 #include "touchlock.h"
+#include "touchgesture.h"
 #include "bedtime.h"
 #include "clockprompt.h"
 #include "attention.h"
@@ -75,9 +76,22 @@ struct {
   uint32_t t0 = 0;      // inicio de la animacion en curso
   uint32_t until = 0;   // fin del estado actual
   float x = 233, targetX = 233;
+  bool fast = false;    // walking after a dragging finger (#21) until it gets there
 } beh;
 uint32_t walkLast = 0;  // instante del ultimo paso del paseo (0 = ninguno aun)
 #define PET_GROUND 304  // linea de suelo de la mascota
+#define PET_WALK_MIN 150  // where the pet may walk to (behNext, and after a finger)
+#define PET_WALK_MAX 325
+#define PET_FOLLOW_PX_S 120.0f  // walking after a finger (a stroll is 30 px/s)
+
+// Reaction to a gesture on the pet (#21, touchgesture.h): drawPet* show it in place of the
+// pet's own behaviour until `until`.
+enum : uint8_t { REACT_NONE = 0, REACT_HOP, REACT_GIGGLE, REACT_HUFF, REACT_STROKE };
+struct {
+  uint8_t kind = REACT_NONE;
+  int8_t away = 1;  // the huff turns this way: away from the finger (-1 left, +1 right)
+  uint32_t t0 = 0, until = 0;
+} petReact;
 PmdMon galleryPmd;  // sprite grande de la vista detalle de la galeria (PMD/TPK2, legal)
 
 // galeria pokedex
@@ -267,8 +281,7 @@ uint32_t holdStart = 0;     // pulsacion larga sobre el bicho
 uint32_t confirmUntil = 0;  // dialogo "soltar?" activo hasta este millis
 uint8_t choiceKind = 0;     // dialogo de decision: 0 ninguno, 1 evolucion, 2 despedida
 uint32_t choiceUntil = 0;   // se cierra solo a este millis
-int16_t tX0, tY0, tXl, tYl; // gesto en curso (inicio y ultima posicion)
-uint32_t tStart = 0;
+TouchGesture touchG;        // gesto en curso y gestos sobre el bicho (touchgesture.h)
 bool holdFired = false;
 
 // BOOT controls and small overlay; all UI/pet changes stay on the loop task.
@@ -639,6 +652,8 @@ void ensureMon() {
   beh.x = beh.targetX = 233;
   beh.mode = 0;
   beh.until = 0;
+  beh.fast = false;
+  petReact.kind = REACT_NONE;
   if (pet.speciesId >= 1 && pet.speciesId <= DEX_COUNT) {
     pmd.load(pet.speciesId, pet.shiny);          // principal: PMD
     if (!pmd.loaded) mon.load(pet.speciesId, pet.shiny);  // respaldo: B/N
@@ -1334,6 +1349,153 @@ void drainTrainingTouch() {
 }
 #endif
 
+// ---------- gestos sobre el bicho (#21, touchgesture.h) ----------
+
+// When the gestures are live (touchgesture.h): the main screen with the pet awake and
+// nothing over it, and not the touch that only wakes the screen.
+static PetGestureGate petGestureGate() {
+  PetGestureGate g;
+  g.dark = swallowGesture;
+  g.egg = pet.isEgg();
+  g.ceremony = pet.ceremony != CER_NONE;
+  g.sleeping = pet.sleeping;
+  g.evolving = pet.evolving();
+  g.eating = pet.eating();
+  g.bathing = bathUntil != 0;
+  g.choosing = pet.awaitingStarter() || pet.awaitingEgg();
+  g.otherScreen = galleryOpen || cardOpen || kbOpen || clockOpen || gameOpen || sackOpen;
+  g.dialog = choiceKind || confirmUntil || feedMenuUntil;
+  return g;
+}
+
+// A touch onTap() would give to the pet: in the pet zone and not on the evolve, runaway or
+// farewell button drawn over it (the same hit tests, in the same order, as onTap).
+static bool onPetBody(int16_t x, int16_t y) {
+  if (!inPetZone(x, y)) return false;
+  if (pet.wantEvolveButton() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
+      y >= EVO_BTN_Y && y <= EVO_BTN_Y + EVO_BTN_H) return false;
+  if ((pet.canRunawayNow() || pet.wantFarewellButton()) && x >= FAR_BTN_X &&
+      x <= FAR_BTN_X + FAR_BTN_W && y >= FAR_BTN_Y && y <= FAR_BTN_Y + FAR_BTN_H) return false;
+  return true;
+}
+
+// The PMD action a reaction plays, from what this sprite has. Every sprite has IDLE, the
+// walks and HOP; only about one species in five has POSE, NOD, BREATH or SIT, so the IDLE
+// fallbacks get their movement from reactOffset(). The hop never uses PMD_HOP: its canvas
+// is tall enough for the jump, so drawPmdActM() would draw most pets smaller mid-hop.
+static uint8_t reactAct(uint8_t kind) {
+  switch (kind) {
+    case REACT_GIGGLE: return pmd.has(PMD_POSE) ? PMD_POSE : pmd.has(PMD_NOD) ? PMD_NOD : PMD_IDLE;
+    case REACT_HUFF: {  // turns its back, or else its side (one still frame); never PMD_HURT
+      uint8_t side = petReact.away < 0 ? PMD_WALKL : PMD_WALKR;
+      return pmd.has(PMD_SIT) ? PMD_SIT : pmd.has(side) ? side : PMD_IDLE;
+    }
+    case REACT_STROKE: return pmd.has(PMD_NOD) ? PMD_NOD : pmd.has(PMD_BREATH) ? PMD_BREATH : PMD_IDLE;
+  }
+  return PMD_IDLE;
+}
+
+static bool reacting(uint32_t now) {
+  return petReact.kind != REACT_NONE && (int32_t)(petReact.until - now) > 0;
+}
+
+// fingerX: where the finger touched, so a huff can turn away from it
+static void startReact(uint8_t kind, int fingerX) {
+  uint32_t now = millis();
+  uint32_t ms = kind == REACT_HOP ? 700 : kind == REACT_GIGGLE ? 1400 : 1600;
+  // the same reaction again (stroking on, tickling on, huffing on) keeps running; a hop starts over
+  if (kind == REACT_HOP || petReact.kind != kind || !reacting(now)) {
+    petReact.t0 = now;
+    int petX = pmd.loaded ? (int)beh.x : CX;
+    petReact.away = fingerX > petX ? -1 : 1;
+  }
+  petReact.kind = kind;
+  petReact.until = now + ms;
+}
+
+// A tap on the pet's body with the gestures live: a pat at once, upgraded by the run of
+// quick taps it belongs to. The huff is gentle: no pat, no sound, no stat change.
+static void petTapGesture(PetTap t) {
+  static const char *const NAME[] = { "", " double", " tickle", " huff" };
+  Serial.printf("PET%s\n", NAME[t]);
+  if (!petTapEarnsPat(t)) {
+    startReact(REACT_HUFF, touchG.x0);
+    return;
+  }
+  pet.caress();
+  if (t == PET_TAP_DOUBLE) {
+    startReact(REACT_HOP, touchG.x0);
+    sfxPlay(SFX_HEART);
+  } else if (t == PET_TAP_TICKLE) {
+    startReact(REACT_GIGGLE, touchG.x0);
+    sfxPlay(SFX_PLAY);
+  } else {
+    if (petReact.kind == REACT_HUFF) petReact.kind = REACT_NONE;  // a fresh pat: over the huff
+    sfxPlay(SFX_HEART);
+  }
+}
+
+// A stroke or a drag while the finger is down (touchgesture.h already checked it began on
+// the pet with the gestures live; this re-checks in case the pet fell asleep meanwhile).
+static void petHeldGesture(TouchAct a) {
+  if (!petGesturesLive(petGestureGate())) return;
+  wakeUI();  // a long stroke or drag keeps the screen awake like any touch
+  if (a == TOUCH_STROKE) {
+    Serial.println("PET stroke");
+    pet.caress();
+    sfxPlay(SFX_HEART);
+    startReact(REACT_STROKE, touchG.xl);
+  } else if (a == TOUCH_DRAG_START) {
+    Serial.println("PET drag");
+    pet.caress();
+    sfxPlay(SFX_HEART);
+    petReact.kind = REACT_NONE;  // walking after the finger (drawPet*) replaces a reaction
+  }
+}
+
+// How a reaction moves the sprite, in px. animated: the sprite plays its own action for it
+// (reactAct); the IDLE fallbacks, the B/W SdMon and the built-in sprite pass false.
+static void reactOffset(uint32_t now, bool animated, int &dx, int &dy) {
+  if (!reacting(now)) return;
+  uint32_t e = now - petReact.t0;
+  if (petReact.kind == REACT_HOP) {
+    dy -= (int)(24.0f * sinf((float)(e % 350) * (float)PI / 350.0f));  // two little hops
+  } else if (petReact.kind == REACT_GIGGLE) {
+    dx += ((e / 60) % 2) ? 3 : -3;              // shaking with giggles
+    if (!animated) dy -= ((e / 120) % 2) ? 4 : 0;
+  } else if (petReact.kind == REACT_STROKE && !animated) {
+    dy -= ((e / 300) % 2) ? 3 : 0;              // a contented bob
+  }
+}
+
+// The fallback sprites do not walk: they lean toward a dragging finger and ease back after.
+static int followLean(uint32_t now) {
+  static int lean = 0;
+  static uint32_t at = 0;
+  if (touchG.dragging(now)) {
+    lean = constrain((int)touchG.dragX - CX, -60, 60);
+    at = now;
+    return lean;
+  }
+  uint32_t e = now - at;
+  if (e >= 400) lean = 0;
+  return lean * (int)(400 - (e < 400 ? e : 400)) / 400;
+}
+
+// the huff: little puffs of breath blown away from the finger, from (x, y) beside the
+// pet's head, each growing as it drifts off and up
+static void drawHuffPuff(int x, int y, uint32_t now) {
+  if (!reacting(now) || petReact.kind != REACT_HUFF) return;
+  uint32_t e = now - petReact.t0;
+  for (int i = 0; i < 2; i++) {
+    uint32_t pe = (e + i * 350) % 700;  // each puff lives 700 ms
+    int r = 6 + (int)(pe / 70);
+    int px = x + petReact.away * (int)(pe / 10), py = y - (int)(pe / 25);
+    gfx->fillCircle(px, py, r, UI_WHITE);
+    gfx->drawCircle(px, py, r, UI_TRACK);
+  }
+}
+
 // el toque se resuelve al LEVANTAR el dedo para distinguir tap de deslizar
 void handleTouch() {
   if (screenIsLocked() || autoTouch.active) return;  // no touch I2C while either lock is on
@@ -1409,32 +1571,34 @@ void handleTouch() {
     return;
   }
 
+  // Swipes, taps, the long-press and the gestures on the pet are resolved by touchG
+  // (touchgesture.h, host-tested): a stroke or a hold-then-drag never ends as anything else.
   if (pressed && !wasPressed) {  // empieza el gesto
-    tX0 = tXl = x;
-    tY0 = tYl = y;
-    tStart = millis();
     holdFired = false;
     swallowGesture = (dimStage > 0) || screenOff;  // si estaba a oscuras, solo despierta
     screenOff = false;
     wakeUI();
+    touchG.down(millis(), x, y, onPetBody(x, y) && petGesturesLive(petGestureGate()));
   } else if (pressed) {  // sigue apoyado
-    tXl = x;
-    tYl = y;
     // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
-    if (!holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen && millis() - tStart > 3000 &&
-        abs(tXl - tX0) < 30 && abs(tYl - tY0) < 30 && inPetZone(tX0, tY0) &&
-        !pet.isEgg() && !confirmUntil && !pet.ceremony) {
+    bool longOk = !holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen &&
+                  inPetZone(touchG.x0, touchG.y0) && !pet.isEgg() && !confirmUntil && !pet.ceremony;
+    TouchAct a = touchG.held(millis(), x, y, longOk);
+    if (a == TOUCH_LONG_PRESS) {
       confirmUntil = millis() + 10000;
       holdFired = true;
+    } else if (a != TOUCH_NONE) {
+      petHeldGesture(a);
     }
   } else if (wasPressed) {  // levanta el dedo: resolver gesto
     wakeUI();
-    int dx = tXl - tX0, dy = tYl - tY0;
-    uint32_t dt = millis() - tStart;
-    if (!holdFired && !swallowGesture) {
-      if (abs(dx) > 80 && abs(dy) < 70 && dt < 800) onSwipe(dx > 0 ? 1 : -1);
-      else if (abs(dy) > 80 && abs(dx) < 70 && dt < 800) onSwipeV(dy > 0 ? 1 : -1);
-      else if (dt < 1500 && abs(dx) < 40 && abs(dy) < 40) onTap(tX0, tY0);
+    switch (touchG.lift(millis(), holdFired || swallowGesture)) {
+      case TOUCH_SWIPE_RIGHT: onSwipe(1); break;
+      case TOUCH_SWIPE_LEFT: onSwipe(-1); break;
+      case TOUCH_SWIPE_DOWN: onSwipeV(1); break;
+      case TOUCH_SWIPE_UP: onSwipeV(-1); break;
+      case TOUCH_TAP: onTap(touchG.x0, touchG.y0); break;
+      default: break;
     }
   }
   wasPressed = pressed;
@@ -1606,8 +1770,12 @@ void onTap(int16_t x, int16_t y) {
       return;
     }
   }
-  // tocar al bicho = caricia
+  // tocar al bicho = caricia; con los gestos vivos, toque doble / cosquillas / bufido (#21)
   if (inPetZone(x, y)) {
+    if (petGesturesLive(petGestureGate())) {
+      petTapGesture(touchG.petTap(millis()));
+      return;
+    }
     Serial.println("PET");
     pet.caress();
     if (!pet.sleeping) sfxPlay(SFX_HEART);
@@ -3742,6 +3910,8 @@ void drawPet() {
 
   PetMood m = pet.mood();
   if (m == MOOD_HAPPY && (millis() / 500) % 2) y -= 6;  // saltito
+  reactOffset(millis(), false, x, y);  // gestures (#21): no actions to play here
+  x += followLean(millis());
 
   drawMap(sp.sprite, SPRITE_H, x, y, s, false);
 
@@ -3754,6 +3924,7 @@ void drawPet() {
   if (m == MOOD_EATING) overlayMouth(sp, x, y, s, true);
   else if (m == MOOD_SAD) overlayMouth(sp, x, y, s, false);
 
+  drawHuffPuff(x + 16 * s + petReact.away * 16 * s, y + 10 * s, millis());
   if (pet.showHeart()) drawMap(SPR_HEART, 32, x + 20 * s, y - 2 * s, 2, false);
 }
 
@@ -3866,7 +4037,7 @@ void behNext() {
   int r = random(100);
   if (r < 35 && (pmd.has(PMD_WALKL) || pmd.has(PMD_WALKR))) {
     beh.mode = 1;  // paseo
-    beh.targetX = 150 + random(176);
+    beh.targetX = PET_WALK_MIN + random(PET_WALK_MAX - PET_WALK_MIN + 1);
     beh.until = now + 15000;
   } else if (r < 60) {
     // gesto aleatorio entre los disponibles
@@ -3901,23 +4072,50 @@ void drawPetPMD() {
   PetMood m = pet.mood();
   uint8_t act;
   bool loop = true;
+  uint32_t t0 = beh.t0;
+  int dx = 0, dy = 0;
+  bool follow = touchG.dragging(now);  // hold-then-drag (#21): walk after the finger
   if (m == MOOD_SLEEPING && pmd.has(PMD_SLEEP)) {
     act = PMD_SLEEP;
     beh.mode = 0;
+    beh.fast = false;
   } else if (m == MOOD_EATING && pmd.has(PMD_EAT)) {
     act = PMD_EAT;
     beh.t0 = 0;
-  } else if (m == MOOD_SAD && pmd.has(PMD_HURT)) {
+    t0 = 0;
+  } else if (reacting(now)) {  // a gesture's reaction (#21) shows even on a sad pet
+    act = reactAct(petReact.kind);
+    t0 = petReact.t0;
+    if (petReact.kind == REACT_HUFF) {
+      loop = false;                     // sits with its back turned
+      if (act != PMD_SIT) t0 = now;     // or holds one still side-on frame
+    }
+    walkLast = 0;  // a walk under way pauses
+    reactOffset(now, act != PMD_IDLE, dx, dy);
+  } else if (m == MOOD_SAD && pmd.has(PMD_HURT) && !follow && !beh.fast) {
     act = PMD_HURT;
   } else {
     // contento: el planificador decide (idle / paseo / gesto)
+    if (follow) {
+      beh.mode = 1;
+      beh.fast = true;
+      beh.targetX = constrain((float)touchG.dragX, (float)PET_WALK_MIN, (float)PET_WALK_MAX);
+      beh.until = now + 15000;
+    }
     if (now > beh.until) behNext();
-    if (beh.mode != 1) walkLast = 0;  // al volver a caminar no se cuenta el tiempo parado
+    if (beh.mode != 1) {
+      walkLast = 0;  // al volver a caminar no se cuenta el tiempo parado
+      beh.fast = false;
+    }
     if (beh.mode == 1) {
       float d = beh.targetX - beh.x;
       if (fabsf(d) < 4) {
-        behNext();
         act = PMD_IDLE;
+        walkLast = 0;
+        if (!follow) {  // a finger still down keeps it waiting there
+          beh.fast = false;
+          behNext();
+        }
       } else {
         // 30 px/s de diseno (3 px por frame a 10 fps), midiendo el tiempo real: con menos frames
         // por segundo camina igual de rapido
@@ -3925,7 +4123,7 @@ void drawPetPMD() {
         uint32_t cap = frameIntervalMs(powerCtx(now)) + 100;  // un hueco mayor (otra pantalla de por medio) no es un paso largo
         if (dt > cap) dt = cap;
         walkLast = now;
-        float step = 30.0f * dt / 1000.0f;
+        float step = (beh.fast ? PET_FOLLOW_PX_S : 30.0f) * dt / 1000.0f;
         if (step > fabsf(d)) step = fabsf(d);  // un frame lento no sobrepasa el destino
         beh.x += d > 0 ? step : -step;
         act = (d > 0) ? PMD_WALKR : PMD_WALKL;
@@ -3937,7 +4135,8 @@ void drawPetPMD() {
     if (!pmd.has(act)) act = PMD_IDLE;
   }
 
-  drawPmdAct(act, (int)beh.x, PET_GROUND, now - beh.t0, loop || act == PMD_IDLE, false, 5);
+  drawPmdAct(act, (int)beh.x + dx, PET_GROUND + dy, now - t0, loop || act == PMD_IDLE, false, 5);
+  drawHuffPuff((int)beh.x + petReact.away * 56, PET_GROUND - 120, now);
 
   if (pet.showHeart()) drawMap(SPR_HEART, 32, (int)beh.x + 50, PET_GROUND - 190, 2, false);
 }
@@ -3952,8 +4151,10 @@ void drawPetSD() {
   bool sil = false;
   if (pet.evolving()) {
     sil = (millis() / 300) % 2;
-  } else if (pet.mood() == MOOD_HAPPY && (millis() / 500) % 2) {
-    y -= 6;  // saltito
+  } else {
+    if (pet.mood() == MOOD_HAPPY && (millis() / 500) % 2) y -= 6;  // saltito
+    reactOffset(millis(), false, x, y);  // gestures (#21): no actions to play here
+    x += followLean(millis());
   }
 
   uint16_t fm = mon.frameMs ? mon.frameMs : 100;
@@ -3966,6 +4167,7 @@ void drawPetSD() {
   }
 
   // emotes en vez de expresiones (los sprites importados no tienen anclas)
+  drawHuffPuff(x + w / 2 + petReact.away * (w / 2), y + h / 3, millis());
   if (pet.showHeart()) drawMap(SPR_HEART, 32, x + w - 30, y - 50, 2, false);
 }
 

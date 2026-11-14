@@ -43,5 +43,6 @@ Huge thanks to that whole community for an enormous amount of work.
 | Feature | Idea from |
 |---|---|
 | Self-care while charging (#24) | `Pet::autoCare()` in [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here, offline |
+| Touch gestures on the pet (#21) | the stroke, drag and tap tracking in `touch.ino` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`touchgesture.h`), offline |
 
 TamaPoke's own code (firmware and tools) is original work.

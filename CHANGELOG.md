@@ -10,6 +10,18 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Touch gestures on the creature.** Besides a tap (a pat, at once as before):
+  a double tap makes it hop; stroking back and forth over it pats it about once
+  a second while you go on; six quick taps in a row tickle it into giggles, and
+  carrying on past twelve gets a gentle huff (it turns away, no pat, no stat
+  change); resting a finger on it for a quarter of a second, then sliding
+  sideways, makes it walk after the finger. Each gesture counts as one pat
+  (+5 JOY, +1 bond) under the same daily bond limit as the rest of the care, so
+  gestures never earn more than tapping. They work only on the main screen with
+  the creature awake; swipes, the release long-press, the touch locks and the
+  strength-training taps behave as before. Nothing new is saved. Idea from
+  Mu-Muu/TamaPoke, re-implemented offline.
+
 - **The clock asks for the time after a power-off.** With no time at boot (the
   1.75C after a flat battery or a 4 s PWR hold; the original 1.75 when its RTC
   lost backup power) the clock restarts from the last saved time, so it is wrong.
