@@ -184,6 +184,20 @@ rounds before it is merged. Both are mandatory, and two is also the cap.
    `issue-fixer`, whose diff the main session then reviews), re-runs the gate,
    and fixes or explicitly dispositions LOW ones. Nothing gets silently dropped.
 
+**Reviewers take the firmware builds from CI** (owner's decision,
+2026-11-14). A `pr-reviewer` runs `tools/gate.sh --no-build`, not the full
+gate. For the builds, it checks CI's `Compile firmware` on the PR's head
+commit: `gh pr checks <n> --repo Andre-Atkinson/TamaPoke` reports that commit,
+and `Compile firmware` must be listed and passing. If it is still running or
+failed, the reviewer says so in its report instead of building to find out.
+It builds locally only when a finding or a mutation needs the firmware
+compiler (code behind `#if BOARD_AMOLED_175C`, the `app0` size cap), and then
+within the two-builds limit above. CI compiles both boards but does not count
+sketch warnings, so the `WARN_BASELINE` check stays with the full gate that
+the author, the round-1 fixer and the main session run. Why: reviews were
+rebuilding commits that CI builds anyway, and with at most two builds at a
+time, parallel sessions queued behind them.
+
 If two review rounds feels wrong for a change (too few or too many), say so
 and ask the owner rather than exceeding the cap.
 
