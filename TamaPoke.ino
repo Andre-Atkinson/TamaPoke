@@ -43,6 +43,9 @@
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "trainingcapture.h"
+#include "app.h"
+#include "serialcmd.h"
+#include "uitext.h"
 #include <Preferences.h>
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
@@ -252,7 +255,7 @@ static bool takeTouchIrq() {
   portEXIT_CRITICAL(&touchIrqMux);
   return pending;
 }
-static TrainingCapture trainingCapture;
+TrainingCapture trainingCapture;
 static bool trainingCaptureReady = false;
 static bool trainingCaptureStarted = false;  // worker task exists (begin() runs once)
 static bool trainingNeedsRelease = false;
@@ -296,7 +299,7 @@ static uint32_t pwrEdgeAt = 0;
 static bool touchNeedsRelease = false;
 #endif
 // Both boards: syncPanelPower() sleeps the CO5300 on screen-off on either one.
-static bool panelAsleep = false;
+bool panelAsleep = false;
 static uint8_t panelBrightness = 255;  // ultimo brillo enviado al panel (255 = forzar el primero)
 #if BOARD_AMOLED_175C
 static char controlToast[48] = "";
@@ -678,7 +681,7 @@ void bedSample(uint32_t epoch) {
 // deja de pedir la hora (clockprompt.h lee bedEdge.stale()). La hora debe haber quedado
 // puesta de verdad (TIME con un valor fuera de rango no cambia el reloj de software de
 // la 1.75C, y sin PCF85063 la 1.75 original sigue sin hora).
-static void bedClockSet(uint32_t set) {
+void bedClockSet(uint32_t set) {
   uint32_t now = rtcEpoch();
   if (!clockSetTook(set, now)) return;
   clockMarkStale(clockStaleMark, false);  // a soft reset now keeps a trusted clock
@@ -2925,7 +2928,7 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
 // El usuario pone su hora LOCAL a ojo; el firmware la usa tal cual, asi que
 // no hay que gestionar zona horaria. Preserva el dia (no rompe racha/edad).
 
-static void loadClockFields(uint32_t e) {
+void loadClockFields(uint32_t e) {
   clockH = (e / 3600) % 24;
   clockM = (e / 60) % 60;
 }
