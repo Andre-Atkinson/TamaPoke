@@ -47,6 +47,7 @@ SIM_SRCS := main.cpp $(COMMON_SRCS)
 # the window: only built by the `window` target, the only one that uses SDL
 WIN_SRCS := interactive.cpp window.cpp main_window.cpp
 GFX_SRCS := Arduino_GFX.cpp Arduino_G.cpp Arduino_DataBus.cpp canvas/Arduino_Canvas.cpp
+# must list the fonts that uitext.cpp's CJK_FONT_JA and CJK_FONT_KO name
 FONTS    := u8g2_font_unifont_t_japanese3 u8g2_font_unifont_t_korean2
 
 # everything both programs link, without their main()
