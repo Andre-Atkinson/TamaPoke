@@ -46,16 +46,3 @@ void renderKeyboard();
 void keyboardTap(int16_t x, int16_t y);
 void renderGallery();
 void galleryTap(int16_t x, int16_t y);
-
-// Used only inside screens.cpp once the code has moved there (#41); a later commit
-// makes them static there.
-void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint16_t color);
-void applyClock();
-void drawClockBtn(int x, int y, const char *l);
-void drawMedalBadge(int x, int y, int i);
-void renderCardProfile();
-void renderCardStats();
-void renderCardMedals();
-void renderCardProgress();
-void renderCardCare();
-void drawThumb(const uint8_t *b, int x, int y, int s, bool sil);

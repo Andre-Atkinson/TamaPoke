@@ -18,6 +18,10 @@
 #include "touchlock.h"
 #include "uitext.h"
 
+// Used only in this file, and called above its definition (in TamaPoke.ino the
+// prototype arduino-cli generates covered that).
+static void drawThumb(const uint8_t *b, int x, int y, int s, bool sil);
+
 PmdMon galleryPmd;  // sprite grande de la vista detalle de la galeria (PMD/TPK2, legal)
 
 // galeria pokedex
@@ -177,7 +181,7 @@ static int statBarX() {
   return x < 150 ? 150 : x;
 }
 
-void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint16_t color) {
+static void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint16_t color) {
   gfx->setTextColor(UI_INK);
   setSize(2);
   setCur(96, y);
@@ -209,7 +213,7 @@ void openClock() {
   clockPrompt.opened();  // however it opened, it does not open again by itself
 }
 
-void applyClock() {
+static void applyClock() {
   uint32_t base = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
   uint32_t e = (base / 86400) * 86400 + (uint32_t)clockH * 3600 + (uint32_t)clockM * 60;
   rtcSetEpoch(e);
@@ -218,7 +222,7 @@ void applyClock() {
   clockOpen = false;
 }
 
-void drawClockBtn(int x, int y, const char *l) {
+static void drawClockBtn(int x, int y, const char *l) {
   gfx->fillRoundRect(x, y, 58, 58, 12, UI_WHITE);
   gfx->drawRoundRect(x, y, 58, 58, 12, UI_INK);
   gfx->setTextColor(UI_INK);
@@ -487,7 +491,7 @@ void drawMedalBadge(int x, int y, int i) {
 }
 
 // pagina 0: perfil (retrato grande, identidad, racha, vinculo, baya)
-void renderCardProfile() {
+static void renderCardProfile() {
   const DexEntry &d = DEX_TBL[pet.speciesId];
   const char *nm = pet.nick[0] ? pet.nick : dexName(pet.speciesId);
   char head[32];
@@ -548,7 +552,7 @@ void renderCardProfile() {
 }
 
 // pagina 1: combate (4 barras + boton de entrenar)
-void renderCardStats() {
+static void renderCardStats() {
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(T(S_BATTLE), 3), 48);
@@ -568,7 +572,7 @@ void renderCardStats() {
 }
 
 // pagina 2: medallas con etiqueta descriptiva
-void renderCardMedals() {
+static void renderCardMedals() {
   int got = 0;
   for (int i = 0; i < MED_COUNT; i++)
     if (pet.hasMedal(1 << i)) got++;
@@ -612,7 +616,7 @@ void renderCardMedals() {
 
 // pagina 3: progreso (nivel, evolucion, descuidos) — saca a la luz mecanicas
 // que antes eran invisibles (cuanto falta para subir/evolucionar y por que)
-void renderCardProgress() {
+static void renderCardProgress() {
   const DexEntry &d = DEX_TBL[pet.speciesId];
   gfx->setTextColor(UI_INK);
   setSize(3);
@@ -695,7 +699,7 @@ static void drawCareBtn(int y, const char *label, const char *value) {
   printT(value);
 }
 
-void renderCardCare() {
+static void renderCardCare() {
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(T(S_CARE), 3), 44);
@@ -821,7 +825,7 @@ void keyboardTap(int16_t x, int16_t y) {
 #define GAL_CELL 80
 
 // dibuja una miniatura centrada en su celda; sil=true la pinta en tinta
-void drawThumb(const uint8_t *b, int x, int y, int s, bool sil) {
+static void drawThumb(const uint8_t *b, int x, int y, int s, bool sil) {
   uint8_t w = b[0], h = b[1], n = b[2];
   const uint8_t *pal = b + 3;
   const uint8_t *d = pal + n * 2;
