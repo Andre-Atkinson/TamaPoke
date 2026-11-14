@@ -482,6 +482,123 @@ int runSelftest(WinApp &app, const Options &o, FILE *serialOut, const std::strin
     t.check(app.framesRendered > drawn, "the window was not drawn again once shown");
   }
 
+  // ---- a second press while a click's release waits is ignored: the click keeps its own
+  // place and time (a double click that fast is not a human one)
+  {
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+    t.frame(10);
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+    t.mouse(SDL_MOUSEBUTTONDOWN, 700, 500);  // logical (350,250)
+    t.frame(10);
+    t.check(gSimTouch.down && gSimTouch.x == 300 && gSimTouch.y == 200,
+            "a second press while a release waited moved the finger or was taken as a new touch");
+    t.run(300);
+    t.check(!gSimTouch.down, "a second press while a release waited left the finger down");
+    t.mouse(SDL_MOUSEBUTTONUP, 700, 500);
+    t.run(100);
+  }
+
+  // ---- a release soon after the press waits for SIM_TAP_DOWN_MS of simulated time, no less, no more
+  {
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+    t.frame(10);
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+    t.frame(10);
+    t.frame(10);
+    t.frame(10);  // about 40 ms since the press
+    t.check(gSimTouch.down, "a release was applied before the finger had been down 80 ms");
+    for (int i = 0; i < 5; i++) t.frame(10);  // about 90 ms
+    t.check(!gSimTouch.down, "a waiting release was still not applied after 90 ms");
+    t.run(100);
+  }
+
+  // ---- B, P and the release of B forgive a negative debt, as a touch does
+  {
+    auto forgives = [&](const char *what) {
+      uint32_t m0 = millis();
+      t.run(50);
+      t.check(millis() > m0, what);
+    };
+    app.pace.debtUs = -5000000;
+    t.key(SDLK_b, true);
+    forgives("B down did not forgive a negative debt");
+    app.pace.debtUs = -5000000;
+    t.key(SDLK_b, false);
+    forgives("B up did not forgive a negative debt");
+    t.run(700);  // BOOT's double-press window closes
+    app.pace.debtUs = -5000000;
+    t.key(SDLK_p, true);
+    t.key(SDLK_p, false);
+    forgives("P did not forgive a negative debt");
+    t.run(1000);
+    t.check(!simPanelVisible(), "P (after a negative debt) did not turn the screen off");
+    t.tapKey(SDLK_p, 1000);  // the next press wakes it again
+    t.check(simPanelVisible(), "the second P did not wake the screen");
+  }
+
+  // ---- --square: the whole panel is touchable and the bezel is not drawn
+  {
+    app.opt.square = true;
+    t.mouse(SDL_MOUSEBUTTONDOWN, 10, 10);  // logical (5,5): off the round glass
+    t.run(100);
+    t.check(gSimTouch.down && gSimTouch.x == 5 && gSimTouch.y == 5, "with --square a press at the panel's corner was not a touch");
+    uint32_t corner = 0;
+    t.check(readPixel(app, 3, 3, corner) && !closeTo(corner, 0x141418, 2), "with --square the corner is drawn as bezel");
+    t.mouse(SDL_MOUSEBUTTONUP, 10, 10);
+    t.run(100);
+    app.opt.square = false;
+    t.check(!gSimTouch.down, "the finger stayed down after the --square press");
+  }
+
+  // ---- fast speeds do not stretch input: the firmware sees simulated time, so a held finger
+  // or BOOT at 600x would be a minutes-long press. The window runs at 1x while input is in
+  // progress and for 1 s of wall time after it, then returns to the chosen speed.
+  {
+    app.pace.speedIndex = 3;  // 600x
+    uint32_t m0 = millis();
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+    t.frame(50);
+    app.titleDueUs = 0;  // refresh the title in the next frame
+    t.frame(50);
+    t.check(strstr(SDL_GetWindowTitle(app.window), "600x (1x while touching)") != nullptr,
+            "the title does not say the speed is 1x while touching");
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+    t.frame(50);
+    t.check(!gSimTouch.down, "the finger stayed down after a click at 600x");
+    // a tap is under 1500 ms and a swipe under 800 ms; a still hold over 3000 ms on the pet opens the release dialog
+    t.check(millis() - m0 <= 200, "a 100 ms click at 600x ran far more than 150 ms of simulated time");
+    // the 1x lasts 1 s of wall time after the last input, then the chosen speed is back
+    for (int i = 0; i < 19; i++) t.frame(50);  // the 950 ms left of the second after the release frame
+    t.check(millis() - m0 <= 1400, "the 1x did not last the second after a click");
+    uint32_t m1 = millis();
+    t.frame(50);
+    t.check(millis() - m1 >= 20000, "the chosen speed did not come back a second after the last input");
+    // a hold longer than the second stays at 1x for as long as the finger is down
+    m0 = millis();
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+    for (int i = 0; i < 30; i++) t.frame(50);  // 1.5 s of wall time
+    t.check(gSimTouch.down && millis() - m0 <= 1700, "a finger held 1.5 s at 600x did not stay at 1x");
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+    t.frame(50);
+    t.check(!gSimTouch.down, "the finger stayed down after a long hold at 600x");
+    for (int i = 0; i < 25; i++) t.frame(50);  // the grace runs out
+    // BOOT the same: a long press is 1500 ms, a double press must come within 350 ms
+    m0 = millis();
+    t.key(SDLK_b, true);
+    for (int i = 0; i < 30; i++) t.frame(50);
+    t.check(digitalRead(0) == LOW && millis() - m0 <= 1700, "BOOT held 1.5 s at 600x did not stay at 1x");
+    t.key(SDLK_b, false);
+    t.frame(50);
+    t.check(digitalRead(0) == HIGH, "BOOT stayed down after B went up at 600x");
+    for (int i = 0; i < 25; i++) t.frame(50);
+    app.pace.speedIndex = 0;
+    t.run(100);
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);  // a touch wakes the screen after all that time
+    t.run(100);
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+    t.run(500);
+  }
+
   // ---- Cmd, Ctrl and Alt combinations belong to the system, not to the simulator
   t.key(SDLK_b, true, false, KMOD_LGUI);
   t.run(100);
@@ -514,6 +631,17 @@ int runSelftest(WinApp &app, const Options &o, FILE *serialOut, const std::strin
     t.push(e);
     t.run(0);
     t.check(app.quit, "closing the window did not quit");
+  }
+
+  // ---- the PMU powering the board off ends the run, with the reason
+  {
+    gSimPower.usb = false;
+    gSimPower.batPct = 0;
+    t.run(5000);
+    t.check(app.quit && !app.quitReason.empty(), "the PMU powering the board off did not end the run with a reason");
+    app.quit = false;
+    app.quitReason.clear();
+    gSimPower.poweredOff = false;
   }
 
   if (!t.ok()) {

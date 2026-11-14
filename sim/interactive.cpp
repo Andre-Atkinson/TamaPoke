@@ -41,10 +41,12 @@ uint8_t simBrightnessMod(uint8_t brightness) {
 void simPaceSetPaused(SimPace &p, bool paused) {
   p.paused = paused;
   p.debtUs = 0;
+  p.graceUs = 0;
 }
 
 std::string simTitleText(const char *board, uint32_t epoch, uint32_t speed, bool behind,
-                         double effectiveSpeed, int batPct, bool usb, bool charging, bool paused) {
+                         double effectiveSpeed, int batPct, bool usb, bool charging, bool paused,
+                         bool slowed) {
   char buf[256];
   size_t n = (size_t)snprintf(buf, sizeof buf, "TamaPoke %s | ", board);
   auto room = [&] { return n < sizeof buf ? sizeof buf - n : (size_t)0; };
@@ -57,7 +59,8 @@ std::string simTitleText(const char *board, uint32_t epoch, uint32_t speed, bool
     n += strftime(buf + n, room(), "%Y-%m-%d %H:%M:%S", &tmv);
   }
   n += (size_t)snprintf(buf + n, room(), " | %ux", (unsigned)speed);
-  if (behind) n += (size_t)snprintf(buf + n, room(), " (running at %.1fx)", effectiveSpeed);
+  if (slowed) n += (size_t)snprintf(buf + n, room(), " (1x while touching)");
+  else if (behind) n += (size_t)snprintf(buf + n, room(), " (running at %.1fx)", effectiveSpeed);
   if (batPct >= 0) n += (size_t)snprintf(buf + n, room(), " | battery %d%%", batPct);
   else n += (size_t)snprintf(buf + n, room(), " | no battery");
   if (usb) n += (size_t)snprintf(buf + n, room(), ", USB%s", charging ? ", charging" : "");

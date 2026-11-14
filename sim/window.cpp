@@ -239,10 +239,12 @@ void refreshTitle(WinApp &a) {
   a.titleDueUs = a.wallUs + TITLE_EVERY_US;
   double eff = a.pace.statWallUs ? (double)a.pace.statSimMs * 1000.0 / (double)a.pace.statWallUs : 0;
   std::string t = simTitleText(a.opt.board.c_str(), rtcEpoch(), a.pace.speed(), a.pace.statBehind, eff,
-                               gSimPower.batPct, gSimPower.usb, gSimPower.charging, a.pace.paused);
+                               gSimPower.batPct, gSimPower.usb, gSimPower.charging, a.pace.paused,
+                               a.pace.statSlowed);
   SDL_SetWindowTitle(a.window, t.c_str());
   a.pace.statSimMs = a.pace.statWallUs = 0;
   a.pace.statBehind = false;
+  a.pace.statSlowed = false;
   fflush(stdout);  // the firmware's serial output, if it goes there
 }
 
@@ -251,10 +253,12 @@ void refreshTitle(WinApp &a) {
 void winPrintHelp() {
   printf(
       "sim window keys:\n"
-      "  mouse    left button is the finger (a press that starts off the round glass is ignored)\n"
-      "  P        short PWR press          B   BOOT, held while the key is held\n"
+      "  mouse    left button is the finger (a press that starts off the round glass is\n"
+      "           ignored, unless --square)\n"
+      "  P        short PWR press          B   BOOT, held while the key is held (1.75C only)\n"
       "  S        save a PNG of the panel (window-NNN.png in --out)\n"
       "  Space    pause / resume           [ ]  slower / faster: 1x 10x 60x 600x 3600x\n"
+      "           (touch, P and B run at 1x while in use and for 1 s after)\n"
       "  U        USB in / out             C   charging on / off\n"
       "  - =      battery -10 / +10 %%      H   this help\n"
       "  Esc, Q or closing the window quits.\n"
@@ -347,8 +351,10 @@ void winFrame(WinApp &a, uint32_t wallDeltaUs, bool readStdin) {
   auto spentUs = [&]() -> uint64_t {
     return a.noBudget ? 0 : (SDL_GetPerformanceCounter() - t0) * 1000000ULL / freq;
   };
-  simPaceFrame(a.pace, wallDeltaUs, a.inputThisFrame, [] { loop(); }, [] { return gSimPower.poweredOff; },
-               spentUs);
+  // (a click whose release still waits keeps fingerDown set, so it counts as held)
+  const bool holding = a.fingerDown || a.bootHeld;
+  simPaceFrame(a.pace, wallDeltaUs, a.inputThisFrame, holding, [] { loop(); },
+               [] { return gSimPower.poweredOff; }, spentUs);
   a.inputThisFrame = false;
   if (a.releasePending && mockMillis64() - a.downAtMs >= SIM_TAP_DOWN_MS) fingerUp(a);  // the click's release
   if (gSimPower.poweredOff) {

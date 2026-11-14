@@ -460,9 +460,9 @@ struct PaceRun {
   uint64_t passes = 0, simMs = 0;
   // un fotograma: cada pasada del firmware falso dura passMs; usPerPass es la pared que
   // gasta cada pasada (para el presupuesto)
-  SimPaceResult frame(uint32_t wallUs, bool input, uint32_t passMs, uint32_t usPerPass = 0) {
+  SimPaceResult frame(uint32_t wallUs, bool input, uint32_t passMs, uint32_t usPerPass = 0, bool holding = false) {
     uint64_t n = 0;
-    SimPaceResult r = simPaceFrame(p, wallUs, input, [&] { delay(passMs); n++; },
+    SimPaceResult r = simPaceFrame(p, wallUs, input, holding, [&] { delay(passMs); n++; },
                                    [] { return false; }, [&]() -> uint32_t { return (uint32_t)(n * usPerPass); });
     passes += r.passes;
     simMs += r.simMs;
@@ -568,13 +568,87 @@ TEST(SimWindow, un_toque_o_boton_perdona_la_deuda_negativa) {
   CHECK_RANGE((long)r.simMs, 14, 18);
 }
 
+TEST(SimWindow, mientras_se_toca_corre_a_1x_y_un_segundo_de_pared_despues_y_luego_vuelve_a_la_velocidad_elegida) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 3;  // 600x
+  // dedo apoyado: cada fotograma de 16 ms de pared son 16 ms simulados, no 9600
+  for (int i = 0; i < 5; i++) {
+    SimPaceResult r = run.frame(16000, i == 0, 2, 0, /*holding=*/true);
+    CHECK_RANGE((long)r.simMs, 15, 18);
+  }
+  CHECK(run.p.statSlowed);
+  // soltado (entrada en este fotograma, ya sin dedo): sigue a 1x durante 1 s de pared
+  uint64_t sim = run.simMs;
+  SimPaceResult r = run.frame(16000, true, 2, 0, false);
+  CHECK_RANGE((long)r.simMs, 15, 18);
+  for (int i = 0; i < 50; i++) run.frame(16000, false, 2);  // 800 ms de pared mas
+  CHECK_RANGE((long)(run.simMs - sim), 15 + 790, 15 + 800 + 5);
+  CHECK(run.p.graceUs > 0 && run.p.graceUs < SIM_INPUT_GRACE_US);
+  // quedan 184 ms de gracia: un fotograma de 250 ms de pared reparte 184 a 1x y 66 a 600x
+  CHECK_RANGE((long)run.p.graceUs, 183000, 185000);
+  r = run.frame(250000, false, 2);
+  CHECK_RANGE((long)r.simMs, 184 + 39600 - 3, 184 + 39600 + 3);
+  CHECK_EQ(run.p.graceUs, (uint32_t)0);
+  // y despues, a la velocidad elegida
+  r = run.frame(16000, false, 2);
+  CHECK_RANGE((long)r.simMs, 9600, 9605);
+}
+
+TEST(SimWindow, sin_entrada_ni_dedo_no_hay_gracia_y_a_1x_no_cambia_nada) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 3;
+  SimPaceResult r = run.frame(16000, false, 2);
+  CHECK_RANGE((long)r.simMs, 9600, 9605);
+  CHECK_EQ(run.p.graceUs, (uint32_t)0);
+  CHECK(!run.p.statSlowed);
+  mockSetMillis(0);
+  PaceRun slow;  // a 1x el titulo no dice "1x while touching": no hay nada que frenar
+  slow.frame(16000, true, 2, 0, true);
+  CHECK(!slow.p.statSlowed);
+}
+
+TEST(SimWindow, la_gracia_se_cuenta_desde_la_ultima_entrada_y_un_dedo_apoyado_la_renueva) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 2;  // 60x
+  SimPaceResult r0 = run.frame(16000, true, 2);  // una pulsacion, sin dedo apoyado (P): ya va a 1x
+  CHECK_RANGE((long)r0.simMs, 15, 18);
+  for (int i = 0; i < 40; i++) run.frame(16000, false, 2);  // 656 ms de pared en total
+  // otra entrada renueva el segundo entero
+  run.frame(16000, true, 2);
+  CHECK_RANGE((long)run.p.graceUs, (long)(SIM_INPUT_GRACE_US - 16000) - 1, (long)(SIM_INPUT_GRACE_US - 16000) + 1);
+  // y un dedo apoyado la mantiene entera, por mucho que dure
+  for (int i = 0; i < 100; i++) run.frame(16000, false, 2, 0, true);
+  CHECK_EQ(run.p.graceUs, SIM_INPUT_GRACE_US - 16000);
+}
+
+TEST(SimWindow, la_pausa_gana_a_la_entrada_y_borra_la_gracia) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 3;
+  run.frame(16000, true, 2, 0, true);
+  CHECK(run.p.graceUs > 0);
+  simPaceSetPaused(run.p, true);
+  CHECK_EQ(run.p.graceUs, (uint32_t)0);
+  uint32_t t = millis();
+  SimPaceResult r = run.frame(16000, true, 2, 0, true);
+  CHECK_EQ(r.passes, (uint64_t)0);
+  CHECK_EQ(millis(), t);
+  CHECK_EQ(run.p.graceUs, (uint32_t)0);  // en pausa ni siquiera se renueva
+  simPaceSetPaused(run.p, false);
+  r = run.frame(16000, false, 2);  // al seguir, sin gracia vieja: a la velocidad elegida
+  CHECK_RANGE((long)r.simMs, 9600, 9605);
+}
+
 TEST(SimWindow, el_apagado_del_pmu_corta_el_fotograma_y_no_cuenta_como_ir_atrasado) {
   mockSetMillis(0);
   PaceRun run;
   run.p.speedIndex = 2;
   bool off = false;
   uint64_t n = 0;
-  SimPaceResult r = simPaceFrame(run.p, 16000, false, [&] { delay(10); if (++n == 3) off = true; },
+  SimPaceResult r = simPaceFrame(run.p, 16000, false, false, [&] { delay(10); if (++n == 3) off = true; },
                                  [&] { return off; }, [] { return 0u; });
   CHECK_EQ(r.passes, (uint64_t)3);
   CHECK(!r.behind);
@@ -591,12 +665,14 @@ TEST(SimWindow, la_velocidad_efectiva_se_mide_con_lo_corrido_y_la_pared_gastada)
 
 // ---------------------------------------------------------------- titulo
 TEST(SimWindow, el_titulo_dice_placa_hora_velocidad_bateria_usb_y_pausa) {
-  std::string t = simTitleText("1.75C", 1794564000UL, 10, false, 0, 80, true, true, false);
+  std::string t = simTitleText("1.75C", 1794564000UL, 10, false, 0, 80, true, true, false, false);
   CHECK_STREQ(t.c_str(), "TamaPoke 1.75C | 2026-11-13 10:00:00 | 10x | battery 80%, USB, charging");
-  t = simTitleText("1.75", 1794564000UL + 3661, 1, false, 0, 15, false, true, true);
+  t = simTitleText("1.75", 1794564000UL + 3661, 1, false, 0, 15, false, true, true, false);
   CHECK_STREQ(t.c_str(), "TamaPoke 1.75 | 2026-11-13 11:01:01 | 1x | battery 15% | paused");  // sin USB no hay "charging"
-  t = simTitleText("1.75C", 0, 600, true, 42.5, -1, false, false, false);
+  t = simTitleText("1.75C", 0, 600, true, 42.5, -1, false, false, false, false);
   CHECK_STREQ(t.c_str(), "TamaPoke 1.75C | no clock | 600x (running at 42.5x) | no battery");
+  t = simTitleText("1.75C", 0, 600, true, 42.5, -1, false, false, false, true);  // tocando gana a "atrasado"
+  CHECK_STREQ(t.c_str(), "TamaPoke 1.75C | no clock | 600x (1x while touching) | no battery");
 }
 
 // ---------------------------------------------------------------- consola serie

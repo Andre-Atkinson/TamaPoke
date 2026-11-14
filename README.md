@@ -517,12 +517,12 @@ tools/sim.sh --window --board 175 --lang ja --clock "2026-11-13 22:30"
 
 | Input | What it does |
 |---|---|
-| left mouse button | the finger: press, drag, release. A press that starts outside the round glass is ignored; a drag that leaves it stays on the panel edge |
+| left mouse button | the finger: press, drag, release. A press that starts outside the round glass is ignored (unless `--square`); a drag that leaves it stays on the panel edge |
 | `P` | short PWR press (on the 1.75C, three within 350 ms lock the pocket, as on the board) |
-| `B` | BOOT, held while the key is held (a long press works) |
+| `B` | BOOT, held while the key is held (a long press works). 1.75C only: the original 1.75 build does not read it |
 | `S` | save a PNG of the panel to `--out` (default `shots/`) as `window-NNN.png`; the path is printed |
 | `Space` | pause / resume (touch and `P`/`B` are ignored while paused) |
-| `[` `]` | slower / faster: 1×, 10×, 60×, 600×, 3600× real time |
+| `[` `]` | slower / faster: 1×, 10×, 60×, 600×, 3600× real time. While a finger or `B` is held, and for 1 s of real time after the last touch, `P` or `B`, the window runs at 1× (the title says `600x (1x while touching)`), so taps, swipes and long presses last as long as they do on the board |
 | `U` / `C` | USB in / out; charging on / off |
 | `-` `=` | battery -10 % / +10 % |
 | `H` | print this key list; `Esc`, `Q` or closing the window quits |
@@ -535,9 +535,10 @@ whether it is paused; if the Mac cannot keep up with a fast speed, it shows the 
 actually reached. A dimmed panel is drawn darker (the firmware's dim levels), and a
 screen that is off or asleep is drawn black. `--square` drops the round glass,
 `--quit-after 2m` closes the window after that much real time, and `--help` lists the
-rest. It runs the firmware in real time, so a light sleep makes a click wait at most
-200 ms of simulated time at 1×; a touch, `P` or `B` skips that wait. A click is held for
-at least 80 ms of simulated time, so a quick tap or trackpad click is not lost. The
+rest. It runs the firmware in real time, so after a light sleep a line typed in the
+terminal can wait up to 200 ms of simulated time at 1×; a touch, `P` or `B` is handled at
+once. A click is held
+for at least 80 ms of simulated time, so a quick tap or trackpad click is not lost. The
 terminal takes ordinary commands only: `PUT`'s raw payload cannot go through it (the
 line splitter drops NUL bytes and lines over 256 characters, and splits at CR and LF).
 

@@ -48,6 +48,13 @@ uint8_t simBrightnessMod(uint8_t brightness);
 // millisecond each.
 static const uint32_t SIM_PACE_MAX_WALL_US = 250000;  // a stalled or hidden window must not jump ahead
 static const uint32_t SIM_PACE_BUDGET_US = 12000;     // wall time one frame may spend running the firmware
+// The firmware sees only simulated time, so a finger held for 100 ms of wall time at 600x
+// would be a 60 s hold (a tap must be under 1500 ms, a swipe under 800 ms, a still hold on
+// the pet over 3000 ms opens the release dialog, BOOT is a long press from 1500 ms, and
+// PWR / BOOT double presses must come within 350 ms). So the window runs at 1x while input
+// is in progress: while a finger or BOOT is held, and for this much wall time after the
+// last touch or button input (a click's release, the next tap of a double press).
+static const uint32_t SIM_INPUT_GRACE_US = 1000000;
 
 struct SimPace {
   int speedIndex = 0;
@@ -59,6 +66,9 @@ struct SimPace {
   // since the last title refresh, for the effective speed
   uint64_t statSimMs = 0, statWallUs = 0;
   bool statBehind = false;
+  // wall time left in which the speed stays 1x after the last input (SIM_INPUT_GRACE_US)
+  uint32_t graceUs = 0;
+  bool statSlowed = false;  // since the last title refresh, a frame ran at 1x instead of the chosen speed
 
   uint32_t speed() const { return kSimSpeeds[speedIndex]; }
 };
@@ -71,18 +81,26 @@ struct SimPaceResult {
 };
 
 // One frame. wallDeltaUs: wall time since the previous frame. input: a touch or button
-// event came in this frame; it forgives a negative debt (the GPIO wakes the chip from
-// light sleep at once), so a click never waits out a sleep. step() runs one loop()
-// pass; stop() ends early (the PMU powered the board off); wallSpentUs() is the wall
-// time this frame has spent so far, against the budget. Paused: nothing runs.
+// event came in this frame; it forgives a negative debt, so a click never waits out a
+// light sleep (touch and button input are handled at once; on the board a touch, and BOOT
+// on the 1.75C, wake the chip, and the PWR key is read after the sleep). holding: a finger
+// or BOOT is down, or a click's release is still waiting. Input and holding both start the
+// SIM_INPUT_GRACE_US of 1x (see there); this frame's wall time counts at 1x for as much of
+// the grace as is left, the rest at the chosen speed. step() runs one loop() pass; stop()
+// ends early (the PMU powered the board off); wallSpentUs() is the wall time this frame
+// has spent so far, against the budget. Paused: nothing runs, and pause wins over input.
 template <class Step, class Stop, class WallSpentUs>
-SimPaceResult simPaceFrame(SimPace &p, uint32_t wallDeltaUs, bool input, Step step, Stop stop,
+SimPaceResult simPaceFrame(SimPace &p, uint32_t wallDeltaUs, bool input, bool holding, Step step, Stop stop,
                            WallSpentUs wallSpentUs) {
   SimPaceResult r;
   if (p.paused) return r;
   if (input && p.debtUs < 0) p.debtUs = 0;
   uint32_t wall = wallDeltaUs > SIM_PACE_MAX_WALL_US ? SIM_PACE_MAX_WALL_US : wallDeltaUs;
-  p.debtUs += (int64_t)wall * (int64_t)p.speed();
+  if (input || holding) p.graceUs = SIM_INPUT_GRACE_US;
+  uint32_t slow = wall < p.graceUs ? wall : p.graceUs;  // wall time that runs at 1x
+  p.graceUs -= slow;                                    // a held finger renews it every frame
+  if (slow > 0 && p.speed() > 1) p.statSlowed = true;
+  p.debtUs += (int64_t)slow + (int64_t)(wall - slow) * (int64_t)p.speed();
   p.statWallUs += wall;
   if (p.debtUs >= 1000) {
     uint64_t t0 = mockMillis64();
@@ -101,15 +119,18 @@ SimPaceResult simPaceFrame(SimPace &p, uint32_t wallDeltaUs, bool input, Step st
   return r;
 }
 
-// pause / resume. Pausing forgets the debt, so resuming does not run a burst.
+// pause / resume. Pausing forgets the debt and the 1x wait, so resuming does not run a burst.
 void simPaceSetPaused(SimPace &p, bool paused);
 
 // ---------------------------------------------------------------- title
 // "TamaPoke 1.75C | 2026-11-13 10:23:45 | 10x | battery 80%, USB, charging | paused".
 // epoch is the board's clock (local time as seconds, 0 = not set). Behind: the speed
 // reads "10x (running at 4.2x)", with effectiveSpeed measured by the caller.
+// Slowed (input ran the firmware at 1x, see SIM_INPUT_GRACE_US): "600x (1x while touching)";
+// it wins over behind, which shows on a later refresh.
 std::string simTitleText(const char *board, uint32_t epoch, uint32_t speed, bool behind,
-                         double effectiveSpeed, int batPct, bool usb, bool charging, bool paused);
+                         double effectiveSpeed, int batPct, bool usb, bool charging, bool paused,
+                         bool slowed);
 
 // ---------------------------------------------------------------- stdin
 // Splits terminal input into complete lines for the firmware's serial console. Feed
