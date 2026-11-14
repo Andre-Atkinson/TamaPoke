@@ -109,6 +109,39 @@ gets no CI (start a run from the Actions tab with `workflow_dispatch`), and a
 PR with merge conflicts gets no run until they are resolved, so an empty
 `gh pr checks` there is not a CI failure.
 
+`main` is protected by the repo ruleset "Protect main" (id 27202277). The owner
+edits it on GitHub under Settings > Rules > Rulesets, and
+`gh api repos/Andre-Atkinson/TamaPoke/rules/branches/main` shows the rules in
+force. Changes reach `main` only through a pull request, merged with a merge
+commit or a squash. Rebase merges, force-pushes and deleting `main` are
+blocked. The five CI jobs must pass first: `Compile firmware`,
+`Game-logic tests (host, no board)`, `Generated headers up to date`,
+`Lint tools/ and sim/ (ruff)` and `i18n format-specifier consistency`. The
+branch does not have to be up to date with `main`, and no approving review is
+needed. Nobody can bypass it, not even the owner (so not any session either).
+
+A PR whose `mergeStateStatus` is `BLOCKED` (`gh pr view <n> --repo
+Andre-Atkinson/TamaPoke --json mergeStateStatus`) has a required check that is
+still running, failed, or never reported. `gh pr checks <n> --repo
+Andre-Atkinson/TamaPoke` lists only the checks that reported, so it can show
+all green on a blocked PR. The firmware compile takes about eight to twelve
+minutes.
+
+Required checks match by job `name:`, and a PR's CI runs the `ci.yml` from its
+merge with `main` as of its last push. So:
+
+- A PR that renames or removes a job in `.github/workflows/ci.yml` stays
+  `BLOCKED` until the ruleset's required checks are changed to match.
+- A PR that adds a job merges normally. Add the new name to the ruleset after
+  it merges, or the job is not enforced.
+- Once a renamed or added name is in the ruleset, every other open PR stays
+  `BLOCKED` (the check is expected but never reported) until CI runs on it
+  again after a push, such as merging `main` into it. Re-running an old run
+  does not help: it reuses the old commit. Dropping a removed name from the
+  ruleset blocks nothing.
+
+The ruleset is a repo setting, so ask the owner before changing it.
+
 If a change affects device behaviour, say plainly in the PR whether it was
 exercised on hardware. Only flash it (app-only) and check it over USB serial
 (`HEALTH`, `STATS`, the periodic `HEALTH` heartbeat) when the owner has asked
