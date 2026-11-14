@@ -24,8 +24,8 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   minutes (screen-off set to never); a screen turned off with PWR stays dark
   (chirp only); the pocket lock gets nothing. Quiet hours (the bedtime
   window, or 22:00-07:00 with bedtime off, and while the clock is unset after a
-  power-off) are silent and dark. No calls while it sleeps, as an egg or during
-  a farewell; a call waits for a minigame, dialog or other screen to close. No
+  power-off) are silent and dark. No calls while it sleeps, as an egg, while
+  choosing a starter or an egg, or during a farewell or a run-away; a call waits for a minigame, dialog or other screen to close. No
   new NVS keys.
 
 - **Play starts a random minigame.** Four short touch games now take turns:

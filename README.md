@@ -96,8 +96,7 @@ While **awake**, per minute:
   while a need is under 25 (the one the status line names), and hides while it sleeps.
   - A call is **not a touch**: it lights or brightens the screen for **15 s**, then the
     screen goes back to what its real idle time says (dim, or off), and anything that
-    waits for the creature to be left alone (the self-care top-ups while charging) keeps
-    counting from your last real touch.
+    waits for the creature to be left alone keeps counting from your last real touch.
   - A screen that turned off by itself lights for 15 s. Touch stays locked if the auto
     touch lock is on; PWR or BOOT turns the screen on for real, and with the touch lock
     off (or not engaged yet) a touch does, and that first touch is swallowed. A stat
@@ -112,7 +111,8 @@ While **awake**, per minute:
     triple-press pocket lock gets nothing.
   - **Quiet hours** (the bedtime window, or 22:00–07:00 if bedtime is off, and any
     time the clock hasn't been set since a power-off): no chirp and no light.
-  - No calls while it sleeps, as an egg, or during a farewell or the egg choice.
+  - No calls while it sleeps, as an egg, while choosing a starter or an egg, or during
+    a farewell or a run-away.
     A call waits while a minigame, the training bag, a dialog, the card, gallery,
     clock or keyboard is open on a lit screen, and comes once you are back.
 

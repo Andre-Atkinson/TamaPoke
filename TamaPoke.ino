@@ -760,9 +760,12 @@ void attnLoop(uint32_t now) {
     // no wakeUI(): not a touch. The window makes powerCtx() full brightness and 10 fps, so
     // the first lit frame is drawn within 100 ms (lastRender is old: frozen while the screen
     // was off, at most 1 s ago on a dimmed one).
+    // The amplifier on now, as the window will keep it (amplifierWanted): otherwise sfxPlay()
+    // would take its 4 s idle hold, audioBusy() would stay true for those 4 s and the loop
+    // would keep the CPU at 80/160 MHz while drawing the lit frames.
+    audioSetIdle(false);
   }
-  // sfxPlay() holds the amplifier for 4 s when audio is idle (then the loop's audioSetIdle
-  // sees the window as in use), so the chirp is heard without wakeUI()'s audioSetIdle(false)
+  // a dark PWR-off call still uses sfxPlay()'s 4 s hold, which is what it is for
   if (a.chirp) sfxPlay(SFX_CALL);  // silent anyway if the sound is off
 
   static const char *const NAMES[ATTN_NEEDS] = { "food", "hygiene", "energy", "joy" };

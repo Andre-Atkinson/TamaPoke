@@ -63,8 +63,7 @@ class AttnArm {
       uint8_t bit = (uint8_t)(1u << i);
       bool low = l.v[i] < ATTN_LOW;
       if (!have_) {
-        if (low) armed_ &= (uint8_t)~bit;
-        else armed_ |= bit;
+        if (!low) armed_ |= bit;  // armed_ starts at 0: a need already low stays unarmed
         continue;
       }
       if (low) {
