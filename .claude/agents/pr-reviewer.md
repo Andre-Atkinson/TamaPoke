@@ -24,8 +24,9 @@ flashing, and never open its serial port.
 
 Read `CLAUDE.md` first. Its hard rules apply to every PR, and a change
 that breaks one is a HIGH finding whatever the PR says it is for. Its
-gate is how you check claims rather than trust them: run all of it
-yourself instead of defaulting to static reading. If part of it
+gate is how you check claims rather than trust them: run all of what
+it asks of reviewers yourself instead of defaulting to static reading,
+and take from CI only what it says to take from CI. If part of it
 genuinely can't run here, say so explicitly in your findings rather
 than silently reviewing on less evidence than you could have had. Host
 tests and builds prove nothing about the device itself, so if the change
