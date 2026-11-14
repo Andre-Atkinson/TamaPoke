@@ -1659,7 +1659,7 @@ class TestSimGenSketch(unittest.TestCase):
             lines = f.readlines()
         names = {re.match(r'.*?(\w+)\(', p).group(1) for _, p, _ in self.gen.find_functions(lines)}
         for must in ('setup', 'loop', 'render', 'handleTouch', 'wakeUI', 'flushUI', 'renderCardCare',
-                     'careTap', 'readTrainingTouch', 'touchIsr', 'printT', 'drawMap'):
+                     'careTap', 'readTrainingTouch', 'touchIsr', 'mixKey', 'drawMap'):
             self.assertIn(must, names)
         out = self.gen.generate(os.path.join(ROOT, 'TamaPoke.ino'), lines)
         self.assertEqual(out.count('\n#line '), 2)
