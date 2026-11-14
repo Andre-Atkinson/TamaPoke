@@ -7,7 +7,7 @@ static ClockPromptHold nothingUp() { return ClockPromptHold(); }
 // ---------------------------------------------------------------- automatic opening
 TEST(ClockPrompt, a_reseeded_clock_opens_the_clock_screen_once) {
   ClockPrompt p;
-  p.boot(true, true);
+  p.boot(true);
   CHECK(p.due(true, nothingUp()));
   CHECK(!p.due(true, nothingUp()));  // closed without setting the time: not again
   CHECK(!p.due(true, nothingUp()));
@@ -15,7 +15,8 @@ TEST(ClockPrompt, a_reseeded_clock_opens_the_clock_screen_once) {
 
 TEST(ClockPrompt, a_clock_with_its_time_never_asks) {
   ClockPrompt p;
-  p.boot(false, true);
+  p.boot(true);
+  CHECK(!p.due(false, nothingUp()));
   CHECK(!p.due(false, nothingUp()));
   CHECK(!p.asking(false));
 }
@@ -23,7 +24,7 @@ TEST(ClockPrompt, a_clock_with_its_time_never_asks) {
 TEST(ClockPrompt, a_clock_that_cannot_be_set_never_asks) {
   // original 1.75 with no PCF85063: the clock keeps reading 0, setting it cannot help
   ClockPrompt p;
-  p.boot(true, false);
+  p.boot(false);
   CHECK(!p.due(true, nothingUp()));
   CHECK(!p.asking(true));
 }
@@ -32,7 +33,7 @@ TEST(ClockPrompt, each_boot_state_holds_it_back_until_it_ends) {
   const char *names[] = { "choosing", "ceremony", "evolving", "dialog", "otherScreen" };
   for (int i = 0; i < 5; i++) {
     ClockPrompt p;
-    p.boot(true, true);
+    p.boot(true);
     ClockPromptHold h;
     bool *f[] = { &h.choosing, &h.ceremony, &h.evolving, &h.dialog, &h.otherScreen };
     *f[i] = true;
@@ -46,7 +47,7 @@ TEST(ClockPrompt, each_boot_state_holds_it_back_until_it_ends) {
 TEST(ClockPrompt, setting_the_clock_first_cancels_the_opening) {
   // held behind the egg choice, then the owner sends TIME: nothing left to ask
   ClockPrompt p;
-  p.boot(true, true);
+  p.boot(true);
   ClockPromptHold h;
   h.choosing = true;
   CHECK(!p.due(true, h));
@@ -57,7 +58,7 @@ TEST(ClockPrompt, setting_the_clock_first_cancels_the_opening) {
 TEST(ClockPrompt, opening_it_by_hand_uses_up_the_automatic_opening) {
   // swiped down to the clock screen while the prompt was held, then swiped up
   ClockPrompt p;
-  p.boot(true, true);
+  p.boot(true);
   p.opened();
   CHECK(!p.due(true, nothingUp()));
   CHECK(p.asking(true));
@@ -65,7 +66,7 @@ TEST(ClockPrompt, opening_it_by_hand_uses_up_the_automatic_opening) {
 
 TEST(ClockPrompt, skipping_keeps_the_badge_until_the_clock_is_set) {
   ClockPrompt p;
-  p.boot(true, true);
+  p.boot(true);
   CHECK(p.due(true, nothingUp()));
   CHECK(p.asking(true));   // skipped: the badge stays
   CHECK(!p.asking(false)); // set by any route: gone

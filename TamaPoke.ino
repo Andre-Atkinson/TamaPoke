@@ -592,7 +592,7 @@ void setup() {
     clockMarkStale(clockStaleMark, true);
     if (!reseeded) Serial.println("clock: not set since its reseed (kept through a reset)");
   }
-  clockPrompt.boot(bedEdge.stale(), e != 0);  // e == 0 here: no PCF85063, cannot be set
+  clockPrompt.boot(e != 0);  // e == 0 here: no PCF85063, the clock cannot be set
   pet.syncClock(e);
   // Sin RTC (la 1.75 original sin PCF85063) e == 0, y el minuto 0 cae dentro de toda ventana:
   // muestrear aqui dormiria al bicho en cada arranque y el bucle (que tampoco muestrea con

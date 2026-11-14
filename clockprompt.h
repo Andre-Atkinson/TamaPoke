@@ -73,14 +73,13 @@ class ClockPrompt {
  public:
   // setup(), once the clock is seeded. `settable`: the clock reads a time, so setting
   // it can work (a missing PCF85063 keeps reading 0: no prompt and no badge at all).
-  void boot(bool stale, bool settable) {
-    settable_ = settable;
-    owed_ = stale && settable;
-  }
+  // One automatic opening is owed; due() only gives it while the clock is stale.
+  void boot(bool settable) { settable_ = owed_ = settable; }
 
-  // Each loop pass: true once, when the clock screen should open by itself.
+  // Each loop pass: true once, when the clock screen should open by itself. The clock
+  // is only ever marked stale at boot, so once it is not, nothing is owed any more.
   bool due(bool stale, const ClockPromptHold &h) {
-    if (!stale) owed_ = false;  // set by another route first (TIME): nothing to ask
+    if (!stale) owed_ = false;  // never stale, or set by another route first (TIME)
     if (!owed_ || clockPromptHeld(h)) return false;
     owed_ = false;
     return true;
