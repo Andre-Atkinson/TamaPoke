@@ -1387,8 +1387,10 @@ static uint8_t reactAct(uint8_t kind) {
   switch (kind) {
     case REACT_GIGGLE: return pmd.has(PMD_POSE) ? PMD_POSE : pmd.has(PMD_NOD) ? PMD_NOD : PMD_IDLE;
     case REACT_HUFF: {  // turns its back, or else its side (one still frame); never PMD_HURT
+      if (pmd.has(PMD_SIT)) return PMD_SIT;
       uint8_t side = petReact.away < 0 ? PMD_WALKL : PMD_WALKR;
-      return pmd.has(PMD_SIT) ? PMD_SIT : pmd.has(side) ? side : PMD_IDLE;
+      if (pmd.has(side)) return side;
+      return PMD_IDLE;
     }
     case REACT_STROKE: return pmd.has(PMD_NOD) ? PMD_NOD : pmd.has(PMD_BREATH) ? PMD_BREATH : PMD_IDLE;
   }
