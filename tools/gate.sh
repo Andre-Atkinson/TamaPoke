@@ -15,10 +15,11 @@
 # The firmware builds run from a staged copy of the working tree (uncommitted
 # changes included; only the parts the firmware build reads) in a folder
 # literally named "TamaPoke": arduino-cli refuses a sketch whose folder name
-# differs from the main .ino, which is the case in every agent worktree. The staged copy and both build folders persist between
-# runs (tools/build_cache.sh says where), so a rebuild reuses the compiled core
-# and libraries. The sketch is recompiled every run, so the sketch warning
-# count covers every sketch file each time. One gate at a time per checkout.
+# differs from the main .ino, which is the case in every agent worktree. The
+# staged copy and both build folders persist between runs (tools/build_cache.sh
+# says where), so a rebuild reuses the compiled core and libraries. Every
+# sketch file is compiled again on every run, so the sketch warning count
+# covers the whole sketch each time. One gate at a time per checkout.
 #
 # Exit status is non-zero if any step failed; the last lines are one summary
 # line per step. Works with macOS (BSD) and Linux tools.
@@ -167,6 +168,10 @@ fi
 sketch_warn_re='TamaPoke/[^:]+:[0-9]+:[0-9]+: warning:'
 # Known sketch warnings per build on main (exact count; update it in the PR that
 # changes it). More than this fails the gate: only new warnings are findings.
+# arduino-cli prints a warning only when it compiles the file, so the builds
+# compile every sketch file on every run (tools/build_cache.sh): the count is
+# the whole sketch's, incremental build or not. Core and library warnings,
+# which incremental builds do not repeat, never counted.
 WARN_BASELINE="${WARN_BASELINE:-20}"
 show_build() {  # show_build <label> <log> <exit code>
   local label="$1" log="$2" rc="$3" n
