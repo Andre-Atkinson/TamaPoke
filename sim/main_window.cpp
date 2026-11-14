@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <time.h>
 #include <string>
 #include "boot.h"
@@ -120,10 +121,10 @@ struct Selftest {
   bool ok() const { return failed.empty(); }
 
   // sim time passes at 1x; a frame is 50 ms
-  void run(uint32_t ms) {
+  void run(uint32_t ms, bool readStdin = false) {
     uint32_t done = 0;
     do {  // at least one frame, so queued events are handled
-      winFrame(app, 50000, false);
+      winFrame(app, 50000, readStdin);
       done += 50;
     } while (done < ms);
   }
@@ -182,6 +183,16 @@ bool closeTo(uint32_t a, uint32_t b, int tol) {
   return absDiff(chan(a, 16), chan(b, 16)) <= tol && absDiff(chan(a, 8), chan(b, 8)) <= tol &&
          absDiff(chan(a, 0), chan(b, 0)) <= tol;
 }
+// how many lines of a file hold `needle`
+int countIn(const std::string &path, const char *needle) {
+  FILE *f = fopen(path.c_str(), "r");
+  if (!f) return -1;
+  int n = 0;
+  char line[1024];
+  while (fgets(line, sizeof line, f)) n += strstr(line, needle) != nullptr;
+  fclose(f);
+  return n;
+}
 bool pngFileOk(const std::string &path) {
   FILE *f = fopen(path.c_str(), "rb");
   if (!f) return false;
@@ -192,7 +203,7 @@ bool pngFileOk(const std::string &path) {
   return n == 8 && memcmp(sig, want, 8) == 0;
 }
 
-int runSelftest(WinApp &app, const Options &o) {
+int runSelftest(WinApp &app, const Options &o, FILE *serialOut, const std::string &logPath) {
   Selftest t(app);
   app.noBudget = true;
 
@@ -277,9 +288,17 @@ int runSelftest(WinApp &app, const Options &o) {
 
   // ---- pause: nothing runs, the firmware's inputs are ignored, the controls still work
   uint32_t before = millis();
+  t.mouse(SDL_MOUSEBUTTONDOWN, 466, 466);  // finger and BOOT held when the pause comes: both let go
+  t.key(SDLK_b, true);
+  t.run(100);
+  t.check(gSimTouch.down && digitalRead(0) == LOW, "finger and BOOT were not down before the pause");
+  before = millis();
   t.tapKey(SDLK_SPACE, 0);
   t.check(app.pace.paused, "Space did not pause");
+  t.check(!gSimTouch.down && digitalRead(0) == HIGH, "pausing left the finger or BOOT held");
+  t.mouse(SDL_MOUSEBUTTONUP, 466, 466);
   t.mouse(SDL_MOUSEBUTTONDOWN, 466, 466);
+  t.key(SDLK_b, false);
   t.run(500);
   t.check(millis() == before, "time moved while paused");
   t.check(!gSimTouch.down, "a mouse press was accepted while paused");
@@ -287,6 +306,23 @@ int runSelftest(WinApp &app, const Options &o) {
   t.check(!app.pace.paused, "Space did not resume");
   t.run(500);
   t.check(millis() - before >= 400, "time did not move after resuming");
+  t.mouse(SDL_MOUSEBUTTONUP, 466, 466);
+
+  // ---- losing focus lets go of everything held (no key-up or mouse-up will arrive)
+  t.mouse(SDL_MOUSEBUTTONDOWN, 466, 466);
+  t.key(SDLK_b, true);
+  t.run(100);
+  t.check(gSimTouch.down && digitalRead(0) == LOW, "finger and BOOT were not down before the focus loss");
+  {
+    SDL_Event e;
+    SDL_zero(e);
+    e.type = SDL_WINDOWEVENT;
+    e.window.windowID = SDL_GetWindowID(app.window);
+    e.window.event = SDL_WINDOWEVENT_FOCUS_LOST;
+    t.push(e);
+  }
+  t.run(100);
+  t.check(!gSimTouch.down && digitalRead(0) == HIGH, "losing focus left the finger or BOOT held");
 
   // ---- speed, power toggles, battery
   t.tapKey(SDLK_RIGHTBRACKET, 0);
@@ -316,9 +352,50 @@ int runSelftest(WinApp &app, const Options &o) {
   t.check(app.shotsSaved == 2 && app.lastShot != shot1 && pngFileOk(app.lastShot),
           "a second S did not write a second file");
 
-  // ---- quit
+  // ---- the terminal: lines typed there reach the firmware's serial console, EOF stops the reading
+  {
+    int fds[2];
+    int saved = dup(0);
+    bool piped = saved >= 0 && pipe(fds) == 0;
+    t.check(piped, "cannot make a pipe for the stdin check");
+    if (piped) {
+      dup2(fds[0], 0);
+      close(fds[0]);
+      fflush(serialOut);
+      int before = countIn(logPath, "heap=");
+      const char cmd[] = "HEALTH\r\n";  // the firmware answers with a line holding heap=
+      if (write(fds[1], cmd, sizeof cmd - 1) != (ssize_t)(sizeof cmd - 1)) t.check(false, "cannot write to the stdin pipe");
+      t.run(50, /*readStdin=*/true);
+      fflush(serialOut);
+      t.check(countIn(logPath, "heap=") == before + 1, "a line typed on stdin did not reach the firmware's serial console");
+      close(fds[1]);
+      t.run(50, true);
+      t.check(!app.stdinOpen, "end of input did not stop the stdin reading");
+      dup2(saved, 0);
+      close(saved);
+    }
+  }
+
+  // ---- quit: Q, the window's close button, the system's quit
   t.tapKey(SDLK_q, 0);
   t.check(app.quit, "Q did not quit");
+  app.quit = false;
+  {
+    SDL_Event e;
+    SDL_zero(e);
+    e.type = SDL_QUIT;
+    t.push(e);
+    t.run(0);
+    t.check(app.quit, "the system's quit did not quit");
+    app.quit = false;
+    SDL_zero(e);
+    e.type = SDL_WINDOWEVENT;
+    e.window.windowID = SDL_GetWindowID(app.window);
+    e.window.event = SDL_WINDOWEVENT_CLOSE;
+    t.push(e);
+    t.run(0);
+    t.check(app.quit, "closing the window did not quit");
+  }
 
   if (!t.ok()) {
     printf("window selftest FAILED: %s\n", t.failed.c_str());
@@ -391,7 +468,7 @@ int main(int argc, char **argv) {
 
   int rc = 0;
   if (o.selftest) {
-    rc = runSelftest(app, o);
+    rc = runSelftest(app, o, serialOut, logPath);
   } else {
     if (!o.quiet) winPrintHelp();
     const uint64_t freq = SDL_GetPerformanceFrequency();
