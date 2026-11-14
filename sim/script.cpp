@@ -125,7 +125,8 @@ static bool onOff(const std::string &s, int32_t &v) {
 }
 
 static bool isPrep(SimOp op) {
-  return op == OP_LANG || op == OP_CLOCK || op == OP_BATTERY || op == OP_USB || op == OP_CHARGING;
+  return op == OP_LANG || op == OP_CLOCK || op == OP_BATTERY || op == OP_USB || op == OP_CHARGING ||
+         op == OP_PMU;
 }
 
 size_t simPreBootEnd(const SimScript &script) {
@@ -180,6 +181,12 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
     } else if (op == "usb" || op == "charging") {
       if (n != 2 || !onOff(w[1], c.a)) return fail("usage: " + op + " on|off");
       c.op = op == "usb" ? OP_USB : OP_CHARGING;
+    } else if (op == "pmu") {
+      // the firmware asks the AXP2101 once, in setup() (batBegin): no changing it later
+      if (n != 2 || (w[1] != "ok" && w[1] != "none")) return fail("usage: pmu ok|none");
+      if (running) return fail("pmu must come before the first step that runs the firmware");
+      c.op = OP_PMU;
+      c.a = w[1] == "ok";
     } else if (op == "tap") {
       if (n != 3 || !toInt(w[1], c.a, 0, 465) || !toInt(w[2], c.b, 0, 465))
         return fail("usage: tap X Y (0-465)");

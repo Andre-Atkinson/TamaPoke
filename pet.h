@@ -15,6 +15,13 @@
 #define CEREMONY_MS 10000UL                // duracion de la despedida en pantalla
 #define FAREWELL_AGE_MIN (3UL * 24 * 60)   // se despide a los 3 dias de juego (en forma final)
 #define RUNAWAY_TICKS 60                   // se escapa tras 1 h con TODO a cero
+// Self-care while charging (#24, idea from Mu-Muu/TamaPoke's autoCare): on USB and
+// untouched for SELFCARE_IDLE_MS, once a minute the first need under SELFCARE_BELOW
+// (food, then hygiene, then energy, then joy) goes back up to SELFCARE_LEVEL. Only
+// up to half, so the player's own care still matters.
+#define SELFCARE_IDLE_MS (10UL * 60 * 1000)
+#define SELFCARE_BELOW 40
+#define SELFCARE_LEVEL 50
 
 // ritmo de cuidado (ajuste "Care", NVS "pace"): normal o relajado (las necesidades
 // bajan a la mitad de velocidad mientras esta despierto)
@@ -130,6 +137,11 @@ public:
   void release();  // soltar (pulsacion larga + confirmar)
   void syncClock(uint32_t nowEpoch);  // aplica el tiempo transcurrido apagado
   void setClock(uint32_t nowEpoch);   // fija la hora sin aplicar progresion
+  // Self-care while charging (#24). The sketch calls this on every loop pass, before
+  // update(): whether the PMU answered at boot, whether USB is in, and the time since
+  // the last touch. A PMU that never answered counts as unplugged, because the
+  // firmware's usbPresent() reports true in that case. RAM only, never saved.
+  void setCharger(bool pmuOk, bool usb, uint32_t idleMs);
   void startFarewell();  // tambien usable desde la consola serie (BYE)
   void startRunaway();   // tambien usable desde la consola serie (RUN)
 
@@ -231,6 +243,7 @@ private:
   uint8_t bondToday = 0;       // tope diario de subida de vinculo
   uint32_t medalUntil = 0;     // celebracion de medalla en pantalla
   uint32_t milestoneUntil = 0; // celebracion de hito de racha
+  bool selfCareOn = false;     // setCharger(): on USB and untouched SELFCARE_IDLE_MS
 
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo
@@ -240,9 +253,25 @@ private:
   void tick();
   void drainBody();  // parte del goteo de necesidades (comida, energia, caca, higiene)
   void drainJoy();   // ...y la felicidad (depende de comida e higiene ya bajadas)
+  void selfCare();   // one need back up to half while charging (#24), from tick()
   void hatch();
   void registerSpecies(int16_t dex);
   void save();
   void load();
   static uint8_t clamp100(int v) { return v < 0 ? 0 : (v > 100 ? 100 : v); }
+};
+
+// "Ready to evolve" chime (the sketch, fed wantEvolveButton() and level() on every loop
+// pass): it sounds when the button appears, at most once per level. Self-care on the
+// charger (#24) keeps lifting the needs back over 40, so the button comes and goes
+// several times an hour while nobody is there, and each return used to chime.
+struct EvoChime {
+  bool wasReady = false;
+  uint16_t chimedLevel = 0;  // 0 = none yet (levels start at 1)
+  bool update(bool ready, uint16_t level) {
+    bool chime = ready && !wasReady && level != chimedLevel;
+    if (chime) chimedLevel = level;
+    wasReady = ready;
+    return chime;
+  }
 };
