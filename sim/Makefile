@@ -2,6 +2,8 @@
 # simulada (simhw.h). Lo normal es llamarlo desde tools/sim.sh.
 #   make -C sim -j3                 1.75C (por defecto)
 #   make -C sim -j3 BOARD=175       1.75 original
+#   make -C sim -j3 window          the interactive SDL2 window (build/<board>/tamapoke_window);
+#                                   opt-in: needs sdl2-config, and nothing else here does
 # ARDUINO_LIBS es la carpeta de librerias de arduino-cli (tools/sim.sh la busca).
 BOARD        ?= 175c
 ARDUINO_LIBS ?= $(HOME)/Documents/Arduino/libraries
@@ -14,6 +16,7 @@ GFX   := $(ARDUINO_LIBS)/GFX_Library_for_Arduino/src
 U8G2  := $(ARDUINO_LIBS)/U8g2/src
 BUILD := build/$(BOARD)
 BIN   := $(BUILD)/tamapoke_sim
+WINBIN := $(BUILD)/tamapoke_window
 
 ifeq ($(BOARD),175c)
 BOARD_FLAG := -DBOARD_AMOLED_175C=1
@@ -37,26 +40,47 @@ CFLAGS   += -funsigned-char
 # el firmware tal cual (rtcbat.cpp y audio.cpp los sustituyen rtcbat_sim.cpp y el audio
 # mudo de test/shim/shim.cpp)
 FW_SRCS  := pet.cpp i18n.cpp sdmon.cpp screenlock.cpp bootbutton.cpp trainingcapture.cpp trainingtouch.cpp
-SIM_SRCS := main.cpp simhw.cpp simfs.cpp rtcbat_sim.cpp script.cpp png.cpp
+# the fake board and the helpers both programs use (tamapoke_sim adds main.cpp)
+COMMON_SRCS := simhw.cpp simfs.cpp rtcbat_sim.cpp script.cpp png.cpp boot.cpp
+SIM_SRCS := main.cpp $(COMMON_SRCS)
+# the window: only built by the `window` target, the only one that uses SDL
+WIN_SRCS := interactive.cpp window.cpp main_window.cpp
 GFX_SRCS := Arduino_GFX.cpp Arduino_G.cpp Arduino_DataBus.cpp canvas/Arduino_Canvas.cpp
 FONTS    := u8g2_font_unifont_t_japanese3 u8g2_font_unifont_t_korean2
 
-OBJS := $(BUILD)/sketch/TamaPoke_ino.o \
+# everything both programs link, without their main()
+CORE_OBJS := $(BUILD)/sketch/TamaPoke_ino.o \
         $(addprefix $(BUILD)/fw/,$(FW_SRCS:.cpp=.o)) \
-        $(addprefix $(BUILD)/sim/,$(SIM_SRCS:.cpp=.o)) \
+        $(addprefix $(BUILD)/sim/,$(COMMON_SRCS:.cpp=.o)) \
         $(BUILD)/shim/shim.o \
         $(addprefix $(BUILD)/gfx/,$(GFX_SRCS:.cpp=.o)) \
         $(BUILD)/fonts/u8g2_fonts.o
+OBJS     := $(CORE_OBJS) $(BUILD)/sim/main.o
+WIN_OBJS := $(addprefix $(BUILD)/win/,$(WIN_SRCS:.cpp=.o))
 
-.PHONY: all clean check-libs
+# SDL2 only for the window. Recursive variables: sdl2-config runs only when the window
+# target is built, so a machine without SDL2 builds `all` as before. The headers go in
+# with -isystem, so SDL cannot add warnings to ours; SDL2main is left out (main_window.cpp
+# defines SDL_MAIN_HANDLED and calls SDL_SetMainReady()).
+SDL_CFLAGS = $(shell sdl2-config --cflags | sed 's/-I/-isystem /g')
+SDL_LIBS   = $(shell sdl2-config --libs | sed 's/-lSDL2main//')
+
+.PHONY: all window clean check-libs check-sdl
 all: check-libs $(BIN)
+window: check-libs check-sdl $(WINBIN)
 
 check-libs:
 	@test -f "$(GFX)/Arduino_GFX.h" || { echo "sim: GFX Library for Arduino not found in $(ARDUINO_LIBS) (set ARDUINO_LIBS)" >&2; exit 1; }
 	@test -f "$(U8G2)/clib/u8g2_fonts.c" || { echo "sim: U8g2 not found in $(ARDUINO_LIBS) (set ARDUINO_LIBS)" >&2; exit 1; }
 
+check-sdl:
+	@command -v sdl2-config >/dev/null || { echo "sim: SDL2 not found (no sdl2-config): the window needs it. Ask the owner before installing it." >&2; exit 1; }
+
 $(BIN): $(OBJS)
 	$(CXX) -o $@ $(OBJS)
+
+$(WINBIN): $(CORE_OBJS) $(WIN_OBJS)
+	$(CXX) -o $@ $(CORE_OBJS) $(WIN_OBJS) $(SDL_LIBS)
 
 # el .ino con los prototipos que genera arduino-cli (gen_sketch.py)
 $(BUILD)/sketch/TamaPoke_ino.cpp: $(REPO)/TamaPoke.ino gen_sketch.py
@@ -73,6 +97,10 @@ $(BUILD)/fw/%.o: $(REPO)/%.cpp
 $(BUILD)/sim/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(WARN) -c -o $@ $<
+
+$(BUILD)/win/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(WARN) $(SDL_CFLAGS) -c -o $@ $<
 
 $(BUILD)/shim/shim.o: $(REPO)/test/shim/shim.cpp
 	@mkdir -p $(dir $@)
@@ -93,4 +121,4 @@ $(BUILD)/fonts/u8g2_fonts.o: $(BUILD)/fonts/u8g2_fonts.c
 clean:
 	rm -rf build
 
--include $(OBJS:.o=.d)
+-include $(OBJS:.o=.d) $(WIN_OBJS:.o=.d)

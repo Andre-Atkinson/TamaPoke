@@ -6,7 +6,13 @@
 #   tools/sim.sh --lang ja --script care-page.txt --out shots/
 #   tools/sim.sh --board 175 --script my.txt     # the original 1.75 instead of the 1.75C
 #   tools/sim.sh --help                          # all simulator options
+#   tools/sim.sh --window [--board 175] [opts]   # an interactive window instead (needs SDL2)
 #
+# --window opens the simulator as a window on the Mac: mouse = finger, keys = PWR/BOOT,
+# this terminal = the serial console (press H in the window for the keys). It is opt-in
+# and the only part that needs SDL2 (Homebrew: sdl2); everything else here works without.
+# Options after --window are tamapoke_window's (--lang, --clock, --square, --out,
+# --serial-log, --quiet, --quit-after, --selftest; --script does not apply).
 # --script takes a path, or the name of a script in sim/scripts/ (with or without .txt).
 # Script steps are listed in sim/script.h and the README ("Simulator").
 # ARDUINO_LIBS overrides where the Arduino libraries are found.
@@ -14,6 +20,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BOARD=175c
+WINDOW=0
 ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -30,10 +37,23 @@ while [[ $# -gt 0 ]]; do
         done
       fi
       ARGS+=(--script "$script"); shift 2 ;;
+    --window) WINDOW=1; shift ;;
     *) ARGS+=("$1"); shift ;;
   esac
 done
 case "$BOARD" in 175c|175) ;; *) echo "sim.sh: --board must be 175c or 175" >&2; exit 2 ;; esac
+
+TARGET=all
+PROG=tamapoke_sim
+if [[ "$WINDOW" -eq 1 ]]; then
+  if ! command -v sdl2-config >/dev/null 2>&1; then
+    echo "sim.sh: --window needs SDL2 and sdl2-config was not found." >&2
+    echo "        Ask the owner before installing it (Homebrew: sdl2). The scripted simulator needs no SDL2." >&2
+    exit 1
+  fi
+  TARGET=window
+  PROG=tamapoke_window
+fi
 
 if [[ -z "${ARDUINO_LIBS:-}" ]]; then
   user_dir="$(arduino-cli config get directories.user 2>/dev/null || true)"
@@ -45,7 +65,7 @@ fi
 
 LOG="$(mktemp "${TMPDIR:-/tmp}/tamapoke-sim-build.XXXXXX")"
 trap 'rm -f "$LOG"' EXIT
-if ! make -C "$ROOT/sim" -s -j3 BOARD="$BOARD" ARDUINO_LIBS="$ARDUINO_LIBS" >"$LOG" 2>&1; then
+if ! make -C "$ROOT/sim" -s -j3 BOARD="$BOARD" ARDUINO_LIBS="$ARDUINO_LIBS" "$TARGET" >"$LOG" 2>&1; then
   cat "$LOG" >&2
   echo "sim.sh: simulator build failed" >&2
   exit 1
@@ -54,4 +74,4 @@ fi
 grep -E 'warning:' "$LOG" >&2 || true
 
 # sprites from the repo unless the caller passes --sprites (the last one wins)
-exec "$ROOT/sim/build/$BOARD/tamapoke_sim" --sprites "$ROOT/tools/sdcard" ${ARGS[@]+"${ARGS[@]}"}
+exec "$ROOT/sim/build/$BOARD/$PROG" --sprites "$ROOT/tools/sdcard" ${ARGS[@]+"${ARGS[@]}"}
