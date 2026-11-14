@@ -14,13 +14,22 @@
 #include "species.h"
 #include "uitext.h"
 
+// Used only in this file, and called above their definitions (in TamaPoke.ino the
+// prototypes arduino-cli generates covered that).
+static uint32_t pmdActTotalMs(const PmdAct &a);
+static void drawPetPMD();
+static void drawPetSD();
+static void overlayEye(const Species &sp, int x, int y, int s, int col);
+static void overlayMouth(const Species &sp, int x, int y, int s, bool open);
+static void drawBar(int x, int y, const char *label, uint8_t val);
+
 PetBeh beh;
-uint32_t walkLast = 0;  // instante del ultimo paso del paseo (0 = ninguno aun)
+static uint32_t walkLast = 0;  // instante del ultimo paso del paseo (0 = ninguno aun)
 
 // escena de bano: espuma sobre el bicho y limpieza al reventar
 uint32_t bathUntil = 0;
-bool bathPending = false;
-struct { int16_t x, y; uint8_t r, ph; } bubbles[14];
+static bool bathPending = false;
+static struct { int16_t x, y; uint8_t r, ph; } bubbles[14];
 
 // ---------- render ----------
 
@@ -45,8 +54,7 @@ int sceneHour() {
   return e ? (int)((e / 3600) % 24) : 13;
 }
 
-
-void drawClouds(uint32_t now, uint16_t col) {
+static void drawClouds(uint32_t now, uint16_t col) {
   for (int k = 0; k < 2; k++) {
     int cx = (int)((now / 50 + k * 250) % 560) - 40;
     int cy = 70 + k * 34;
@@ -216,7 +224,7 @@ void drawCelebration() {
   printT(l2);
 }
 
-void drawBattery() {
+static void drawBattery() {
   int pc = batPercent();
   if (pc < 0) return;  // sin bateria conectada
   bool charging = batCharging();
@@ -382,7 +390,7 @@ void drawRunawayButton() {
 
 // animacion epica de evolucion: halo radial + rayos giratorios + parpadeo del
 // sprite acelerando + chispas que salen disparadas + fogonazo final
-void drawEvolveFX(uint32_t now) {
+static void drawEvolveFX(uint32_t now) {
   float t = pet.evolveT();          // 0..1
   int cx = CX, cy = PET_GROUND - 96;
 
@@ -535,13 +543,13 @@ void drawBath() {
 
 // ---------- mascota PMD: comportamiento ----------
 
-uint32_t pmdActTotalMs(const PmdAct &a) {
+static uint32_t pmdActTotalMs(const PmdAct &a) {
   uint32_t t = 0;
   for (uint8_t i = 0; i < a.frames; i++) t += a.ms[i];
   return t ? t : 100;
 }
 
-uint8_t pmdFrameAt(const PmdAct &a, uint32_t t, bool loop) {
+static uint8_t pmdFrameAt(const PmdAct &a, uint32_t t, bool loop) {
   uint32_t total = pmdActTotalMs(a);
   if (!loop && t >= total) return a.frames - 1;
   t %= total;
@@ -581,7 +589,7 @@ void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool 
 }
 
 // elige el siguiente capricho del bicho cuando esta contento
-void behNext() {
+static void behNext() {
   uint32_t now = millis();
   beh.t0 = now;
   int r = random(100);
@@ -610,7 +618,7 @@ void behNext() {
   }
 }
 
-void drawPetPMD() {
+static void drawPetPMD() {
   uint32_t now = millis();
 
   if (pet.evolving()) {
@@ -692,7 +700,7 @@ void drawPetPMD() {
 }
 
 // sprite animado desde la SD: zoom entero por pixel, frames a su ritmo
-void drawPetSD() {
+static void drawPetSD() {
   int s = mon.scale;
   int w = mon.w * s, h = mon.h * s;
   int x = CX - w / 2;
@@ -722,13 +730,13 @@ void drawPetSD() {
 }
 
 // ojo cerrado: borra el ojo 3x4 y dibuja el parpado
-void overlayEye(const Species &sp, int x, int y, int s, int col) {
+static void overlayEye(const Species &sp, int x, int y, int s, int col) {
   gfx->fillRect(x + col * s, y + sp.eyeRow * s, 3 * s, 4 * s, sp.bodyColor);
   gfx->fillRect(x + col * s, y + (sp.eyeRow + 2) * s, 3 * s, s, INK_K);
 }
 
 // borra la sonrisa base y pinta boca abierta (comer) o ceno (triste)
-void overlayMouth(const Species &sp, int x, int y, int s, bool open) {
+static void overlayMouth(const Species &sp, int x, int y, int s, bool open) {
   int mc = sp.mouthCol, mr = sp.mouthRow;
   gfx->fillRect(x + (mc - 3) * s, y + mr * s, 7 * s, 2 * s, sp.bodyColor);
   if (open) {
@@ -789,7 +797,7 @@ void drawBars() {
 // dentro de la barra. Se deriva de la etiqueta mas larga, con el 48 de suelo
 // para que en los idiomas latinos no cambie nada.
 // Requiere el tamano de texto 2 ya puesto, porque textW() lo necesita.
-int barLabelGap() {
+static int barLabelGap() {
   const StrId ids[] = { S_BAR_FOOD, S_BAR_JOY, S_BAR_ENE, S_BAR_HYG };
   int ancho = 0;
   for (StrId id : ids) {
@@ -801,7 +809,7 @@ int barLabelGap() {
   return ancho <= 48 ? 48 : ancho + 8;
 }
 
-void drawBar(int x, int y, const char *label, uint8_t val) {
+static void drawBar(int x, int y, const char *label, uint8_t val) {
   gfx->setTextColor(inkColor());
   setSize(2);
   setCur(x, y);

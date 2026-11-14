@@ -22,21 +22,3 @@ void renderGame();
 void startSack();
 void sackTap();
 void renderSack();
-
-// Used only inside gameui.cpp once the code has moved there (#41); a later commit
-// makes them static there.
-void gameSounds();
-void finishGame();
-void drawGameScene();
-bool gameNight();
-void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS);
-void drawGameHud(uint16_t ink, uint16_t score);
-void drawGameBar(uint32_t left, uint32_t total);
-void drawGameExit();
-void drawGameTitle(uint16_t ink);
-void drawKeepy(uint16_t ink);
-void drawCatch(uint16_t ink);
-void drawBush(int x, int y, bool front, bool night);
-void drawPeek(uint16_t ink);
-void drawSong(uint16_t ink);
-void drawGameResult(uint16_t ink);

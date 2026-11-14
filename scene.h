@@ -67,18 +67,3 @@ void drawButtons();
 const char *eggMsg();
 const char *statusMsg();
 void drawMap(const char *const *map, int n, int x, int y, int s, bool silhouette);
-
-// Used only inside scene.cpp once the code has moved there (#41); a later commit
-// makes them static there.
-void drawClouds(uint32_t now, uint16_t col);
-void drawBattery();
-void drawEvolveFX(uint32_t now);
-uint32_t pmdActTotalMs(const PmdAct &a);
-uint8_t pmdFrameAt(const PmdAct &a, uint32_t t, bool loop);
-void behNext();
-void drawPetPMD();
-void drawPetSD();
-void overlayEye(const Species &sp, int x, int y, int s, int col);
-void overlayMouth(const Species &sp, int x, int y, int s, bool open);
-int barLabelGap();
-void drawBar(int x, int y, const char *label, uint8_t val);

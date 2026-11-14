@@ -13,20 +13,24 @@
 #include "species.h"
 #include "uitext.h"
 
+// Used only in this file, and called above its definition (in TamaPoke.ino the
+// prototype arduino-cli generates covered that).
+static void gameSounds();
+
 // minijuegos de Play (minigames.h): uno al azar de la bolsa cada vez
 bool gameOpen = false;
-MiniGames games;
-uint32_t gameOverUntil = 0;   // pantalla de resultado hasta este millis
-uint16_t gameShownScore = 0;  // puntuacion de la partida que se ensena en el resultado
-bool gameNewHi = false;
+static MiniGames games;
+static uint32_t gameOverUntil = 0;   // pantalla de resultado hasta este millis
+static uint16_t gameShownScore = 0;  // puntuacion de la partida que se ensena en el resultado
+static bool gameNewHi = false;
 
 // saco de entrenamiento (entrena la fuerza)
 bool sackOpen = false;
 uint32_t sackUntil = 0, sackOverUntil = 0;
 uint16_t sackHits = 0;
 float sackShake = 0;
-uint8_t sackGain = 0;
-bool sackNewHi = false;
+static uint8_t sackGain = 0;
+static bool sackNewHi = false;
 
 // ---------- minijuegos de Play (logica en minigames.h) ----------
 
@@ -71,7 +75,7 @@ void gameTouch(bool pressed, int16_t x, int16_t y) {
 }
 
 // sonidos que pide el juego tras un paso o un toque
-void gameSounds() {
+static void gameSounds() {
   uint8_t note = games.takeNote();
   if (note < 4) sfxPlay(SFX_NOTE0 + note);
   uint8_t e = games.takeEvents();
@@ -82,7 +86,7 @@ void gameSounds() {
 }
 
 // fin de la partida (el juego acabo o nadie lo toco en 15 s): record y recompensa
-void finishGame() {
+static void finishGame() {
   uint8_t g = games.game();
   gameShownScore = games.score();
   gameNewHi = gameShownScore > pet.gameBest(g);
@@ -113,7 +117,7 @@ void sackTap() {
   sackShake = 16;  // sacude el saco
 }
 
-void drawGameScene();  // prototipo (definida mas abajo)
+static void drawGameScene();  // prototipo (definida mas abajo)
 
 void renderSack() {
   uint32_t now = millis();
@@ -225,7 +229,7 @@ void renderSack() {
 }
 
 // fondo del minijuego: hatibat del bicho (cielo por hora + suelo del bioma)
-void drawGameScene() {
+static void drawGameScene() {
   int hh = sceneHour();
   bool night = hh < 6 || hh >= 20;
   uint16_t top, bot;
@@ -246,7 +250,7 @@ void drawGameScene() {
 
 // ---------- dibujo de los minijuegos ----------
 
-bool gameNight() {
+static bool gameNight() {
   int h = sceneHour();
   return h < 6 || h >= 20;
 }
@@ -254,7 +258,7 @@ bool gameNight() {
 
 // el bicho dentro de un juego: su sprite PMD (sin esa accion, IDLE), si no el sprite
 // antiguo de la SD, y si tampoco hay, la Poke Ball
-void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS) {
+static void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS) {
   if (pmd.loaded) {
     if (!pmd.has(act)) act = PMD_IDLE;
     drawPmdAct(act, cx, groundY, millis(), true, false, maxS);
@@ -276,7 +280,7 @@ void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS) {
 }
 
 // marcador y record de este juego, debajo del boton de salir
-void drawGameHud(uint16_t ink, uint16_t score) {
+static void drawGameHud(uint16_t ink, uint16_t score) {
   char buf[8];
   snprintf(buf, sizeof(buf), "%u", score);
   gfx->setTextColor(ink);
@@ -294,7 +298,7 @@ void drawGameHud(uint16_t ink, uint16_t score) {
 }
 
 // barra fina de lo que queda de partida (Berry Catch: tiempo; Peekaboo: apariciones)
-void drawGameBar(uint32_t left, uint32_t total) {
+static void drawGameBar(uint32_t left, uint32_t total) {
   const int bw = 200, by = 130;
   int fw = total ? (int)((uint32_t)bw * left / total) : 0;
   gfx->fillRoundRect(CX - bw / 2, by, bw, 10, 4, UI_TRACK);
@@ -303,7 +307,7 @@ void drawGameBar(uint32_t left, uint32_t total) {
 
 // "Mantener: salir", arriba en todos los juegos (como el del saco en la 1.75C). El
 // boton es claro de dia y de noche, asi que su texto va siempre en tinta oscura.
-void drawGameExit() {
+static void drawGameExit() {
   const int ex = GameTouchRouter::EXIT_X, ey = GameTouchRouter::EXIT_Y;
   const int ew = GameTouchRouter::EXIT_W, eh = GameTouchRouter::EXIT_H;
   const uint32_t hold = GameTouchRouter::EXIT_HOLD_MS;
@@ -319,7 +323,7 @@ void drawGameExit() {
 }
 
 // portada (~1,2 s): icono, nombre y pista
-void drawGameTitle(uint16_t ink) {
+static void drawGameTitle(uint16_t ink) {
   uint8_t g = games.game();
   drawMap(GAME_ICON[g], 16, CX - 32, 112, 4, false);
   const char *name = T((StrId)(S_GAME_KEEPY + g));
@@ -335,7 +339,7 @@ void drawGameTitle(uint16_t ink) {
   printT(hint);
 }
 
-void drawKeepy(uint16_t ink) {
+static void drawKeepy(uint16_t ink) {
   const KeepyGame &k = games.keepy;
   drawGameHud(ink, k.score);
   for (int i = 0; i < KeepyGame::LIVES; i++) {  // vidas
@@ -357,7 +361,7 @@ void drawKeepy(uint16_t ink) {
 static const char *const *const CATCH_ICON[4] = { SPR_ICON_FOOD, SPR_ICON_BERRY_B, SPR_ICON_BERRY_G,
                                                   SPR_ICON_ROTTEN };
 
-void drawCatch(uint16_t ink) {
+static void drawCatch(uint16_t ink) {
   const CatchGame &c = games.catcher;
   drawGameHud(ink, c.result());
   drawGameBar(c.timeLeft(), CatchGame::DURATION_MS);
@@ -372,7 +376,7 @@ void drawCatch(uint16_t ink) {
 }
 
 // arbusto de Peekaboo: la copa va detras del bicho y el borde de delante encima
-void drawBush(int x, int y, bool front, bool night) {
+static void drawBush(int x, int y, bool front, bool night) {
   uint16_t light = night ? C565(0x2c, 0x5c, 0x34) : C565(0x58, 0xb8, 0x68);
   uint16_t dark = night ? C565(0x1e, 0x45, 0x26) : C565(0x3c, 0x8a, 0x4c);
   if (!front) {
@@ -387,7 +391,7 @@ void drawBush(int x, int y, bool front, bool night) {
   }
 }
 
-void drawPeek(uint16_t ink) {
+static void drawPeek(uint16_t ink) {
   const PeekGame &p = games.peek;
   bool night = gameNight();
   drawGameHud(ink, p.score);
@@ -412,7 +416,7 @@ static const uint16_t SONG_COL[SongGame::PADS] = { C565(0xe8, 0x50, 0x3a), C565(
 static const char *const *const SONG_ICON[SongGame::PADS] = { SPR_ICON_FOOD, SPR_ICON_BERRY_B,
                                                               SPR_ICON_BERRY_G, SPR_ICON_CANDY };
 
-void drawSong(uint16_t ink) {
+static void drawSong(uint16_t ink) {
   const SongGame &s = games.song;
   bool night = gameNight();
   const char *msg = s.playersTurn() ? T(S_SONG_TURN) : T(S_SONG_LISTEN);
@@ -450,7 +454,7 @@ void drawSong(uint16_t ink) {
 }
 
 // resultado (4 s): puntuacion, record y premio
-void drawGameResult(uint16_t ink) {
+static void drawGameResult(uint16_t ink) {
   uint8_t g = games.game();
   const char *name = T((StrId)(S_GAME_KEEPY + g));
   gfx->setTextColor(ink);
