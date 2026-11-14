@@ -120,9 +120,6 @@ int flashIdxForDex(int16_t dex) {
   return (dex >= 1 && dex <= 9) ? IDX[dex] : -1;
 }
 
-// settingslayout.h lays the settings pills out around its own copy of the centre
-static_assert(CX == SET_PANEL_C && CY == SET_PANEL_C, "settingslayout.h assumes the panel centre is (CX, CY)");
-
 Btn buttons[4] = {
   { 140, 390, SPR_ICON_FOOD },   // comer
   { 202, 404, SPR_ICON_PLAY },   // jugar

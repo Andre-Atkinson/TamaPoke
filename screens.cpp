@@ -18,6 +18,9 @@
 #include "touchlock.h"
 #include "uitext.h"
 
+// settingslayout.h lays the settings pills out around its own copy of the centre
+static_assert(CX == SET_PANEL_C && CY == SET_PANEL_C, "settingslayout.h assumes the panel centre is (CX, CY)");
+
 // Used only in this file, and called above its definition (in TamaPoke.ino the
 // prototype arduino-cli generates covered that).
 static void drawThumb(const uint8_t *b, int x, int y, int s, bool sil);
