@@ -482,6 +482,20 @@ int runSelftest(WinApp &app, const Options &o, FILE *serialOut, const std::strin
     t.check(app.framesRendered > drawn, "the window was not drawn again once shown");
   }
 
+  // ---- a release soon after the press waits for SIM_TAP_DOWN_MS of simulated time, no less, no more
+  {
+    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
+    t.frame(10);
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
+    t.frame(10);
+    t.frame(10);
+    t.frame(10);  // about 40 ms since the press
+    t.check(gSimTouch.down, "a release was applied before the finger had been down 80 ms");
+    for (int i = 0; i < 5; i++) t.frame(10);  // about 90 ms
+    t.check(!gSimTouch.down, "a waiting release was still not applied after 90 ms");
+    t.run(100);
+  }
+
   // ---- a second press while a click's release waits is ignored: the click keeps its own
   // place and time (a double click that fast is not a human one)
   {
@@ -495,20 +509,6 @@ int runSelftest(WinApp &app, const Options &o, FILE *serialOut, const std::strin
     t.run(300);
     t.check(!gSimTouch.down, "a second press while a release waited left the finger down");
     t.mouse(SDL_MOUSEBUTTONUP, 700, 500);
-    t.run(100);
-  }
-
-  // ---- a release soon after the press waits for SIM_TAP_DOWN_MS of simulated time, no less, no more
-  {
-    t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
-    t.frame(10);
-    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
-    t.frame(10);
-    t.frame(10);
-    t.frame(10);  // about 40 ms since the press
-    t.check(gSimTouch.down, "a release was applied before the finger had been down 80 ms");
-    for (int i = 0; i < 5; i++) t.frame(10);  // about 90 ms
-    t.check(!gSimTouch.down, "a waiting release was still not applied after 90 ms");
     t.run(100);
   }
 
@@ -558,15 +558,16 @@ int runSelftest(WinApp &app, const Options &o, FILE *serialOut, const std::strin
     uint32_t m0 = millis();
     t.mouse(SDL_MOUSEBUTTONDOWN, 600, 400);
     t.frame(50);
+    t.frame(50);
+    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
     app.titleDueUs = 0;  // refresh the title in the next frame
     t.frame(50);
-    t.check(strstr(SDL_GetWindowTitle(app.window), "600x (1x while touching)") != nullptr,
-            "the title does not say the speed is 1x while touching");
-    t.mouse(SDL_MOUSEBUTTONUP, 600, 400);
-    t.frame(50);
+    const std::string title = SDL_GetWindowTitle(app.window);
     t.check(!gSimTouch.down, "the finger stayed down after a click at 600x");
     // a tap is under 1500 ms and a swipe under 800 ms; a still hold over 3000 ms on the pet opens the release dialog
     t.check(millis() - m0 <= 200, "a 100 ms click at 600x ran far more than 150 ms of simulated time");
+    t.check(title.find("600x (1x while touching)") != std::string::npos,
+            "the title does not say the speed is 1x while touching");
     // the 1x lasts 1 s of wall time after the last input, then the chosen speed is back
     for (int i = 0; i < 19; i++) t.frame(50);  // the 950 ms left of the second after the release frame
     t.check(millis() - m0 <= 1400, "the 1x did not last the second after a click");
