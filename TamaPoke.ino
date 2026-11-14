@@ -71,30 +71,9 @@ PmdMon evoPmd;      // forma anterior, solo durante el parpadeo de evolucion
 int16_t monFor = -2;
 bool monShinyFor = false;
 
-// comportamiento del bicho en pantalla
-struct PetBeh {
-  uint8_t mode = 0;     // 0 idle, 1 paseo, 2 gesto one-shot
-  uint8_t act = PMD_IDLE;
-  uint32_t t0 = 0;      // inicio de la animacion en curso
-  uint32_t until = 0;   // fin del estado actual
-  float x = 233, targetX = 233;
-  bool fast = false;    // walking after a dragging finger (#21) until it gets there
-};
 PetBeh beh;
 uint32_t walkLast = 0;  // instante del ultimo paso del paseo (0 = ninguno aun)
-#define PET_GROUND 304  // linea de suelo de la mascota
-#define PET_WALK_MIN 150  // where the pet may walk to (behNext, and after a finger)
-#define PET_WALK_MAX 325
-#define PET_FOLLOW_PX_S 120.0f  // walking after a finger (a stroll is 30 px/s)
 
-// Reaction to a gesture on the pet (#21, touchgesture.h): drawPet* show it in place of the
-// pet's own behaviour until `until`.
-enum : uint8_t { REACT_NONE = 0, REACT_HOP, REACT_GIGGLE, REACT_HUFF, REACT_STROKE };
-struct PetReact {
-  uint8_t kind = REACT_NONE;
-  int8_t away = 1;  // the huff turns this way: away from the finger (-1 left, +1 right)
-  uint32_t t0 = 0, until = 0;
-};
 PetReact petReact;
 PmdMon galleryPmd;  // sprite grande de la vista detalle de la galeria (PMD/TPK2, legal)
 
@@ -187,30 +166,17 @@ int flashIdxForDex(int16_t dex) {
 
 // settingslayout.h lays the settings pills out around its own copy of the centre
 static_assert(CX == SET_PANEL_C && CY == SET_PANEL_C, "settingslayout.h assumes the panel centre is (CX, CY)");
-#define PET_CY 202  // centro vertical del sprite
 
-static const uint16_t INK_K = 0x18C4;  // spriteColor('k')
-
-// botones de icono siguiendo el arco inferior de la pantalla redonda
-// (los exteriores van mas altos para no salirse del circulo)
-struct Btn {
-  int16_t cx, cy;
-  const char *const *icon;
-};
 Btn buttons[4] = {
   { 140, 390, SPR_ICON_FOOD },   // comer
   { 202, 404, SPR_ICON_PLAY },   // jugar
   { 264, 404, SPR_ICON_LIGHT },  // luz
   { 326, 390, SPR_ICON_CLEAN },  // bano
 };
-#define BTN_HALF 26  // boton de 52x52
-#define BTN_HIT 36   // radio tactil (un poco mas generoso)
 
 // grietas del huevo (pixeles 'k' sobre el sprite)
 static const uint8_t CRACK1[][2] = { {15,8},{16,9},{15,10} };
 static const uint8_t CRACK2[][2] = { {11,13},{12,14},{11,15},{20,12},{19,13},{20,14} };
-// estrellas del modo noche
-static const uint16_t STARS[][2] = { {120,140},{330,120},{370,210},{95,230},{280,90},{160,95} };
 
 bool wasPressed = false;
 // eleccion de inicial (primera partida): Bulbasaur / Charmander / Squirtle, 3 filas
@@ -226,16 +192,6 @@ static const int16_t STARTER_DEX[3] = { 1, 4, 7 };
 #define EGGSEL_HIT 60   // medio ancho de la zona tactil de cada huevo
 static const int16_t EGGSEL_CX[EGG_CHOICES] = { 93, 233, 373 };
 int8_t eggSel = -1;     // huevo tocado una vez (-1 = ninguno); solo UI, no se guarda
-// boton-CTA de evolucion (centrado, mitad de pantalla)
-#define EVO_BTN_W 256
-#define EVO_BTN_H 64
-#define EVO_BTN_X (CX - EVO_BTN_W / 2)
-#define EVO_BTN_Y 172  // test/test_clockprompt.cpp (ClockBadge) mirrors this: update it too
-// boton-CTA de despedida (mas ancho: lleva el nombre + frase)
-#define FAR_BTN_W 408
-#define FAR_BTN_H 58
-#define FAR_BTN_X (CX - FAR_BTN_W / 2)
-#define FAR_BTN_Y 176  // mirrored in test/test_clockprompt.cpp (ClockBadge) too
 // el CST9217 avisa por el pin INT cuando hay datos tactiles; lo usamos para no
 // leer el bus I2C mientras el chip esta dormido (esa lectura se colgaba ~1s)
 volatile bool gTouchIrq = false;
@@ -1681,7 +1637,6 @@ uint16_t inkColor() { return gNight ? UI_INK_NIGHT : UI_INK; }
 
 // ---------- escena de fondo: bioma del tipo + hora real del RTC ----------
 
-#define C565(r, g, b) ((uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3)))
 #define HORIZON 232  // linea donde el cielo se encuentra con el suelo
 
 uint16_t lerp565(uint16_t a, uint16_t b, int i, int n) {
@@ -1698,15 +1653,6 @@ int sceneHour() {
   return e ? (int)((e / 3600) % 24) : 13;
 }
 
-// suelo de cada bioma de dia (de noche se mezcla hacia el azul nocturno)
-static const uint16_t BIOME_SOIL[6] = {
-  C565(0x7e, 0xc0, 0x7f),  // 0 pradera
-  C565(0xdc, 0xca, 0x94),  // 1 playa (arena)
-  C565(0x4f, 0x8a, 0x55),  // 2 bosque
-  C565(0x8a, 0x55, 0x44),  // 3 volcan
-  C565(0xa8, 0x90, 0x6a),  // 4 montana
-  C565(0xe6, 0xee, 0xf5),  // 5 nieve
-};
 
 void drawClouds(uint32_t now, uint16_t col) {
   for (int k = 0; k < 2; k++) {
@@ -2361,9 +2307,6 @@ static bool gameNight() {
   return h < 6 || h >= 20;
 }
 
-// icono de cada juego (portada y fila de records de la ficha), en el orden de GameId
-static const char *const *const GAME_ICON[GAME_COUNT] = { SPR_ICON_PLAY, SPR_ICON_FOOD, SPR_ICON_BUSH,
-                                                          SPR_ICON_NOTE };
 
 // el bicho dentro de un juego: su sprite PMD (sin esa accion, IDLE), si no el sprite
 // antiguo de la SD, y si tampoco hay, la Poke Ball

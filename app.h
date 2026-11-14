@@ -16,6 +16,39 @@
 #define CX 233  // centro de la pantalla redonda
 #define CY 233
 
+// Reaction to a gesture on the pet (#21, touchgesture.h): drawPet* show it in place of the
+// pet's own behaviour until `until`.
+enum : uint8_t { REACT_NONE = 0, REACT_HOP, REACT_GIGGLE, REACT_HUFF, REACT_STROKE };
+struct PetReact {
+  uint8_t kind = REACT_NONE;
+  int8_t away = 1;  // the huff turns this way: away from the finger (-1 left, +1 right)
+  uint32_t t0 = 0, until = 0;
+};
+
+#define PET_CY 202  // centro vertical del sprite
+
+static const uint16_t INK_K = 0x18C4;  // spriteColor('k')
+
+// botones de icono siguiendo el arco inferior de la pantalla redonda
+// (los exteriores van mas altos para no salirse del circulo)
+struct Btn {
+  int16_t cx, cy;
+  const char *const *icon;
+};
+#define BTN_HALF 26  // boton de 52x52
+#define BTN_HIT 36   // radio tactil (un poco mas generoso)
+
+// boton-CTA de evolucion (centrado, mitad de pantalla)
+#define EVO_BTN_W 256
+#define EVO_BTN_H 64
+#define EVO_BTN_X (CX - EVO_BTN_W / 2)
+#define EVO_BTN_Y 172  // test/test_clockprompt.cpp (ClockBadge) mirrors this: update it too
+// boton-CTA de despedida (mas ancho: lleva el nombre + frase)
+#define FAR_BTN_W 408
+#define FAR_BTN_H 58
+#define FAR_BTN_X (CX - FAR_BTN_W / 2)
+#define FAR_BTN_Y 176  // mirrored in test/test_clockprompt.cpp (ClockBadge) too
+
 extern Arduino_Canvas *gfx;  // the whole frame, in PSRAM; flushUI() sends it to the panel
 extern Pet pet;
 extern SdMon mon;            // the black-and-white sprite (no PMD sprite on the SD)
