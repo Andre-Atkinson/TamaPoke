@@ -15,7 +15,7 @@
 // twice in a few minutes. The bubble itself is not tied to the call: it shows whenever a
 // need is low (attnShown), silently.
 
-// The needs in the order the status line names them (statusMsg() in TamaPoke.ino: food,
+// The needs in the order the status line names them (statusMsg() in scene.cpp: food,
 // hygiene, energy, joy). When several are low the bubble shows the first, so it agrees
 // with the text above it.
 enum AttnNeed : uint8_t { ATTN_FOOD = 0, ATTN_HYGIENE, ATTN_ENERGY, ATTN_JOY, ATTN_NEEDS };

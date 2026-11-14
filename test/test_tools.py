@@ -1659,8 +1659,18 @@ class TestSimGenSketch(unittest.TestCase):
             lines = f.readlines()
         names = {re.match(r'.*?(\w+)\(', p).group(1) for _, p, _ in self.gen.find_functions(lines)}
         for must in ('setup', 'loop', 'render', 'handleTouch', 'wakeUI', 'flushUI', 'renderCardCare',
-                     'careTap', 'readTrainingTouch', 'touchIsr', 'mixKey', 'drawMap'):
+                     'careTap', 'readTrainingTouch', 'touchIsr', 'mixKey', 'onSwipe'):
             self.assertIn(must, names)
+        # No name depends on where it sits in the file: the last definition of the .ino, found
+        # with a plain column-0 pattern of its own (not the generator's regex), must be the last
+        # function it returns, so a scan that stops early cannot pass, and neither can a stray
+        # match after it. The pattern takes one-line definitions too ("int f() { return 1; }").
+        last_def = re.compile(r'(?!(?:if|for|while|switch|else|do|return)\b)[A-Za-z_][\w \t*&:<>,]*\w\([^;{}]*\)\s*(?:const\s*)?\{(?:.*\})?\s*$')
+        defs = [i for i, ln in enumerate(lines) if last_def.match(ln)]
+        self.assertTrue(defs)
+        found = max(i for i, _, _ in self.gen.find_functions(lines))
+        self.assertEqual(found, defs[-1], 'the last definition find_functions returns is line %d %r, the '
+                         "file's last is line %d %r" % (found + 1, lines[found], defs[-1] + 1, lines[defs[-1]]))
         out = self.gen.generate(os.path.join(ROOT, 'TamaPoke.ino'), lines)
         self.assertEqual(out.count('\n#line '), 2)
 

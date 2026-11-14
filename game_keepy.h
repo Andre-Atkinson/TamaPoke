@@ -7,7 +7,7 @@
 // minigames were split out (stepGame/gameTap/respawnBall), tuned to an 85 ms
 // step. Only the input changed: a hit counts when the finger touches.
 struct KeepyGame {
-  static constexpr float CX = 233, CY = 233;
+  static constexpr float ARENA_CX = 233, ARENA_CY = 233;
   static constexpr float WALL_R = 205;   // round wall the ball bounces off
   static constexpr float FLOOR_Y = 384;  // below this the ball is dropped
   static constexpr float HIT_R = 74;     // tap distance that hits the ball
@@ -74,7 +74,7 @@ struct KeepyGame {
     ballVY += grav * k;
     ballX += ballVX * k;
     ballY += ballVY * k;
-    float dx = ballX - CX, dy = ballY - CY;  // bounce off the round wall
+    float dx = ballX - ARENA_CX, dy = ballY - ARENA_CY;  // bounce off the round wall
     float d = sqrtf(dx * dx + dy * dy);
     if (d > WALL_R) {
       float nx = dx / d, ny = dy / d;
@@ -83,8 +83,8 @@ struct KeepyGame {
         ballVX = (ballVX - 2 * dot * nx) * 0.85f;
         ballVY = (ballVY - 2 * dot * ny) * 0.85f;
       }
-      ballX = CX + nx * WALL_R;
-      ballY = CY + ny * WALL_R;
+      ballX = ARENA_CX + nx * WALL_R;
+      ballY = ARENA_CY + ny * WALL_R;
     }
     if (ballY > FLOOR_Y) {
       misses++;

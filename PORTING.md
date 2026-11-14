@@ -188,6 +188,7 @@ work against LittleFS.
 | `i18n.cpp` / `i18n.h` | One new string, `S_HOLD_EXIT`, in all 8 languages. |
 | `TamaPoke.ino` | 1.75C-only lock, BOOT, overlay and training paths; boot banner prints `BOARD_NAME`. |
 | `serialcmd.cpp` | The 1.75C-only serial commands `LOCK?` and `TRAINTRACE` (the serial console moved here from `TamaPoke.ino`, #41). |
+| `gameui.cpp` | The 1.75C-only training capture in the strength-training sack: its start check, the capture frame and the hold-to-exit chip (the minigame screens moved here from `TamaPoke.ino`, #41). |
 | `tools/build_175c.sh` | **New.** 1.75C build (flag + partition table), also used by CI. |
 | `tools/flash_175c.sh` | **New.** esptool wrapper; table and offsets from `boards/175c/partitions.csv`. |
 | `tools/build_spritefs.sh` | **New.** Builds `storage.littlefs.bin` from the normal pack. |

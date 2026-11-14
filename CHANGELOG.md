@@ -117,11 +117,13 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 ### Changed
 
 - **`TamaPoke.ino` is being split into modules** (#41), moving code without
-  changing it: the serial console is now `serialcmd.cpp` and the text helpers
-  `uitext.cpp`, with `app.h` declaring what the sketch shares with them. The
-  tables in `dex.h` and `species.h` are `inline` instead of `static`, so each
-  is stored once however many files use it: the firmware is 2,400 bytes smaller.
-  Nothing changes on the screen or on the serial port.
+  changing it: the serial console is now `serialcmd.cpp`, the text helpers
+  `uitext.cpp`, the main screen's scene and pet drawing `scene.cpp`, and the
+  minigame and training-sack screens `gameui.cpp`, with `app.h` declaring what
+  the sketch shares with them. The tables in `dex.h` and `species.h` are
+  `inline` instead of `static`, so each is stored once however many files use
+  it: the firmware is about 2.5 KB smaller. Nothing changes on the screen or on
+  the serial port.
 
 - **Clear power pills on the settings screen** (#11). The touch lock, screen-off
   and battery pills showed raw codes (`L10`, `60s`, `--`, `icon`, `%`). Each now
