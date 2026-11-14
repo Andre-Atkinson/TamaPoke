@@ -114,6 +114,7 @@ TEST(ClockSet, a_set_counts_only_if_the_clock_reads_it_back) {
   CHECK(!clockSetTook(e, e + 6));
   CHECK(!clockSetTook(e + 6, e));
   CHECK(!clockSetTook(e, 0));      // missing PCF85063: still no time
+  CHECK(!clockSetTook(0, 0));      // TIME 0 with no clock: reading 0 back is not a set
   CHECK(!clockSetTook(1000, 0));   // 1.75C: TIME before 2025 is ignored
   CHECK(!clockSetTook(1000, e));   // ... and the clock keeps its old time
 }
