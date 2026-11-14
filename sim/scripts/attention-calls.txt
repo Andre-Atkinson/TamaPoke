@@ -1,0 +1,47 @@
+# Attention calls (#9). A need that drops below 25 calls once. With the screen timed out
+# the call lights it for 15 s (a "peek": touch stays locked until PWR) with a "!" bubble
+# beside the pet, and a view left open is closed first. At night (22:00-07:00 with bedtime
+# off) the call is silent and dark, and the bubble is there when she looks.
+#   tools/sim.sh --script attention-calls --serial-log calls.log --out shots/
+# The serial log shows each call: "call hygiene: peek chirp", "call joy: silent (quiet)".
+battery 80
+
+# new game: pick Charmander, hatch the egg (the clock is 2026-11-13 10:00)
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+shot 1-fresh
+
+# the screen turns off at 60 s and touch locks 10 s later. At ~16 min the poops take
+# hygiene under 25, and its call lights the screen for 15 s
+wait 957s
+shot 2-hygiene-call
+# PWR during the peek turns the screen on for real and unlocks touch; a bath ends it
+press pwr
+wait 1s
+shot 3-pwr-on
+tap 326 390
+wait 4s
+shot 4-bathed
+
+# the stat card is left open and the screen times out; food's call (~28 min) goes back
+# to the pet screen before lighting it
+swipe up
+wait 1s
+shot 5-card-left-open
+wait 715s
+shot 6-food-call-closed-the-card
+wait 20s
+shot 7-dark-again
+
+# 23:00 with bedtime off: quiet hours. Joy's call (~34 min) stays dark and silent; PWR
+# shows the bubble (food first, like the status line)
+serial TIME 1794610800
+wait 350s
+shot 8-quiet-call-stayed-dark
+press pwr
+wait 1s
+shot 9-night-bubble

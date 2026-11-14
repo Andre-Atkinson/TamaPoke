@@ -36,6 +36,7 @@
 #include "screenlock.h"
 #include "touchlock.h"
 #include "bedtime.h"
+#include "attention.h"
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "trainingcapture.h"
@@ -121,6 +122,10 @@ uint8_t nameLen = 0;
 uint8_t cardPage = 0;         // 0 perfil, 1 stats, 2 medallas, 3 progreso, 4 cuidados (ritmo y hora de dormir)
 BedEdge bedEdge;                 // horario de dormir: convierte la hora en eventos dormir/despertar
 BedEvent bedPending = BED_NONE;  // evento a la espera de que no haya minijuego ni dialogo abiertos
+// Attention calls (attention.h, #9): see attnLoop()
+AttnArm attnArm;
+uint32_t attnPeekUntil = 0;   // a call lights a timed-out screen until this millis() (0 = no peek)
+bool screenOffByPwr = false;  // the screen went dark with a PWR press, not the timeout: calls leave it dark
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
 
@@ -400,6 +405,7 @@ void pollPwrButton() {
   else if (act == PWR_EDGE_TOGGLE && !screenLock.locked()) {
     Serial.println("PWR short");
     screenOff = !screenOff;
+    screenOffByPwr = screenOff;
     if (!screenOff) wakeUI();
   }
 #else
@@ -410,6 +416,7 @@ void pollPwrButton() {
     lastPwr = now;
     if (pwrShortPressed()) {
       screenOff = !screenOff;
+      screenOffByPwr = screenOff;
       if (!screenOff) wakeUI();
     }
   }
@@ -683,6 +690,73 @@ void bedApply() {
   }
 }
 
+// ---------- attention calls (attention.h, #9) ----------
+// The needs are sampled on every loop pass, also with the screen off: the loop never stops
+// (it light-sleeps at most POWER_SLEEP_MS between passes), so a need that drops in
+// Pet::tick() is seen on the same pass, with no extra wakeup.
+//
+// A call on a screen that timed out is a "peek": the panel lights for ATTN_PEEK_MS while
+// screenOff stays true, so the auto touch lock holds (TouchLock only sees screenOff), PWR
+// and BOOT still turn the screen on for real, and when the peek ends the panel just goes
+// dark again. powerCtx(), the panel sleep and the autosave treat a peek as a lit screen.
+
+static bool attnPeeking(uint32_t now) {
+  return screenOff && attnPeekUntil && (int32_t)(attnPeekUntil - now) > 0;
+}
+
+// back to the pet screen, as if each had been left by hand without finishing (no rename,
+// no new time): they were left open when the screen timed out
+static void attnCloseViews() {
+  if (galleryOpen) {
+    galleryOpen = false;
+    galleryDetail = 0;
+    galleryPmd.unload();
+  }
+  kbOpen = false;
+  clockOpen = false;
+  cardOpen = false;
+}
+
+void attnLoop(uint32_t now) {
+  // the peek ended, or the screen came on for real (PWR, BOOT, a touch): forget the
+  // deadline, so an old one can't read as "still lit" once millis() wraps
+  if (attnPeekUntil && !attnPeeking(now)) attnPeekUntil = 0;
+  bool away = pet.sleeping || pet.isEgg() || pet.ceremony || pet.awaitingStarter() || pet.awaitingEgg();
+  uint8_t calls = attnArm.update(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene), away);
+  if (!calls) return;
+
+  AttnScene s;
+  s.busy = pet.evolving() || pet.eating() || timeLeft(bathUntil) || timeLeft(confirmUntil) ||
+           timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+  s.playing = gameOpen || sackOpen;
+  s.browsing = kbOpen || clockOpen || galleryOpen || cardOpen;
+  if (screenIsLocked()) s.screen = ATTN_SCR_POCKET;
+  else if (screenOff) s.screen = screenOffByPwr ? ATTN_SCR_PWR_OFF : ATTN_SCR_TIMED_OUT;
+  else s.screen = dimStageNow(powerCtx(now)) == DIM_OFF ? ATTN_SCR_LIT_IDLE : ATTN_SCR_LIT;
+  // the loop refreshes lastSeenEpoch from the clock every 30 s: no I2C read here
+  uint32_t e = pet.lastSeenEpoch;
+  s.quiet = attnQuiet(pet.bedPreset, e && !bedEdge.stale(), bedMinuteOfDay(e));
+  AttnAction a = attnDecide(s);
+  if (a.wait) return;  // asked again next pass; dropped if the need recovers or the pet goes away
+
+  attnArm.done();
+  if (a.closeViews) attnCloseViews();
+  if (a.peek) {
+    attnPeekUntil = now + ATTN_PEEK_MS;
+    if (!attnPeekUntil) attnPeekUntil = 1;  // 0 means "no peek"
+  }
+  if (a.peek || a.brighten) wakeUI();  // full brightness, and the amplifier on before the chirp
+  if (a.chirp) sfxPlay(SFX_CALL);      // silent anyway if the sound is off
+
+  static const char *const NAMES[ATTN_NEEDS] = { "food", "hygiene", "energy", "joy" };
+  char what[32] = "";  // "food+hygiene+energy+joy" at most
+  int n = 0;
+  for (uint8_t i = 0; i < ATTN_NEEDS; i++)
+    if (calls & (1u << i)) n += snprintf(what + n, sizeof what - n, "%s%s", n ? "+" : "", NAMES[i]);
+  Serial.printf("call %s: %s%s\n", what, a.peek ? "peek" : a.brighten ? "brighten" : a.chirp ? "dark" : "silent",
+                a.chirp ? " chirp" : s.quiet ? " (quiet)" : " (locked)");
+}
+
 void loop() {
   uint32_t now = millis();
   pet.update(now);
@@ -716,12 +790,14 @@ void loop() {
 #if !BOARD_AMOLED_175C
   pollPwrButton();  // original board: same PEK short press as before
 #endif
+  attnLoop(now);  // before the screen-off and panel decisions below, so a peek lights this pass
 
   // Apagado por inactividad en cualquier pantalla, tambien el reloj y la galeria
   // (son estaticas: fps 0 no significa que el temporizador este parado). El USB
   // no lo desactiva: solo impide el light sleep.
   if (!screenOff && autoScreenOff(powerCtx(now)) && !pet.evolving() && !pet.ceremony) {
     screenOff = true;
+    screenOffByPwr = false;
     Serial.printf("screen off: idle %lu ms, timeout %lu ms, usb=%d\n",
                   (unsigned long)idleSince(now, lastInteract),
                   (unsigned long)powerOffMs, usbPresent() ? 1 : 0);
@@ -748,7 +824,7 @@ void loop() {
     touchBringUpPending = false;
     touchBringUp();
   }
-  bool wantSleep = screenOff;
+  bool wantSleep = screenOff && !attnPeeking(now);
 #if BOARD_AMOLED_175C
   wantSleep = wantSleep || screenLock.blank(millis());
 #endif
@@ -774,7 +850,8 @@ void loop() {
 #if BOARD_AMOLED_175C
   lockBlank = screenLock.blank(millis());
 #endif
-  if (pet.savePending() && (screenOff || lockBlank || dimStage >= 1 || pet.sleeping)) {
+  // (not during a call's peek: the panel is lit then, and the freeze would show)
+  if (pet.savePending() && ((screenOff && !attnPeeking(now)) || lockBlank || dimStage >= 1 || pet.sleeping)) {
     pet.flushSave();
   }
 
@@ -873,7 +950,7 @@ void loop() {
 PowerCtx powerCtx(uint32_t now) {
   PowerCtx c;
   c.idleMs = idleSince(now, lastInteract);
-  c.screenOff = screenOff;
+  c.screenOff = screenOff && !attnPeeking(now);  // a call's peek lights the panel like a screen that is on
 #if BOARD_AMOLED_175C
   c.screenOff = c.screenOff || screenLock.blank(now);
 #endif
@@ -1967,6 +2044,7 @@ bool render() {
     drawPet();
     drawBath();
     drawPoops();
+    drawAttnBubble();
     // panel inferior: base limpia para barras y botones sobre el paisaje
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     drawBars();
@@ -3799,6 +3877,36 @@ void drawPoops() {
   for (int i = 0; i < pet.poops; i++) {
     drawMap(SPR_POOP, 32, 36 + i * 46, 244, 2, false);
   }
+}
+
+// The attention "!" (#9): a speech bubble beside the pet while a need is low, with the icon
+// of the button that fixes it (attnShown: the same need the status line names). Silent and
+// not tied to the call, so it is there whenever she looks. Hidden while something else is
+// going on around the pet: sleep, eating, a heart, the bath, evolution, a banner or a dialog.
+// #23's speech bubbles can reuse the shape (attnBubbleAt).
+void drawAttnBubble() {
+  static const char *const *const ICONS[ATTN_NEEDS] = { SPR_ICON_FOOD, SPR_ICON_CLEAN, SPR_ICON_LIGHT, SPR_ICON_PLAY };
+  uint8_t need = attnShown(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene));
+  if (need >= ATTN_NEEDS) return;
+  if (pet.sleeping || pet.eating() || pet.showHeart() || pet.evolving() || timeLeft(bathUntil) || pet.showMedal() ||
+      pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil)))
+    return;
+  AttnBubble b = attnBubbleAt(pmd.loaded ? (int)beh.x : CX);
+  uint16_t ink = inkColor();
+  gfx->fillRoundRect(b.x, b.y, b.w, b.h, 12, UI_WHITE);
+  gfx->drawRoundRect(b.x, b.y, b.w, b.h, 12, ink);
+  // tail: leaves the bottom edge near the pet's side and points down at it; the white
+  // triangle covers the border where it joins, the two lines redraw its outer edges
+  int base = b.y + b.h - 1, tipY = b.y + b.h + ATTN_BUBBLE_TAIL;
+  int x0 = b.right ? b.x + 10 : b.x + b.w - 24, x1 = x0 + 14;
+  int tipX = b.right ? b.x + 2 : b.x + b.w - 2;
+  gfx->fillTriangle(x0, base, x1, base, tipX, tipY, UI_WHITE);
+  gfx->drawLine(x0, base, tipX, tipY, ink);
+  gfx->drawLine(x1, base, tipX, tipY, ink);
+  // a red "!" drawn as shapes (no font: the same in every language) and the 16x16 icon at x2
+  gfx->fillRoundRect(b.x + 12, b.y + 7, 8, 21, 3, UI_BAR_BAD);
+  gfx->fillRoundRect(b.x + 12, b.y + 31, 8, 7, 3, UI_BAR_BAD);
+  drawMap(ICONS[need], 16, b.x + 30, b.y + 6, 2, false);
 }
 
 void drawBars() {

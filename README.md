@@ -88,6 +88,22 @@ While **awake**, per minute:
   `board.py clock`); it then acts as if the device had just started, so at 22:30 the
   creature goes to sleep and at 14:00 nothing happens.
   Changing the setting never puts the pet to sleep or wakes it by itself.
+- ❗ **Attention calls:** when FOOD, JOY, ENE or HYG first drops **below 25** (where
+  its bar turns red), the creature calls once: one soft chirp (if sound is on) and a
+  "!" speech bubble beside it with the icon of the button that helps (berry, ball,
+  moon, bubbles). The same need calls again only after getting back to **40** or
+  more, so a quick cuddle can't make it call twice. The bubble stays, silently,
+  while a need is under 25 (the one the status line names), and hides while it sleeps.
+  - A screen that turned off by itself lights for **15 s**, with touch still locked
+    until PWR (a PWR press turns it on as usual); a stat card, gallery, clock or
+    keyboard left open goes back to the creature first. A dimmed screen brightens.
+  - A screen you turned off with PWR stays dark (the chirp still plays), and the
+    triple-press pocket lock gets nothing.
+  - **Quiet hours** (the bedtime window, or 22:00–07:00 if bedtime is off, and any
+    time the clock hasn't been set since a power-off): no chirp and no light.
+  - No calls while it sleeps, as an egg, or during a farewell or the egg choice.
+    A call waits while a minigame, the training bag, a dialog, the card, gallery,
+    clock or keyboard is open on a lit screen, and comes once you are back.
 
 ### Eggs & who you get (spawn odds)
 - **First ever pet:** you pick a starter — **Bulbasaur / Charmander / Squirtle**.
@@ -405,6 +421,9 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
   a short PWR press wakes it. The CPU runs at 240 MHz in use, 160 MHz once dimmed or asleep and 80 MHz with the
   screen off (a minigame stays at 240). The original 1.75 keeps its previous behaviour by default (screen-off and touch lock set to
   never) but can pick either in the settings, and CPU scaling applies to both boards.
+- **Attention calls** light a screen that turned off by itself for 15 s at most (not in quiet hours), and only
+  when a need first drops below 25, so a few times a day. They are noticed by the loop that already runs
+  with the screen off (no extra wakeups).
 - **Low battery (< 20 %, not charging):** brightness capped (100, then 60 under 10 %) and frames twice as slow.
 - **Battery reads over I2C** every 10 s instead of 2 s when the screen is off or almost off.
 - The pet walks by real time, so lower frame rates do not slow it down.

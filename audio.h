@@ -18,6 +18,7 @@ enum Sfx : uint8_t {
   SFX_NOTE1,    // baya azul (mi)
   SFX_NOTE2,    // baya verde (sol)
   SFX_NOTE3,    // caramelo (do agudo)
+  SFX_CALL,     // aviso de atencion (#9): una necesidad acaba de bajar de 25
   SFX_COUNT
 };
 
