@@ -261,17 +261,22 @@ private:
   static uint8_t clamp100(int v) { return v < 0 ? 0 : (v > 100 ? 100 : v); }
 };
 
-// "Ready to evolve" chime (the sketch, fed wantEvolveButton() and level() on every loop
-// pass): it sounds when the button appears, at most once per level. Self-care on the
-// charger (#24) keeps lifting the needs back over 40, so the button comes and goes
-// several times an hour while nobody is there, and each return used to chime.
+// "Ready to evolve" chime (the sketch, fed wantEvolveButton(), speciesId and level() on
+// every loop pass): it sounds when the button appears, at most once per level for each
+// form. Self-care on the charger (#24) keeps lifting the needs back over 40, so the
+// button comes and goes several times an hour while nobody is there, and each return
+// used to chime. A new form (evolve()) chimes again at the same level; that also covers
+// a new pet: it starts as an egg (speciesId -1), which the loop always sees in between,
+// so the species change clears chimedLevel and the level check needs no reset of its own.
 struct EvoChime {
   bool wasReady = false;
+  int16_t species = -1;      // the form last seen
   uint16_t chimedLevel = 0;  // 0 = none yet (levels start at 1)
-  bool update(bool ready, uint16_t level) {
-    // a pet's age only goes forward: a lower level is a new pet (the egg after an
-    // ending), which chimes at that level again
-    if (level < chimedLevel) chimedLevel = 0;
+  bool update(bool ready, int16_t speciesNow, uint16_t level) {
+    if (speciesNow != species) {
+      species = speciesNow;
+      chimedLevel = 0;
+    }
     bool chime = ready && !wasReady && level != chimedLevel;
     if (chime) chimedLevel = level;
     wasReady = ready;

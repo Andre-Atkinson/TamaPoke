@@ -98,7 +98,7 @@ While **awake**, per minute:
   powered off, and stays off if the power chip doesn't answer (the firmware then
   can't tell USB from battery). A need it lifts in the same minute doesn't count
   as a slip-up, and the runaway countdown can't build. The "ready to evolve"
-  chime sounds at most once per level, because the needs keep coming back over 40.
+  chime sounds at most once per level for each form, because the needs keep coming back over 40.
 
 ### Eggs & who you get (spawn odds)
 - **First ever pet:** you pick a starter — **Bulbasaur / Charmander / Squirtle**.

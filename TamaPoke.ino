@@ -699,10 +699,10 @@ void loop() {
 
   // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
   // (incluye el caso de cumplir al despertar). canEvolveNow es false durmiendo.
-  // At most once per level (EvoChime, pet.h): self-care on the charger keeps
-  // bringing the button back.
+  // At most once per level for each form (EvoChime, pet.h): self-care on the
+  // charger keeps bringing the button back.
   static EvoChime evoChime;
-  if (evoChime.update(pet.wantEvolveButton(), pet.level())) sfxPlay(SFX_MEDAL);
+  if (evoChime.update(pet.wantEvolveButton(), pet.speciesId, pet.level())) sfxPlay(SFX_MEDAL);
   // aviso sombrio cuando el bicho esta a punto de escaparse por abandono
   static bool wasRunReady = false;
   bool runReady = pet.canRunawayNow();

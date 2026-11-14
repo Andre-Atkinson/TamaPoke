@@ -250,6 +250,7 @@ TEST(SimScript, pmu_is_a_boot_step) {
 // without the AXP2101 the fake gives what rtcbat.cpp gives: USB reads as present
 TEST(SimPower, without_the_pmu_usb_reads_present_like_the_firmware) {
   SimPower saved = gSimPower;
+  pwrSetup();  // no press latched from another test
   gSimPower.usb = false;
   gSimPower.batPct = 0;
   gSimPower.pmuOk = false;
@@ -259,12 +260,27 @@ TEST(SimPower, without_the_pmu_usb_reads_present_like_the_firmware) {
   CHECK_EQ(batPercent(), -1);
   CHECK(!batCharging());
   CHECK(!batShouldShutdown());
+  gSimPower.batPct = 60;
+  CHECK_EQ(batMillivolts(), 0);                  // no reading without the PMU
+  simPwrPress();
+  CHECK(!pwrShortPressed());                     // the PKEY is read from the AXP2101
+  batPowerOff();
+  CHECK(!gSimPower.poweredOff);                  // and so is the power-off
+  gSimPower.batPct = 0;
   gSimPower.pmuOk = true;  // the same board with the PMU answering
   CHECK(batBegin());
   CHECK(!usbPresent());
   CHECK(!usbPresentNow());
   CHECK(batShouldShutdown());
+  gSimPower.batPct = 60;
+  CHECK(batMillivolts() > 0);                    // controls: the same calls with the PMU
+  pwrSetup();                                    // clear the press latched above
+  simPwrPress();
+  CHECK(pwrShortPressed());
+  batPowerOff();
+  CHECK(gSimPower.poweredOff);
   gSimPower = saved;
+  pwrSetup();
 }
 
 TEST(SimRunner, sobrevive_a_la_vuelta_de_millis) {

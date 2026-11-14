@@ -56,7 +56,7 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   powered-off catch-up, and off when the AXP2101 doesn't answer at boot (the
   firmware then reports USB as present). No new NVS key. Each top-up logs a
   `self-care:` line on the serial port. The "ready to evolve" chime now sounds
-  at most once per level, since the needs keep coming back over 40.
+  at most once per level for each form, since the needs keep coming back over 40.
 - Simulator: `pmu none` before boot simulates a power chip that doesn't answer;
   `sim/scripts/self-care.txt` and `self-care-no-pmu.txt` show self-care.
 - **`CARE?` serial command** prints `pace=<n> bed=<n> inbed=<0|1> stale=<0|1>

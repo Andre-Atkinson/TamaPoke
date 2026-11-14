@@ -2426,38 +2426,50 @@ TEST(selfcare, every_minute_in_relaxed_pace_too) {
 // ---------------------------------------------------------------- "ready to evolve" chime
 TEST(evochime, sounds_when_the_button_appears) {
   EvoChime c;
-  CHECK(!c.update(false, 16));
-  CHECK(c.update(true, 16));
-  CHECK_MSG(!c.update(true, 16), "staying ready doesn't chime again");
+  CHECK(!c.update(false, 4, 16));
+  CHECK(c.update(true, 4, 16));
+  CHECK_MSG(!c.update(true, 4, 16), "staying ready doesn't chime again");
 }
 
 TEST(evochime, once_per_level) {
   EvoChime c;
-  CHECK(c.update(true, 16));
-  CHECK(!c.update(false, 16));
-  CHECK_MSG(!c.update(true, 16), "back at the same level: no second chime");
+  CHECK(c.update(true, 4, 16));
+  CHECK(!c.update(false, 4, 16));
+  CHECK_MSG(!c.update(true, 4, 16), "back at the same level: no second chime");
 }
 
 TEST(evochime, again_at_a_new_level) {
   EvoChime c;
-  CHECK(c.update(true, 16));
-  CHECK(!c.update(false, 16));  // e.g. "keep this form" until the next level
-  CHECK(c.update(true, 17));
+  CHECK(c.update(true, 4, 16));
+  CHECK(!c.update(false, 4, 16));  // e.g. "keep this form" until the next level
+  CHECK(c.update(true, 4, 17));
 }
 
-// the sketch keeps one EvoChime from boot: the next pet starts again at level 1
+// the sketch keeps one EvoChime from boot: the next pet starts again at level 1, and
+// every new pet is an egg (species -1) first, which the loop sees on its way
 TEST(evochime, a_new_pet_chimes_at_the_same_level_again) {
   EvoChime c;
-  CHECK(c.update(true, 16));
-  CHECK(!c.update(false, 16));  // released with the button still showing
-  for (uint16_t lv = 1; lv < 16; lv++) CHECK(!c.update(false, lv));  // the new pet grows
-  CHECK(c.update(true, 16));
+  CHECK(c.update(true, 4, 16));
+  CHECK(!c.update(false, 4, 16));  // released with the button still showing
+  CHECK(!c.update(false, -1, 1));  // the egg
+  for (uint16_t lv = 1; lv < 16; lv++) CHECK(!c.update(false, 4, lv));  // the new pet grows
+  CHECK(c.update(true, 4, 16));
+}
+
+// evolve() while the button was showing and then losing it again: the new form is
+// ready at the level the old one chimed at, and that is a new button
+TEST(evochime, a_new_form_chimes_at_the_same_level) {
+  EvoChime c;
+  CHECK(c.update(true, 4, 40));
+  CHECK(!c.update(false, 4, 40));  // a need dips under 40
+  CHECK(c.update(true, 5, 40));
 }
 
 TEST(evochime, needs_the_button_to_appear) {
   EvoChime c;
-  CHECK(c.update(true, 16));
-  CHECK_MSG(!c.update(true, 17), "still ready at the next level: no chime, as before");
+  CHECK(c.update(true, 4, 16));
+  CHECK_MSG(!c.update(true, 4, 17), "still ready at the next level: no chime, as before");
+  CHECK_MSG(!c.update(true, 5, 17), "a new form that is ready at once: the button never appeared");
 }
 
 // The case that needed it: a pet at its evolution level left on the charger.
@@ -2474,7 +2486,7 @@ TEST(evochime, a_ready_pet_on_the_charger_chimes_once) {
     bool ready = p.wantEvolveButton();
     if (ready && !was) appearances++;
     was = ready;
-    if (c.update(ready, p.level())) chimes++;
+    if (c.update(ready, p.speciesId, p.level())) chimes++;
   }
   CHECK_EQ(p.level(), (uint16_t)16);
   CHECK_MSG(appearances >= 3, "self-care brings the button back several times an hour");

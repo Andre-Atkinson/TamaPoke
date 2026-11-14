@@ -2,6 +2,10 @@
 # the pet has been untouched for 10 minutes, the first need under 40 goes back to 50
 # once a minute. The "self-care:" lines and the STATS replies are in serial.log.
 #   tools/sim.sh --script self-care --out shots/self-care
+# For the 1.75C, the default board (--board 175c). On the original 1.75 the screen is on
+# by default, so "press pwr" below turns it off and the touch that starts the 10 minutes
+# never happens. (A tap would do it, but it can land on a care button or on the pet,
+# and touching the pet counts as care.)
 # The same with an AXP2101 that never answers (USB reads as present): self-care-no-pmu.
 
 battery 60
