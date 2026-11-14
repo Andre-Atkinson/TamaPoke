@@ -170,6 +170,8 @@ int flashIdxForDex(int16_t dex) {
 
 #define CX 233  // centro de la pantalla redonda
 #define CY 233
+// settingslayout.h lays the settings pills out around its own copy of the centre
+static_assert(CX == SET_PANEL_C && CY == SET_PANEL_C, "settingslayout.h assumes the panel centre is (CX, CY)");
 #define PET_CY 202  // centro vertical del sprite
 
 static const uint16_t INK_K = 0x18C4;  // spriteColor('k')
@@ -2861,13 +2863,14 @@ static void drawPowerPills() {
   r = powerPillRect(PILL_BATTERY);
   int pc = batPercent();
   bool charging = pc >= 0 && batCharging();
-  uint16_t col = pc < 0 ? UI_INK : batteryColor(pc, charging, UI_INK);
+  // no reading: faint grey, so it reads as "nothing to show" rather than a flat (red) battery
+  uint16_t col = pc < 0 ? UI_TRACK : batteryColor(pc, charging, UI_INK);
   if (batAsPercent) {
     batteryPctLabel(s, sizeof(s), pc, charging);
     gfx->setTextColor(col);
     setCur(r.x + (r.w - textW(s, 2)) / 2, r.y + (r.h - 14) / 2);
     printT(s);
-  } else {  // with no reading (pc < 0) an empty outline: no battery
+  } else {  // with no reading (pc < 0) an empty grey outline
     drawBatteryGlyph(r.x + (r.w - PILL_BAT_W - 4) / 2, r.y + (r.h - PILL_BAT_H) / 2, PILL_BAT_W, PILL_BAT_H,
                      pc < 0 ? 0 : pc, charging, col, UI_INK);
   }
