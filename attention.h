@@ -69,7 +69,7 @@ class AttnArm {
       if (low) {
         if (armed_ & bit) {
           armed_ &= (uint8_t)~bit;
-          if (!away) waiting_ |= bit;
+          waiting_ |= bit;  // cleared below if away
         }
       } else {
         waiting_ &= (uint8_t)~bit;

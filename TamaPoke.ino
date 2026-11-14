@@ -754,7 +754,7 @@ void attnLoop(uint32_t now) {
   for (uint8_t i = 0; i < ATTN_NEEDS; i++)
     if (calls & (1u << i)) n += snprintf(what + n, sizeof what - n, "%s%s", n ? "+" : "", NAMES[i]);
   Serial.printf("call %s: %s%s\n", what, a.peek ? "peek" : a.brighten ? "brighten" : a.chirp ? "dark" : "silent",
-                a.chirp ? " chirp" : s.quiet ? " (quiet)" : " (locked)");
+                a.chirp ? (audioEnabled() ? " chirp" : " (muted)") : s.quiet ? " (quiet)" : " (locked)");
 }
 
 void loop() {
