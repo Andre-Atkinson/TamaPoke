@@ -18,7 +18,6 @@
 #include <Wire.h>
 #include "Arduino_GFX_Library.h"
 #include "TouchDrvCSTXXX.hpp"
-#include <U8g2lib.h>  // fuentes CJK (japones); ver applyLangFont()
 #include <esp_sleep.h>
 #include <driver/gpio.h>
 #include "pin_config.h"
