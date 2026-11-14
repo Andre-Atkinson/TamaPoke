@@ -619,47 +619,56 @@ class TestBoardScripts(unittest.TestCase):
 # Records each call's argv as one JSON line and fakes a good build: a small
 # TamaPoke.ino.bin in --output-dir and, when FAKE_PARTS is set, that partition
 # table in --build-path (what the core's prebuild hook would have copied).
+# FAKE_BIN_SIZE sets the image size, FAKE_NO_BIN writes none, FAKE_SLEEP waits
+# that many seconds, FAKE_FAIL exits 1, and FAKE_ORDER_LOG gets a "compile" line
+# per call (to check the order of the gate's steps).
 FAKE_ARDUINO_CLI = r'''#!/usr/bin/env python3
-import json, os, shutil, sys
+import json, os, shutil, sys, time
 args = sys.argv[1:]
 with open(os.environ['FAKE_CLI_LOG'], 'a') as fh:
     fh.write(json.dumps(args) + '\n')
+if os.environ.get('FAKE_ORDER_LOG'):
+    with open(os.environ['FAKE_ORDER_LOG'], 'a') as fh:
+        fh.write('compile\n')
 def opt(name):
     return args[args.index(name) + 1] if name in args else None
-if opt('--output-dir'):
+if opt('--build-path'):
+    os.makedirs(opt('--build-path'), exist_ok=True)
+time.sleep(float(os.environ.get('FAKE_SLEEP', '0')))
+if os.environ.get('FAKE_FAIL'):
+    sys.exit(1)
+if opt('--output-dir') and not os.environ.get('FAKE_NO_BIN'):
     os.makedirs(opt('--output-dir'), exist_ok=True)
     with open(os.path.join(opt('--output-dir'), 'TamaPoke.ino.bin'), 'wb') as fh:
-        fh.write(b'\0' * 1024)
+        fh.write(b'\0' * int(os.environ.get('FAKE_BIN_SIZE', '1024')))
 if opt('--build-path') and os.environ.get('FAKE_PARTS'):
-    os.makedirs(opt('--build-path'), exist_ok=True)
     shutil.copy(os.environ['FAKE_PARTS'], os.path.join(opt('--build-path'), 'partitions.csv'))
 '''
 
 
-class TestBuildJobs(unittest.TestCase):
-    """build_175c.sh and the gate's original-1.75 build cap arduino-cli's
-    parallel compile jobs (its own default is every core), checked against a
-    fake arduino-cli on PATH, so nothing here really compiles."""
+class FakeArduinoCliCase(unittest.TestCase):
+    """A fake arduino-cli on PATH, so nothing here really compiles, and a HOME
+    of the test's own, so the persistent build folders (tools/build_cache.sh)
+    land in its temp dir and never in the owner's cache."""
 
     PARTS = os.path.join(ROOT, 'boards', '175c', 'partitions.csv')
-    # Both scripts carry their own copy of the rule; these pin both, from either
-    # side. '08' is octal to arduino-cli (and invalid), '010' would be 8 jobs.
-    GOOD_JOBS = ('1', '0', '8', '9999')
-    BAD_JOBS = ('x', '08', '010', '-1', '3 ', '2.5', '10000')
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.log = os.path.join(self.tmp, 'arduino-cli.log')
-        bindir = os.path.join(self.tmp, 'bin')
-        os.makedirs(bindir)
-        fake = os.path.join(bindir, 'arduino-cli')
+        self.bindir = os.path.join(self.tmp, 'bin')
+        os.makedirs(self.bindir)
+        fake = os.path.join(self.bindir, 'arduino-cli')
         with open(fake, 'w') as fh:
             fh.write(FAKE_ARDUINO_CLI)
         os.chmod(fake, 0o755)
-        # An owner's own TAMAPOKE_JOBS (or board overrides) must not leak in.
+        self.home = os.path.join(self.tmp, 'home')
+        os.makedirs(self.home)
+        # An owner's own TAMAPOKE_JOBS (or board overrides, or cache location) must not leak in.
         self.env = {k: v for k, v in os.environ.items()
-                    if k not in ('TAMAPOKE_JOBS', 'TAMAPOKE_OUT', 'FQBN_175C', 'APP_MAX_OVERRIDE')}
-        self.env.update(PATH=bindir + os.pathsep + os.environ.get('PATH', ''),
+                    if k not in ('TAMAPOKE_JOBS', 'TAMAPOKE_OUT', 'FQBN_175C', 'APP_MAX_OVERRIDE',
+                                 'XDG_CACHE_HOME')}
+        self.env.update(PATH=self.bindir + os.pathsep + os.environ.get('PATH', ''), HOME=self.home,
                         FAKE_CLI_LOG=self.log, FAKE_PARTS=self.PARTS)
 
     def tearDown(self):
@@ -683,22 +692,23 @@ class TestBuildJobs(unittest.TestCase):
         self.assertNotIn('-j', call)
         return call[call.index('--jobs') + 1]
 
-    def build_175c(self, **env):
-        return subprocess.run([os.path.join(TOOLS, 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out')],
+    def build_175c(self, *args, **env):
+        return subprocess.run([os.path.join(TOOLS, 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out'), *args],
                               env=dict(self.env, **env), capture_output=True, text=True, timeout=60)
 
-    def gate_root(self):
-        """A minimal repo for gate.sh: the real gate and 1.75C build script,
-        the 1.75C table, a one-line sketch, and stand-ins for the host tests,
-        the i18n check and the desktop simulator that record that they ran."""
-        root = os.path.join(self.tmp, 'repo')
+    def gate_root(self, name='repo'):
+        """A minimal repo for gate.sh: the real gate, 1.75C build script and
+        build-cache helper, the 1.75C table, a one-line sketch, and stand-ins
+        for the host tests, the i18n check and the desktop simulator that
+        record that they ran."""
+        root = os.path.join(self.tmp, name)
         os.makedirs(os.path.join(root, 'tools'))
         os.makedirs(os.path.join(root, 'test'))
         os.makedirs(os.path.join(root, 'boards', '175c'))
         os.makedirs(os.path.join(root, 'sim', 'scripts'))
         put(os.path.join(root, 'sim', 'scripts', 'screens.txt'))   # no `shot` lines: 0/0 screens
-        for name in ('gate.sh', 'build_175c.sh'):
-            shutil.copy2(os.path.join(TOOLS, name), os.path.join(root, 'tools', name))
+        for script in ('gate.sh', 'build_175c.sh', 'build_cache.sh'):
+            shutil.copy2(os.path.join(TOOLS, script), os.path.join(root, 'tools', script))
         shutil.copy2(self.PARTS, os.path.join(root, 'boards', '175c', 'partitions.csv'))
         put(os.path.join(root, 'TamaPoke.ino'), b'void setup() {}\nvoid loop() {}\n')
         self.ran = os.path.join(self.tmp, 'ran')
@@ -715,6 +725,16 @@ class TestBuildJobs(unittest.TestCase):
     def gate(self, root, *args, **env):
         return subprocess.run([os.path.join(root, 'tools', 'gate.sh'), *args],
                               env=dict(self.env, **env), capture_output=True, text=True, timeout=120)
+
+
+class TestBuildJobs(FakeArduinoCliCase):
+    """build_175c.sh and the gate's original-1.75 build cap arduino-cli's
+    parallel compile jobs (its own default is every core)."""
+
+    # Both scripts carry their own copy of the rule; these pin both, from either
+    # side. '08' is octal to arduino-cli (and invalid), '010' would be 8 jobs.
+    GOOD_JOBS = ('1', '0', '8', '9999')
+    BAD_JOBS = ('x', '08', '010', '-1', '3 ', '2.5', '10000')
 
     def test_build_175c_caps_compile_jobs_at_3_by_default(self):
         for env in ({}, {'TAMAPOKE_JOBS': ''}):
@@ -784,6 +804,265 @@ class TestBuildJobs(unittest.TestCase):
                 self.assertIn('TAMAPOKE_JOBS', r.stdout)
                 self.assertNotIn('set -', r.stdout)
                 self.assertEqual(self.calls(), [])
+
+
+class TestBuildCache(FakeArduinoCliCase):
+    """Incremental firmware builds (tools/build_cache.sh): one persistent build
+    folder per checkout and board, the gate's stable staged copy, the lock that
+    keeps two runs out of one folder, and --clean."""
+
+    APP0 = 0x300000   # boards/175c/partitions.csv
+
+    def setUp(self):
+        super().setUp()
+        self.uname('Linux')   # the cache lives in ~/.cache unless a test says otherwise
+
+    def uname(self, system):
+        path = os.path.join(self.bindir, 'uname')
+        put(path, f'#!/bin/sh\necho {system}\n'.encode())
+        os.chmod(path, 0o755)
+
+    @staticmethod
+    def opt(call, name):
+        return call[call.index(name) + 1]
+
+    @staticmethod
+    def owner_of(pid):
+        """What tools/build_cache.sh records for a running process."""
+        start = subprocess.run(['ps', '-o', 'lstart=', '-p', str(pid)],
+                               capture_output=True, text=True).stdout.strip()
+        return f'{pid} {start}'
+
+    @staticmethod
+    def hold(folder, owner):
+        os.makedirs(folder + '.lock')
+        put(os.path.join(folder + '.lock', 'owner'), (owner + '\n').encode())
+
+    def build_path(self, **env):
+        """The 1.75C build folder build_175c.sh uses for this checkout."""
+        self.fresh()
+        r = self.build_175c(**env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (call,) = self.calls()
+        self.fresh()
+        return self.opt(call, '--build-path')
+
+    def gate_calls(self, root, *args, **env):
+        """Run the gate and return its two compile calls, 1.75C first."""
+        self.fresh()
+        r = self.gate(root, *args, **env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        calls = self.calls()
+        self.assertEqual(len(calls), 2, calls)
+        return sorted(calls, key=lambda c: '16M' in self.opt(c, '--fqbn'))
+
+    def test_each_checkout_keeps_one_build_folder_in_the_user_cache(self):
+        xdg = os.path.join(self.tmp, 'xdg')
+        for system, env, base in (
+                ('Darwin', {}, os.path.join(self.home, 'Library', 'Caches', 'tamapoke')),
+                ('Linux', {}, os.path.join(self.home, '.cache', 'tamapoke')),
+                ('Linux', {'XDG_CACHE_HOME': xdg}, os.path.join(xdg, 'tamapoke'))):
+            with self.subTest(system=system, env=env):
+                self.uname(system)
+                first = self.build_path(**env)
+                put(os.path.join(first, 'kept'))   # say, a compiled library
+                self.assertEqual(self.build_path(**env), first, 'a rebuild must use the same build folder')
+                self.assertTrue(os.path.exists(os.path.join(first, 'kept')), 'the build folder was not kept')
+                folder = os.path.dirname(first)
+                self.assertEqual(os.path.dirname(folder), base)
+                self.assertEqual(os.path.basename(first), 'build-175c')
+                self.assertTrue(os.path.basename(folder).startswith(os.path.basename(ROOT) + '-'), folder)
+        # Two checkouts never share one, even when their folders have the same name.
+        self.uname('Linux')
+        paths = set()
+        for where in ('one', 'two'):
+            root = self.gate_root(os.path.join(where, 'TamaPoke'))
+            self.fresh()
+            r = subprocess.run([os.path.join(root, 'tools', 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out')],
+                               env=self.env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            (call,) = self.calls()
+            paths.add(self.opt(call, '--build-path'))
+        self.assertEqual(len(paths), 2, paths)
+
+    def test_a_rebuild_recompiles_the_sketch_and_reuses_the_rest(self):
+        root = self.gate_root()
+        builds = [self.build_path()] + [self.opt(c, '--build-path') for c in self.gate_calls(root)]
+        for build in builds:
+            for part in ('sketch/pet.cpp.o', 'libraries/U8g2/u8g2_fonts.c.o', 'core/core.a'):
+                os.makedirs(os.path.dirname(os.path.join(build, part)), exist_ok=True)
+                put(os.path.join(build, part))
+        self.assertEqual(self.build_path(), builds[0])
+        self.assertEqual([self.opt(c, '--build-path') for c in self.gate_calls(root)], builds[1:])
+        for build in builds:
+            with self.subTest(build=build):
+                # a kept sketch object would hide its warnings from the gate's count
+                self.assertFalse(os.path.exists(os.path.join(build, 'sketch')), 'the sketch was not recompiled')
+                self.assertTrue(os.path.exists(os.path.join(build, 'libraries', 'U8g2', 'u8g2_fonts.c.o')))
+                self.assertTrue(os.path.exists(os.path.join(build, 'core', 'core.a')))
+
+    def test_clean_builds_from_empty_folders(self):
+        build = self.build_path()
+        root = self.gate_root()
+        gate_builds = [self.opt(c, '--build-path') for c in self.gate_calls(root)]
+        stage = self.gate_calls(root)[1][-1]
+        leftovers = [os.path.join(b, 'libraries', 'old.o') for b in [build] + gate_builds]
+        leftovers.append(os.path.join(os.path.dirname(stage), 'old-stage-file'))
+        for path in leftovers:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            put(path)
+        # without --clean everything is kept, and arduino-cli is not asked to clean
+        self.assertEqual(self.build_path(), build)
+        for call in self.gate_calls(root):
+            self.assertNotIn('--clean', call)
+        for path in leftovers:
+            self.assertTrue(os.path.exists(path), path)
+        # with it nothing is
+        self.fresh()
+        r = self.build_175c('--clean')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (call,) = self.calls()
+        self.assertIn('--clean', call)
+        for call in self.gate_calls(root, '--clean'):
+            self.assertIn('--clean', call)
+        for path in leftovers:
+            self.assertFalse(os.path.exists(path), f'{path} survived --clean')
+        # --clean is about the builds, which --no-build skips
+        self.fresh()
+        r = self.gate(root, '--clean', '--no-build')
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn('--clean', r.stderr)
+        self.assertFalse(os.path.exists(self.ran))
+        for script in ('build_175c.sh', 'gate.sh'):
+            r = subprocess.run([os.path.join(TOOLS, script), '--help'], env=self.env,
+                               capture_output=True, text=True, timeout=30)
+            self.assertIn('--clean', r.stdout, script)
+
+    def test_a_folder_in_use_by_another_run_is_refused(self):
+        owner = self.owner_of(os.getpid())   # a running process: this test
+        build = self.build_path()
+        self.hold(build, owner)
+        r = self.build_175c()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('in use by another run', r.stderr)
+        self.assertIn(str(os.getpid()), r.stderr)
+        self.assertEqual(self.calls(), [], 'built in a folder another run holds')
+        with open(os.path.join(build + '.lock', 'owner')) as fh:
+            self.assertEqual(fh.read().strip(), owner, "another run's lock was touched")
+        # one gate at a time per checkout: refused before any step runs
+        root = self.gate_root()
+        gate_dir = os.path.dirname(self.opt(self.gate_calls(root)[0], '--build-path'))
+        self.hold(gate_dir, owner)
+        self.fresh()
+        r = self.gate(root)
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn('in use by another run', r.stderr)
+        self.assertFalse(os.path.exists(self.ran), 'the gate ran steps while another gate held the lock')
+        self.assertEqual(self.calls(), [])
+        self.assertTrue(os.path.isdir(gate_dir + '.lock'))
+        # --no-build touches no build folder, so it needs no lock
+        r = self.gate(root, '--no-build')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_a_lock_whose_owner_is_gone_is_taken_over(self):
+        gone = subprocess.Popen(['true'])
+        gone.wait()
+        build = self.build_path()
+        for owner in (f'{gone.pid} Thu Jan  1 00:00:00 1970',          # no such process any more
+                      f'{os.getpid()} Thu Jan  1 00:00:00 1970'):      # its pid now belongs to another process
+            with self.subTest(owner=owner):
+                self.hold(build, owner)
+                self.fresh()
+                r = self.build_175c()
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn('Took over', r.stderr)
+                self.assertEqual(len(self.calls()), 1)
+                self.assertFalse(os.path.exists(build + '.lock'))
+
+    def test_the_lock_is_given_back_however_the_run_ends(self):
+        import signal
+        build = self.build_path()
+        self.assertFalse(os.path.exists(build + '.lock'), 'kept after a good build')
+        r = self.build_175c(FAKE_FAIL='1')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(os.path.exists(build + '.lock'), 'kept after a failed build')
+        root = self.gate_root()
+        gate_dir = os.path.dirname(self.opt(self.gate_calls(root)[0], '--build-path'))
+        self.assertFalse(os.path.exists(gate_dir + '.lock'), 'kept after a green gate')
+        r = self.gate(root, FAKE_FAIL='1')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(os.path.exists(gate_dir + '.lock'), 'kept after a failed gate')
+        # stopped while compiling (Ctrl-C or a kill): the trap still gives it back
+        self.fresh()
+        p = subprocess.Popen([os.path.join(TOOLS, 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out')],
+                             env=dict(self.env, FAKE_SLEEP='30'), start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            deadline = time.time() + 20
+            while not self.calls() and time.time() < deadline:
+                time.sleep(0.05)
+            with open(os.path.join(build + '.lock', 'owner')) as fh:
+                self.assertEqual(fh.read().split()[0], str(p.pid), 'the running build does not hold the lock')
+            os.killpg(p.pid, signal.SIGTERM)
+            p.wait(timeout=20)
+        finally:
+            if p.poll() is None:
+                os.killpg(p.pid, signal.SIGKILL)
+                p.wait()
+        self.assertFalse(os.path.exists(build + '.lock'), 'kept after the build was stopped')
+
+    def test_the_gate_stages_into_one_folder_that_mirrors_the_tree(self):
+        root = self.gate_root()
+        put(os.path.join(root, 'gone.cpp'))
+        put(os.path.join(root, 'kept.h'))
+        os.utime(os.path.join(root, 'kept.h'), (1577836800, 1577836800))   # 2020-01-01
+        c175c, c175 = self.gate_calls(root)
+        stage = c175[-1]
+        self.assertEqual(c175c[-1], stage, 'both boards build the same staged copy')
+        self.assertEqual(os.path.basename(stage), 'TamaPoke')
+        gate_dir = os.path.dirname(os.path.dirname(stage))
+        self.assertEqual(self.opt(c175c, '--build-path'), os.path.join(gate_dir, 'build-175c'))
+        self.assertEqual(self.opt(c175, '--build-path'), os.path.join(gate_dir, 'build-175'))
+        self.assertTrue(os.path.exists(os.path.join(stage, 'gone.cpp')))
+        os.remove(os.path.join(root, 'gone.cpp'))
+        put(os.path.join(root, 'new.cpp'))
+        c175c, c175 = self.gate_calls(root)
+        self.assertEqual([c175c[-1], c175[-1]], [stage, stage], 'the staged copy moved')
+        self.assertFalse(os.path.exists(os.path.join(stage, 'gone.cpp')), 'a deleted file is still staged')
+        self.assertTrue(os.path.exists(os.path.join(stage, 'new.cpp')))
+        self.assertEqual(os.stat(os.path.join(stage, 'kept.h')).st_mtime,
+                         os.stat(os.path.join(root, 'kept.h')).st_mtime, 'staging changed an mtime')
+
+    def test_the_gate_runs_the_fast_steps_before_the_firmware_builds(self):
+        root = self.gate_root()
+        r = self.gate(root, FAKE_ORDER_LOG=self.ran)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        with open(self.ran) as fh:
+            self.assertEqual(fh.read().split(), ['tests', 'i18n', 'sim', 'sim', 'compile', 'compile'])
+
+    def test_the_app0_cap_holds_on_every_run(self):
+        build = self.build_path()
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, 'out', 'TamaPoke.ino.bin')))
+        # a rebuild in the same folder: arduino-cli gets the cap, and the image is checked
+        for size, ok in ((self.APP0, True), (self.APP0 + 1, False)):
+            with self.subTest(size=size):
+                self.fresh()
+                r = self.build_175c(FAKE_BIN_SIZE=str(size))
+                self.assertEqual(r.returncode == 0, ok, r.stderr)
+                (call,) = self.calls()
+                self.assertEqual(self.opt(call, '--build-path'), build)
+                self.assertIn(f'upload.maximum_size={self.APP0}', call)
+                if not ok:
+                    self.assertIn('larger than app0', r.stderr)
+        # what is checked is this run's output, never a leftover from an earlier run
+        put(os.path.join(self.tmp, 'out', 'TamaPoke.ino.bin'), b'\0' * 1024)
+        r = self.build_175c(FAKE_NO_BIN='1')
+        self.assertNotEqual(r.returncode, 0, 'passed on an image an earlier build left')
+        self.assertIn('wrote no', r.stderr)
+        self.assertTrue(os.path.exists(os.path.join(build, 'partitions.csv')), 'expected a leftover table')
+        r = self.build_175c(FAKE_PARTS='')
+        self.assertNotEqual(r.returncode, 0, 'passed on a partition table an earlier build left')
+        self.assertIn('wrong partition table', r.stderr)
 
 
 class TestBoardPy(unittest.TestCase):

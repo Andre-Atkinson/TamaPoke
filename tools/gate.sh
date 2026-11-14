@@ -2,18 +2,23 @@
 # The TamaPoke pre-PR gate, in one command with real exit codes and short output.
 #
 #   tools/gate.sh               everything
-#   tools/gate.sh --no-build    skip the firmware and simulator builds (quick runs)
+#   tools/gate.sh --no-build    skip the simulator and the firmware builds (quick runs)
+#   tools/gate.sh --clean       firmware builds from scratch: reuse nothing from earlier runs
 #   TAMAPOKE_JOBS=8 tools/gate.sh   compile jobs per firmware build: default 3, 0 = all cores
 #
-# Steps: host tests (+ASan/UBSan), i18n format check, no-network check over the
-# firmware sources, both firmware builds (1.75C and the original 1.75, one after
-# the other), and the desktop simulator for both boards (tools/sim.sh, skipped
-# with --no-build).
+# Steps, fastest first so most breakage shows in seconds: host tests
+# (+ASan/UBSan), i18n format check, no-network check over the firmware sources,
+# the desktop simulator for both boards (tools/sim.sh: it compiles the real
+# sketch on the host), then both firmware builds (1.75C and the original 1.75,
+# one after the other).
 #
 # The firmware builds run from a staged copy of the working tree (uncommitted
 # changes included) in a folder literally named "TamaPoke": arduino-cli refuses
 # a sketch whose folder name differs from the main .ino, which is the case in
-# every agent worktree. Temp dirs are removed on exit.
+# every agent worktree. The staged copy and both build folders persist between
+# runs (tools/build_cache.sh says where), so a rebuild reuses the compiled core
+# and libraries. The sketch is recompiled every run, so the sketch warning
+# count covers every sketch file each time. One gate at a time per checkout.
 #
 # Exit status is non-zero if any step failed; the last lines are one summary
 # line per step. Works with macOS (BSD) and Linux tools.
@@ -23,13 +28,19 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 2
 
 BUILD=1
+CLEAN=0
 for a in "$@"; do
   case "$a" in
     --no-build) BUILD=0 ;;
-    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    --clean) CLEAN=1 ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $a" >&2; exit 2 ;;
   esac
 done
+if [[ "$BUILD" -eq 0 && "$CLEAN" -eq 1 ]]; then
+  echo "--clean is for the firmware builds, which --no-build skips; pass one or the other" >&2
+  exit 2
+fi
 
 # Parallel compile jobs for each firmware build (arduino-cli's own default is
 # every core). Checked up front so a typo fails in a second, not after the tests.
@@ -40,6 +51,16 @@ if [[ "$BUILD" -eq 1 && ! "$JOBS" =~ $JOBS_RE ]]; then
   exit 2
 fi
 
+# The staged copy and the build folders (see tools/build_cache.sh). Taken
+# before any step runs, so a second gate in this checkout stops at once.
+# shellcheck source=build_cache.sh
+. "$ROOT/tools/build_cache.sh"
+trap tp_unlock_all EXIT
+if [[ "$BUILD" -eq 1 ]]; then
+  CACHE="$(tp_cache_dir "$ROOT")/gate"
+  tp_lock "$CACHE" || exit 2
+fi
+
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tamapoke-gate.XXXXXX")" || exit 2
 KEEP="$ROOT/test/build/gate-logs"   # failing runs keep their full logs here (gitignored)
 keep_logs() {
@@ -48,6 +69,7 @@ keep_logs() {
     echo "full logs of this failed run: $KEEP"
   fi
   rm -rf "$TMP"
+  tp_unlock_all
 }
 trap keep_logs EXIT
 ESC="$(printf '\033')"
@@ -119,6 +141,28 @@ else
   record "no-network" 1 "forbidden pattern in firmware source"
 fi
 
+# ---------------------------------------------------------------- simulator
+# The desktop simulator compiles the real sketch on the host (sim/, tools/sim.sh):
+# a firmware change that breaks the host build or a screen script shows up here.
+# Skipped with --no-build like the firmware builds (it needs the same Arduino libraries).
+if [[ "$BUILD" -eq 1 ]]; then
+  echo "== desktop simulator =="
+  want="$(grep -cE '^[[:space:]]*shot[[:space:]]' sim/scripts/screens.txt)"
+  for b in 175c 175; do
+    ./tools/sim.sh --board "$b" --lang en --script sim/scripts/screens.txt --out "$TMP/sim-$b" --quiet \
+      >"$TMP/sim-$b.log" 2>&1
+    rc=$?
+    got="$(find "$TMP/sim-$b" -name '*.png' 2>/dev/null | wc -l | tr -d ' ')"
+    grep -iE 'error|fail|warning:' "$TMP/sim-$b.log" | head -n 20
+    w="$(grep -c 'warning:' "$TMP/sim-$b.log")"
+    [[ "$rc" -ne 0 ]] && tail -n 15 "$TMP/sim-$b.log"
+    if [[ "$rc" -eq 0 && "$got" -ne "$want" ]]; then rc=1; fi
+    record "simulator $b" "$rc" "$got/$want screens, $w host build warning(s)"
+  done
+else
+  SUMMARY+=("SKIP  simulator")
+fi
+
 # ---------------------------------------------------------------- builds
 sketch_warn_re='TamaPoke/[^:]+:[0-9]+:[0-9]+: warning:'
 # Known sketch warnings per build on main (exact count; update it in the PR that
@@ -146,9 +190,12 @@ show_build() {  # show_build <label> <log> <exit code>
 }
 
 if [[ "$BUILD" -eq 1 ]]; then
-  STAGE="$TMP/stage/TamaPoke"
+  # Mirror the working tree into the same folder every run: rsync keeps the
+  # mtimes, and --delete/--delete-excluded drop whatever is no longer in it.
+  STAGE="$CACHE/stage/TamaPoke"
+  if [[ "$CLEAN" -eq 1 ]]; then rm -rf "$CACHE/stage"; fi
   mkdir -p "$STAGE"
-  if ! rsync -a \
+  if ! rsync -a --delete --delete-excluded \
     --exclude '/.git' --exclude '/out' --exclude '/test/build' --exclude '/backups' \
     --exclude '/.claude/worktrees' --exclude '/tools/build' --exclude '/.venv' \
     --exclude '/sim/build' --exclude '/shots' \
@@ -158,39 +205,25 @@ if [[ "$BUILD" -eq 1 ]]; then
   fi
 fi
 if [[ "$BUILD" -eq 1 ]]; then
-  echo "== build 1.75C (--jobs $JOBS) =="
-  (cd "$STAGE" && TAMAPOKE_JOBS="$JOBS" ./tools/build_175c.sh --out "$TMP/out175c") >"$TMP/b175c.log" 2>&1
+  CLEAN_ARG=()
+  how="--jobs $JOBS"
+  if [[ "$CLEAN" -eq 1 ]]; then CLEAN_ARG=(--clean); how="$how, --clean"; fi
+  echo "== build 1.75C ($how) =="
+  (cd "$STAGE" && TAMAPOKE_JOBS="$JOBS" ./tools/build_175c.sh ${CLEAN_ARG[@]+"${CLEAN_ARG[@]}"} \
+    --build-path "$CACHE/build-175c" --out "$TMP/out175c") >"$TMP/b175c.log" 2>&1
   show_build "1.75C" "$TMP/b175c.log" $?
 
-  echo "== build 1.75 (original, --jobs $JOBS) =="
-  (cd "$STAGE" && arduino-cli compile --warnings=all --jobs "$JOBS" \
-    --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB" \
-    --build-path "$TMP/b175") >"$TMP/b175.log" 2>&1
-  show_build "1.75" "$TMP/b175.log" $?
+  echo "== build 1.75 (original, $how) =="
+  rc=0
+  tp_prepare_build "$CACHE/build-175" "$CLEAN" >"$TMP/b175.log" 2>&1 || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    arduino-cli compile --warnings=all --jobs "$JOBS" ${CLEAN_ARG[@]+"${CLEAN_ARG[@]}"} \
+      --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB" \
+      --build-path "$CACHE/build-175" "$STAGE" >>"$TMP/b175.log" 2>&1 || rc=$?
+  fi
+  show_build "1.75" "$TMP/b175.log" "$rc"
 else
   SUMMARY+=("SKIP  firmware builds")
-fi
-
-# ---------------------------------------------------------------- simulator
-# The desktop simulator compiles the real sketch on the host (sim/, tools/sim.sh):
-# a firmware change that breaks the host build or a screen script shows up here.
-# Skipped with --no-build like the firmware builds (it needs the same Arduino libraries).
-if [[ "$BUILD" -eq 1 ]]; then
-  echo "== desktop simulator =="
-  want="$(grep -cE '^[[:space:]]*shot[[:space:]]' sim/scripts/screens.txt)"
-  for b in 175c 175; do
-    ./tools/sim.sh --board "$b" --lang en --script sim/scripts/screens.txt --out "$TMP/sim-$b" --quiet \
-      >"$TMP/sim-$b.log" 2>&1
-    rc=$?
-    got="$(find "$TMP/sim-$b" -name '*.png' 2>/dev/null | wc -l | tr -d ' ')"
-    grep -iE 'error|fail|warning:' "$TMP/sim-$b.log" | head -n 20
-    w="$(grep -c 'warning:' "$TMP/sim-$b.log")"
-    [[ "$rc" -ne 0 ]] && tail -n 15 "$TMP/sim-$b.log"
-    if [[ "$rc" -eq 0 && "$got" -ne "$want" ]]; then rc=1; fi
-    record "simulator $b" "$rc" "$got/$want screens, $w host build warning(s)"
-  done
-else
-  SUMMARY+=("SKIP  simulator")
 fi
 
 # ---------------------------------------------------------------- summary
