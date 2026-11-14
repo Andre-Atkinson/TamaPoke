@@ -130,7 +130,7 @@ tp_unlock_all() {  # give back every lock this process took (and only those)
   local lock me
   me="$$ $(tp_proc_start "$$")"
   for lock in ${TP_LOCKS[@]+"${TP_LOCKS[@]}"}; do
-    [[ "$(cat "$lock/owner" 2>/dev/null)" == "$me" ]] && rm -rf "$lock"
+    if [[ "$(cat "$lock/owner" 2>/dev/null)" == "$me" ]]; then rm -rf "$lock"; fi
   done
   TP_LOCKS=()
 }
