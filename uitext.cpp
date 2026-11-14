@@ -8,7 +8,7 @@
 
 // fuente CJK activa: de momento siempre false, la carga llegara con el
 // soporte de japones/coreano/chino (ver PR #13)
-bool gCjkFont = false;
+static bool gCjkFont = false;
 
 // ---------- texto: tamano y cursor (preparado para fuentes CJK) ----------
 // La fuente clasica ancla el cursor en la ESQUINA SUPERIOR del texto, y las 74
@@ -22,8 +22,8 @@ bool gCjkFont = false;
 //
 // Con la fuente clasica gFontAscent es 0, asi que setCur(x,y) es exactamente
 // setCur(x,y): esto no mueve un pixel en los seis idiomas actuales.
-uint8_t gTextSize = 1;
-int gFontAscent = 0;  // px del borde superior a la linea base, 0 = fuente clasica
+static uint8_t gTextSize = 1;
+static int gFontAscent = 0;  // px del borde superior a la linea base, 0 = fuente clasica
 
 // --- ajuste de la fuente CJK (los dos valores van juntos) ---
 // La fuente clasica mide 8 px de alto a escala 1. Si la CJK mide mas, hay que
