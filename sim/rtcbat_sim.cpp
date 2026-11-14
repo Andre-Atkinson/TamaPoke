@@ -34,22 +34,25 @@ void rtcSetEpoch(uint32_t e) {
   simClockSet(e);
 }
 
-bool batBegin() { return true; }
+// pmuOk false ("pmu none" in a script) gives what rtcbat.cpp gives without the AXP2101:
+// no battery reading, not charging, never a low-battery shutdown, and USB reads as present
+bool batBegin() { return gSimPower.pmuOk; }
 void pmuEnablePanel() {}
 void batSetPollMs(uint32_t) {}
-int batPercent() { return gSimPower.batPct; }
-bool batCharging() { return gSimPower.charging && gSimPower.usb; }
+int batPercent() { return gSimPower.pmuOk ? gSimPower.batPct : -1; }
+bool batCharging() { return gSimPower.pmuOk && gSimPower.charging && gSimPower.usb; }
 int batMillivolts() {
-  if (gSimPower.batPct < 0) return 0;
+  if (!gSimPower.pmuOk || gSimPower.batPct < 0) return 0;
   return 3300 + gSimPower.batPct * 9;  // aproximado: 3,3 V vacia, 4,2 V llena
 }
-bool batShouldShutdown() { return gSimPower.batPct == 0 && !gSimPower.usb; }
-void batPowerOff() { gSimPower.poweredOff = true; }
-bool usbPresent() { return gSimPower.usb; }
-bool usbPresentNow() { return gSimPower.usb; }
+bool batShouldShutdown() { return gSimPower.pmuOk && gSimPower.batPct == 0 && !gSimPower.usb; }
+void batPowerOff() { if (gSimPower.pmuOk) gSimPower.poweredOff = true; }
+bool usbPresent() { return gSimPower.pmuOk ? gSimPower.usb : true; }
+bool usbPresentNow() { return gSimPower.pmuOk ? gSimPower.usb : true; }
 
 void pwrSetup() { gPwrLatched = false; }
 bool pwrShortPressed() {
+  if (!gSimPower.pmuOk) return false;  // the PKEY is read from the AXP2101
   bool was = gPwrLatched;
   gPwrLatched = false;
   return was;

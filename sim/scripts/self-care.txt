@@ -1,0 +1,42 @@
+# Self-care while charging (#24): on battery nothing tops the needs up; on USB, once
+# the pet has been untouched for 10 minutes, the first need under 40 goes back to 50
+# once a minute. The "self-care:" lines and the STATS replies are in serial.log.
+#   tools/sim.sh --script self-care --out shots/self-care
+# For the 1.75C, the default board (--board 175c). On the original 1.75 the screen is on
+# by default, so "press pwr" below turns it off and the touch that starts the 10 minutes
+# never happens. (A tap would do it, but it can land on a care button or on the pet,
+# and touching the pet counts as care.)
+# The same with an AXP2101 that never answers (USB reads as present): self-care-no-pmu.
+
+battery 60
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# on battery, untouched for 22 minutes: food falls under 40 and stays there
+wait 22m
+serial STATS
+
+# plug in and wake the screen: the touch starts the 10 minutes
+usb on
+press pwr
+wait 1s
+shot plugged-in
+wait 9m
+serial STATS
+
+# the tenth untouched minute: food back to 50, then the next need each minute
+wait 2m
+serial STATS
+wait 10m
+serial STATS
+
+# wake the screen again to see the pet and its bars
+press pwr
+wait 1s
+shot after-self-care
