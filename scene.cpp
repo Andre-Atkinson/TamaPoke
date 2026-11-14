@@ -14,6 +14,11 @@
 #include "species.h"
 #include "uitext.h"
 
+#define PET_GROUND 304  // linea de suelo de la mascota
+#define PET_WALK_MIN 150  // where the pet may walk to (behNext, and after a finger)
+#define PET_WALK_MAX 325
+#define PET_FOLLOW_PX_S 120.0f  // walking after a finger (a stroll is 30 px/s)
+
 // Used only in this file, and called above their definitions (in TamaPoke.ino the
 // prototypes arduino-cli generates covered that).
 static uint32_t pmdActTotalMs(const PmdAct &a);

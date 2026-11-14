@@ -16,10 +16,6 @@ struct PetBeh {
   float x = 233, targetX = 233;
   bool fast = false;    // walking after a dragging finger (#21) until it gets there
 };
-#define PET_GROUND 304  // linea de suelo de la mascota
-#define PET_WALK_MIN 150  // where the pet may walk to (behNext, and after a finger)
-#define PET_WALK_MAX 325
-#define PET_FOLLOW_PX_S 120.0f  // walking after a finger (a stroll is 30 px/s)
 
 // estrellas del modo noche
 inline const uint16_t STARS[][2] = { {120,140},{330,120},{370,210},{95,230},{280,90},{160,95} };
