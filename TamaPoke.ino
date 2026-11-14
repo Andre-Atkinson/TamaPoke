@@ -122,9 +122,6 @@ bool screenOffByPwr = false;  // the screen went dark with a PWR press, not the 
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
 ClockPrompt clockPrompt;      // asks for the time after a reseed (clockprompt.h, #10)
-// Declared here, not left to the Arduino preprocessor: it skips its own prototype when
-// the sketch has one, and loop() and onSwipeV() both call it before its definition.
-void openClock();
 // The stale flag of bedEdge, kept through soft resets: RTC memory survives a crash,
 // watchdog or ESP.restart like the 1.75C soft clock does, and power loss clears both.
 RTC_NOINIT_ATTR ClockStaleMark clockStaleMark;
@@ -1611,10 +1608,10 @@ void drawEggStyled(uint8_t rarity, uint16_t spot, int x, int y, int s) {
   }
 }
 
-static const char *eggRarityText(uint8_t rarity) {
+const char *eggRarityText(uint8_t rarity) {
   return rarity == R_LEGENDARIO ? T(S_EGG_LEGEND) : rarity == R_RARO ? T(S_EGG_RARE) : T(S_EGG_COMMON);
 }
-static uint16_t eggRarityColor(uint8_t rarity) {
+uint16_t eggRarityColor(uint8_t rarity) {
   return rarity == R_LEGENDARIO ? UI_BAR_WARN : rarity == R_RARO ? 0x4C98 : inkColor();
 }
 

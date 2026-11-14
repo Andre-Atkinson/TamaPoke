@@ -6,6 +6,7 @@
 #include "clockprompt.h"
 #include "dex.h"
 #include "rtcbat.h"
+#include "screens.h"
 #include "sdmon.h"
 #include "serialcmd.h"
 

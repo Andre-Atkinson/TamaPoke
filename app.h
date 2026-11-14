@@ -11,6 +11,7 @@
 #include "power.h"
 #include "sdmon.h"
 #include "touchgesture.h"
+#include "touchlock.h"
 #if BOARD_AMOLED_175C
 #include "screenlock.h"
 #include "trainingcapture.h"
@@ -60,11 +61,6 @@ extern Arduino_Canvas *gfx;  // the whole frame, in PSRAM; flushUI() sends it to
 extern Pet pet;
 extern SdMon mon;            // the black-and-white sprite (no PMD sprite on the SD)
 extern PmdMon pmd;           // the main screen's PMD sprite
-extern PmdMon galleryPmd;    // the gallery's detail-page sprite
-extern bool galleryOpen;
-extern bool galleryDirty;
-extern int16_t galleryDetail;  // dex shown in detail, 0 = the grid
-extern bool clockOpen;         // the clock and settings screen
 extern BedEdge bedEdge;
 extern bool panelAsleep;       // syncPanelPower() has put the CO5300 to sleep
 #if BOARD_AMOLED_175C
@@ -80,6 +76,10 @@ extern uint32_t confirmUntil;   // the "release?" dialog is open until this mill
 extern uint8_t choiceKind;      // the choice dialog: 0 none, 1 evolve, 2 farewell
 extern uint32_t choiceUntil;    // the choice dialog closes by itself at this millis()
 extern bool batAsPercent;       // settings: the battery as "87%" instead of the icon
+extern uint8_t userDim;         // settings: brightness level (power.h)
+extern uint32_t powerOffMs;     // settings: screen off after this long untouched, 0 = never
+extern uint32_t touchLockMs;    // settings: touch locks this long after the screen goes off
+extern TouchLock autoTouch;
 extern ClockPrompt clockPrompt;
 extern TouchGesture touchG;     // the gesture in progress
 extern uint8_t dimStage;        // 0 awake, 1 dimmed, 2 nearly off
@@ -89,7 +89,7 @@ extern bool swallowGesture;     // the touch that wakes the screen does nothing 
 extern bool wasPressed;         // a finger was on the glass at the last poll
 
 void bedClockSet(uint32_t set);  // the clock was set: the bedtime edge starts over
-void loadClockFields(uint32_t e);  // the clock screen's fields from an epoch
+void bedSample(uint32_t epoch);  // the bedtime edge sees the time
 int flashIdxForDex(int16_t dex);   // the flash sprite of a dex number, -1 = none
 PowerCtx powerCtx(uint32_t now);
 bool screenIsLocked();
