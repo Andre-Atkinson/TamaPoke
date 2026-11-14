@@ -893,6 +893,12 @@ class TestSketchWarnings(unittest.TestCase):
         for args, env in (((os.path.join(self.tmp, 'missing.log'),), {}),
                           ((self.log(1),), {'WARN_BASELINE': 'x'}),
                           ((self.log(1),), {'WARN_BASELINE': '-1'}),
+                          # leading zeros are octal to bash (( )); 08 is invalid, 010 would be 8
+                          ((self.log(1),), {'WARN_BASELINE': '08'}),
+                          ((self.log(1),), {'WARN_BASELINE': '010'}),
+                          # too long: bash arithmetic overflows
+                          ((self.log(1),), {'WARN_BASELINE': '12345'}),
+                          ((self.log(1),), {'WARN_BASELINE': '99999999999999999999'}),
                           ((), {}),
                           ((self.log(1), 'extra'), {})):
             with self.subTest(args=args, env=env):
@@ -1293,6 +1299,24 @@ class TestBuildCache(FakeArduinoCliCase):
                     else:
                         self.assertIn(f'FAIL  {label} build (exit 1)  ({n} sketch warnings: +1 NEW over baseline {base})',
                                       r.stdout)
+
+    def test_gate_refuses_a_bad_warning_baseline_before_running_anything(self):
+        root = self.gate_root()
+        for bad in ('x', '-1', '08', '010', '12345', '99999999999999999999'):
+            with self.subTest(bad=bad):
+                self.fresh()
+                r = self.gate(root, FAKE_ORDER_LOG=self.ran, WARN_BASELINE=bad)
+                self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+                self.assertIn('WARN_BASELINE', r.stderr)
+                self.assertFalse(os.path.exists(self.ran), 'the gate ran steps before checking WARN_BASELINE')
+                self.assertEqual(self.calls(), [])
+        # No firmware builds, nothing to count: the value does not matter.
+        for flag in ('--no-build', '--no-firmware'):
+            with self.subTest(flag=flag):
+                self.fresh()
+                r = self.gate(root, flag, WARN_BASELINE='08')
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertEqual(self.calls(), [])
 
     def test_no_firmware_runs_everything_but_the_firmware_builds(self):
         root = self.gate_root()

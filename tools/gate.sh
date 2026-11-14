@@ -21,7 +21,8 @@
 # staged copy and both build folders persist between runs (tools/build_cache.sh
 # says where), so a rebuild reuses the compiled core and libraries. Every
 # sketch file is compiled again on every run, so the sketch warning count
-# covers the whole sketch each time. One gate at a time per checkout.
+# covers the whole sketch each time. One firmware-building gate at a time per
+# checkout (a lock); --no-build and --no-firmware take none.
 #
 # Exit status is non-zero if any step failed; the last lines are one summary
 # line per step. Works with macOS (BSD) and Linux tools.
@@ -48,6 +49,10 @@ if [[ "$FIRMWARE" -eq 0 && "$CLEAN" -eq 1 ]]; then
   exit 2
 fi
 
+# The sketch-warning count and WARN_BASELINE, shared with CI's firmware builds.
+# shellcheck source=sketch_warnings.sh
+. "$ROOT/tools/sketch_warnings.sh"
+
 # Parallel compile jobs for each firmware build (arduino-cli's own default is
 # every core). Checked up front so a typo fails in a second, not after the tests.
 JOBS="${TAMAPOKE_JOBS:-3}"
@@ -56,14 +61,14 @@ if [[ "$FIRMWARE" -eq 1 && ! "$JOBS" =~ $JOBS_RE ]]; then
   echo "TAMAPOKE_JOBS must be 0 (all cores) or a whole number of jobs, up to 9999; got '$JOBS'" >&2
   exit 2
 fi
+# The sketch-warning baseline is checked the same way: a typo fails now, not
+# after both builds.
+if [[ "$FIRMWARE" -eq 1 ]]; then tp_warn_baseline_ok || exit 2; fi
 
 # The staged copy and the build folders (see tools/build_cache.sh). Taken
 # before any step runs, so a second gate in this checkout stops at once.
 # shellcheck source=build_cache.sh
 . "$ROOT/tools/build_cache.sh"
-# The sketch-warning count and WARN_BASELINE, shared with CI's firmware builds.
-# shellcheck source=sketch_warnings.sh
-. "$ROOT/tools/sketch_warnings.sh"
 trap tp_unlock_all EXIT
 if [[ "$FIRMWARE" -eq 1 ]]; then
   CACHE="$(tp_cache_dir "$ROOT")"
@@ -83,7 +88,6 @@ keep_logs() {
   tp_unlock_all
 }
 trap keep_logs EXIT
-ESC="$(printf '\033')"
 
 SUMMARY=()
 FAILED=0
@@ -96,10 +100,9 @@ record() {  # record <name> <exit code> [extra]
     FAILED=1
   fi
 }
-strip_ansi() { sed "s/${ESC}\\[[0-9;]*[A-Za-z]//g"; }
 # print the last lines of a log when the filtered view came out empty
 tail_if_empty() {  # tail_if_empty <filtered-count> <log>
-  [[ "$1" -eq 0 ]] && tail -n 15 "$2" | strip_ansi
+  [[ "$1" -eq 0 ]] && tail -n 15 "$2" | tp_strip_ansi
 }
 
 # ---------------------------------------------------------------- host tests
@@ -108,7 +111,7 @@ echo "== host tests (--asan) =="
 rc=$?
 # Failing/known tests with their indented assertion lines, the "Fallos:" list,
 # summaries, and every warning or error.
-strip_ansi <"$TMP/tests.log" \
+tp_strip_ansi <"$TMP/tests.log" \
   | awk '/ (FAIL|KNOWN|XPASS) /{print; d=1; next}
          d && /^        /{print; next} {d=0}
          /^Fallos:|^Bugs conocidos/{print; l=1; next}
@@ -181,7 +184,7 @@ show_build() {  # show_build <label> <log> <exit code>
   local label="$1" log="$2" rc="$3" wrc
   # in build order (a sorted view separates an error from its source line);
   # awk drops exact repeats only
-  strip_ansi <"$log" \
+  tp_strip_ansi <"$log" \
     | grep -iE "can't open|error|${TP_SKETCH_WARN_RE}|Sketch uses|build OK" | awk '!seen[$0]++' >"$log.f"
   cat "$log.f"
   if [[ "$rc" -ne 0 ]]; then

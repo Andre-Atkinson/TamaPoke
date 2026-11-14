@@ -131,9 +131,9 @@ jobs:
 
   # The "Protect main" ruleset requires a check named exactly "Compile
   # firmware": this job, which passes only if both boards compiled within the
-  # warning baseline. It runs
-  # even when a build failed or the run was cancelled (always()), because a
-  # skipped required check would count as passing.
+  # warning baseline. It runs even when a build failed or the run was
+  # cancelled (always()), because a skipped required check would count as
+  # passing.
   firmware:
     name: Compile firmware
     needs: firmware-build

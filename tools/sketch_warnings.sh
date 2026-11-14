@@ -7,7 +7,7 @@
 #   WARN_BASELINE=21 tools/sketch_warnings.sh LOG
 #
 # Exit status: 0 if N is at most B, 1 if it is over, 2 if LOG can't be read or
-# WARN_BASELINE is not a whole number. LOG is arduino-cli compile --warnings=all
+# WARN_BASELINE is not a whole number (0 to 9999, no leading zeros). LOG is arduino-cli compile --warnings=all
 # output (colour codes are ignored).
 #
 # A sketch warning is a "file:line:col: warning:" line for a file in a folder
@@ -23,21 +23,33 @@
 # (tools/build_cache.sh). The core and libraries they reuse never counted.
 TP_WARN_BASELINE="${WARN_BASELINE:-20}"
 TP_SKETCH_WARN_RE='TamaPoke/[^:]+:[0-9]+:[0-9]+: warning:'
+# Same rule as TAMAPOKE_JOBS: no leading zeros (bash (( )) reads 08 and 010 as
+# octal) and a bounded length (no overflow).
+TP_WARN_BASELINE_RE='^(0|[1-9][0-9]{0,3})$'
+
+# tp_warn_baseline_ok: return 0 if WARN_BASELINE is usable; otherwise say so on
+# stderr and return 2. tools/gate.sh calls it up front, before any step runs.
+tp_warn_baseline_ok() {
+  if [[ ! "$TP_WARN_BASELINE" =~ $TP_WARN_BASELINE_RE ]]; then
+    echo "WARN_BASELINE must be a whole number, 0 to 9999, without leading zeros; got '$TP_WARN_BASELINE'" >&2
+    return 2
+  fi
+}
+
+# tp_strip_ansi: remove terminal colour codes from stdin (arduino-cli colours
+# its output). tools/gate.sh uses it too.
+tp_strip_ansi() { sed "s/$(printf '\033')\\[[0-9;]*[A-Za-z]//g"; }
 
 # tp_sketch_warnings <log>: print "N sketch warning(s), baseline B", set
 # TP_WARN_COUNT to N; return 0 if N <= B, 1 if over, 2 on bad input.
 tp_sketch_warnings() {
-  local log="$1" esc
-  if [[ ! "$TP_WARN_BASELINE" =~ ^[0-9]+$ ]]; then
-    echo "WARN_BASELINE must be a whole number; got '$TP_WARN_BASELINE'" >&2
-    return 2
-  fi
+  local log="$1"
+  tp_warn_baseline_ok || return 2
   if [[ ! -f "$log" || ! -r "$log" ]]; then
     echo "Can't read the build log '$log'" >&2
     return 2
   fi
-  esc="$(printf '\033')"
-  TP_WARN_COUNT="$(sed "s/${esc}\\[[0-9;]*[A-Za-z]//g" <"$log" | grep -E "$TP_SKETCH_WARN_RE" | sort -u | wc -l | tr -d ' ')"
+  TP_WARN_COUNT="$(tp_strip_ansi <"$log" | grep -E "$TP_SKETCH_WARN_RE" | sort -u | wc -l | tr -d ' ')"
   echo "$TP_WARN_COUNT sketch warning(s), baseline $TP_WARN_BASELINE"
   (( TP_WARN_COUNT <= TP_WARN_BASELINE ))
 }
