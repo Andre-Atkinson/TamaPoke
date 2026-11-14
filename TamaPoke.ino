@@ -50,10 +50,6 @@ static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright unt
 #include "uitext.h"
 #include <Preferences.h>
 
-// Version del firmware. Subir este numero en cada release (y manifest.json para
-// el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.19"
-
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
 Arduino_CO5300 *panel = new Arduino_CO5300(
@@ -116,8 +112,6 @@ bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
-#define CARD_PAGE_CARE 4
-#define CARD_LAST_PAGE CARD_PAGE_CARE
 uint8_t cardPage = 0;         // 0 perfil, 1 stats, 2 medallas, 3 progreso, 4 cuidados (ritmo y hora de dormir)
 BedEdge bedEdge;                 // horario de dormir: convierte la hora en eventos dormir/despertar
 BedEvent bedPending = BED_NONE;  // evento a la espera de que no haya minijuego ni dialogo abiertos
@@ -158,11 +152,6 @@ static const uint8_t CRACK1[][2] = { {15,8},{16,9},{15,10} };
 static const uint8_t CRACK2[][2] = { {11,13},{12,14},{11,15},{20,12},{19,13},{20,14} };
 
 bool wasPressed = false;
-// eleccion de inicial (primera partida): Bulbasaur / Charmander / Squirtle, 3 filas
-static const int16_t STARTER_DEX[3] = { 1, 4, 7 };
-#define STARTER_ROW_Y 110
-#define STARTER_ROW_H 70
-#define STARTER_ROW_GAP 8
 // eleccion de huevo (ajuste Care "Huevos"): tres huevos en fila. Un toque lo
 // levanta y ensena su rareza; un segundo toque en el mismo lo elige.
 #define EGGSEL_S 4      // escala: el huevo visible mide 68x92 px
