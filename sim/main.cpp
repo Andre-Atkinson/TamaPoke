@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
   int lang = o.lang;
   uint32_t clock = o.clockGiven ? o.clock : 0;
   bool clockSet = o.clockGiven;
-  // lang, clock, battery, usb y charging que van antes del primer paso que corre el
+  // lang, clock, battery, usb, charging y pmu que van antes del primer paso que corre el
   // firmware se aplican ya: el firmware los ve en setup()
   size_t first = simPreBootEnd(script);
   for (size_t i = 0; i < first; i++) {
@@ -157,6 +157,7 @@ int main(int argc, char **argv) {
       case OP_BATTERY: gSimPower.batPct = c.a; break;
       case OP_USB: gSimPower.usb = c.a != 0; break;
       case OP_CHARGING: gSimPower.charging = c.a != 0; break;
+      case OP_PMU: gSimPower.pmuOk = c.a != 0; break;
       default: break;
     }
   }
@@ -196,6 +197,7 @@ int main(int argc, char **argv) {
     switch (c.op) {
       case OP_LANG:
       case OP_CLOCK:
+      case OP_PMU:
         break;  // el lector los rechaza despues del primer paso que corre el firmware
       case OP_BATTERY: gSimPower.batPct = c.a; break;
       case OP_USB: gSimPower.usb = c.a != 0; break;

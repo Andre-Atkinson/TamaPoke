@@ -60,6 +60,19 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   curse and shiny chance); the other two are Common eggs of other types. Time is
   paused until you pick, and the choice survives a power-off. Saved under new
   keys in the pet's NVS namespace (`eggch`, `ecpk`, `ec0`-`ec2`).
+- **Self-care while charging** (#24, always on). Plugged into USB and untouched
+  for 10 minutes, the pet looks after itself up to half: once a minute the first
+  need under 40 (food, then hygiene, which also clears the poops, then energy,
+  then joy) goes back to 50. It isn't the player's care (no streak or bond, no
+  medal of its own) and is silent. A need it lifts that minute is not a slip-up,
+  so a pet left on the charger can still earn IN SHAPE and evolve on time. Off
+  while asleep, as an egg, during an ending and in the
+  powered-off catch-up, and off when the AXP2101 doesn't answer at boot (the
+  firmware then reports USB as present). No new NVS key. Each top-up logs a
+  `self-care:` line on the serial port. The "ready to evolve" chime now sounds
+  at most once per level for each form, since the needs keep coming back over 40.
+- Simulator: `pmu none` before boot simulates a power chip that doesn't answer;
+  `sim/scripts/self-care.txt` and `self-care-no-pmu.txt` show self-care.
 - **`CARE?` serial command** prints `pace=<n> bed=<n> inbed=<0|1> stale=<0|1>
   egg=<0|1> picking=<0|1>` (`stale=1`: bedtime paused until the clock is set;
   `egg=1`: Eggs set to Choose; `picking=1`: the three-egg choice is on screen).

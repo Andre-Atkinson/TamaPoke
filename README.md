@@ -62,7 +62,7 @@ While **awake**, per minute:
 | JOY | −1 | **−2 extra** if FOOD < 30, **−2 extra** if HYG < 30 |
 
 - ~**15 %/min** chance to poop (only if FOOD > 40). Poops tank hygiene fast.
-- **Care slip-up** = letting any stat hit **≤ 10** (30-min cooldown so it counts once).
+- **Care slip-up** = letting any stat hit **≤ 10** (60-min cooldown so it counts once).
   Each slip-up **delays evolution by 1 level** and cools the bond.
 
 ### Actions
@@ -88,6 +88,19 @@ While **awake**, per minute:
   opens by itself to ask, or `board.py clock`); it then acts as if the device had just started, so at 22:30 the
   creature goes to sleep and at 14:00 nothing happens.
   Changing the setting never puts the pet to sleep or wakes it by itself.
+- 🔌 **Self-care while charging** (always on): plugged into USB and untouched for
+  **10 minutes**, the pet looks after itself a little. Once a minute, the first
+  need under **40**, in the order FOOD, HYG (which also clears the poops), ENE,
+  JOY, goes back up to **50**. It only goes up to half, so your own care still
+  matters, and it isn't your care: it gives no streak or bond, awards no medal
+  itself, and makes no sound or animation. Any touch starts the 10 minutes again.
+  It's off while the pet is asleep, as an egg and during an ending, never applies
+  to the time it was powered off, and stays off if the power chip doesn't answer
+  (the firmware then can't tell USB from battery). A need it lifts in the same
+  minute doesn't count as a slip-up, and the runaway countdown can't build. With
+  no slip-ups, a pet left on the charger can still earn the **IN SHAPE** medal at
+  level 5 (no slip-ups, weight 0), and slip-ups don't delay its evolution. The "ready to evolve"
+  chime sounds at most once per level for each form, because the needs keep coming back over 40.
 
 ### Eggs & who you get (spawn odds)
 - **First ever pet:** you pick a starter — **Bulbasaur / Charmander / Squirtle**.
@@ -441,8 +454,10 @@ tools/sim_shots.sh        # every main screen in all 8 languages -> shots/<lang>
 A script is one step per line (the full list is in `sim/script.h`):
 `tap X Y`, `hold X Y 3s`, `swipe left|right|up|down`, `press pwr 3`,
 `press boot`, `wait 2h`, `serial SPEC 25`, `battery 15`, `usb on`, and
-`shot NAME`. `lang` and `clock 2026-11-13 22:30` set the language and the time
-before boot (`clock none`: no time, as after a power-off; see `sim/scripts/clock-prompt.txt`); `battery`, `usb` and `charging` placed before the first step that
+`shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
+doesn't answer) set the language, the time and the PMU before boot, and only
+there (`clock none`: no time, as after a power-off; see `sim/scripts/clock-prompt.txt`);
+`battery`, `usb` and `charging` placed before the first step that
 runs the firmware (`tap`, `wait`, `shot`...) are also in place at boot. Each run starts a new game, with an empty NVS. Screenshots are
 466×466 with the round panel masked. The firmware's serial output goes to
 `serial.log` next to them. `--board 175` simulates the original 1.75 instead of

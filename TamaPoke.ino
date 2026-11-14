@@ -88,6 +88,9 @@ int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 bool screenOff = false;       // original 1.75: single PWR; 1.75C: triple-press lock
 uint8_t userDim = 0;          // nivel de brillo de ajustes (power.h): 0 alto, 1 medio, 2 bajo
 bool batAsPercent = false;    // ajustes: false = icono (el de siempre), true = "87%"
+// The AXP2101 answered at boot (batBegin()). When it didn't, usbPresent() reports true
+// and self-care (#24) has to treat that as unplugged.
+bool pmuReady = false;
 // Defaults when the NVS keys "off"/"tlk" are absent. The 1.75C turns the screen off at 60 s
 // and locks touch 10 s later; the original 1.75 keeps its historical behaviour (never), and
 // the user can pick either in settings.
@@ -563,7 +566,7 @@ void setup() {
 
   // reloj real: aplica el tiempo que estuvo apagado
   rtcBegin();
-  batBegin();
+  pmuReady = batBegin();
   pwrSetup();
   uint32_t e = rtcEpoch();
   bool reseeded = (e == 0);
@@ -719,6 +722,8 @@ void bedApply() {
 
 void loop() {
   uint32_t now = millis();
+  // self-care while charging (#24): the cached USB reading, no extra I2C
+  pet.setCharger(pmuReady, usbPresent(), idleSince(now, lastInteract));
   pet.update(now);
 
   // el amplificador sigue al estado de sueno (la llamada sale sola si no cambia).
@@ -728,10 +733,10 @@ void loop() {
 
   // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
   // (incluye el caso de cumplir al despertar). canEvolveNow es false durmiendo.
-  static bool wasEvoReady = false;
-  bool evoReady = pet.wantEvolveButton();
-  if (evoReady && !wasEvoReady) sfxPlay(SFX_MEDAL);
-  wasEvoReady = evoReady;
+  // At most once per level for each form (EvoChime, pet.h): self-care on the
+  // charger keeps bringing the button back.
+  static EvoChime evoChime;
+  if (evoChime.update(pet.wantEvolveButton(), pet.speciesId, pet.level())) sfxPlay(SFX_MEDAL);
   // aviso sombrio cuando el bicho esta a punto de escaparse por abandono
   static bool wasRunReady = false;
   bool runReady = pet.canRunawayNow();

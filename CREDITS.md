@@ -38,4 +38,10 @@ Huge thanks to that whole community for an enormous amount of work.
 | Board and pinout | [Waveshare ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-1.75) |
 | Web installer | [ESP Web Tools](https://esphome.github.io/esp-web-tools/) (Nabu Casa) |
 
+## Ideas from other forks
+
+| Feature | Idea from |
+|---|---|
+| Self-care while charging (#24) | `Pet::autoCare()` in [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here, offline |
+
 TamaPoke's own code (firmware and tools) is original work.

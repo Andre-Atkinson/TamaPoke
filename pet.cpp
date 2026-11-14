@@ -168,6 +168,14 @@ void Pet::tick() {
 
   if (drain) drainJoy();
 
+  // Self-care while charging (#24). After this minute's drain, so a top-up shows as
+  // 50, and before the slip-up and run-away checks, so a need it lifts this minute is
+  // not a slip-up. Its position is the guard: the returns above keep it off during a
+  // ceremony, the starter or egg choice, as an egg and asleep. syncClock() (the
+  // powered-off catch-up) never runs tick(), so it never self-cares. Every minute in
+  // both paces: relaxed only halves the drain.
+  if (selfCareOn) selfCare();
+
   // Descuido: dejar una estadistica por los suelos cuenta como error de
   // cuidado (con enfriamiento para no contar el mismo descuido cada minuto)
   if (mistakeCooldown > 0) mistakeCooldown--;
@@ -212,6 +220,43 @@ void Pet::drainJoy() {
   if (fullness < 30) dJoy -= 2;
   if (hygiene < 30) dJoy -= 2;
   joy = clamp100(joy + dJoy);
+}
+
+void Pet::setCharger(bool pmuOk, bool usb, uint32_t idleMs) {
+  selfCareOn = pmuOk && usb && idleMs >= SELFCARE_IDLE_MS;
+}
+
+// One need per minute, in a fixed order: food and hygiene first, because either one
+// under 30 makes joy fall three times as fast. Hygiene also clears the poops: with
+// three on screen it drops 13 a minute and would be back under 40 the next minute.
+// This is not the player's care: no registerCare() (streak), no addBond(), no medals,
+// and no heart or eating state either, because a visible event wakes the screen and
+// restarts the idle time that keeps self-care on. No save() of its own: tick() marks
+// the periodic one.
+void Pet::selfCare() {
+  const char *what;
+  uint8_t before;
+  if (fullness < SELFCARE_BELOW) {
+    what = "food";
+    before = fullness;
+    fullness = SELFCARE_LEVEL;
+  } else if (hygiene < SELFCARE_BELOW) {
+    what = "hygiene";
+    before = hygiene;
+    hygiene = SELFCARE_LEVEL;
+    poops = 0;
+  } else if (energy < SELFCARE_BELOW) {
+    what = "energy";
+    before = energy;
+    energy = SELFCARE_LEVEL;
+  } else if (joy < SELFCARE_BELOW) {
+    what = "joy";
+    before = joy;
+    joy = SELFCARE_LEVEL;
+  } else {
+    return;
+  }
+  Serial.printf("self-care: %s %u->%u\n", what, (unsigned)before, (unsigned)SELFCARE_LEVEL);
 }
 
 // vuelca el guardado periodico pendiente (lo llama el loop en un momento sin

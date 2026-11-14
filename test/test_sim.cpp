@@ -233,6 +233,64 @@ TEST(SimRunner, cero_no_corre_ninguna_pasada) {
   CHECK_EQ(millis(), (uint32_t)10);
 }
 
+// pmu ok|none (#24): the firmware asks the AXP2101 once, in setup(), so it is boot-only
+TEST(SimScript, pmu_is_a_boot_step) {
+  SimScript s = simParseScript("pmu none\nusb on\nwait 1s\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(simPreBootEnd(s), (size_t)2);
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_PMU);
+  CHECK_EQ(s.cmds[0].a, 0);
+  CHECK_EQ(simParseScript("pmu ok\n").cmds[0].a, 1);
+  CHECK_EQ(simParseScript("wait 1s\npmu none\n", "r.txt").error,
+           std::string("r.txt:2: pmu must come before the first step that runs the firmware"));
+  CHECK(!simParseScript("pmu off\n").error.empty());
+  CHECK(!simParseScript("pmu\n").error.empty());
+}
+
+// without the AXP2101 the fake gives what rtcbat.cpp gives: USB reads as present
+TEST(SimPower, without_the_pmu_usb_reads_present_like_the_firmware) {
+  SimPower saved = gSimPower;
+  pwrSetup();  // no press latched from another test
+  gSimPower.usb = false;
+  gSimPower.batPct = 0;
+  gSimPower.pmuOk = false;
+  CHECK(!batBegin());
+  CHECK(usbPresent());
+  CHECK(usbPresentNow());
+  CHECK_EQ(batPercent(), -1);
+  CHECK(!batCharging());
+  CHECK(!batShouldShutdown());
+  gSimPower.batPct = 60;
+  CHECK_EQ(batMillivolts(), 0);                  // no reading without the PMU
+  simPwrPress();
+  CHECK(!pwrShortPressed());                     // the PKEY is read from the AXP2101
+  batPowerOff();
+  CHECK(!gSimPower.poweredOff);                  // and so is the power-off
+  gSimPower.usb = true;
+  gSimPower.charging = true;
+  CHECK(!batCharging());                         // and the charger status
+  gSimPower.usb = false;
+  gSimPower.charging = false;
+  gSimPower.batPct = 0;
+  gSimPower.pmuOk = true;  // the same board with the PMU answering
+  CHECK(batBegin());
+  CHECK(!usbPresent());
+  CHECK(!usbPresentNow());
+  CHECK(batShouldShutdown());
+  gSimPower.batPct = 60;
+  CHECK(batMillivolts() > 0);                    // controls: the same calls with the PMU
+  pwrSetup();                                    // clear the press latched above
+  simPwrPress();
+  CHECK(pwrShortPressed());
+  batPowerOff();
+  CHECK(gSimPower.poweredOff);
+  gSimPower.usb = true;
+  gSimPower.charging = true;
+  CHECK(batCharging());
+  gSimPower = saved;
+  pwrSetup();
+}
+
 TEST(SimRunner, sobrevive_a_la_vuelta_de_millis) {
   mockSetMillis(0xFFFFFF00u);
   simRunFor(1000, [] { delay(100); });
