@@ -17,6 +17,12 @@
 # The build folder persists between runs (tools/build_cache.sh says where), so
 # a rebuild reuses the compiled core and libraries. Every sketch file is
 # compiled again on every run. One run at a time per build folder.
+# This script builds the checkout itself, and arduino-cli rebuilds everything
+# when the set of source-like files (.h .c .cpp .S .md .json ...) anywhere under
+# the sketch folder changes, hidden folders such as .claude/worktrees/ included.
+# So adding or removing a file in test/, sim/, docs/, web/ or an agent worktree
+# makes the next run a full build. tools/gate.sh avoids that by building a
+# narrowed staged copy.
 # CI runs this same script (with --clean), so a green CI means this command works.
 set -euo pipefail
 
@@ -74,8 +80,9 @@ tp_lock "$BUILD" || exit 1
 tp_prepare_build "$BUILD" "$ROOT" "$CLEAN"
 mkdir -p "$OUT"
 # The checks below must read what this run produced, never a leftover: the
-# hook writes the table again and arduino-cli exports a new image.
-rm -f "$BUILD/partitions.csv" "$OUT/TamaPoke.ino.bin"
+# hook writes the table again (tp_prepare_build removed the old one) and
+# arduino-cli exports a new image.
+rm -f "$OUT/TamaPoke.ino.bin"
 
 # The ESP32 core's first prebuild hook copies a sketch-root partitions.csv into
 # the build folder. Point that hook at the 1.75C table instead, so the table is

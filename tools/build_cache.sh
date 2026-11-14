@@ -123,6 +123,11 @@ tp_prepare_build() {  # tp_prepare_build <build folder> <sketch folder> <clean: 
   # the gate counts the sketch's: so no sketch object is kept. Its library
   # detection there (the .libsdetect.d files) is still reused.
   if [[ -d "$build/sketch" ]]; then find "$build/sketch" -name '*.o' -delete || return 1; fi
+  # The core's prebuild hooks copy the scheme's partition table only when
+  # {build.path}/partitions.csv does not exist, and arduino-cli does not notice
+  # a change to a .csv, so a table left by an earlier build would be kept
+  # forever. Every build's hooks write it again.
+  rm -f "$build/partitions.csv" || return 1
   mkdir -p "$build"
 }
 

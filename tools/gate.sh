@@ -204,10 +204,13 @@ if [[ "$BUILD" -eq 1 ]]; then
   # changes (its "additionalFiles" build option), so without this a new test,
   # doc or simulator file would cost a full rebuild. A folder missing from this
   # list is only staged for nothing; tools/ is reduced to the build scripts.
+  # --checksum: rsync's size-and-mtime quick check misses a same-size edit made
+  # in the same second as the previous sync (mtimes are whole seconds on some
+  # rsyncs), and the stage now persists between runs, so it would never arrive.
   STAGE="$CACHE/stage/TamaPoke"
   if [[ "$CLEAN" -eq 1 ]]; then rm -rf "$CACHE/stage"; fi
   mkdir -p "$STAGE"
-  if ! rsync -a --delete --delete-excluded \
+  if ! rsync -a --checksum --delete --delete-excluded \
     --include '/tools/' --include '/tools/build_175c.sh' --include '/tools/build_cache.sh' \
     --exclude '/tools/*' \
     --exclude '/.git' --exclude '/.github' --exclude '/.claude' --exclude '/.venv' \

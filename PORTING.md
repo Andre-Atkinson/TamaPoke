@@ -58,7 +58,12 @@ flags can be added with `--flags '-DSOMETHING=1'`. Its build folder persists
 between runs, one per checkout (under `~/Library/Caches/tamapoke/` on macOS,
 `~/.cache/tamapoke/` elsewhere; `tools/build_cache.sh` has the details), so a
 rebuild reuses the compiled core and libraries and only compiles the sketch
-again. `--clean` builds from scratch, as CI does.
+again. `--clean` builds from scratch, as CI does. One catch: arduino-cli
+rebuilds everything when the set of source-like files (`.h`, `.c`, `.cpp`,
+`.md`, `.json`, ...) anywhere under the sketch folder changes, hidden folders
+included, so adding or removing a file in `test/`, `sim/`, `docs/`, `web/` or
+`.claude/worktrees/` makes the next standalone run a full build. `tools/gate.sh`
+avoids this by building a staged copy without those folders.
 
 There is deliberately **no `partitions.csv` in the sketch root**: the core
 copies a root `partitions.csv` into every build, whatever scheme is selected,

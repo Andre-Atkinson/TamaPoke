@@ -617,8 +617,10 @@ class TestBoardScripts(unittest.TestCase):
 
 
 # Records each call's argv as one JSON line and fakes a good build: a small
-# TamaPoke.ino.bin in --output-dir and, when FAKE_PARTS is set, that partition
-# table in --build-path (what the core's prebuild hook would have copied).
+# TamaPoke.ino.bin in --output-dir and, for the 1.75C (PartitionScheme=custom)
+# when FAKE_PARTS is set, that partition table in --build-path (what
+# build_175c.sh's prebuild hook copies; the original 1.75's scheme is built in
+# and the fake leaves no table).
 # FAKE_BIN_SIZE sets the image size, FAKE_NO_BIN writes none, FAKE_SLEEP waits
 # that many seconds, FAKE_FAIL exits 1, and FAKE_ORDER_LOG gets a "compile" line
 # per call (to check the order of the gate's steps).
@@ -641,7 +643,7 @@ if opt('--output-dir') and not os.environ.get('FAKE_NO_BIN'):
     os.makedirs(opt('--output-dir'), exist_ok=True)
     with open(os.path.join(opt('--output-dir'), 'TamaPoke.ino.bin'), 'wb') as fh:
         fh.write(b'\0' * int(os.environ.get('FAKE_BIN_SIZE', '1024')))
-if opt('--build-path') and os.environ.get('FAKE_PARTS'):
+if opt('--build-path') and os.environ.get('FAKE_PARTS') and 'PartitionScheme=custom' in (opt('--fqbn') or ''):
     shutil.copy(os.environ['FAKE_PARTS'], os.path.join(opt('--build-path'), 'partitions.csv'))
 '''
 
@@ -1088,6 +1090,39 @@ class TestBuildCache(FakeArduinoCliCase):
         self.assertTrue(os.path.exists(os.path.join(stage, 'new.cpp')))
         self.assertEqual(os.stat(os.path.join(stage, 'kept.h')).st_mtime,
                          os.stat(os.path.join(root, 'kept.h')).st_mtime, 'staging changed an mtime')
+
+    def test_the_gate_stages_a_same_size_edit_even_when_the_mtime_did_not_change(self):
+        # rsync's size-and-mtime quick check skips such a file; the stage now
+        # persists, so the stale copy would stay for good. os.utime stands in
+        # for an edit within the same second as the previous sync.
+        root = self.gate_root()
+        src = os.path.join(root, 'same.h')
+        put(src, b'aaaa')
+        os.utime(src, (1577836800, 1577836800))
+        stage = self.gate_calls(root)[0][-1]
+        with open(os.path.join(stage, 'same.h'), 'rb') as fh:
+            self.assertEqual(fh.read(), b'aaaa')
+        put(src, b'bbbb')
+        os.utime(src, (1577836800, 1577836800))
+        self.gate_calls(root)
+        with open(os.path.join(stage, 'same.h'), 'rb') as fh:
+            self.assertEqual(fh.read(), b'bbbb', 'the same-size edit never reached the staged copy')
+
+    def test_a_partition_table_an_earlier_build_left_is_not_kept(self):
+        # The core's prebuild hooks copy a scheme's table only if the build
+        # folder has none, and arduino-cli ignores .csv files: a leftover
+        # would be used for ever.
+        root = self.gate_root()
+        c175c, c175 = self.gate_calls(root)
+        b175c, b175 = self.opt(c175c, '--build-path'), self.opt(c175, '--build-path')
+        self.assertTrue(os.path.exists(os.path.join(b175c, 'partitions.csv')), 'the 1.75C build got no table')
+        self.assertFalse(os.path.exists(os.path.join(b175, 'partitions.csv')), 'the fake wrote a table for the 1.75')
+        for build in (b175c, b175):
+            put(os.path.join(build, 'partitions.csv'), b'# stale\nnvs,data,nvs,0x9000,0x5000,\n')
+        self.gate_calls(root)
+        self.assertFalse(os.path.exists(os.path.join(b175, 'partitions.csv')), 'the 1.75 build kept a stale table')
+        with open(os.path.join(b175c, 'partitions.csv')) as fh:
+            self.assertNotIn('stale', fh.read(), 'the 1.75C build kept a stale table')
 
     def test_the_gate_runs_the_fast_steps_before_the_firmware_builds(self):
         root = self.gate_root()
