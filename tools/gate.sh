@@ -13,9 +13,9 @@
 # one after the other).
 #
 # The firmware builds run from a staged copy of the working tree (uncommitted
-# changes included) in a folder literally named "TamaPoke": arduino-cli refuses
-# a sketch whose folder name differs from the main .ino, which is the case in
-# every agent worktree. The staged copy and both build folders persist between
+# changes included; only the parts the firmware build reads) in a folder
+# literally named "TamaPoke": arduino-cli refuses a sketch whose folder name
+# differs from the main .ino, which is the case in every agent worktree. The staged copy and both build folders persist between
 # runs (tools/build_cache.sh says where), so a rebuild reuses the compiled core
 # and libraries. The sketch is recompiled every run, so the sketch warning
 # count covers every sketch file each time. One gate at a time per checkout.
@@ -33,7 +33,7 @@ for a in "$@"; do
   case "$a" in
     --no-build) BUILD=0 ;;
     --clean) CLEAN=1 ;;
-    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+    -h|--help) awk 'NR > 1 && /^set -/ { exit } NR > 1' "$0"; exit 0 ;;
     *) echo "Unknown arg: $a" >&2; exit 2 ;;
   esac
 done
@@ -191,14 +191,21 @@ show_build() {  # show_build <label> <log> <exit code>
 
 if [[ "$BUILD" -eq 1 ]]; then
   # Mirror the working tree into the same folder every run: rsync keeps the
-  # mtimes, and --delete/--delete-excluded drop whatever is no longer in it.
+  # mtimes, and --delete/--delete-excluded drop whatever is no longer there.
+  # Folders the firmware build never reads stay out. arduino-cli rebuilds
+  # everything when the set of source-like files anywhere under the sketch
+  # changes (its "additionalFiles" build option), so without this a new test,
+  # doc or simulator file would cost a full rebuild. A folder missing from this
+  # list is only staged for nothing; tools/ is reduced to the build scripts.
   STAGE="$CACHE/stage/TamaPoke"
   if [[ "$CLEAN" -eq 1 ]]; then rm -rf "$CACHE/stage"; fi
   mkdir -p "$STAGE"
   if ! rsync -a --delete --delete-excluded \
-    --exclude '/.git' --exclude '/out' --exclude '/test/build' --exclude '/backups' \
-    --exclude '/.claude/worktrees' --exclude '/tools/build' --exclude '/.venv' \
-    --exclude '/sim/build' --exclude '/shots' \
+    --include '/tools/' --include '/tools/build_175c.sh' --include '/tools/build_cache.sh' \
+    --exclude '/tools/*' \
+    --exclude '/.git' --exclude '/.github' --exclude '/.claude' --exclude '/.venv' \
+    --exclude '/test' --exclude '/sim' --exclude '/docs' --exclude '/web' \
+    --exclude '/out' --exclude '/backups' --exclude '/shots' \
     "$ROOT/" "$STAGE/"; then
     record "stage working tree for builds" 1 "rsync failed; builds skipped"
     BUILD=0

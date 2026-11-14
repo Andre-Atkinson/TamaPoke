@@ -6,7 +6,7 @@
 #
 #   <cache>/<checkout folder>-<hash of its path>/
 #     build-175c/               tools/build_175c.sh run on its own
-#     gate/stage/TamaPoke/      the gate's staged copy of the working tree
+#     gate/stage/TamaPoke/      the gate's staged copy of the working tree (what the build reads)
 #     gate/build-175c/          the gate's 1.75C build
 #     gate/build-175/           the gate's original-1.75 build
 #

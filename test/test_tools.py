@@ -1025,6 +1025,13 @@ class TestBuildCache(FakeArduinoCliCase):
         self.assertEqual(self.opt(c175c, '--build-path'), os.path.join(gate_dir, 'build-175c'))
         self.assertEqual(self.opt(c175, '--build-path'), os.path.join(gate_dir, 'build-175'))
         self.assertTrue(os.path.exists(os.path.join(stage, 'gone.cpp')))
+        # Only what the firmware build reads: arduino-cli rebuilds everything when
+        # the set of files anywhere under the sketch changes, so a new test must
+        # not reach the staged copy.
+        self.assertEqual(sorted(os.listdir(os.path.join(stage, 'tools'))), ['build_175c.sh', 'build_cache.sh'])
+        for folder in ('test', 'sim'):
+            self.assertFalse(os.path.exists(os.path.join(stage, folder)), f'{folder}/ was staged')
+        self.assertTrue(os.path.exists(os.path.join(stage, 'boards', '175c', 'partitions.csv')))
         os.remove(os.path.join(root, 'gone.cpp'))
         put(os.path.join(root, 'new.cpp'))
         c175c, c175 = self.gate_calls(root)

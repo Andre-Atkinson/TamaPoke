@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
     --flags) EXTRA="$2"; shift 2 ;;
     --build-path) BUILD="$2"; shift 2 ;;
     --clean) CLEAN=1; shift ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) awk 'NR > 1 && /^set -/ { exit } NR > 1' "$0"; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
