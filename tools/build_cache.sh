@@ -55,7 +55,7 @@ tp_lock() {  # tp_lock <folder>: take <folder>.lock, or say who holds it and ret
        && mkdir "$lock.stale" 2>/dev/null; then
       if [[ "$(cat "$lock/owner" 2>/dev/null)" == "$owner" ]]; then
         rm -rf "$lock"
-        echo "Took over $lock: its owner (pid $pid) is no longer running." >&2
+        echo "Removed a stale lock, $lock: its owner (pid $pid) is no longer running." >&2
       fi
       rmdir "$lock.stale"
     fi

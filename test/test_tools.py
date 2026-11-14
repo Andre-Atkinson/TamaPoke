@@ -976,7 +976,7 @@ class TestBuildCache(FakeArduinoCliCase):
                 self.fresh()
                 r = self.build_175c()
                 self.assertEqual(r.returncode, 0, r.stderr)
-                self.assertIn('Took over', r.stderr)
+                self.assertIn('Removed a stale lock', r.stderr)
                 self.assertEqual(len(self.calls()), 1)
                 self.assertFalse(os.path.exists(build + '.lock'))
 
