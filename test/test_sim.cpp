@@ -266,6 +266,11 @@ TEST(SimPower, without_the_pmu_usb_reads_present_like_the_firmware) {
   CHECK(!pwrShortPressed());                     // the PKEY is read from the AXP2101
   batPowerOff();
   CHECK(!gSimPower.poweredOff);                  // and so is the power-off
+  gSimPower.usb = true;
+  gSimPower.charging = true;
+  CHECK(!batCharging());                         // and the charger status
+  gSimPower.usb = false;
+  gSimPower.charging = false;
   gSimPower.batPct = 0;
   gSimPower.pmuOk = true;  // the same board with the PMU answering
   CHECK(batBegin());
@@ -279,6 +284,9 @@ TEST(SimPower, without_the_pmu_usb_reads_present_like_the_firmware) {
   CHECK(pwrShortPressed());
   batPowerOff();
   CHECK(gSimPower.poweredOff);
+  gSimPower.usb = true;
+  gSimPower.charging = true;
+  CHECK(batCharging());
   gSimPower = saved;
   pwrSetup();
 }

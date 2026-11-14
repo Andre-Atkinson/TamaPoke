@@ -2318,6 +2318,21 @@ TEST(selfcare, is_not_the_players_care) {
   mockClearForcedRandom();
 }
 
+// flash wear: a top-up rides on tick()'s periodic save, never a write of its own
+TEST(selfcare, makes_no_save_of_its_own) {
+  Pet p;
+  makeQuietPet(p);  // hatching saved food 80
+  setStats(p, 20, 80, 80, 100);
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  Preferences raw;
+  raw.begin("tamapoke", true);
+  CHECK_MSG(raw.getUChar("full", 0) == 80, "the top-up is not written to flash by itself");
+  raw.end();
+  mockClearForcedRandom();
+}
+
 // a heart or the eating animation would wake the screen and restart the idle time
 TEST(selfcare, is_silent) {
   Pet p;

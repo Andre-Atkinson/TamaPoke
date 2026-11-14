@@ -51,8 +51,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 - **Self-care while charging** (#24, always on). Plugged into USB and untouched
   for 10 minutes, the pet looks after itself up to half: once a minute the first
   need under 40 (food, then hygiene, which also clears the poops, then energy,
-  then joy) goes back to 50. It isn't the player's care (no streak, bond or
-  medals) and is silent. Off while asleep, as an egg, during an ending and in the
+  then joy) goes back to 50. It isn't the player's care (no streak or bond, no
+  medal of its own) and is silent. A need it lifts that minute is not a slip-up,
+  so a pet left on the charger can still earn IN SHAPE and evolve on time. Off
+  while asleep, as an egg, during an ending and in the
   powered-off catch-up, and off when the AXP2101 doesn't answer at boot (the
   firmware then reports USB as present). No new NVS key. Each top-up logs a
   `self-care:` line on the serial port. The "ready to evolve" chime now sounds

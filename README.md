@@ -92,12 +92,14 @@ While **awake**, per minute:
   **10 minutes**, the pet looks after itself a little. Once a minute, the first
   need under **40**, in the order FOOD, HYG (which also clears the poops), ENE,
   JOY, goes back up to **50**. It only goes up to half, so your own care still
-  matters, and it isn't your care: no streak, bond or medals, and no sound or
-  animation. Any touch starts the 10 minutes again. It's off while the pet is
-  asleep, as an egg and during an ending, never applies to the time it was
-  powered off, and stays off if the power chip doesn't answer (the firmware then
-  can't tell USB from battery). A need it lifts in the same minute doesn't count
-  as a slip-up, and the runaway countdown can't build. The "ready to evolve"
+  matters, and it isn't your care: it gives no streak or bond, awards no medal
+  itself, and makes no sound or animation. Any touch starts the 10 minutes again.
+  It's off while the pet is asleep, as an egg and during an ending, never applies
+  to the time it was powered off, and stays off if the power chip doesn't answer
+  (the firmware then can't tell USB from battery). A need it lifts in the same
+  minute doesn't count as a slip-up, and the runaway countdown can't build. With
+  no slip-ups, a pet left on the charger can still earn the **IN SHAPE** medal at
+  level 5 (no slip-ups, weight 0), and slip-ups don't delay its evolution. The "ready to evolve"
   chime sounds at most once per level for each form, because the needs keep coming back over 40.
 
 ### Eggs & who you get (spawn odds)
