@@ -482,17 +482,6 @@ void clockTap(int16_t x, int16_t y) {
   if (OK_BTN.contains(x, y)) { applyClock(); return; }
 }
 
-// medallas en la ficha: badge con etiqueta, color si conseguida
-void drawMedalBadge(int x, int y, int i) {
-  bool got = pet.hasMedal(1 << i);
-  gfx->fillRoundRect(x, y, 100, 24, 6, got ? UI_BAR_OK : UI_TRACK);
-  if (!got) gfx->drawRoundRect(x, y, 100, 24, 6, UI_TRACK);
-  gfx->setTextColor(got ? UI_BG_DAY : 0x9492);
-  setSize(2);
-  setCur(x + (100 - textW(medalLabel(i), 2)) / 2, y + 5);
-  printT(medalLabel(i));
-}
-
 // pagina 0: perfil (retrato grande, identidad, racha, vinculo, baya)
 static void renderCardProfile() {
   const DexEntry &d = DEX_TBL[pet.speciesId];

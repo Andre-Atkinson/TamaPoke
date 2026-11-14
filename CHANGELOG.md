@@ -128,6 +128,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   however many files use it: the firmware is about 2.6 KB smaller. Nothing
   changes on the screen or on the serial port.
 
+- **The unused `drawMedalBadge` is gone** from `screens.cpp`. It drew the pet
+  card's medal badges before the card was split into pages; since then the
+  medals page has drawn its own and nothing called it. Nothing changes on the
+  screen.
+
 - **Clear power pills on the settings screen** (#11). The touch lock, screen-off
   and battery pills showed raw codes (`L10`, `60s`, `--`, `icon`, `%`). Each now
   shows an icon and a number like the sound and brightness pills: a padlock and
