@@ -35,7 +35,6 @@
 #include "screenlock.h"
 #include "touchlock.h"
 #include "touchgesture.h"
-#include "settingslayout.h"
 #include "bedtime.h"
 #include "clockprompt.h"
 #include "attention.h"
