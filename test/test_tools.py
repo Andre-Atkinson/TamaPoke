@@ -751,8 +751,8 @@ class FakeArduinoCliCase(unittest.TestCase):
         put(os.path.join(root, 'tools', 'test_i18n_formats.py'),
             f'open({self.ran!r}, "a").write("i18n\\n")\n'.encode())
         # --window is the interactive window's --selftest. FAKE_WINDOW picks what the
-        # stand-in does: ok (the default), fail (exit 1, says FAILED) or silent (exit 0
-        # but without the "selftest ok" line).
+        # stand-in does: ok (the default), fail (exit 1, says FAILED), exit1 (exit 1 after
+        # printing the ok line) or silent (exit 0 but without the "selftest ok" line).
         sim = os.path.join(root, 'tools', 'sim.sh')
         put(sim, (f'#!/usr/bin/env bash\n'
                   f'if [[ " $* " == *" --window "* ]]; then\n'
@@ -760,6 +760,7 @@ class FakeArduinoCliCase(unittest.TestCase):
                   f'  case "${{FAKE_WINDOW:-ok}}" in\n'
                   f'    ok) echo "window selftest ok: stub" ;;\n'
                   f'    fail) echo "window selftest FAILED: stub"; exit 1 ;;\n'
+                  f'    exit1) echo "window selftest ok: stub"; exit 1 ;;\n'
                   f'    silent) ;;\n'
                   f'  esac\n'
                   f'else\n'
@@ -1389,9 +1390,19 @@ class TestBuildCache(FakeArduinoCliCase):
         self.assertIn('SKIP  simulator', r.stdout)
         self.assertNotIn('window', r.stdout.replace('SKIP  simulator', ''))
 
+    def test_sim_window_without_sdl2_says_what_is_missing_and_builds_nothing(self):
+        # the stand-in sdl2-config fails unless FAKE_SDL=1: this machine "has no SDL2"
+        r = subprocess.run([os.path.join(TOOLS, 'sim.sh'), '--window', '--selftest'], env=self.env,
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn('sim.sh: --window needs SDL2', r.stderr)
+        self.assertIn('Ask the owner before installing', r.stderr)
+        self.assertNotIn('build failed', r.stderr)   # it stopped before building anything
+        self.assertEqual(self.calls(), [])
+
     def test_a_failing_or_silent_window_selftest_fails_the_gate(self):
         root = self.gate_root()
-        for mode in ('fail', 'silent'):
+        for mode in ('fail', 'exit1', 'silent'):
             with self.subTest(mode=mode):
                 self.fresh()
                 r = self.gate(root, '--no-firmware', FAKE_ORDER_LOG=self.ran, FAKE_SDL='1', FAKE_WINDOW=mode)

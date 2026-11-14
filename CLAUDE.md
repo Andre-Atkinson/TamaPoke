@@ -86,7 +86,7 @@ It runs: `test/run_tests.sh --asan` (host logic + ASan/UBSan + tools tests),
 boards (`tools/sim.sh --board 175c` and `--board 175`, each with `--lang en
 --script sim/scripts/screens.txt --out <dir> --quiet`; the PNG count must equal
 the lines matching `^[[:space:]]*shot[[:space:]]` in that script). When
-`sdl2-config` exists it also builds the interactive simulator window and runs
+`sdl2-config` works it also builds the interactive simulator window and runs
 its `--selftest` (synthetic SDL events, `SDL_VIDEODRIVER=dummy`) for both
 boards, one `window <board>` line each; without SDL2 it records `SKIP  window
 (no SDL2)`. SDL2 is opt-in and only the window needs it: ask the owner before

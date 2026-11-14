@@ -46,8 +46,8 @@ case "$BOARD" in 175c|175) ;; *) echo "sim.sh: --board must be 175c or 175" >&2;
 TARGET=all
 PROG=tamapoke_sim
 if [[ "$WINDOW" -eq 1 ]]; then
-  if ! command -v sdl2-config >/dev/null 2>&1; then
-    echo "sim.sh: --window needs SDL2 and sdl2-config was not found." >&2
+  if ! sdl2-config --version >/dev/null 2>&1; then
+    echo "sim.sh: --window needs SDL2, and sdl2-config is missing or does not run." >&2
     echo "        Ask the owner before installing it (Homebrew: sdl2). The scripted simulator needs no SDL2." >&2
     exit 1
   fi

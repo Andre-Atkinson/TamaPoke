@@ -176,10 +176,10 @@ if [[ "$BUILD" -eq 1 ]]; then
     record "simulator $b" "$rc" "$got/$want screens, $w host build warning(s)"
   done
   # The interactive window (sim/window.cpp) is opt-in and needs SDL2 (Homebrew), which a
-  # machine may not have: no sdl2-config, no window lines. Its --selftest pushes synthetic
+  # machine may not have: no working sdl2-config, no window lines. Its --selftest pushes synthetic
   # mouse and key events through the window's real event handler under SDL's dummy video
   # driver and checks the fake board saw them.
-  if command -v sdl2-config >/dev/null 2>&1; then
+  if sdl2-config --version >/dev/null 2>&1; then
     for b in 175c 175; do
       SDL_VIDEODRIVER=dummy ./tools/sim.sh --window --board "$b" --selftest --quiet --out "$TMP/win-$b" \
         >"$TMP/win-$b.log" 2>&1

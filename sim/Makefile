@@ -74,7 +74,7 @@ check-libs:
 	@test -f "$(U8G2)/clib/u8g2_fonts.c" || { echo "sim: U8g2 not found in $(ARDUINO_LIBS) (set ARDUINO_LIBS)" >&2; exit 1; }
 
 check-sdl:
-	@command -v sdl2-config >/dev/null || { echo "sim: SDL2 not found (no sdl2-config): the window needs it. Ask the owner before installing it." >&2; exit 1; }
+	@sdl2-config --version >/dev/null 2>&1 || { echo "sim: SDL2 not found (no sdl2-config): the window needs it. Ask the owner before installing it." >&2; exit 1; }
 
 $(BIN): $(OBJS)
 	$(CXX) -o $@ $(OBJS)
