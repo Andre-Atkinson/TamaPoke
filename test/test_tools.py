@@ -689,10 +689,11 @@ class FakeArduinoCliCase(unittest.TestCase):
         os.chmod(fake, 0o755)
         self.home = os.path.join(self.tmp, 'home')
         os.makedirs(self.home)
-        # An owner's own TAMAPOKE_JOBS (or board overrides, or cache location) must not leak in.
+        # An owner's own TAMAPOKE_JOBS (or board overrides, cache location or
+        # warning baseline) must not leak in.
         self.env = {k: v for k, v in os.environ.items()
                     if k not in ('TAMAPOKE_JOBS', 'TAMAPOKE_OUT', 'FQBN_175C', 'APP_MAX_OVERRIDE',
-                                 'XDG_CACHE_HOME')}
+                                 'XDG_CACHE_HOME', 'WARN_BASELINE')}
         self.env.update(PATH=self.bindir + os.pathsep + os.environ.get('PATH', ''), HOME=self.home,
                         FAKE_CLI_LOG=self.log, FAKE_PARTS=self.PARTS)
 

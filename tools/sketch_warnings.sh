@@ -7,8 +7,8 @@
 #   WARN_BASELINE=21 tools/sketch_warnings.sh LOG
 #
 # Exit status: 0 if N is at most B, 1 if it is over, 2 if LOG can't be read or
-# WARN_BASELINE is not a whole number (0 to 9999, no leading zeros). LOG is arduino-cli compile --warnings=all
-# output (colour codes are ignored).
+# WARN_BASELINE is not a whole number from 0 to 9999 without leading zeros.
+# LOG is arduino-cli compile --warnings=all output (colour codes are ignored).
 #
 # A sketch warning is a "file:line:col: warning:" line for a file in a folder
 # named TamaPoke (the sketch: the gate's staged copy, CI's checkout). The same
