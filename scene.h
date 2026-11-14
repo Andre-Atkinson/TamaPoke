@@ -22,12 +22,12 @@ struct PetBeh {
 #define PET_FOLLOW_PX_S 120.0f  // walking after a finger (a stroll is 30 px/s)
 
 // estrellas del modo noche
-static const uint16_t STARS[][2] = { {120,140},{330,120},{370,210},{95,230},{280,90},{160,95} };
+inline const uint16_t STARS[][2] = { {120,140},{330,120},{370,210},{95,230},{280,90},{160,95} };
 
 #define C565(r, g, b) ((uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3)))
 
 // suelo de cada bioma de dia (de noche se mezcla hacia el azul nocturno)
-static const uint16_t BIOME_SOIL[6] = {
+inline const uint16_t BIOME_SOIL[6] = {
   C565(0x7e, 0xc0, 0x7f),  // 0 pradera
   C565(0xdc, 0xca, 0x94),  // 1 playa (arena)
   C565(0x4f, 0x8a, 0x55),  // 2 bosque
