@@ -1,0 +1,15 @@
+// The main screen's scene and pet drawing (scene.h). Moved out of TamaPoke.ino (#41).
+#include <Arduino.h>
+#include "app.h"
+#include "attention.h"
+#include "blit.h"
+#include "clockprompt.h"
+#include "dex.h"
+#include "i18n.h"
+#include "power.h"
+#include "rtcbat.h"
+#include "scene.h"
+#include "sdmon.h"
+#include "settingslayout.h"
+#include "species.h"
+#include "uitext.h"

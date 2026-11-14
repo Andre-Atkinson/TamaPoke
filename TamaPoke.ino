@@ -43,6 +43,8 @@
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "trainingcapture.h"
 #include "app.h"
+#include "gameui.h"
+#include "scene.h"
 #include "serialcmd.h"
 #include "uitext.h"
 #include <Preferences.h>
@@ -70,14 +72,15 @@ int16_t monFor = -2;
 bool monShinyFor = false;
 
 // comportamiento del bicho en pantalla
-struct {
+struct PetBeh {
   uint8_t mode = 0;     // 0 idle, 1 paseo, 2 gesto one-shot
   uint8_t act = PMD_IDLE;
   uint32_t t0 = 0;      // inicio de la animacion en curso
   uint32_t until = 0;   // fin del estado actual
   float x = 233, targetX = 233;
   bool fast = false;    // walking after a dragging finger (#21) until it gets there
-} beh;
+};
+PetBeh beh;
 uint32_t walkLast = 0;  // instante del ultimo paso del paseo (0 = ninguno aun)
 #define PET_GROUND 304  // linea de suelo de la mascota
 #define PET_WALK_MIN 150  // where the pet may walk to (behNext, and after a finger)
@@ -87,11 +90,12 @@ uint32_t walkLast = 0;  // instante del ultimo paso del paseo (0 = ninguno aun)
 // Reaction to a gesture on the pet (#21, touchgesture.h): drawPet* show it in place of the
 // pet's own behaviour until `until`.
 enum : uint8_t { REACT_NONE = 0, REACT_HOP, REACT_GIGGLE, REACT_HUFF, REACT_STROKE };
-struct {
+struct PetReact {
   uint8_t kind = REACT_NONE;
   int8_t away = 1;  // the huff turns this way: away from the finger (-1 left, +1 right)
   uint32_t t0 = 0, until = 0;
-} petReact;
+};
+PetReact petReact;
 PmdMon galleryPmd;  // sprite grande de la vista detalle de la galeria (PMD/TPK2, legal)
 
 // galeria pokedex
