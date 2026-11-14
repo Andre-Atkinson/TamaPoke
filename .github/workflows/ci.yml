@@ -32,7 +32,8 @@ env:
 
 jobs:
   # The two boards compile in parallel, each from scratch: CI keeps no build
-  # output between runs, only the installed core and libraries.
+  # output between runs, only the installed core and libraries. Each also fails
+  # on sketch warnings over WARN_BASELINE, counted as tools/gate.sh counts them.
   firmware-build:
     name: Compile firmware (${{ matrix.board }})
     runs-on: ubuntu-latest
@@ -102,12 +103,15 @@ jobs:
                  for l in json.load(sys.stdin).get("installed_libraries", [])}
           sys.exit(0 if all(got.get(n) == v for n, v in want.items()) else f"want {want}, got {got}")'
 
+      # Each compile keeps its output in build.log for the warning count below.
+      # "shell: bash" runs with pipefail, so a failed compile still fails the step.
       - name: Compile (original 1.75)
         if: matrix.board == '1.75'
+        shell: bash
         run: >
           arduino-cli compile --warnings=all --clean
           --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
-          .
+          . 2>&1 | tee "$RUNNER_TEMP/build.log"
 
       # Waveshare AMOLED 1.75C (experimental): mismo codigo con
       # -DBOARD_AMOLED_175C=1 y su tabla de particiones (boards/175c/). Se
@@ -115,14 +119,21 @@ jobs:
       # From scratch (--clean) and on every core, like the 1.75 build.
       - name: Compile (Waveshare AMOLED 1.75C)
         if: matrix.board == '1.75C'
+        shell: bash
         env:
           TAMAPOKE_JOBS: "0"
-        run: tools/build_175c.sh --clean --out "$RUNNER_TEMP/out-175c"
+        run: tools/build_175c.sh --clean --out "$RUNNER_TEMP/out-175c" 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # The same count and WARN_BASELINE as tools/gate.sh (both use this script).
+      # CI builds from scratch, so every sketch warning is in the log.
+      - name: Sketch warnings within the baseline
+        run: tools/sketch_warnings.sh "$RUNNER_TEMP/build.log"
 
   # The "Protect main" ruleset requires a check named exactly "Compile
-  # firmware": this job, which passes only if both boards compiled. It runs
-  # even when a build failed or the run was cancelled (always()), because a
-  # skipped required check would count as passing.
+  # firmware": this job, which passes only if both boards compiled within the
+  # warning baseline. It runs even when a build failed or the run was
+  # cancelled (always()), because a skipped required check would count as
+  # passing.
   firmware:
     name: Compile firmware
     needs: firmware-build

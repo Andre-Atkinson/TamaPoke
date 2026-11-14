@@ -638,8 +638,10 @@ class TestBoardScripts(unittest.TestCase):
 # build_175c.sh's prebuild hook copies; the original 1.75's scheme is built in
 # and the fake leaves no table).
 # FAKE_BIN_SIZE sets the image size, FAKE_NO_BIN writes none, FAKE_SLEEP waits
-# that many seconds, FAKE_FAIL exits 1, and FAKE_ORDER_LOG gets a "compile" line
-# per call (to check the order of the gate's steps).
+# that many seconds, FAKE_FAIL exits 1, FAKE_ORDER_LOG gets a "compile" line
+# per call (to check the order of the gate's steps), and FAKE_WARNINGS=N prints
+# N different warnings in the sketch (the last argument), one of them twice,
+# plus one in a library.
 FAKE_ARDUINO_CLI = r'''#!/usr/bin/env python3
 import json, os, shutil, sys, time
 args = sys.argv[1:]
@@ -650,6 +652,11 @@ if os.environ.get('FAKE_ORDER_LOG'):
         fh.write('compile\n')
 def opt(name):
     return args[args.index(name) + 1] if name in args else None
+for i in range(int(os.environ.get('FAKE_WARNINGS', '0'))):
+    for _ in range(2 if i == 0 else 1):
+        print(f'{args[-1]}/pet.cpp:{i + 1}:5: warning: fake warning {i} [-Wfake]', file=sys.stderr)
+if os.environ.get('FAKE_WARNINGS'):
+    print('/home/x/Arduino/libraries/U8g2/src/u8g2.c:1:1: warning: a library one [-Wfake]', file=sys.stderr)
 if opt('--build-path'):
     os.makedirs(opt('--build-path'), exist_ok=True)
 time.sleep(float(os.environ.get('FAKE_SLEEP', '0')))
@@ -682,10 +689,11 @@ class FakeArduinoCliCase(unittest.TestCase):
         os.chmod(fake, 0o755)
         self.home = os.path.join(self.tmp, 'home')
         os.makedirs(self.home)
-        # An owner's own TAMAPOKE_JOBS (or board overrides, or cache location) must not leak in.
+        # An owner's own TAMAPOKE_JOBS (or board overrides, cache location or
+        # warning baseline) must not leak in.
         self.env = {k: v for k, v in os.environ.items()
                     if k not in ('TAMAPOKE_JOBS', 'TAMAPOKE_OUT', 'FQBN_175C', 'APP_MAX_OVERRIDE',
-                                 'XDG_CACHE_HOME')}
+                                 'XDG_CACHE_HOME', 'WARN_BASELINE')}
         self.env.update(PATH=self.bindir + os.pathsep + os.environ.get('PATH', ''), HOME=self.home,
                         FAKE_CLI_LOG=self.log, FAKE_PARTS=self.PARTS)
 
@@ -715,8 +723,8 @@ class FakeArduinoCliCase(unittest.TestCase):
                               env=dict(self.env, **env), capture_output=True, text=True, timeout=60)
 
     def gate_root(self, name='repo'):
-        """A minimal repo for gate.sh: the real gate, 1.75C build script and
-        build-cache helper, the 1.75C table, a one-line sketch, and stand-ins
+        """A minimal repo for gate.sh: the real gate, 1.75C build script,
+        build-cache helper and warning counter, the 1.75C table, a one-line sketch, and stand-ins
         for the host tests, the i18n check and the desktop simulator that
         record that they ran."""
         root = os.path.join(self.tmp, name)
@@ -725,7 +733,7 @@ class FakeArduinoCliCase(unittest.TestCase):
         os.makedirs(os.path.join(root, 'boards', '175c'))
         os.makedirs(os.path.join(root, 'sim', 'scripts'))
         put(os.path.join(root, 'sim', 'scripts', 'screens.txt'))   # no `shot` lines: 0/0 screens
-        for script in ('gate.sh', 'build_175c.sh', 'build_cache.sh'):
+        for script in ('gate.sh', 'build_175c.sh', 'build_cache.sh', 'sketch_warnings.sh'):
             shutil.copy2(os.path.join(TOOLS, script), os.path.join(root, 'tools', script))
         shutil.copy2(self.PARTS, os.path.join(root, 'boards', '175c', 'partitions.csv'))
         put(os.path.join(root, 'TamaPoke.ino'), b'void setup() {}\nvoid loop() {}\n')
@@ -822,6 +830,106 @@ class TestBuildJobs(FakeArduinoCliCase):
                 self.assertIn('TAMAPOKE_JOBS', r.stdout)
                 self.assertNotIn('set -', r.stdout)
                 self.assertEqual(self.calls(), [])
+
+
+class TestSketchWarnings(unittest.TestCase):
+    """tools/sketch_warnings.sh: the sketch-warning count and WARN_BASELINE,
+    shared by tools/gate.sh and CI's firmware builds."""
+
+    SCRIPT = os.path.join(TOOLS, 'sketch_warnings.sh')
+    ESC = '\033'
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.env = {k: v for k, v in os.environ.items() if k != 'WARN_BASELINE'}
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def log(self, sketch_warnings):
+        """A build log with that many different sketch warnings, plus what must
+        not count: a repeat, the same line in colour, a core and a library
+        warning, an error, a note, and a warning in arduino-cli's generated
+        TamaPoke.ino.cpp."""
+        stage = '/cache/repo-0123/gate/stage/TamaPoke'
+        lines = [f'{stage}/pet.cpp:{i + 1}:5: warning: unused variable [-Wunused-variable]'
+                 for i in range(sketch_warnings)]
+        if sketch_warnings:
+            lines.append(lines[0])                                   # a header included twice
+            lines.append(f'{self.ESC}[1m{lines[-1]}{self.ESC}[0m')   # the same, coloured
+        lines += [
+            '/home/x/.arduino15/packages/esp32/tools/cdc_host.h:162:58: warning: missing initializer',
+            '/home/x/Arduino/libraries/U8g2/src/u8g2.c:9:1: warning: unused [-Wunused]',
+            f'{stage}/pet.cpp:3:1: error: expected ;',
+            f'{stage}/pet.cpp:4:1: note: declared here',
+            '/cache/repo-0123/gate/build-175/sketch/TamaPoke.ino.cpp:3:1: warning: generated',
+            'Sketch uses 909806 bytes (28%) of program storage space. Maximum is 3145728 bytes.',
+        ]
+        path = os.path.join(self.tmp, 'build.log')
+        put(path, ('\n'.join(lines) + '\n').encode())
+        return path
+
+    def run_script(self, *args, **env):
+        return subprocess.run([self.SCRIPT, *args], env=dict(self.env, **env),
+                              capture_output=True, text=True, timeout=30)
+
+    def test_counts_each_sketch_warning_once_and_nothing_else(self):
+        for n in (0, 1, 7):
+            with self.subTest(n=n):
+                r = self.run_script(self.log(n))
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline 20')
+
+    def test_more_than_the_baseline_fails(self):
+        for n, baseline, rc in ((20, None, 0), (21, None, 1), (21, '21', 0), (22, '21', 1), (1, '0', 1)):
+            with self.subTest(n=n, baseline=baseline):
+                env = {'WARN_BASELINE': baseline} if baseline is not None else {}
+                r = self.run_script(self.log(n), **env)
+                self.assertEqual(r.returncode, rc, r.stdout + r.stderr)
+                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline {baseline or 20}')
+                if rc:
+                    self.assertIn(f'+{n - int(baseline or 20)} NEW', r.stderr)
+
+    def test_bad_input_is_an_error_not_a_pass(self):
+        for args, env in (((os.path.join(self.tmp, 'missing.log'),), {}),
+                          ((self.log(1),), {'WARN_BASELINE': 'x'}),
+                          ((self.log(1),), {'WARN_BASELINE': '-1'}),
+                          # leading zeros are octal to bash (( )); 08 is invalid, 010 would be 8
+                          ((self.log(1),), {'WARN_BASELINE': '08'}),
+                          ((self.log(1),), {'WARN_BASELINE': '010'}),
+                          # too long: bash arithmetic overflows
+                          ((self.log(1),), {'WARN_BASELINE': '12345'}),
+                          ((self.log(1),), {'WARN_BASELINE': '99999999999999999999'}),
+                          ((), {}),
+                          ((self.log(1), 'extra'), {})):
+            with self.subTest(args=args, env=env):
+                r = self.run_script(*args, **env)
+                self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+
+    def test_ci_counts_both_boards_with_it(self):
+        """CI's firmware builds keep their output and run this script on it, in
+        a step that always runs after a good compile."""
+        with open(os.path.join(ROOT, '.github', 'workflows', 'ci.yml')) as fh:
+            ci = fh.read()
+        job = re.search(r'^  firmware-build:\n(.*?)(?=^  \S)', ci, re.S | re.M).group(1)
+        steps = re.split(r'^      - ', job, flags=re.M)[1:]
+        compiles = [st for st in steps if st.startswith('name: Compile (')]
+        self.assertEqual(len(compiles), 2, 'expected the 1.75 and the 1.75C compile steps')
+        for st in compiles:
+            with self.subTest(step=st.splitlines()[0]):
+                self.assertRegex(st, r'\n        shell: bash\n', 'a tee without pipefail hides a failed compile')
+                self.assertRegex(st, re.compile(r'2>&1 \| tee "\$RUNNER_TEMP/build\.log"$', re.M))
+        after = steps[steps.index(compiles[-1]) + 1:]
+        counts = [st for st in after if 'tools/sketch_warnings.sh "$RUNNER_TEMP/build.log"' in st]
+        self.assertEqual(len(counts), 1, 'no warning count after the compiles')
+        self.assertNotIn('if:', counts[0])
+        self.assertNotIn('continue-on-error', counts[0])
+
+    def test_the_gate_counts_with_it(self):
+        with open(os.path.join(TOOLS, 'gate.sh')) as fh:
+            gate = fh.read()
+        self.assertIn('. "$ROOT/tools/sketch_warnings.sh"', gate)
+        self.assertNotIn('WARN_BASELINE=', gate, 'the gate has its own baseline again')
 
 
 class TestBuildCache(FakeArduinoCliCase):
@@ -1176,6 +1284,64 @@ class TestBuildCache(FakeArduinoCliCase):
         self.assertFalse(os.path.exists(os.path.join(b175, 'partitions.csv')), 'the 1.75 build kept a stale table')
         with open(os.path.join(b175c, 'partitions.csv')) as fh:
             self.assertNotIn('stale', fh.read(), 'the 1.75C build kept a stale table')
+
+    def test_the_gate_fails_on_sketch_warnings_over_the_baseline(self):
+        root = self.gate_root()
+        for n, env, green in ((20, {}, True), (21, {}, False), (21, {'WARN_BASELINE': '21'}, True)):
+            with self.subTest(n=n, env=env):
+                self.fresh()
+                r = self.gate(root, FAKE_WARNINGS=str(n), **env)
+                base = env.get('WARN_BASELINE', '20')
+                self.assertEqual(r.returncode == 0, green, r.stdout + r.stderr)
+                for label in ('1.75C', '1.75'):
+                    self.assertIn(f'{label}: {n} sketch warning(s), baseline {base}', r.stdout)
+                    if green:
+                        self.assertIn(f'PASS  {label} build  ({n} sketch warnings)', r.stdout)
+                    else:
+                        self.assertIn(f'FAIL  {label} build (exit 1)  ({n} sketch warnings: +1 NEW over baseline {base})',
+                                      r.stdout)
+
+    def test_gate_refuses_a_bad_warning_baseline_before_running_anything(self):
+        root = self.gate_root()
+        for bad in ('x', '-1', '08', '010', '12345', '99999999999999999999'):
+            with self.subTest(bad=bad):
+                self.fresh()
+                r = self.gate(root, FAKE_ORDER_LOG=self.ran, WARN_BASELINE=bad)
+                self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+                self.assertIn('WARN_BASELINE', r.stderr)
+                self.assertFalse(os.path.exists(self.ran), 'the gate ran steps before checking WARN_BASELINE')
+                self.assertEqual(self.calls(), [])
+        # No firmware builds, nothing to count: the value does not matter.
+        for flag in ('--no-build', '--no-firmware'):
+            with self.subTest(flag=flag):
+                self.fresh()
+                r = self.gate(root, flag, WARN_BASELINE='08')
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertEqual(self.calls(), [])
+
+    def test_no_firmware_runs_everything_but_the_firmware_builds(self):
+        root = self.gate_root()
+        r = self.gate(root, '--no-firmware', FAKE_ORDER_LOG=self.ran)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        with open(self.ran) as fh:
+            self.assertEqual(fh.read().split(), ['tests', 'i18n', 'sim', 'sim'])
+        self.assertEqual(self.calls(), [])
+        for line in ('PASS  host tests', 'PASS  i18n formats', 'PASS  no-network',
+                     'PASS  simulator 175c', 'PASS  simulator 175', 'SKIP  firmware builds'):
+            self.assertIn(line, r.stdout)
+        self.assertNotIn('SKIP  simulator', r.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.home, '.cache', 'tamapoke')),
+                         'took a build folder it never builds in')
+        # no firmware build: the job count does not matter, --clean has nothing to clean
+        self.fresh()
+        r = self.gate(root, '--no-firmware', TAMAPOKE_JOBS='08')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        r = self.gate(root, '--no-firmware', '--clean')
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn('--clean', r.stderr)
+        r = subprocess.run([os.path.join(TOOLS, 'gate.sh'), '--help'], env=self.env,
+                           capture_output=True, text=True, timeout=30)
+        self.assertIn('--no-firmware', r.stdout)
 
     def test_the_gate_runs_the_fast_steps_before_the_firmware_builds(self):
         root = self.gate_root()
