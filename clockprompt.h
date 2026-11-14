@@ -24,6 +24,8 @@
 // of the 1.75C running, still wrong; only power loss clears them, and then the clock
 // has no time and is reseeded anyway. RTC memory holds garbage after power-on, so the
 // mark is a magic word plus its complement: garbage reads as "not stale".
+// Keep it a plain struct with no initializers: a constructor would run at every boot
+// and wipe the copy the reset was meant to keep.
 struct ClockStaleMark {
   uint32_t magic, check;
 };
