@@ -1,6 +1,7 @@
 // Simulador de escritorio (sim/): lectura de guiones, avance del reloj falso y el
 // escritor de PNG. La parte que corre el firmware se prueba con tools/sim.sh.
 #include "framework.h"
+#include "../sim/interactive.h"
 #include "../sim/png.h"
 #include "../sim/runner.h"
 #include "../sim/script.h"
@@ -9,6 +10,9 @@
 #include "../i18n.h"
 #include <stdio.h>
 #include <sys/stat.h>
+#include <set>
+#include <string>
+#include <vector>
 
 // ---------------------------------------------------------------- duraciones
 TEST(SimScript, duraciones_con_unidades_y_combinadas) {
@@ -373,4 +377,379 @@ TEST(SimPng, imagen_de_prueba_para_el_decodificador_de_python) {
   mkdir("build", 0755);
   CHECK(pngWriteRgb565("build/sim_png_selftest.png", px.data(), W, H, false));
   CHECK(pngWriteRgb565("build/sim_png_selftest_round.png", px.data(), W, H, true));
+}
+
+// ======================================================================
+// Ventana interactiva (sim/interactive.*): lo que se prueba sin SDL
+// ======================================================================
+
+// ---------------------------------------------------------------- velocidades y bateria
+TEST(SimWindow, la_velocidad_sube_y_baja_por_la_tabla_y_se_para_en_los_extremos) {
+  CHECK_EQ(SIM_SPEED_COUNT, 5);
+  CHECK_EQ(kSimSpeeds[0], (uint32_t)1);
+  CHECK_EQ(kSimSpeeds[4], (uint32_t)3600);
+  CHECK_EQ(simSpeedStep(0, 1), 1);
+  CHECK_EQ(simSpeedStep(1, 1), 2);
+  CHECK_EQ(simSpeedStep(3, 1), 4);
+  CHECK_EQ(simSpeedStep(4, 1), 4);   // tope alto
+  CHECK_EQ(simSpeedStep(4, -1), 3);
+  CHECK_EQ(simSpeedStep(1, -1), 0);
+  CHECK_EQ(simSpeedStep(0, -1), 0);  // tope bajo
+}
+
+TEST(SimWindow, la_bateria_se_mueve_de_10_en_10_entre_0_y_100) {
+  CHECK_EQ(simBatteryStep(80, 1), 90);
+  CHECK_EQ(simBatteryStep(80, -1), 70);
+  CHECK_EQ(simBatteryStep(95, 1), 100);   // tope alto: no pasa de 100
+  CHECK_EQ(simBatteryStep(100, 1), 100);
+  CHECK_EQ(simBatteryStep(5, -1), 0);     // tope bajo
+  CHECK_EQ(simBatteryStep(0, -1), 0);
+  CHECK_EQ(simBatteryStep(-1, 1), 10);    // sin bateria cuenta como 0
+  CHECK_EQ(simBatteryStep(-1, -1), 0);
+}
+
+// ---------------------------------------------------------------- cristal redondo
+TEST(SimWindow, el_cristal_es_el_circulo_inscrito_y_el_resto_no_es_tactil) {
+  CHECK(simInGlass(232, 232));
+  CHECK(simInGlass(233, 233));
+  CHECK(simInGlass(0, 232));     // los cuatro puntos cardinales del circulo
+  CHECK(simInGlass(465, 233));
+  CHECK(simInGlass(232, 0));
+  CHECK(simInGlass(233, 465));
+  CHECK(!simInGlass(0, 0));      // esquinas: fuera del cristal
+  CHECK(!simInGlass(465, 465));
+  CHECK(!simInGlass(5, 5));
+  CHECK(!simInGlass(100, 30));
+  // el borde en la diagonal: (68,68) dentro y (67,67) fuera, como la mascara del PNG
+  CHECK(simInGlass(68, 68));
+  CHECK(!simInGlass(67, 67));
+  CHECK(simInGlass(397, 397));
+  CHECK(!simInGlass(398, 398));
+  CHECK(!simInGlass(-1, 232));   // fuera del panel
+  CHECK(!simInGlass(466, 232));
+  CHECK(!simInGlass(232, -1));
+  CHECK(!simInGlass(232, 466));
+}
+
+TEST(SimWindow, un_arrastre_que_sale_del_panel_se_queda_en_el_borde) {
+  CHECK_EQ(simClampCoord(-50), 0);
+  CHECK_EQ(simClampCoord(0), 0);
+  CHECK_EQ(simClampCoord(233), 233);
+  CHECK_EQ(simClampCoord(465), 465);
+  CHECK_EQ(simClampCoord(466), 465);
+  CHECK_EQ(simClampCoord(5000), 465);
+}
+
+// ---------------------------------------------------------------- brillo
+TEST(SimWindow, el_brillo_normal_se_ve_completo_y_el_atenuado_mas_oscuro_pero_legible) {
+  CHECK_EQ(simBrightnessMod(145), (uint8_t)255);  // despierta con bateria
+  CHECK_EQ(simBrightnessMod(180), (uint8_t)255);  // despierta con USB
+  CHECK_EQ(simBrightnessMod(255), (uint8_t)255);
+  uint8_t low = simBrightnessMod(60);             // atenuada (DIM_LOW)
+  CHECK(low < 200);                               // claramente mas oscura
+  CHECK(low >= 100);                              // y aun legible
+  CHECK(simBrightnessMod(8) >= 64);               // nunca por debajo del suelo
+  CHECK(simBrightnessMod(1) >= 64);
+  for (int b = 1; b < 255; b++) CHECK(simBrightnessMod((uint8_t)b) <= simBrightnessMod((uint8_t)(b + 1)));
+}
+
+// ---------------------------------------------------------------- ritmo
+namespace {
+struct PaceRun {
+  SimPace p;
+  uint64_t passes = 0, simMs = 0;
+  // un fotograma: cada pasada del firmware falso dura passMs; usPerPass es la pared que
+  // gasta cada pasada (para el presupuesto)
+  SimPaceResult frame(uint32_t wallUs, bool input, uint32_t passMs, uint32_t usPerPass = 0, bool holding = false) {
+    uint64_t n = 0;
+    SimPaceResult r = simPaceFrame(p, wallUs, input, holding, [&] { delay(passMs); n++; },
+                                   [] { return false; }, [&]() -> uint32_t { return (uint32_t)(n * usPerPass); });
+    passes += r.passes;
+    simMs += r.simMs;
+    return r;
+  }
+};
+}  // namespace
+
+TEST(SimWindow, a_1x_el_reloj_falso_sigue_al_de_pared_sin_perder_el_resto_de_cada_fotograma) {
+  mockSetMillis(0);
+  PaceRun run;
+  for (int i = 0; i < 120; i++) run.frame(16667, false, 2);  // 120 fotogramas de 16,667 ms = 2000 ms
+  CHECK_RANGE((long)millis(), 1995, 2000);
+  CHECK_EQ(run.simMs, (uint64_t)millis());
+  CHECK(run.passes > 900);
+}
+
+TEST(SimWindow, la_velocidad_multiplica_el_tiempo_simulado) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 2;  // 60x
+  SimPaceResult r = run.frame(16000, false, 10);
+  CHECK_RANGE((long)r.simMs, 960, 970);  // 16 ms * 60
+  mockSetMillis(0);
+  run.p.speedIndex = 4;  // 3600x
+  r = run.frame(16000, false, 10);
+  CHECK_RANGE((long)r.simMs, 57600, 57610);
+}
+
+TEST(SimWindow, en_pausa_no_corre_nada_y_al_seguir_no_hay_rafaga) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.frame(16000, false, 200);  // una pasada que se pasa: deuda negativa justo antes de pausar
+  CHECK(run.p.debtUs < 0);
+  simPaceSetPaused(run.p, true);
+  uint32_t t = millis();
+  for (int i = 0; i < 50; i++) {
+    SimPaceResult r = run.frame(200000, true, 2);
+    CHECK_EQ(r.passes, (uint64_t)0);
+  }
+  CHECK_EQ(millis(), t);
+  simPaceSetPaused(run.p, false);
+  SimPaceResult r = run.frame(16000, false, 2);
+  CHECK_RANGE((long)r.simMs, 14, 18);  // un fotograma, sin deuda vieja ni los 10 s de pausa
+}
+
+TEST(SimWindow, un_fotograma_parado_no_salta_mas_de_250_ms_de_pared) {
+  mockSetMillis(0);
+  PaceRun run;
+  SimPaceResult r = run.frame(10 * 1000 * 1000, false, 5);  // la ventana estuvo 10 s oculta
+  CHECK_RANGE((long)r.simMs, 250, 254);
+  mockSetMillis(0);
+  run.p.speedIndex = 1;  // 10x
+  r = run.frame(10 * 1000 * 1000, false, 5);
+  CHECK_RANGE((long)r.simMs, 2500, 2504);  // el tope es de pared, antes de multiplicar
+}
+
+TEST(SimWindow, si_el_anfitrion_no_llega_se_acaba_el_presupuesto_y_la_deuda_se_descarta) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 3;  // 600x: 16 ms de pared deben 9600 ms
+  // cada pasada gasta 1 ms de pared y simula 10 ms: el presupuesto (12 ms) corta a las 12 pasadas
+  SimPaceResult r = run.frame(16000, false, 10, 1000);
+  CHECK_EQ(r.passes, (uint64_t)12);
+  CHECK_EQ(r.simMs, (uint64_t)120);
+  CHECK(r.behind);
+  CHECK(r.droppedMs > 9000);
+  CHECK_EQ(run.p.debtUs, (int64_t)0);  // se tira, no se acumula
+  CHECK(run.p.statBehind);
+  // el siguiente fotograma empieza de cero: no arrastra lo no pagado
+  run.p.speedIndex = 0;
+  r = run.frame(16000, false, 2);
+  CHECK(!r.behind);
+  CHECK_RANGE((long)r.simMs, 15, 18);
+}
+
+TEST(SimWindow, una_pasada_que_se_pasa_deja_deuda_negativa_y_no_corre_nada_hasta_pagarla) {
+  mockSetMillis(0);
+  PaceRun run;
+  SimPaceResult r = run.frame(16000, false, 200);  // un light sleep de 200 ms
+  CHECK_EQ(r.passes, (uint64_t)1);
+  CHECK_EQ(run.p.debtUs, (int64_t)(16000 - 200000));
+  int idle = 0;
+  while (idle < 40) {
+    r = run.frame(16000, false, 200);
+    if (r.passes) break;
+    idle++;
+    CHECK_EQ(millis(), (uint32_t)200);  // mientras debe, no corre nada
+  }
+  CHECK_EQ(idle, 11);  // 184 ms de pared hasta alcanzar al reloj, a 16 ms por fotograma
+  CHECK_EQ(millis(), (uint32_t)400);  // y entonces corre otra pasada
+}
+
+TEST(SimWindow, un_toque_o_boton_perdona_la_deuda_negativa) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.frame(16000, false, 200);  // se pasa de largo: deuda -184 ms
+  CHECK(run.p.debtUs < 0);
+  SimPaceResult r = run.frame(16000, false, 200);
+  CHECK_EQ(r.passes, (uint64_t)0);  // sin entrada, espera
+  r = run.frame(16000, true, 2);    // con entrada, corre ya (el GPIO despierta del sueno)
+  CHECK(r.passes > 0);
+  CHECK_RANGE((long)r.simMs, 14, 18);
+}
+
+TEST(SimWindow, mientras_se_toca_corre_a_1x_y_un_segundo_de_pared_despues_y_luego_vuelve_a_la_velocidad_elegida) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 3;  // 600x
+  // dedo apoyado: cada fotograma de 16 ms de pared son 16 ms simulados, no 9600
+  for (int i = 0; i < 5; i++) {
+    SimPaceResult r = run.frame(16000, i == 0, 2, 0, /*holding=*/true);
+    CHECK_RANGE((long)r.simMs, 15, 18);
+  }
+  CHECK(run.p.statSlowed);
+  // soltado (entrada en este fotograma, ya sin dedo): sigue a 1x durante 1 s de pared
+  uint64_t sim = run.simMs;
+  SimPaceResult r = run.frame(16000, true, 2, 0, false);
+  CHECK_RANGE((long)r.simMs, 15, 18);
+  for (int i = 0; i < 50; i++) run.frame(16000, false, 2);  // 800 ms de pared mas
+  CHECK_RANGE((long)(run.simMs - sim), 15 + 790, 15 + 800 + 5);
+  CHECK(run.p.graceUs > 0 && run.p.graceUs < SIM_INPUT_GRACE_US);
+  // quedan 184 ms de gracia: un fotograma de 250 ms de pared reparte 184 a 1x y 66 a 600x
+  CHECK_RANGE((long)run.p.graceUs, 183000, 185000);
+  r = run.frame(250000, false, 2);
+  CHECK_RANGE((long)r.simMs, 184 + 39600 - 3, 184 + 39600 + 3);
+  CHECK_EQ(run.p.graceUs, (uint32_t)0);
+  // y despues, a la velocidad elegida
+  r = run.frame(16000, false, 2);
+  CHECK_RANGE((long)r.simMs, 9600, 9605);
+}
+
+TEST(SimWindow, sin_entrada_ni_dedo_no_hay_gracia_y_a_1x_no_cambia_nada) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 3;
+  SimPaceResult r = run.frame(16000, false, 2);
+  CHECK_RANGE((long)r.simMs, 9600, 9605);
+  CHECK_EQ(run.p.graceUs, (uint32_t)0);
+  CHECK(!run.p.statSlowed);
+  mockSetMillis(0);
+  PaceRun slow;  // a 1x el titulo no dice "1x while touching": no hay nada que frenar
+  slow.frame(16000, true, 2, 0, true);
+  CHECK(!slow.p.statSlowed);
+}
+
+TEST(SimWindow, la_gracia_se_cuenta_desde_la_ultima_entrada_y_un_dedo_apoyado_la_renueva) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 2;  // 60x
+  SimPaceResult r0 = run.frame(16000, true, 2);  // una pulsacion, sin dedo apoyado (P): ya va a 1x
+  CHECK_RANGE((long)r0.simMs, 15, 18);
+  for (int i = 0; i < 40; i++) run.frame(16000, false, 2);  // 656 ms de pared en total
+  // otra entrada renueva el segundo entero
+  run.frame(16000, true, 2);
+  CHECK_RANGE((long)run.p.graceUs, (long)(SIM_INPUT_GRACE_US - 16000) - 1, (long)(SIM_INPUT_GRACE_US - 16000) + 1);
+  // y un dedo apoyado la mantiene entera, por mucho que dure
+  for (int i = 0; i < 100; i++) run.frame(16000, false, 2, 0, true);
+  CHECK_EQ(run.p.graceUs, SIM_INPUT_GRACE_US - 16000);
+}
+
+TEST(SimWindow, la_pausa_gana_a_la_entrada_y_borra_la_gracia) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 3;
+  run.frame(16000, true, 2, 0, true);
+  CHECK(run.p.graceUs > 0);
+  simPaceSetPaused(run.p, true);
+  CHECK_EQ(run.p.graceUs, (uint32_t)0);
+  uint32_t t = millis();
+  SimPaceResult r = run.frame(16000, true, 2, 0, true);
+  CHECK_EQ(r.passes, (uint64_t)0);
+  CHECK_EQ(millis(), t);
+  CHECK_EQ(run.p.graceUs, (uint32_t)0);  // en pausa ni siquiera se renueva
+  simPaceSetPaused(run.p, false);
+  r = run.frame(16000, false, 2);  // al seguir, sin gracia vieja: a la velocidad elegida
+  CHECK_RANGE((long)r.simMs, 9600, 9605);
+}
+
+TEST(SimWindow, el_apagado_del_pmu_corta_el_fotograma_y_no_cuenta_como_ir_atrasado) {
+  mockSetMillis(0);
+  PaceRun run;
+  run.p.speedIndex = 2;
+  bool off = false;
+  uint64_t n = 0;
+  SimPaceResult r = simPaceFrame(run.p, 16000, false, false, [&] { delay(10); if (++n == 3) off = true; },
+                                 [&] { return off; }, [] { return 0u; });
+  CHECK_EQ(r.passes, (uint64_t)3);
+  CHECK(!r.behind);
+  CHECK_EQ(run.p.debtUs, (int64_t)0);
+}
+
+TEST(SimWindow, la_velocidad_efectiva_se_mide_con_lo_corrido_y_la_pared_gastada) {
+  mockSetMillis(0);
+  PaceRun run;
+  for (int i = 0; i < 10; i++) run.frame(20000, false, 5);
+  CHECK_EQ(run.p.statWallUs, (uint64_t)200000);
+  CHECK_RANGE((long)run.p.statSimMs, 195, 200);
+}
+
+// ---------------------------------------------------------------- titulo
+TEST(SimWindow, el_titulo_dice_placa_hora_velocidad_bateria_usb_y_pausa) {
+  std::string t = simTitleText("1.75C", 1794564000UL, 10, false, 0, 80, true, true, false, false);
+  CHECK_STREQ(t.c_str(), "TamaPoke 1.75C | 2026-11-13 10:00:00 | 10x | battery 80%, USB, charging");
+  t = simTitleText("1.75", 1794564000UL + 3661, 1, false, 0, 15, false, true, true, false);
+  CHECK_STREQ(t.c_str(), "TamaPoke 1.75 | 2026-11-13 11:01:01 | 1x | battery 15% | paused");  // sin USB no hay "charging"
+  t = simTitleText("1.75C", 0, 600, true, 42.5, -1, false, false, false, false);
+  CHECK_STREQ(t.c_str(), "TamaPoke 1.75C | no clock | 600x (running at 42.5x) | no battery");
+  t = simTitleText("1.75C", 0, 600, true, 42.5, -1, false, false, false, true);  // tocando gana a "atrasado"
+  CHECK_STREQ(t.c_str(), "TamaPoke 1.75C | no clock | 600x (1x while touching) | no battery");
+}
+
+// ---------------------------------------------------------------- consola serie
+namespace {
+std::vector<std::string> feedAll(SimLineSplitter &s, const std::vector<std::string> &chunks) {
+  std::vector<std::string> out;
+  for (const std::string &c : chunks) s.feed(c.data(), c.size(), out);
+  return out;
+}
+}  // namespace
+
+TEST(SimWindow, las_lineas_de_la_consola_salen_enteras_aunque_lleguen_a_trozos) {
+  SimLineSplitter s;
+  std::vector<std::string> out = feedAll(s, { "HAT", "CH\nSPEC ", "25", "\nLV", "L 5" });
+  CHECK_EQ((int)out.size(), 2);
+  CHECK_STREQ(out[0].c_str(), "HATCH");
+  CHECK_STREQ(out[1].c_str(), "SPEC 25");
+  out = feedAll(s, { "\n" });  // la tercera termina ahora
+  CHECK_EQ((int)out.size(), 1);
+  CHECK_STREQ(out[0].c_str(), "LVL 5");
+}
+
+TEST(SimWindow, lf_cr_y_crlf_terminan_la_linea_y_las_vacias_se_tiran) {
+  SimLineSplitter s;
+  std::vector<std::string> out = feedAll(s, { "A\nB\rC\r\nD\n\n\r\n\rE\n" });
+  CHECK_EQ((int)out.size(), 5);
+  CHECK_STREQ(out[0].c_str(), "A");
+  CHECK_STREQ(out[1].c_str(), "B");
+  CHECK_STREQ(out[2].c_str(), "C");
+  CHECK_STREQ(out[3].c_str(), "D");
+  CHECK_STREQ(out[4].c_str(), "E");
+  // CRLF partido entre dos lecturas: sigue siendo una sola linea
+  SimLineSplitter s2;
+  out = feedAll(s2, { "STATS\r", "\nHEALTH\r\n" });
+  CHECK_EQ((int)out.size(), 2);
+  CHECK_STREQ(out[0].c_str(), "STATS");
+  CHECK_STREQ(out[1].c_str(), "HEALTH");
+}
+
+TEST(SimWindow, una_linea_demasiado_larga_se_descarta_entera_y_la_siguiente_pasa) {
+  SimLineSplitter s;
+  std::string ok(SIM_LINE_MAX, 'x');       // justo en el limite: pasa
+  std::string tooLong(SIM_LINE_MAX + 1, 'y');
+  std::string huge(100000, 'z');           // sin terminador durante mucho rato: no crece sin limite
+  std::vector<std::string> out = feedAll(s, { ok + "\n", tooLong + "\n", huge, huge, "\nHATCH\n" });
+  CHECK_EQ((int)out.size(), 2);
+  CHECK_EQ(out[0].size(), SIM_LINE_MAX);
+  CHECK_STREQ(out[1].c_str(), "HATCH");
+}
+
+TEST(SimWindow, los_bytes_nulos_de_la_entrada_se_saltan) {
+  SimLineSplitter s;
+  const char data[] = { 'H', '\0', 'I', '\n' };
+  std::vector<std::string> out;
+  s.feed(data, sizeof data, out);
+  CHECK_EQ((int)out.size(), 1);
+  CHECK_STREQ(out[0].c_str(), "HI");
+}
+
+// ---------------------------------------------------------------- capturas
+static std::set<std::string> gFakeFiles;
+static bool fakeExists(const std::string &p) { return gFakeFiles.count(p) != 0; }
+
+TEST(SimWindow, las_capturas_se_numeran_y_no_pisan_las_de_una_sesion_anterior) {
+  gFakeFiles.clear();
+  int n = 1;
+  std::string p = simShotPath("shots", n, fakeExists);
+  CHECK_STREQ(p.c_str(), "shots/window-001.png");
+  CHECK_EQ(n, 1);
+  gFakeFiles.insert("shots/window-001.png");
+  gFakeFiles.insert("shots/window-002.png");
+  n = 1;
+  p = simShotPath("shots", n, fakeExists);
+  CHECK_STREQ(p.c_str(), "shots/window-003.png");
+  CHECK_EQ(n, 3);
+  n = 0;  // un contador sin inicializar empieza en 1
+  p = simShotPath("out/dir", n, fakeExists);
+  CHECK_STREQ(p.c_str(), "out/dir/window-001.png");
+  gFakeFiles.clear();
 }

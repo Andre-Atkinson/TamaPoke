@@ -6,12 +6,11 @@
 //
 // tools/sim.sh compila y llama a este programa.
 #include <Arduino.h>
-#include <Preferences.h>
-#include <sys/stat.h>
-#include <errno.h>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include "boot.h"
+#include "interactive.h"
 #include "png.h"
 #include "runner.h"
 #include "script.h"
@@ -33,7 +32,7 @@ struct Options {
 
 // Tiempos de los gestos (ms de reloj falso). Los umbrales de handleTouch(): un toque
 // dura < 1500 ms y se mueve < 40 px; un deslizamiento > 80 px en < 800 ms.
-const uint32_t TAP_DOWN_MS = 80;
+// (lo que dura un toque, SIM_TAP_DOWN_MS, esta en interactive.h: lo comparte la ventana)
 const uint32_t SETTLE_MS = 400;      // tras soltar: el gesto se resuelve y se dibuja otro frame
 const uint32_t PWR_SPACING_MS = 120; // entre pulsaciones de PWR: el bucle sondea el PKEY cada 40 ms
 const uint32_t PWR_RESOLVE_MS = 350 + 250;  // PwrButton::GAP_MS y un frame
@@ -89,26 +88,8 @@ bool parseArgs(int argc, char **argv, Options &o) {
   return true;
 }
 
-bool mkdirs(const std::string &dir) {
-  std::string cur;
-  std::stringstream ss(dir);
-  std::string part;
-  if (!dir.empty() && dir[0] == '/') cur = "/";
-  while (std::getline(ss, part, '/')) {
-    if (part.empty()) continue;
-    cur += part + "/";
-    if (mkdir(cur.c_str(), 0755) != 0 && errno != EEXIST) return false;
-  }
-  return true;
-}
-
 uint64_t run(uint64_t ms) {
   return simRunFor(ms, [] { loop(); }, [] { return gSimPower.poweredOff; });
-}
-
-void onRestart() {
-  fprintf(stderr, "sim: the firmware called ESP.restart() (WIPE); stopping here\n");
-  exit(3);
 }
 
 }  // namespace
@@ -137,7 +118,7 @@ int main(int argc, char **argv) {
   } else {
     script = simParseScript("wait 2s\nshot boot\n", "default");
   }
-  if (!mkdirs(o.out)) {
+  if (!simMkdirs(o.out)) {
     fprintf(stderr, "cannot create %s\n", o.out.c_str());
     return 2;
   }
@@ -163,19 +144,6 @@ int main(int argc, char **argv) {
   }
   if (!clockSet) simParseClock("2026-11-13 10:00", clock);
 
-  mockNvsReset();
-  if (lang >= 0) {
-    Preferences p;
-    p.begin("tamapoke", false);
-    p.putUChar("lang", (uint8_t)lang);
-    p.end();
-  }
-  mockSetMillis(0);
-  simClockSet(clock);
-  simFsSetRoot(o.sprites.c_str());
-  simFsHideShiny(BOARD_AMOLED_175C);
-  mockSetRestartHook(onRestart);
-
   FILE *serialLog = nullptr;
   std::string logPath = o.serialLog.empty() ? o.out + "/serial.log" : o.serialLog;
   serialLog = fopen(logPath.c_str(), "w");
@@ -183,7 +151,12 @@ int main(int argc, char **argv) {
     fprintf(stderr, "cannot write %s\n", logPath.c_str());
     return 2;
   }
-  mockSerialOutput(serialLog);
+  SimBootConfig boot;
+  boot.lang = lang;
+  boot.clock = clock;
+  boot.sprites = o.sprites;
+  boot.serialOut = serialLog;
+  simBootPrepare(boot);
 
   if (!o.quiet)
     printf("sim: %s, lang %s, clock %u, sprites %s\n", BOARD_AMOLED_175C ? "1.75C" : "1.75",
@@ -204,7 +177,7 @@ int main(int argc, char **argv) {
       case OP_CHARGING: gSimPower.charging = c.a != 0; break;
       case OP_TAP:
         simTouchSet(true, (int16_t)c.a, (int16_t)c.b);
-        run(TAP_DOWN_MS);
+        run(SIM_TAP_DOWN_MS);
         simTouchSet(false, 0, 0);
         run(SETTLE_MS);
         break;
@@ -258,9 +231,7 @@ int main(int argc, char **argv) {
       }
       case OP_SHOT: {
         std::string path = o.out + "/" + c.text + ".png";
-        static uint16_t black[SIM_W * SIM_H];
-        const uint16_t *px = simPanelVisible() ? gSimPanel.fb : black;
-        if (!pngWriteRgb565(path, px, SIM_W, SIM_H, !o.square)) {
+        if (!pngWriteRgb565(path, simShownPixels(), SIM_W, SIM_H, !o.square)) {
           fprintf(stderr, "cannot write %s\n", path.c_str());
           return 1;
         }

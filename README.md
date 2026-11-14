@@ -502,6 +502,53 @@ the 1.75C. `--script` takes a path, or the name of a script in `sim/scripts/`
 with or without `.txt` (`care-page`). `shots/` is git-ignored. The last line of
 the run counts the sound effects that would have played and the light sleeps.
 
+### Interactive window
+
+`tools/sim.sh --window` opens the same simulated board as a window on the Mac:
+the mouse is the finger, the keyboard is the buttons, and the terminal is the serial
+console. It is opt-in: it needs SDL2, which comes from Homebrew (`brew install
+sdl2`), and **the owner is asked before it is installed**. Without SDL2 the scripted
+simulator, the tests and the gate work as before, and `--window` says what is missing.
+
+```bash
+tools/sim.sh --window                    # the 1.75C, clock = this Mac's local time
+tools/sim.sh --window --board 175 --lang ja --clock "2026-11-13 22:30"
+```
+
+| Input | What it does |
+|---|---|
+| left mouse button | the finger: press, drag, release. A press that starts outside the round glass is ignored (unless `--square`); a drag that leaves it stays on the panel edge |
+| `P` | short PWR press (on the 1.75C, three within 350 ms lock the pocket, as on the board) |
+| `B` | BOOT, held while the key is held (a long press works). 1.75C only: the original 1.75 build does not read it |
+| `S` | save a PNG of the panel to `--out` (default `shots/`) as `window-NNN.png`; the path is printed |
+| `Space` | pause / resume (touch and `P`/`B` are ignored while paused) |
+| `[` `]` | slower / faster: 1×, 10×, 60×, 600×, 3600× real time. While a finger or `B` is held, and for 1 s of real time after the last touch, `P` or `B`, the window runs at 1× (the title says `600x (1x while touching)`), so taps, swipes and long presses last as long as they do on the board |
+| `U` / `C` | USB in / out; charging on / off |
+| `-` `=` | battery -10 % / +10 % |
+| `H` | print this key list; `Esc`, `Q` or closing the window quits |
+
+Type a line in the terminal and press Enter to send it to the firmware's serial console
+(`HATCH`, `SPEC 25`, `STATS`...); its output appears in the terminal, or in
+`--serial-log FILE`. Lines over 256 characters are dropped. The window title shows the
+board, the simulated date and time, the speed, the battery, USB and charging, and
+whether it is paused; if the Mac cannot keep up with a fast speed, it shows the speed
+actually reached. A dimmed panel is drawn darker (the firmware's dim levels), and a
+screen that is off or asleep is drawn black. `--square` drops the round glass,
+`--quit-after 2m` closes the window after that much real time, and `--help` lists the
+rest. It runs the firmware in real time, so after a light sleep a line typed in the
+terminal can wait up to 200 ms of simulated time at 1×; a touch, `P` or `B` is handled at
+once. A click is held
+for at least 80 ms of simulated time, so a quick tap or trackpad click is not lost. The
+terminal takes ordinary commands only: `PUT`'s raw payload cannot go through it (the
+line splitter drops NUL bytes and lines over 256 characters, and splits at CR and LF).
+
+`tools/gate.sh` builds the window and runs `--selftest` for both boards when SDL2 is
+there (SDL's dummy video driver, no display needed): it pushes synthetic mouse and key
+events through the window's own event handler and checks that the fake touch, the
+buttons, the battery controls and the screenshot saw them, and that the picture drawn
+has the right colours, bezel and dimming. That is the only automatic test of the
+window. The window has been tried by hand only when a PR says so.
+
 **What it models:** the real firmware code: game logic, every screen, the
 Arduino_GFX drawing code and fonts (CJK included), the frame pacing, the
 firmware's dim and screen-off decisions, the touch lock, the PWR lock, the BOOT button, and the
@@ -516,9 +563,9 @@ timing, audio (sounds are counted, not played), real timing (drawing and QSPI
 take no time, and light sleep is a jump of the clock), the touch INT line
 (it is edge-only: the ISR fires on press, move and release, but the pin always
 reads high, so level checks of the pin and the `touch.sleep()` hazard of holding
-it low cannot be reproduced), and AMOLED brightness (dimming is not drawn:
-screenshots are full colour unless the panel is asleep, off or at brightness 0,
-which are saved black). It
+it low cannot be reproduced), and AMOLED brightness (screenshots are full colour
+unless the panel is asleep, off or at brightness 0, which are saved black; the
+interactive window does darken a dimmed panel, roughly). It
 doesn't model PSRAM or heap limits, or NVS flash wear. The PMU, RTC, ES8311 and
 QMI8658 are stand-ins, not drivers. The host is 64-bit, so code that depends on
 the size of `long` or of a pointer can behave differently. A screen that looks

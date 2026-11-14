@@ -11,8 +11,10 @@
 # Steps, fastest first so most breakage shows in seconds: host tests
 # (+ASan/UBSan), i18n format check, no-network check over the firmware sources,
 # the desktop simulator for both boards (tools/sim.sh: it compiles the real
-# sketch on the host), then both firmware builds (1.75C and the original 1.75,
-# one after the other).
+# sketch on the host; when SDL2 is installed, also its interactive window,
+# built and driven by synthetic events with --selftest under SDL's dummy video
+# driver, with no display needed; without SDL2 that line is a SKIP), then both
+# firmware builds (1.75C and the original 1.75, one after the other).
 #
 # The firmware builds run from a staged copy of the working tree (uncommitted
 # changes included; only the parts the firmware build reads) in a folder
@@ -173,6 +175,28 @@ if [[ "$BUILD" -eq 1 ]]; then
     if [[ "$rc" -eq 0 && "$got" -ne "$want" ]]; then rc=1; fi
     record "simulator $b" "$rc" "$got/$want screens, $w host build warning(s)"
   done
+  # The interactive window (sim/window.cpp) is opt-in and needs SDL2 (Homebrew), which a
+  # machine may not have: no working sdl2-config, no window lines. Its --selftest pushes synthetic
+  # mouse and key events through the window's real event handler under SDL's dummy video
+  # driver and checks the fake board saw them.
+  if sdl2-config --version >/dev/null 2>&1; then
+    for b in 175c 175; do
+      SDL_VIDEODRIVER=dummy ./tools/sim.sh --window --board "$b" --selftest --quiet --out "$TMP/win-$b" \
+        >"$TMP/win-$b.log" 2>&1
+      rc=$?
+      grep -iE 'error|fail|warning:' "$TMP/win-$b.log" | head -n 20
+      w="$(grep -c 'warning:' "$TMP/win-$b.log")"
+      [[ "$rc" -ne 0 ]] && tail -n 15 "$TMP/win-$b.log"
+      if [[ "$rc" -eq 0 ]] && ! grep -q '^window selftest ok' "$TMP/win-$b.log"; then rc=1; fi
+      if [[ "$rc" -eq 0 ]]; then
+        record "window $b" "$rc" "selftest ok, $w host build warning(s)"
+      else
+        record "window $b" "$rc" "selftest or build failed, $w host build warning(s)"
+      fi
+    done
+  else
+    SUMMARY+=("SKIP  window (no SDL2)")
+  fi
 else
   SUMMARY+=("SKIP  simulator")
 fi

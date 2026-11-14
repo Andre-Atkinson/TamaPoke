@@ -694,6 +694,13 @@ class FakeArduinoCliCase(unittest.TestCase):
         self.env = {k: v for k, v in os.environ.items()
                     if k not in ('TAMAPOKE_JOBS', 'TAMAPOKE_OUT', 'FQBN_175C', 'APP_MAX_OVERRIDE',
                                  'XDG_CACHE_HOME', 'WARN_BASELINE')}
+        # A stand-in sdl2-config first on PATH: the gate runs the interactive window's
+        # selftest only where SDL2 works. FAKE_SDL=1 makes it work; by default it does
+        # not, whatever the machine has installed.
+        sdl = os.path.join(self.bindir, 'sdl2-config')
+        with open(sdl, 'w') as fh:
+            fh.write('#!/usr/bin/env bash\n[[ "${FAKE_SDL:-0}" == 1 ]] && { echo 2.0.0; exit 0; }\nexit 1\n')
+        os.chmod(sdl, 0o755)
         self.env.update(PATH=self.bindir + os.pathsep + os.environ.get('PATH', ''), HOME=self.home,
                         FAKE_CLI_LOG=self.log, FAKE_PARTS=self.PARTS)
 
@@ -743,8 +750,22 @@ class FakeArduinoCliCase(unittest.TestCase):
         os.chmod(stub, 0o755)
         put(os.path.join(root, 'tools', 'test_i18n_formats.py'),
             f'open({self.ran!r}, "a").write("i18n\\n")\n'.encode())
+        # --window is the interactive window's --selftest. FAKE_WINDOW picks what the
+        # stand-in does: ok (the default), fail (exit 1, says FAILED), exit1 (exit 1 after
+        # printing the ok line) or silent (exit 0 but without the "selftest ok" line).
         sim = os.path.join(root, 'tools', 'sim.sh')
-        put(sim, f'#!/usr/bin/env bash\necho sim >> "{self.ran}"\n'.encode())
+        put(sim, (f'#!/usr/bin/env bash\n'
+                  f'if [[ " $* " == *" --window "* ]]; then\n'
+                  f'  echo window >> "{self.ran}"\n'
+                  f'  case "${{FAKE_WINDOW:-ok}}" in\n'
+                  f'    ok) echo "window selftest ok: stub" ;;\n'
+                  f'    fail) echo "window selftest FAILED: stub"; exit 1 ;;\n'
+                  f'    exit1) echo "window selftest ok: stub"; exit 1 ;;\n'
+                  f'    silent) ;;\n'
+                  f'  esac\n'
+                  f'else\n'
+                  f'  echo sim >> "{self.ran}"\n'
+                  f'fi\n').encode())
         os.chmod(sim, 0o755)
         return root
 
@@ -1342,6 +1363,53 @@ class TestBuildCache(FakeArduinoCliCase):
         r = subprocess.run([os.path.join(TOOLS, 'gate.sh'), '--help'], env=self.env,
                            capture_output=True, text=True, timeout=30)
         self.assertIn('--no-firmware', r.stdout)
+
+    def test_the_window_selftest_runs_for_both_boards_when_sdl2_works(self):
+        root = self.gate_root()
+        r = self.gate(root, '--no-firmware', FAKE_ORDER_LOG=self.ran, FAKE_SDL='1')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        with open(self.ran) as fh:
+            self.assertEqual(fh.read().split(), ['tests', 'i18n', 'sim', 'sim', 'window', 'window'])
+        for line in ('PASS  window 175c  (selftest ok, 0 host build warning(s))',
+                     'PASS  window 175  (selftest ok, 0 host build warning(s))'):
+            self.assertIn(line, r.stdout)
+        self.assertNotIn('SKIP  window', r.stdout)
+
+    def test_the_window_is_skipped_when_there_is_no_sdl2(self):
+        root = self.gate_root()
+        r = self.gate(root, '--no-firmware', FAKE_ORDER_LOG=self.ran)  # the stand-in sdl2-config fails
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        with open(self.ran) as fh:
+            self.assertEqual(fh.read().split(), ['tests', 'i18n', 'sim', 'sim'])
+        self.assertIn('SKIP  window (no SDL2)', r.stdout)
+        self.assertNotIn('window 175', r.stdout)
+        # --no-build skips the whole simulator, the window with it
+        self.fresh()
+        r = self.gate(root, '--no-build', FAKE_SDL='1')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('SKIP  simulator', r.stdout)
+        self.assertNotIn('window', r.stdout.replace('SKIP  simulator', ''))
+
+    def test_sim_window_without_sdl2_says_what_is_missing_and_builds_nothing(self):
+        # the stand-in sdl2-config fails unless FAKE_SDL=1: this machine "has no SDL2"
+        r = subprocess.run([os.path.join(TOOLS, 'sim.sh'), '--window', '--selftest'], env=self.env,
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn('sim.sh: --window needs SDL2', r.stderr)
+        self.assertIn('Ask the owner before installing', r.stderr)
+        self.assertNotIn('build failed', r.stderr)   # it stopped before building anything
+        self.assertEqual(self.calls(), [])
+
+    def test_a_failing_or_silent_window_selftest_fails_the_gate(self):
+        root = self.gate_root()
+        for mode in ('fail', 'exit1', 'silent'):
+            with self.subTest(mode=mode):
+                self.fresh()
+                r = self.gate(root, '--no-firmware', FAKE_ORDER_LOG=self.ran, FAKE_SDL='1', FAKE_WINDOW=mode)
+                self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                self.assertIn('FAIL  window 175c', r.stdout)
+                self.assertIn('FAIL  window 175 ', r.stdout)
+                self.assertIn('GATE FAILED', r.stdout)
 
     def test_the_gate_runs_the_fast_steps_before_the_firmware_builds(self):
         root = self.gate_root()
