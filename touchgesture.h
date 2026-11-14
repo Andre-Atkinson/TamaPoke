@@ -26,7 +26,8 @@
 //
 // Conflicts. A stroke or a drag claims its contact: from then on it never resolves as a
 // swipe, a tap or the 3 s long-press. Before that, a contact behaves exactly as it always
-// did. A drag needs a rest first, so a swipe (which moves at once) never becomes one, and it
+// did. A drag needs a rest first, so a swipe that moves at once never becomes one (a swipe that
+// starts with a pause of DRAG_REST_MS on the pet does: see held()), and it
 // starts only beyond TAP_SLOP from where the finger landed, so it cannot take a tap or the
 // long-press, whose finger stays inside LONG_PRESS_SLOP < TAP_SLOP. A long-press that fired
 // first claims the contact too: no stroke or drag after it. Gestures need down(..., live)
@@ -117,7 +118,8 @@ struct TouchGesture {
   bool active = false;  // down() .. lift()
   bool live = false;    // pet gestures possible on this contact
   uint8_t claim = CLAIM_NONE;
-  bool restBroken = false;
+  bool restBroken = false;  // the finger left the landing spot before the rest was confirmed
+  bool rested = false;      // a sample at DRAG_REST_MS or later found it still on the spot
   int16_t x0 = 0, y0 = 0;  // where the finger landed (taps resolve here)
   int16_t xl = 0, yl = 0;  // the last sample
   int16_t dragX = 0;       // where a drag's finger is
@@ -138,6 +140,7 @@ struct TouchGesture {
     live = petLive;
     claim = CLAIM_NONE;
     restBroken = false;
+    rested = false;
     x0 = xl = dragX = x;
     y0 = yl = y;
     t0 = lastAt = now;
@@ -199,7 +202,14 @@ inline TouchAct TouchGesture::held(uint32_t now, int16_t x, int16_t y, bool long
     return TOUCH_DRAG_MOVE;
   }
   if (live) {
-    if (dt < DRAG_REST_MS && (iabs(dx) > DRAG_REST_SLOP || iabs(dy) > DRAG_REST_SLOP)) restBroken = true;
+    // The rest is confirmed only by a sample taken at DRAG_REST_MS or later with the finger
+    // still on the landing spot. A sample that finds it further away first (a swipe, or sparse
+    // polls with the loop busy) rules the drag out for good, so a first sample at 260 ms already
+    // 100 px away is a swipe, not a drag.
+    if (!rested && !restBroken) {
+      if (iabs(dx) > DRAG_REST_SLOP || iabs(dy) > DRAG_REST_SLOP) restBroken = true;
+      else if (dt >= DRAG_REST_MS) rested = true;
+    }
     ax.feed(x, STROKE_LEG);
     ay.feed(y, STROKE_LEG);
     if (ax.turns >= STROKE_TURNS || ay.turns >= STROKE_TURNS) {
@@ -211,8 +221,10 @@ inline TouchAct TouchGesture::held(uint32_t now, int16_t x, int16_t y, bool long
         return TOUCH_STROKE;
       }
     }
-    // No dt >= DRAG_REST_MS test needed: reaching DRAG_START before then breaks the rest.
-    if (claim == CLAIM_NONE && !restBroken && iabs(dx) >= DRAG_START && iabs(dx) > iabs(dy)) {
+    // Trade-off (owner's choice of 250 ms): a sideways swipe that starts on the pet with a short
+    // pause (rested, then 80+ px quickly) is a drag, so the lift opens no gallery. A swipe that
+    // moves at once, or starts off the pet, is unaffected.
+    if (claim == CLAIM_NONE && rested && iabs(dx) >= DRAG_START && iabs(dx) > iabs(dy)) {
       claim = CLAIM_DRAG;
       dragX = x;
       return TOUCH_DRAG_START;

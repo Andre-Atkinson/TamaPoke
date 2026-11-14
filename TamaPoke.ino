@@ -1361,10 +1361,12 @@ static PetGestureGate petGestureGate() {
   g.sleeping = pet.sleeping;
   g.evolving = pet.evolving();
   g.eating = pet.eating();
-  g.bathing = bathUntil != 0;
+  // the timed dialogs and the bath are compared with timeLeft(), like careBusy(), because
+  // render() only zeroes them when it draws (it does not while the screen is off)
+  g.bathing = timeLeft(bathUntil);
   g.choosing = pet.awaitingStarter() || pet.awaitingEgg();
   g.otherScreen = galleryOpen || cardOpen || kbOpen || clockOpen || gameOpen || sackOpen;
-  g.dialog = choiceKind || confirmUntil || feedMenuUntil;
+  g.dialog = timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
   return g;
 }
 
@@ -1441,7 +1443,13 @@ static void petTapGesture(PetTap t) {
 // the pet with the gestures live; this re-checks in case the pet fell asleep meanwhile).
 static void petHeldGesture(TouchAct a) {
   if (!petGesturesLive(petGestureGate())) return;
-  wakeUI();  // a long stroke or drag keeps the screen awake like any touch
+  if (a == TOUCH_DRAG_MOVE) {
+    // Only keep the screen from dimming: wakeUI() would force a frame per move at a slow
+    // frame rate (low battery), where a drag is meant to draw once per interval.
+    lastInteract = millis();
+    return;
+  }
+  wakeUI();  // a stroke or the start of a drag wakes the screen like any touch
   if (a == TOUCH_STROKE) {
     Serial.println("PET stroke");
     pet.caress();
@@ -1470,11 +1478,17 @@ static void reactOffset(uint32_t now, bool animated, int &dx, int &dy) {
   }
 }
 
+// A hold-then-drag is being followed: the finger is dragging and the gestures are still
+// live (a pet that fell asleep mid-drag stops following it).
+static bool petFollowing(uint32_t now) {
+  return touchG.dragging(now) && petGesturesLive(petGestureGate());
+}
+
 // The fallback sprites do not walk: they lean toward a dragging finger and ease back after.
 static int followLean(uint32_t now) {
   static int lean = 0;
   static uint32_t at = 0;
-  if (touchG.dragging(now)) {
+  if (petFollowing(now)) {
     lean = constrain((int)touchG.dragX - CX, -60, 60);
     at = now;
     return lean;
@@ -1484,10 +1498,16 @@ static int followLean(uint32_t now) {
   return lean * (int)(400 - (e < 400 ? e : 400)) / 400;
 }
 
+static bool huffing(uint32_t now) { return reacting(now) && petReact.kind == REACT_HUFF; }
+
+// The heart of the pat before the huff (the 11th tap) is not drawn while the pet turns away.
+// Only the drawing skips it: pet.showHeart() is untouched for its other uses.
+static bool heartShown(uint32_t now) { return pet.showHeart() && !huffing(now); }
+
 // the huff: little puffs of breath blown away from the finger, from (x, y) beside the
 // pet's head, each growing as it drifts off and up
 static void drawHuffPuff(int x, int y, uint32_t now) {
-  if (!reacting(now) || petReact.kind != REACT_HUFF) return;
+  if (!huffing(now)) return;
   uint32_t e = now - petReact.t0;
   for (int i = 0; i < 2; i++) {
     uint32_t pe = (e + i * 350) % 700;  // each puff lives 700 ms
@@ -3927,7 +3947,7 @@ void drawPet() {
   else if (m == MOOD_SAD) overlayMouth(sp, x, y, s, false);
 
   drawHuffPuff(x + 16 * s + petReact.away * 16 * s, y + 10 * s, millis());
-  if (pet.showHeart()) drawMap(SPR_HEART, 32, x + 20 * s, y - 2 * s, 2, false);
+  if (heartShown(millis())) drawMap(SPR_HEART, 32, x + 20 * s, y - 2 * s, 2, false);
 }
 
 // ---------- escena de bano ----------
@@ -4076,7 +4096,7 @@ void drawPetPMD() {
   bool loop = true;
   uint32_t t0 = beh.t0;
   int dx = 0, dy = 0;
-  bool follow = touchG.dragging(now);  // hold-then-drag (#21): walk after the finger
+  bool follow = petFollowing(now);  // hold-then-drag (#21): walk after the finger
   if (m == MOOD_SLEEPING && pmd.has(PMD_SLEEP)) {
     act = PMD_SLEEP;
     beh.mode = 0;
@@ -4140,7 +4160,7 @@ void drawPetPMD() {
   drawPmdAct(act, (int)beh.x + dx, PET_GROUND + dy, now - t0, loop || act == PMD_IDLE, false, 5);
   drawHuffPuff((int)beh.x + petReact.away * 56, PET_GROUND - 120, now);
 
-  if (pet.showHeart()) drawMap(SPR_HEART, 32, (int)beh.x + 50, PET_GROUND - 190, 2, false);
+  if (heartShown(now)) drawMap(SPR_HEART, 32, (int)beh.x + 50, PET_GROUND - 190, 2, false);
 }
 
 // sprite animado desde la SD: zoom entero por pixel, frames a su ritmo
@@ -4170,7 +4190,7 @@ void drawPetSD() {
 
   // emotes en vez de expresiones (los sprites importados no tienen anclas)
   drawHuffPuff(x + w / 2 + petReact.away * (w / 2), y + h / 3, millis());
-  if (pet.showHeart()) drawMap(SPR_HEART, 32, x + w - 30, y - 50, 2, false);
+  if (heartShown(millis())) drawMap(SPR_HEART, 32, x + w - 30, y - 50, 2, false);
 }
 
 // ojo cerrado: borra el ojo 3x4 y dibuja el parpado

@@ -84,7 +84,10 @@ While **awake**, per minute:
 
   Gestures work on the main screen with the creature awake, not on an egg or while
   a menu or dialog is open. A swipe, a tap or the long-press (release) starting on
-  the creature works as before.
+  the creature works as before, with one catch: a sideways slide that starts with a
+  short pause (a quarter of a second) on the creature makes it walk after your
+  finger instead of opening the Pokédex. To open the Pokédex, swipe without
+  pausing, or start the swipe off the creature.
 - 🌙 **Sleep:** rest — ENE **+6/min**, needs drain ~**4× slower** with floors
   (FOOD 30 / JOY 35 / HYG 45). No poops, no slip-ups, can't run away while asleep.
 - 🛏️ **Bedtime** (stat card, *Care* page; off by default): pick 21:00–07:00,

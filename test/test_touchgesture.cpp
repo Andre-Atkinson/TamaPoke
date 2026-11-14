@@ -209,6 +209,17 @@ TEST(TouchGesture, stroking_on_pays_one_pat_per_STROKE_EVERY_MS_at_most) {
   CHECK_EQ(f.up(), TOUCH_NONE);
 }
 
+TEST(TouchGesture, a_stroke_pat_needs_two_more_turns_for_the_next_one) {
+  TG g;
+  Finger f(g);
+  f.down(180, 200);
+  f.strokeX(100, 100, 3);  // two turns: one pat
+  CHECK_EQ(f.count(TOUCH_STROKE), 1);
+  f.rest(3000);  // then the finger rests where it is: no turns, so no pat however long it stays
+  CHECK_EQ(f.count(TOUCH_STROKE), 1);
+  CHECK_EQ(f.up(), TOUCH_NONE);
+}
+
 TEST(TouchGesture, the_stroke_limit_holds_across_contacts) {
   TG g;
   Finger a(g);
@@ -224,7 +235,9 @@ TEST(TouchGesture, the_stroke_limit_holds_across_contacts) {
   CHECK(g.claimed());
   b.strokeX(100, 100, 12);  // keep going past the limit
   CHECK_EQ(b.count(TOUCH_STROKE), 1);
-  CHECK(b.strokeTimes[0] - a.strokeTimes[0] >= TG::STROKE_EVERY_MS);
+  CHECK(!a.strokeTimes.empty() && !b.strokeTimes.empty());
+  if (!a.strokeTimes.empty() && !b.strokeTimes.empty())
+    CHECK(b.strokeTimes[0] - a.strokeTimes[0] >= TG::STROKE_EVERY_MS);
   CHECK_EQ(b.up(), TOUCH_NONE);
 }
 
@@ -298,6 +311,48 @@ TEST(TouchGesture, the_rest_must_last_DRAG_REST_MS) {
   f.x = 200 + TG::DRAG_START + 10;  // a jump 220 ms in: before the 250 ms rest is over
   f.sample();
   CHECK_EQ(f.count(TOUCH_DRAG_START), 0);
+}
+
+TEST(TouchGesture, a_late_first_sample_already_far_away_is_a_swipe_not_a_drag) {
+  // the loop was busy: the first poll after down() comes at 260 ms, 100 px along
+  TG g;
+  g.down(10000, 200, 220, true);
+  CHECK_EQ(g.held(10260, 300, 220, true), TOUCH_NONE);
+  CHECK_EQ(g.held(10280, 330, 220, true), TOUCH_NONE);
+  CHECK_EQ(g.lift(10300, false), TOUCH_SWIPE_RIGHT);
+}
+
+TEST(TouchGesture, sparse_polls_that_never_saw_a_rest_do_not_drag) {
+  // a 100 ms cadence: 205 at 100 ms, 210 at 200 ms, then 330 at 300 ms. No sample at or after
+  // 250 ms found the finger on its spot, so nothing confirmed a rest.
+  TG g;
+  g.down(10000, 200, 220, true);
+  CHECK_EQ(g.held(10100, 205, 220, true), TOUCH_NONE);
+  CHECK_EQ(g.held(10200, 210, 220, true), TOUCH_NONE);
+  CHECK_EQ(g.held(10300, 330, 220, true), TOUCH_NONE);
+  CHECK_EQ(g.lift(10320, false), TOUCH_SWIPE_RIGHT);
+  // the same cadence with a sample after the rest time on the spot does drag
+  TG h;
+  h.down(20000, 200, 220, true);
+  CHECK_EQ(h.held(20100, 205, 220, true), TOUCH_NONE);
+  CHECK_EQ(h.held(20300, 210, 220, true), TOUCH_NONE);  // 300 ms, still within the slop
+  CHECK_EQ(h.held(20400, 330, 220, true), TOUCH_DRAG_START);
+  CHECK_EQ(h.lift(20420, false), TOUCH_NONE);
+}
+
+TEST(TouchGesture, a_still_dragging_finger_reports_no_move) {
+  TG g;
+  Finger f(g);
+  f.down(200, 220);
+  f.rest(TG::DRAG_REST_MS + 20);
+  f.moveTo(280, 220, 200);
+  CHECK_EQ(f.count(TOUCH_DRAG_START), 1);
+  int moves = f.count(TOUCH_DRAG_MOVE);
+  f.rest(1000);  // the finger holds still: samples keep coming at the same x
+  CHECK_EQ(f.count(TOUCH_DRAG_MOVE), moves);
+  CHECK(g.dragging(f.t));  // and it is still dragging
+  f.moveTo(285, 220, 20);
+  CHECK_EQ(f.count(TOUCH_DRAG_MOVE), moves + 1);
 }
 
 TEST(TouchGesture, a_vertical_slide_after_a_rest_is_no_drag) {

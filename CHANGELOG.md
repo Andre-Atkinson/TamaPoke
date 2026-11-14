@@ -18,8 +18,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   sideways, makes it walk after the finger. Each gesture counts as one pat
   (+5 JOY, +1 bond) under the same daily bond limit as the rest of the care, so
   gestures never earn more than tapping. They work only on the main screen with
-  the creature awake; swipes, the release long-press, the touch locks and the
-  strength-training taps behave as before. Nothing new is saved. Idea from
+  the creature awake; taps, the release long-press, the touch locks and the
+  strength-training taps behave as before, and so do swipes that move at once.
+  One change: a sideways slide that starts with a short pause on the creature
+  makes it walk after the finger instead of opening the Pokédex (swipe without
+  pausing, or start off the creature). Nothing new is saved. Idea from
   Mu-Muu/TamaPoke, re-implemented offline.
 
 - **The clock asks for the time after a power-off.** With no time at boot (the
