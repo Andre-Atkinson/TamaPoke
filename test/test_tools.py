@@ -1658,8 +1658,8 @@ class TestSimGenSketch(unittest.TestCase):
         with open(os.path.join(ROOT, 'TamaPoke.ino'), encoding='utf-8', errors='surrogateescape') as f:
             lines = f.readlines()
         names = {re.match(r'.*?(\w+)\(', p).group(1) for _, p, _ in self.gen.find_functions(lines)}
-        for must in ('setup', 'loop', 'render', 'handleTouch', 'wakeUI', 'flushUI', 'renderCardCare',
-                     'careTap', 'readTrainingTouch', 'touchIsr', 'mixKey', 'onSwipe'):
+        for must in ('setup', 'loop', 'render', 'handleTouch', 'wakeUI', 'flushUI', 'bedApply',
+                     'attnLoop', 'readTrainingTouch', 'touchIsr', 'mixKey', 'onSwipe'):
             self.assertIn(must, names)
         # No name depends on where it sits in the file: the last definition of the .ino, found
         # with a plain column-0 pattern of its own (not the generator's regex), must be the last
