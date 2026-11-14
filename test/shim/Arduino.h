@@ -1,6 +1,6 @@
 // Shim minimo de Arduino.h para ejecutar la logica del firmware en el host.
 // Cubre lo que usan pet.cpp / i18n.cpp (tests) y, desde el simulador (sim/),
-// el resto del nucleo Arduino-ESP32 que toca TamaPoke.ino: String, Print, pines,
+// el resto del nucleo Arduino-ESP32 que tocan TamaPoke.ino y sus modulos: String, Print, pines,
 // interrupciones, delay(), ESP.*. El reloj es falso y controlable para que los
 // tests y el simulador sean deterministas: delay() solo adelanta ese reloj.
 #pragma once

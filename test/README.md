@@ -49,8 +49,9 @@ python3 test/test_tools.py    # solo las herramientas de tools/
 ## Que NO se cubre
 
 Todo lo que necesita la placa: pantalla, tactil y consola serie (`TamaPoke.ino`
-y los modulos que salieron de el, como `uitext.cpp` y `serialcmd.cpp`), audio
-(`audio.cpp`), tarjeta SD (`sdmon.cpp`) y RTC/bateria (`rtcbat.cpp`). El
+y los modulos que salieron de el: `scene.cpp`, `gameui.cpp`, `uitext.cpp` y
+`serialcmd.cpp`), audio (`audio.cpp`), tarjeta SD (`sdmon.cpp`) y RTC/bateria
+(`rtcbat.cpp`). El
 `.ino` y esos modulos tampoco se compilan aqui: los compila el simulador
 (`tools/sim.sh`, ver la seccion "Simulator" del README) contra una placa
 simulada, y `tools/gate.sh` lo corre en las dos placas. Los tests de este directorio se compilan con el `char`

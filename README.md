@@ -347,7 +347,7 @@ witness it), each opening a two-option dialog:
 - **PMD SpriteCollab** (everything — main screen, stat card, minigame **and the
   Pokédex grid + detail view**): behaviour sprites — `tools/pack_pmd.py` packs
   actions (Idle, Walk L/R, Sleep, Eat, Hurt, Attack, Pose, Nod, DeepBreath) into
-  the multi-action **TPK2** format (`/mons/pNNN.bin`). The engine in `TamaPoke.ino`
+  the multi-action **TPK2** format (`/mons/pNNN.bin`). The engine in `scene.cpp`
   makes the creature wander, gesture, curl up to sleep, chew and wince. Anchored by
   the feet (lowest content row), not the canvas. The Pokédex thumbnails
   (`thumbs.bin`, TPTH) are derived from these by `tools/make_thumbs.py`.
@@ -426,10 +426,12 @@ beach, forest, volcano, mountain, snow). Sleeping forces night.
 
 ## Layout
 
-- `TamaPoke.ino` — init, game loop, render of every screen, gestures, audio
+- `TamaPoke.ino` — init, game loop, touch and gestures, `render()` and the screens not split out yet (card, clock, keyboard, gallery, starter and egg choice), audio
 - `app.h` — what `TamaPoke.ino` shares with the modules split out of it (#41)
 - `serialcmd.h` / `serialcmd.cpp` — the USB serial console (SD provisioning and debug commands)
 - `uitext.h` / `uitext.cpp` — text size, cursor and font in every language
+- `scene.h` / `scene.cpp` — the main screen: sky and biome, the pet's PMD animation and walk, bath, poops, header, bars, buttons, the endings and their buttons
+- `gameui.h` / `gameui.cpp` — the minigames' screens and the strength-training sack (their logic is in `minigames.h`)
 - `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
 - `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)
 - `rtcbat.h` / `rtcbat.cpp` — PCF85063 RTC + AXP2101 PMU (battery, brightness, PWR button)
