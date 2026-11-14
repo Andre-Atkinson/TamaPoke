@@ -34,6 +34,7 @@ def main():
     out = []
     out.append("#pragma once\n#include <stdint.h>\n#include \"i18n.h\"  // gLang\n\n")
     out.append("// GENERADO por tools/gen_dex.py desde tools/dex_data.py - no editar\n\n")
+    out.append("// The tables and functions are inline (C++17), not static: the linker keeps one\n// copy however many source files include this header (#41).\n\n")
     out.append("#define DEX_COUNT 151\n")
     out.append("#define DEX_EEVEE 133  // rama al azar: 134/135/136\n\n")
     out.append(
@@ -52,7 +53,7 @@ def main():
     evolved = {evo for *_, evo, _lvl in [(d[4], d[5]) for d in DEX] for evo in [_[0] for _ in [(d[4],) for d in DEX]]}
     evolved = {d[4] for d in DEX if d[4]} | {135, 136}
     rarities = []
-    out.append("static const DexEntry DEX_TBL[DEX_COUNT + 1] = {\n")
+    out.append("inline const DexEntry DEX_TBL[DEX_COUNT + 1] = {\n")
     out.append('  { "?", 0, 0, 0, 0x2946, 50, 50, 50, 50, 0 },  // 0: sin usar\n')
     for num, slug, display, typ, evo, lvl in DEX:
         acc = rgb565(TYPE_ACCENTS[typ])
@@ -76,7 +77,7 @@ def main():
         "// del ingles en gen 1 (ES/IT/PT usan el de DEX_TBL); JA y KO van en UTF-8,\n"
         "// que se pinta con la fuente U8g2. nullptr = sin nombre propio.\n")
     for lg in ('fr', 'de', 'ja', 'ko'):
-        out.append(f"static const char *const DEX_NAME_{lg.upper()}[DEX_COUNT + 1] = {{\n")
+        out.append(f"inline const char *const DEX_NAME_{lg.upper()}[DEX_COUNT + 1] = {{\n")
         fila = []
         for num in range(0, 152):
             nm = LOCAL_NAMES.get(num, {}).get(lg)
@@ -90,7 +91,7 @@ def main():
     out.append(
         "// Nombre de la especie en el idioma activo (cae al de DEX_TBL si ese\n"
         "// idioma no tiene nombre propio para ella).\n"
-        "static inline const char *dexName(int16_t dex) {\n"
+        "inline const char *dexName(int16_t dex) {\n"
         "  if (dex < 1 || dex > DEX_COUNT) return DEX_TBL[0].name;\n"
         "  const char *n = (gLang == LANG_FR)   ? DEX_NAME_FR[dex]\n"
         "                  : (gLang == LANG_DE) ? DEX_NAME_DE[dex]\n"
@@ -101,7 +102,7 @@ def main():
         "}\n\n")
 
     out.append("// el primer huevo de la partida: iniciales clasicos\n")
-    out.append("static const int16_t CLASSIC_DEX[] = { %s };\n" % ", ".join(map(str, CLASSIC)))
+    out.append("inline const int16_t CLASSIC_DEX[] = { %s };\n" % ", ".join(map(str, CLASSIC)))
     out.append(f"#define NUM_CLASSIC_DEX {len(CLASSIC)}\n")
     from collections import Counter
     c = Counter(rarities)

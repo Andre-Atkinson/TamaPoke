@@ -426,7 +426,10 @@ beach, forest, volcano, mountain, snow). Sleeping forces night.
 
 ## Layout
 
-- `TamaPoke.ino` — init, game loop, render of every screen, gestures, serial console, audio
+- `TamaPoke.ino` — init, game loop, render of every screen, gestures, audio
+- `app.h` — what `TamaPoke.ino` shares with the modules split out of it (#41)
+- `serialcmd.h` / `serialcmd.cpp` — the USB serial console (SD provisioning and debug commands)
+- `uitext.h` / `uitext.cpp` — text size, cursor and font in every language
 - `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
 - `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)
 - `rtcbat.h` / `rtcbat.cpp` — PCF85063 RTC + AXP2101 PMU (battery, brightness, PWR button)
@@ -492,8 +495,8 @@ To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in
 
 ## Simulator
 
-`tools/sim.sh` runs the real `TamaPoke.ino` on the Mac, against a simulated
-board, and saves PNG screenshots of the panel. Use it to see UI and care changes
+`tools/sim.sh` runs the real firmware (`TamaPoke.ino` and its modules) on the
+Mac, against a simulated board, and saves PNG screenshots of the panel. Use it to see UI and care changes
 without flashing. It needs nothing beyond what the firmware build already uses:
 a C++ compiler, Python 3, and the GFX Library for Arduino and U8g2 libraries that
 arduino-cli installed.
@@ -502,6 +505,11 @@ arduino-cli installed.
 tools/sim.sh --lang ja --script care-page.txt --out shots/
 tools/sim_shots.sh        # every main screen in all 8 languages -> shots/<lang>/
 ```
+
+`sim/scripts/every-screen.txt` reaches what `screens.txt` does not (evolution,
+the dialogs, every minigame, the biomes, the endings, the BOOT and PWR presses).
+Run with the other scripts in `sim/scripts/`, it lets two builds be compared
+screen by screen.
 
 A script is one step per line (the full list is in `sim/script.h`):
 `tap X Y`, `hold X Y 3s`, `swipe left|right|up|down`, `press pwr 3`,

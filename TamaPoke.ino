@@ -18,7 +18,6 @@
 #include <Wire.h>
 #include "Arduino_GFX_Library.h"
 #include "TouchDrvCSTXXX.hpp"
-#include <U8g2lib.h>  // fuentes CJK (japones); ver applyLangFont()
 #include <esp_sleep.h>
 #include <driver/gpio.h>
 #include "pin_config.h"
@@ -43,6 +42,9 @@
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "trainingcapture.h"
+#include "app.h"
+#include "serialcmd.h"
+#include "uitext.h"
 #include <Preferences.h>
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
@@ -57,9 +59,6 @@ Arduino_CO5300 *panel = new Arduino_CO5300(
 Arduino_Canvas *gfx = new Arduino_Canvas(LCD_WIDTH, LCD_HEIGHT, panel);
 
 TouchDrvCST92xx touch;
-// fuente CJK activa: de momento siempre false, la carga llegara con el
-// soporte de japones/coreano/chino (ver PR #13)
-bool gCjkFont = false;
 #define TOUCH_ADDR 0x5A  // CST9217
 Pet pet;
 
@@ -182,8 +181,6 @@ int flashIdxForDex(int16_t dex) {
   return (dex >= 1 && dex <= 9) ? IDX[dex] : -1;
 }
 
-#define CX 233  // centro de la pantalla redonda
-#define CY 233
 // settingslayout.h lays the settings pills out around its own copy of the centre
 static_assert(CX == SET_PANEL_C && CY == SET_PANEL_C, "settingslayout.h assumes the panel centre is (CX, CY)");
 #define PET_CY 202  // centro vertical del sprite
@@ -252,7 +249,7 @@ static bool takeTouchIrq() {
   portEXIT_CRITICAL(&touchIrqMux);
   return pending;
 }
-static TrainingCapture trainingCapture;
+TrainingCapture trainingCapture;
 static bool trainingCaptureReady = false;
 static bool trainingCaptureStarted = false;  // worker task exists (begin() runs once)
 static bool trainingNeedsRelease = false;
@@ -296,7 +293,7 @@ static uint32_t pwrEdgeAt = 0;
 static bool touchNeedsRelease = false;
 #endif
 // Both boards: syncPanelPower() sleeps the CO5300 on screen-off on either one.
-static bool panelAsleep = false;
+bool panelAsleep = false;
 static uint8_t panelBrightness = 255;  // ultimo brillo enviado al panel (255 = forzar el primero)
 #if BOARD_AMOLED_175C
 static char controlToast[48] = "";
@@ -678,7 +675,7 @@ void bedSample(uint32_t epoch) {
 // deja de pedir la hora (clockprompt.h lee bedEdge.stale()). La hora debe haber quedado
 // puesta de verdad (TIME con un valor fuera de rango no cambia el reloj de software de
 // la 1.75C, y sin PCF85063 la 1.75 original sigue sin hora).
-static void bedClockSet(uint32_t set) {
+void bedClockSet(uint32_t set) {
   uint32_t now = rtcEpoch();
   if (!clockSetTook(set, now)) return;
   clockMarkStale(clockStaleMark, false);  // a soft reset now keeps a trusted clock
@@ -1138,142 +1135,6 @@ void idleWait(PowerCtx c) {
   // A press sequence is pending: keep the loop at ~40 ms so pollPwrButton() sees each press.
   if (controlsBusy) { delay(10); return; }
   delay(idleDelayMs(c));
-}
-
-// ---------- consola serie (provision de SD + depuracion) ----------
-
-void handleSerial() {
-  if (!Serial.available()) return;
-  String line = Serial.readStringUntil('\n');
-  line.trim();
-  if (line.length() == 0) return;
-#if BOARD_AMOLED_175C
-  if (line == "LOCK?") {
-    Serial.printf("LOCK locked=%d panel_sleep=%d\n", screenLock.locked() ? 1 : 0,
-                  panelAsleep ? 1 : 0);
-    return;
-  }
-#endif
-  if (sdSerialCommand(line)) return;
-
-  if (line == "HATCH") {
-    pet.eggTap(); pet.eggTap(); pet.eggTap();
-    Serial.println("DONE");
-  } else if (line.startsWith("SPEC ")) {
-    int n = line.substring(5).toInt();
-    if (n >= 1 && n <= DEX_COUNT) {
-      pet.cancelEggChoice();  // con un bicho en pantalla ya no hay huevo que elegir
-      pet.prevSpeciesId = pet.speciesId;
-      pet.speciesId = n;
-      Serial.printf("especie #%d %s\n", n, DEX_TBL[n].name);
-    }
-    Serial.println("DONE");
-  } else if (line.startsWith("LVL ")) {
-    pet.ageMinutes = (uint32_t)line.substring(4).toInt() * MINUTES_PER_LEVEL;
-    Serial.println("DONE");
-  } else if (line.startsWith("TIME ")) {
-    uint32_t e = (uint32_t)line.substring(5).toInt();
-    rtcSetEpoch(e);
-    pet.setClock(e);
-    bedClockSet(e);
-    // the open screen shows the time just set (only if it took: a TIME the clock ignores
-    // must not overwrite what the player is editing)
-    if (clockOpen && clockSetTook(e, rtcEpoch())) loadClockFields(rtcEpoch());
-    Serial.printf("rtc=%u\n", rtcEpoch());
-    Serial.println("DONE");
-  } else if (line.startsWith("RTCSET ")) {  // solo RTC (simular apagados en pruebas)
-    rtcSetEpoch((uint32_t)line.substring(7).toInt());
-    Serial.printf("rtc=%u\n", rtcEpoch());
-    Serial.println("DONE");
-  } else if (line == "TIME") {
-    Serial.printf("rtc=%u\n", rtcEpoch());
-    Serial.println("DONE");
-  } else if (line == "GAL") {
-    galleryOpen = !galleryOpen;
-    galleryDetail = 0;
-    galleryDirty = true;
-    if (!galleryOpen) galleryPmd.unload();
-    Serial.println("DONE");
-  } else if (line == "EGGS") {
-    // simula 20 tiradas de huevo (no cambia el estado del juego)
-    for (int i = 0; i < 20; i++) {
-      int16_t d = pet.pickEggSpecies();
-      Serial.printf("%d:%s(r%u) ", d, DEX_TBL[d].name, DEX_TBL[d].rarity);
-    }
-    Serial.println();
-    Serial.println("DONE");
-  } else if (line == "SHINY") {  // alterna shiny del actual (pruebas)
-    pet.shiny = !pet.shiny;
-    Serial.printf("shiny=%d\n", pet.shiny);
-    Serial.println("DONE");
-  } else if (line.startsWith("NICK ")) {
-    pet.rename(line.substring(5).c_str());
-    Serial.printf("nick=%s\n", pet.nick);
-    Serial.println("DONE");
-  } else if (line == "CAREDAY") {  // simula un dia nuevo cuidado (pruebas)
-    pet.setClock(pet.lastSeenEpoch + 86400);
-    pet.caress();
-    Serial.printf("streak=%u bond=%u medals=0x%X\n", pet.streak, pet.bond, pet.medals);
-    Serial.println("DONE");
-  } else if (line == "BYE") {
-    pet.startFarewell();
-    Serial.println("DONE");
-  } else if (line == "RUN") {
-    pet.startRunaway();
-    Serial.println("DONE");
-  } else if (line == "CARE?") {  // read-only: relaxed pace / bedtime settings and whether it is bedtime now
-    uint32_t e = rtcEpoch();
-    Serial.printf("pace=%u bed=%u inbed=%d stale=%d egg=%u picking=%d\n", pet.pace, pet.bedPreset,
-                  e && isBedtime(pet.bedPreset, bedMinuteOfDay(e)) ? 1 : 0, bedEdge.stale() ? 1 : 0,
-                  pet.eggPickMode, pet.awaitingEgg() ? 1 : 0);
-    Serial.println("DONE");
-  } else if (line == "BEEP") {
-    sfxPlay(SFX_HATCH);  // prueba de audio
-    Serial.println("DONE");
-  } else if (line == "ABANDON") {
-    pet.dbgRunawayReady();  // fuerza el estado "lista para escaparse" (test del boton)
-    Serial.println("DONE");
-  } else if (line == "WIPE") {
-    pet.factoryReset();     // borra NVS y reinicia -> partida nueva (eleccion de inicial)
-    Serial.println("DONE");
-    delay(100);
-    ESP.restart();
-  } else if (line == "REG") {
-    Serial.printf("pokedex %u/151:", pet.registeredCount());
-    for (int i = 1; i <= 151; i++)
-      if (pet.isRegistered(i)) Serial.printf(" %d", i);
-    Serial.println();
-    Serial.println("DONE");
-#if BOARD_AMOLED_175C
-  } else if (line == "TRAINTRACE ON" || line == "TRAINTRACE OFF" || line == "TRAINTRACE?") {
-    if (line != "TRAINTRACE?") trainingCapture.setTracing(line == "TRAINTRACE ON");
-    Serial.printf("TRAINTRACE %s poll=20ms trace_drops=%lu kind=0:error,1:contact,2:release,3:empty,4:cover\n",
-                  trainingCapture.tracing() ? "ON" : "OFF", (unsigned long)trainingCapture.traceDropped());
-    Serial.println("DONE");
-#endif
-  } else if (line == "SAVE") {  // write pending pet changes now (tools/pet_save.sh runs it before a backup)
-    pet.saveNow();  // always: lastSeenEpoch and the 5th-tick changes may be RAM-only
-    Serial.println("saved");
-    Serial.println("DONE");
-  } else if (line == "HEALTH") {
-    Serial.printf("up=%lus heap=%u min=%u sd=%d mon=%d\n",
-                  (unsigned long)(millis() / 1000), ESP.getFreeHeap(),
-                  ESP.getMinFreeHeap(), sdReady, pmd.loaded || mon.loaded);
-    Serial.println("DONE");
-  } else if (line == "STATS") {
-    Serial.printf("spec=%d nv=%u com=%u fel=%u ene=%u lim=%u desc=%u sd=%d mon=%d bat=%d usb=%d rtc=%u\n",
-                  pet.speciesId, pet.level(), pet.fullness, pet.joy, pet.energy,
-                  pet.hygiene, pet.careMistakes, sdReady, mon.loaded,
-                  batPercent(), usbPresent(), rtcEpoch());
-    Serial.printf("peso=%u fue=%u def=%u vel=%u genes=%u/%u/%u tr=%u/%u/%u baya=%d\n",
-                  pet.weight, pet.atkStat(), pet.defStat(), pet.speStat(),
-                  pet.geneAtk, pet.geneDef, pet.geneSpe,
-                  pet.trAtk, pet.trDef, pet.trSpe, pet.berryKnown);
-    Serial.printf("shiny=%d streak=%u/%u bond=%u medals=0x%X(%u) nick=%s\n",
-                  pet.shiny, pet.streak, pet.bestStreak, pet.bond, pet.medals,
-                  pet.totalMedals, pet.nick);
-    Serial.println("DONE");
-  }
 }
 
 // ---------- entrada tactil ----------
@@ -2037,128 +1898,6 @@ void eggSelectTap(int16_t x, int16_t y) {
     }
     return;
   }
-}
-
-// ---------- texto: tamano y cursor (preparado para fuentes CJK) ----------
-// La fuente clasica ancla el cursor en la ESQUINA SUPERIOR del texto, y las 74
-// coordenadas Y del codigo estan escritas asi. Las fuentes U8g2 lo anclan en la
-// LINEA BASE (drawChar hace curY = y - baseline*size), asi que al cambiar de
-// fuente todo el texto subiria. setCur() compensa esa diferencia en un solo
-// sitio, para que la Y siga significando "arriba" con cualquier fuente.
-//
-// setSize() existe solo porque la libreria tiene textsize_x protegido y setCur()
-// necesita saber la escala activa para multiplicar el ascenso.
-//
-// Con la fuente clasica gFontAscent es 0, asi que setCur(x,y) es exactamente
-// setCur(x,y): esto no mueve un pixel en los seis idiomas actuales.
-uint8_t gTextSize = 1;
-int gFontAscent = 0;  // px del borde superior a la linea base, 0 = fuente clasica
-
-// --- ajuste de la fuente CJK (los dos valores van juntos) ---
-// La fuente clasica mide 8 px de alto a escala 1. Si la CJK mide mas, hay que
-// dividir la escala para que los tamanos cuadren... pero dividir ADELGAZA el
-// trazo: a escala 1 la unifont pinta lineas de 1 px mientras el latino a escala
-// 2 las pinta de 2, y el japones se ve tenue aunque mida igual.
-//
-// Por eso conviene una fuente base pequena Y EN NEGRITA (_b_), que permita usar
-// la MISMA escala que el latino: asi el grosor coincide y no hay que dividir.
-//
-// Se probo una fuente realmente negrita (b10_b) y NO sirve a este tamano: los
-// trazos se juntan y los kana pierden detalle, ilegibles incluso para un lector
-// nativo. Se vuelve a la unifont, que es la mas legible, y el trazo fino se
-// compensa en printT() repintando 1 px desplazado (pseudo-negrita).
-// japanese3 y no japanese1: los subconjuntos 1 y 2 traen kana y kanji pero
-// NINGUNA puntuacion CJK, y Arduino_GFX no dibuja nada cuando le falta el
-// glifo (ni avanza el cursor), asi que los 25 signos ！ y ？ de las cadenas
-// desaparecian. Es la misma familia unifont: cabecera de metricas identica y
-// superconjunto estricto, comprobado glifo a glifo sobre los 226 codepoints
-// que usa el firmware. Cuesta 102 KB mas de flash y no mueve un pixel.
-// El coreano necesita una fuente con hangul, y CJK_FONT era un solo #define.
-// En vez de dar por hecho que un subconjunto sirve para las dos escrituras, la
-// fuente se elige por idioma. korean2 y no korean1: el coreano de aqui usa 296
-// silabas distintas y todas estan en KS X 1001, el conjunto de 2350 que es el
-// tamano medido para korean2; korean1 trae 478. La comprobacion mira la
-// pertenencia a KS X 1001, no recorre la tabla de la fuente, asi que se apoya
-// en que el conjunto de korean2 sea ese; el ASCII se da por presente.
-// Sin comprobar en placa: si CJK_SIZE_DIV 2 le sienta a korean2 igual que a la
-// japonesa. El ascenso si se mide en tiempo de ejecucion en applyLangFont().
-#define CJK_FONT_JA u8g2_font_unifont_t_japanese3
-#define CJK_FONT_KO u8g2_font_unifont_t_korean2
-#define CJK_SIZE_DIV 2
-
-void setSize(uint8_t n) {
-  // gTextSize guarda la escala REALMENTE aplicada, no la pedida: setCur()
-  // multiplica el ascenso por ella y tiene que cuadrar con lo que se pinta.
-  gTextSize = gCjkFont ? (n >= CJK_SIZE_DIV ? n / CJK_SIZE_DIV : 1) : n;
-  gfx->setTextSize(gTextSize);
-}
-
-void setCur(int x, int y) {
-  gfx->setCursor(x, y + gFontAscent * gTextSize);
-}
-
-// Fija la fuente del idioma activo. Es el UNICO sitio que la toca: el resto del
-// codigo dibuja igual para todos los idiomas gracias a textW()/setCur().
-//
-// El ascenso se mide en vez de codificarlo: getTextBounds() devuelve y1 como
-// desplazamiento del borde superior respecto al cursor, negativo con las fuentes
-// U8g2 (que anclan en la linea base). Asi setCur() puede seguir tratando la Y
-// como "arriba" sea cual sea la fuente, sin constantes magicas por fuente.
-void applyLangFont() {
-  gCjkFont = LANG_IS_CJK(gLang);
-  if (!gCjkFont) {
-    gfx->setFont();            // 5x7 clasica, CP437: la Y ya es el borde superior
-    gfx->setUTF8Print(false);
-    gFontAscent = 0;
-    return;
-  }
-  gfx->setFont((gLang == LANG_KO) ? CJK_FONT_KO : CJK_FONT_JA);
-  gfx->setUTF8Print(true);     // las cadenas CJK son UTF-8 multibyte
-  int16_t x1, y1;
-  uint16_t w, h;
-  uint8_t antes = gTextSize;
-  gfx->setTextSize(1);
-  gfx->getTextBounds("A", 0, 0, &x1, &y1, &w, &h);
-  gFontAscent = -y1;           // y1 negativo: subir desde la linea base
-  gfx->setTextSize(antes);
-}
-
-// ---------- medida de texto (preparado para fuentes CJK) ----------
-// La fuente clasica de Arduino_GFX avanza 6 px por caracter a tamano 1, y la UI
-// centraba con strlen(s)*6*n a pelo. Eso solo vale para un byte por caracter y
-// ancho fijo: con una fuente U8g2 para japones/coreano/chino, ni strlen() cuenta
-// caracteres (UTF-8 es multibyte) ni todos miden lo mismo. Centralizarlo aqui es
-// lo que permitira anadir esos idiomas sin tocar cada punto de dibujado.
-//
-// Para la fuente clasica devuelve EXACTAMENTE la misma cuenta que habia antes,
-// asi que este cambio no mueve un pixel en los seis idiomas actuales.
-uint16_t textW(const char *s, uint8_t size) {
-  if (!gCjkFont) return (uint16_t)strlen(s) * 6 * size;
-  int16_t x1, y1;
-  uint16_t w, h;
-  gfx->getTextBounds(s, 0, 0, &x1, &y1, &w, &h);
-  return w;
-}
-
-// x del cursor para dejar el texto centrado en CX
-int centerX(const char *s, uint8_t size) { return CX - textW(s, size) / 2; }
-
-// Imprime respetando la fuente activa. Con la CJK repinta el texto desplazado
-// 1 px: la unifont a escala reducida deja trazos de 1 px y se ve tenue, y una
-// fuente de verdad negrita a este tamano junta los trazos y estropea los kana.
-// Repintar engorda el trazo sin deformar el glifo. Probado en placa por
-// usakomint, que comparo las dos opciones en japones.
-// El teclado de apodos es solo alfabeto (se deja asi a proposito), de modo que
-// aqui nunca hay CJK y no hace falta engordar nada.
-void printT(char c) { gfx->print(c); }
-
-void printT(const char *s) {
-  if (gCjkFont) {
-    int16_t x = gfx->getCursorX(), y = gfx->getCursorY();
-    gfx->print(s);
-    gfx->setCursor(x + 1, y);
-  }
-  gfx->print(s);
 }
 
 // Pantallas que solo cambian con un toque (o con un dato que cambia muy de vez en cuando):
@@ -2925,7 +2664,7 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
 // El usuario pone su hora LOCAL a ojo; el firmware la usa tal cual, asi que
 // no hay que gestionar zona horaria. Preserva el dia (no rompe racha/edad).
 
-static void loadClockFields(uint32_t e) {
+void loadClockFields(uint32_t e) {
   clockH = (e / 3600) % 24;
   clockM = (e / 60) % 60;
 }

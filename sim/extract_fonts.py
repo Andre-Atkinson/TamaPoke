@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Copia las fuentes U8g2 que usa TamaPoke.ino desde la libreria U8g2 instalada.
+"""Copia las fuentes U8g2 que usa uitext.cpp desde la libreria U8g2 instalada.
 
 clib/u8g2_fonts.c pesa ~40 MB (todas las fuentes de U8g2); compilarlo entero en el
 host tarda mucho. Este script saca solo los arrays pedidos, tal cual, a un .c

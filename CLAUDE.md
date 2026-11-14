@@ -60,7 +60,7 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
   `tools/update_175c.sh` (runs both of those, so sends `SAVE` and
   `TIME <epoch>`) and `tools/send_sd.py` (`PUT`). The owner's request to run
   one covers the commands it always sends; `tools/board.py cmd X` needs the
-  request that `X` itself needs. (From `handleSerial` in `TamaPoke.ino` and
+  request that `X` itself needs. (From `handleSerial` in `serialcmd.cpp` and
   `sdSerialCommand` in `sdmon.cpp`; re-check when those change.)
 - **Installing anything:** ask the owner first. Python packages only ever go
   into `.venv/`, never system-wide.

@@ -17,6 +17,21 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, 'tools')
 sys.path.insert(0, TOOLS)
 
+# The firmware's own sources in the sketch folder: TamaPoke.ino and the modules split
+# out of it (#41), with the rest of the sketch root. Left out: the generated dex.h and
+# species.h, and the translations in i18n.cpp, whose literals are UTF-8 on purpose.
+SKETCH_SKIP = {'dex.h', 'species.h', 'i18n.cpp'}
+
+
+def sketch_sources():
+    """{name: text} of every sketch-root .ino/.cpp/.h except SKETCH_SKIP."""
+    out = {}
+    for name in sorted(os.listdir(ROOT)):
+        if name.endswith(('.ino', '.cpp', '.h')) and name not in SKETCH_SKIP:
+            with open(os.path.join(ROOT, name), encoding='utf-8') as fh:
+                out[name] = fh.read()
+    return out
+
 
 class TestToolsCompile(unittest.TestCase):
     def test_todos_los_scripts_compilan(self):
@@ -167,25 +182,29 @@ class TestGeneratedFiles(unittest.TestCase):
 
 
 class TestSketchSanity(unittest.TestCase):
-    """Comprobaciones baratas sobre el .ino que no necesitan compilarlo."""
+    """Comprobaciones baratas sobre el sketch que no necesitan compilarlo."""
 
     @classmethod
     def setUpClass(cls):
-        with open(os.path.join(ROOT, 'TamaPoke.ino')) as fh:
-            cls.ino = fh.read()
+        cls.sources = sketch_sources()
+
+    def test_las_fuentes_del_sketch_incluyen_el_ino(self):
+        self.assertIn('TamaPoke.ino', self.sources)
 
     def test_el_sketch_no_lleva_caracteres_no_ascii_en_literales_de_pantalla(self):
         # los comentarios pueden llevar lo que quieran; los literales, no:
         # la fuente GFX es ASCII y un acento sale como basura
-        for lineno, line in enumerate(self.ino.splitlines(), 1):
-            code = line.split('//')[0]
-            for chunk in code.split('"')[1::2]:
-                self.assertTrue(chunk.isascii(),
-                                f'TamaPoke.ino:{lineno}: literal no ASCII: {chunk!r}')
+        for name, text in self.sources.items():
+            for lineno, line in enumerate(text.splitlines(), 1):
+                code = line.split('//')[0]
+                for chunk in code.split('"')[1::2]:
+                    self.assertTrue(chunk.isascii(),
+                                    f'{name}:{lineno}: literal no ASCII: {chunk!r}')
 
     def test_las_llaves_estan_equilibradas(self):
-        self.assertEqual(self.ino.count('{'), self.ino.count('}'),
-                         'llaves descompensadas en TamaPoke.ino')
+        for name, text in self.sources.items():
+            self.assertEqual(text.count('{'), text.count('}'),
+                             f'llaves descompensadas en {name}')
 
 
 
@@ -230,7 +249,7 @@ class TestBuffersDeTexto(unittest.TestCase):
         ids = re.findall(r'\b(S_[A-Z0-9_]+)\b', cuerpo)
         filas = fmt.extract_table(leer('i18n.cpp'), 'STRINGS', len(cls.LANGS))
         cls.LIT = {sid: [fila[k] for fila in filas] for k, sid in enumerate(ids)}
-        cls.ino = leer('TamaPoke.ino').splitlines()
+        cls.sources = {name: text.splitlines() for name, text in sketch_sources().items()}
         cls.APODO = int(re.search(r'char\s+nick\[(\d+)\]', leer('pet.h')).group(1)) - 1
         base = max(len(row[2].encode()) for row in DEX)
         cls.NOMBRE = {}
@@ -279,22 +298,23 @@ class TestBuffersDeTexto(unittest.TestCase):
     def test_cada_texto_formateado_cabe_en_su_buffer_en_todos_los_idiomas(self):
         llamada = re.compile(r'snprintf\((\w+),\s*sizeof\(\1\),\s*T\((S_[A-Z0-9_]+)\)')
         revisadas = 0
-        for n, linea in enumerate(self.ino, 1):
-            m = llamada.search(linea.split('//')[0])
-            if not m:
-                continue
-            var, sid = m.groups()
-            tam = next((int(d.group(1)) for k in range(n - 2, -1, -1)
-                        for d in [re.search(r'\bchar\s+' + var + r'\s*\[(\d+)\]', self.ino[k])]
-                        if d), None)
-            self.assertIsNotNone(tam, f'TamaPoke.ino:{n}: no encuentro la declaracion de {var}')
-            revisadas += 1
-            for li, lang in enumerate(self.LANGS):
-                with self.subTest(linea=n, id=sid, idioma=lang):
-                    peor = self.peor_caso(sid, li)
-                    self.assertLessEqual(
-                        peor, tam,
-                        f'TamaPoke.ino:{n}: {var}[{tam}] con {sid} en {lang} necesita {peor} bytes')
+        for name, lineas in self.sources.items():
+            for n, linea in enumerate(lineas, 1):
+                m = llamada.search(linea.split('//')[0])
+                if not m:
+                    continue
+                var, sid = m.groups()
+                tam = next((int(d.group(1)) for k in range(n - 2, -1, -1)
+                            for d in [re.search(r'\bchar\s+' + var + r'\s*\[(\d+)\]', lineas[k])]
+                            if d), None)
+                self.assertIsNotNone(tam, f'{name}:{n}: no encuentro la declaracion de {var}')
+                revisadas += 1
+                for li, lang in enumerate(self.LANGS):
+                    with self.subTest(fichero=name, linea=n, id=sid, idioma=lang):
+                        peor = self.peor_caso(sid, li)
+                        self.assertLessEqual(
+                            peor, tam,
+                            f'{name}:{n}: {var}[{tam}] con {sid} en {lang} necesita {peor} bytes')
         self.assertGreater(revisadas, 10, 'el patron de snprintf ya no encuentra las llamadas')
 
 
@@ -1639,7 +1659,7 @@ class TestSimGenSketch(unittest.TestCase):
             lines = f.readlines()
         names = {re.match(r'.*?(\w+)\(', p).group(1) for _, p, _ in self.gen.find_functions(lines)}
         for must in ('setup', 'loop', 'render', 'handleTouch', 'wakeUI', 'flushUI', 'renderCardCare',
-                     'careTap', 'readTrainingTouch', 'touchIsr', 'printT', 'drawMap'):
+                     'careTap', 'readTrainingTouch', 'touchIsr', 'mixKey', 'drawMap'):
             self.assertIn(must, names)
         out = self.gen.generate(os.path.join(ROOT, 'TamaPoke.ino'), lines)
         self.assertEqual(out.count('\n#line '), 2)

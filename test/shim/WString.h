@@ -1,5 +1,5 @@
 // Shim de la clase String de Arduino sobre std::string. Solo los metodos que usan
-// el firmware (consola serie de TamaPoke.ino y sdmon.cpp) y algunos habituales.
+// el firmware (consola serie de serialcmd.cpp y sdmon.cpp) y algunos habituales.
 #pragma once
 #include <stdint.h>
 #include <stdlib.h>
