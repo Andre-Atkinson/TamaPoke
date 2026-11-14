@@ -125,6 +125,9 @@ BedEvent bedPending = BED_NONE;  // evento a la espera de que no haya minijuego 
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
 ClockPrompt clockPrompt;      // asks for the time after a reseed (clockprompt.h, #10)
+// Declared here, not left to the Arduino preprocessor: it skips its own prototype when
+// the sketch has one, and loop() and onSwipeV() both call it before its definition.
+void openClock();
 // The stale flag of bedEdge, kept through soft resets: RTC memory survives a crash,
 // watchdog or ESP.restart like the 1.75C soft clock does, and power loss clears both.
 RTC_NOINIT_ATTR ClockStaleMark clockStaleMark;
@@ -1324,8 +1327,6 @@ void handleTouch() {
 }
 
 // deslizar vertical: abre/cierra la ficha del bicho
-void openClock();  // prototipo
-
 void onSwipeV(int dir) {
   if (pet.awaitingStarter() || pet.awaitingEgg()) return;  // bloqueado mientras elige inicial o huevo
   if (gameOpen || galleryOpen || kbOpen || sackOpen || pet.ceremony) return;
