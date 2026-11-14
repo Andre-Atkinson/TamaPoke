@@ -44,7 +44,7 @@ constexpr SetRect LANG_PILL = {LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_
 
 // second row, the power pills (#11): an icon plus a number, like the sound and
 // brightness pills above them. Left to right:
-enum PowerPill : int8_t {
+enum PowerPill {
   PILL_NONE = -1,
   PILL_TOUCH_LOCK = 0,  // padlock + seconds after the screen goes off, or "off"
   PILL_SCREEN_OFF = 1,  // screen + seconds without a touch, or "off" (never)
