@@ -145,9 +145,11 @@ TEST(TouchGesture, a_blocked_or_unknown_contact_resolves_nothing) {
   Finger f(g);
   f.down(233, 200);
   CHECK_EQ(f.up(true), TOUCH_NONE);  // the touch only woke the screen
-  // a lift with no down (the contact began in a minigame or before a lock): nothing
-  CHECK_EQ(g.lift(f.t + 20, false), TOUCH_NONE);
-  CHECK_EQ(g.held(f.t + 40, 233, 200, true), TOUCH_NONE);
+  // samples and a lift with no down (the contact began in a minigame or before a lock):
+  // nothing, not even a tap or a long-press from the stale landing point
+  CHECK_EQ(g.lift(f.t + 40, false), TOUCH_NONE);
+  CHECK_EQ(g.held(f.t + TG::LONG_PRESS_MS + 500, 233, 200, true), TOUCH_NONE);
+  CHECK_EQ(g.lift(f.t + TG::LONG_PRESS_MS + 520, false), TOUCH_NONE);
 }
 
 // ------------------------------------------------ stroke
