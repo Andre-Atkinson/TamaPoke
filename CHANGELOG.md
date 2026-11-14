@@ -111,6 +111,22 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   `egg=1`: Eggs set to Choose; `picking=1`: the three-egg choice is on screen).
 - Strings for the Care page and the egg choice in all eight languages.
 
+### Changed
+
+- **Clear power pills on the settings screen** (#11). The touch lock, screen-off
+  and battery pills showed raw codes (`L10`, `60s`, `--`, `icon`, `%`). Each now
+  shows an icon and a number like the sound and brightness pills: a padlock and
+  the seconds after the screen goes off (`0s` locks as it goes off; an open
+  padlock and "off" never locks), a screen and the seconds without a touch
+  ("off" = never), and the battery as the header shows it (its icon or `87%`,
+  with the live level). "off" is the only word, in every language. The pills are
+  centred on the screen, 36 px tall instead of 26 (as tall as OK) and well inside
+  the round edge, and a tap reaches exactly the pill that is drawn. The sound,
+  brightness and language row moved up 14 px to make room. In Japanese and Korean
+  the time and "OK" were placed for the Latin font; they are now centred on the
+  text's measured width, which brings the time from about 44 px left of centre to
+  within about 7 px.
+
 ### Fixed
 
 - **Leaving a minigame** is now a "Hold: exit" button at the top of every game,
