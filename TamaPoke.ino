@@ -36,6 +36,8 @@
 #include "screenlock.h"
 #include "touchlock.h"
 #include "bedtime.h"
+#include "clockprompt.h"
+#include "attention.h"
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "trainingcapture.h"
@@ -87,6 +89,9 @@ int16_t galleryDetail = 0;  // dex en vista detalle, 0 = rejilla
 bool screenOff = false;       // original 1.75: single PWR; 1.75C: triple-press lock
 uint8_t userDim = 0;          // nivel de brillo de ajustes (power.h): 0 alto, 1 medio, 2 bajo
 bool batAsPercent = false;    // ajustes: false = icono (el de siempre), true = "87%"
+// The AXP2101 answered at boot (batBegin()). When it didn't, usbPresent() reports true
+// and self-care (#24) has to treat that as unplugged.
+bool pmuReady = false;
 // Defaults when the NVS keys "off"/"tlk" are absent. The 1.75C turns the screen off at 60 s
 // and locks touch 10 s later; the original 1.75 keeps its historical behaviour (never), and
 // the user can pick either in settings.
@@ -121,8 +126,19 @@ uint8_t nameLen = 0;
 uint8_t cardPage = 0;         // 0 perfil, 1 stats, 2 medallas, 3 progreso, 4 cuidados (ritmo y hora de dormir)
 BedEdge bedEdge;                 // horario de dormir: convierte la hora en eventos dormir/despertar
 BedEvent bedPending = BED_NONE;  // evento a la espera de que no haya minijuego ni dialogo abiertos
+// Attention calls (attention.h, #9): see attnLoop()
+AttnArm attnArm;
+uint32_t attnShowUntil = 0;   // a call lights (or brightens) the screen until this millis() (0 = none)
+bool screenOffByPwr = false;  // the screen went dark with a PWR press, not the timeout: calls leave it dark
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
+ClockPrompt clockPrompt;      // asks for the time after a reseed (clockprompt.h, #10)
+// Declared here, not left to the Arduino preprocessor: it skips its own prototype when
+// the sketch has one, and loop() and onSwipeV() both call it before its definition.
+void openClock();
+// The stale flag of bedEdge, kept through soft resets: RTC memory survives a crash,
+// watchdog or ESP.restart like the 1.75C soft clock does, and power loss clears both.
+RTC_NOINIT_ATTR ClockStaleMark clockStaleMark;
 
 // escena de bano: espuma sobre el bicho y limpieza al reventar
 uint32_t bathUntil = 0;
@@ -196,12 +212,12 @@ int8_t eggSel = -1;     // huevo tocado una vez (-1 = ninguno); solo UI, no se g
 #define EVO_BTN_W 256
 #define EVO_BTN_H 64
 #define EVO_BTN_X (CX - EVO_BTN_W / 2)
-#define EVO_BTN_Y 172
+#define EVO_BTN_Y 172  // test/test_clockprompt.cpp (ClockBadge) mirrors this: update it too
 // boton-CTA de despedida (mas ancho: lleva el nombre + frase)
 #define FAR_BTN_W 408
 #define FAR_BTN_H 58
 #define FAR_BTN_X (CX - FAR_BTN_W / 2)
-#define FAR_BTN_Y 176
+#define FAR_BTN_Y 176  // mirrored in test/test_clockprompt.cpp (ClockBadge) too
 // el CST9217 avisa por el pin INT cuando hay datos tactiles; lo usamos para no
 // leer el bus I2C mientras el chip esta dormido (esa lectura se colgaba ~1s)
 volatile bool gTouchIrq = false;
@@ -400,6 +416,8 @@ void pollPwrButton() {
   else if (act == PWR_EDGE_TOGGLE && !screenLock.locked()) {
     Serial.println("PWR short");
     screenOff = !screenOff;
+    screenOffByPwr = screenOff;
+    attnShowUntil = 0;  // PWR wins over a call's window
     if (!screenOff) wakeUI();
   }
 #else
@@ -410,6 +428,8 @@ void pollPwrButton() {
     lastPwr = now;
     if (pwrShortPressed()) {
       screenOff = !screenOff;
+      screenOffByPwr = screenOff;
+      attnShowUntil = 0;  // PWR wins over a call's window
       if (!screenOff) wakeUI();
     }
   }
@@ -555,10 +575,11 @@ void setup() {
 
   // reloj real: aplica el tiempo que estuvo apagado
   rtcBegin();
-  batBegin();
+  pmuReady = batBegin();
   pwrSetup();
   uint32_t e = rtcEpoch();
-  if (e == 0) {
+  bool reseeded = (e == 0);
+  if (reseeded) {
     // Sin pila de respaldo, el PCF85063 pierde la hora al cortar la
     // alimentacion. Sembrar siempre la fecha fija haria RETROCEDER el tiempo de
     // juego respecto a lo ya guardado, y eso rompe la racha, la edad y la hora
@@ -572,10 +593,18 @@ void setup() {
     e = rtcEpoch();
     Serial.printf("RTC sin hora: sembrado en %u%s\n", seed,
                   seen > 1767225600UL ? " (desde la ultima hora guardada)" : "");
-    // la hora es la ultima guardada, no la real: pausa el horario de dormir hasta que
-    // alguien ponga la hora (pantalla del reloj o TIME), o dormiria y despertaria a deshoras
-    bedEdge.markStale();
   }
+  // A reseeded clock has the last saved time, not the real one: bedtime pauses until
+  // somebody sets it (clock screen or TIME), or it would sleep and wake at odd hours,
+  // and the clock screen asks for the time (clockprompt.h). A soft reset keeps a clock
+  // that was never set since its reseed just as wrong, so the RTC-memory mark carries
+  // the flag over.
+  if (clockStaleAtBoot(reseeded, clockStaleMark)) {
+    bedEdge.markStale();
+    clockMarkStale(clockStaleMark, true);
+    if (!reseeded) Serial.println("clock: not set since its reseed (kept through a reset)");
+  }
+  clockPrompt.boot(e != 0);  // e == 0 here: no PCF85063, the clock cannot be set
   pet.syncClock(e);
   // Sin RTC (la 1.75 original sin PCF85063) e == 0, y el minuto 0 cae dentro de toda ventana:
   // muestrear aqui dormiria al bicho en cada arranque y el bucle (que tampoco muestrea con
@@ -627,12 +656,15 @@ void bedSample(uint32_t epoch) {
 }
 
 // Alguien puso la hora (pantalla del reloj o TIME): si estaba obsoleta (sembrada tras
-// quedarse sin corriente) el horario se reanuda como si fuera un arranque. La hora
-// debe haber quedado puesta de verdad (TIME con un valor fuera de rango no cambia
-// el reloj de software de la 1.75C).
+// quedarse sin corriente) el horario se reanuda como si fuera un arranque, y el reloj
+// deja de pedir la hora (clockprompt.h lee bedEdge.stale()). La hora debe haber quedado
+// puesta de verdad (TIME con un valor fuera de rango no cambia el reloj de software de
+// la 1.75C, y sin PCF85063 la 1.75 original sigue sin hora).
 static void bedClockSet(uint32_t set) {
   uint32_t now = rtcEpoch();
-  if (!bedEdge.stale() || !now || (now > set ? now - set : set - now) > 5) return;
+  if (!clockSetTook(set, now)) return;
+  clockMarkStale(clockStaleMark, false);  // a soft reset now keeps a trusted clock
+  if (!bedEdge.stale()) return;
   bedEdge.clockSet();
   bedPending = BED_NONE;
   bedSample(now);
@@ -650,10 +682,31 @@ static void bedClockSet(uint32_t set) {
 // borde mas) dependen de pet.sleeping, y al dormir el juego y el saco se abandonan sin
 // premio (bedApply). El bano se compara con timeLeft, no en bruto: bathUntil solo se
 // pone a 0 en drawBath(), que no corre con la pantalla apagada.
+//
+// careBusy() is the part that does not depend on the screen: bedBusy() and the attention
+// calls (attnLoop) both wait while it holds.
+static bool careBusy() {
+  return timeLeft(bathUntil) || pet.evolving() || pet.eating() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) ||
+         (choiceKind && timeLeft(choiceUntil));
+}
+
 static bool bedBusy() {
   bool dark = screenOff || screenIsLocked();
-  return (!dark && (gameOpen || sackOpen || kbOpen || clockOpen)) || timeLeft(bathUntil) || pet.evolving() ||
-         pet.eating() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+  return (!dark && (gameOpen || sackOpen || kbOpen || clockOpen)) || careBusy();
+}
+
+// What holds back the clock screen that opens by itself after a reseed (clockprompt.h):
+// the starter or egg choice, a ceremony, evolution, a dialog or another screen. The
+// timed dialogs are compared with timeLeft(), like bedBusy(), because render() only
+// zeroes them when it draws.
+static ClockPromptHold clockPromptHold() {
+  ClockPromptHold h;
+  h.choosing = pet.awaitingStarter() || pet.awaitingEgg();
+  h.ceremony = pet.ceremony != CER_NONE;
+  h.evolving = pet.evolving();
+  h.dialog = timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+  h.otherScreen = galleryOpen || gameOpen || sackOpen || kbOpen || clockOpen || cardOpen;
+  return h;
 }
 
 #if BOARD_AMOLED_175C
@@ -683,8 +736,89 @@ void bedApply() {
   }
 }
 
+// ---------- attention calls (attention.h, #9) ----------
+// The needs are sampled on every loop pass, also with the screen off: the loop never stops
+// (it light-sleeps at most POWER_SLEEP_MS between passes), so a need that drops in
+// Pet::tick() is seen on the same pass, with no extra wakeup.
+//
+// A call opens a "showing" window of ATTN_PEEK_MS (attnShowUntil) and does NOT count as a
+// touch: lastInteract is left alone (self-care while charging, #24, reads idleSince(now,
+// lastInteract) at the top of loop() and waits for 10 untouched minutes).
+// powerCtx() reads the window as "just touched" (idle 0, panel on), so the screen is lit
+// at full brightness, drawn at 10 fps, with no auto-off, no dimming and no light sleep for
+// its length; when it ends the real idle applies again (dim, or off, or dark).
+//  - A screen that timed out (a "peek"): screenOff stays true, so the auto touch lock, if
+//    on, keeps holding (TouchLock only sees screenOff). PWR and BOOT turn the screen on for
+//    real (the existing path, which unlocks touch); with the touch lock off, or not engaged
+//    yet, a touch does, and that first touch is swallowed.
+//  - A lit screen (dimmed, or almost off): it brightens for the window.
+// PWR off, a touch, BOOT or anything else that calls wakeUI() ends the window.
+
+static bool attnShowing(uint32_t now) {
+  return attnShowUntil && (int32_t)(attnShowUntil - now) > 0;
+}
+
+// back to the pet screen, as if each had been left by hand without finishing (no rename,
+// no new time): they were left open when the screen timed out
+static void attnCloseViews() {
+  if (galleryOpen) {
+    galleryOpen = false;
+    galleryDetail = 0;
+    galleryPmd.unload();
+  }
+  kbOpen = false;
+  clockOpen = false;
+  cardOpen = false;
+}
+
+void attnLoop(uint32_t now) {
+  // the window ended, or the screen came on for real (PWR, BOOT, a touch): forget the
+  // deadline, so an old one can't read as "showing" once millis() wraps
+  if (attnShowUntil && !attnShowing(now)) attnShowUntil = 0;
+  bool away = pet.sleeping || pet.isEgg() || pet.ceremony || pet.awaitingStarter() || pet.awaitingEgg();
+  uint8_t calls = attnArm.update(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene), away);
+  if (!calls) return;
+
+  AttnScene s;
+  s.busy = careBusy();
+  s.playing = gameOpen || sackOpen;
+  s.browsing = kbOpen || clockOpen || galleryOpen || cardOpen;
+  s.screen = attnScreen(screenIsLocked(), screenOff, screenOffByPwr, dimStageNow(powerCtx(now)) == DIM_OFF);
+  // the loop refreshes lastSeenEpoch from the clock every 30 s: no I2C read here
+  uint32_t e = pet.lastSeenEpoch;
+  s.quiet = attnQuiet(pet.bedPreset, e && !bedEdge.stale(), bedMinuteOfDay(e));
+  AttnAction a = attnDecide(s);
+  if (a.wait) return;  // asked again next pass; dropped if the need recovers or the pet goes away
+
+  attnArm.done();
+  if (a.closeViews) attnCloseViews();
+  if (a.peek || a.brighten) {
+    attnShowUntil = now + ATTN_PEEK_MS;
+    if (!attnShowUntil) attnShowUntil = 1;  // 0 means "no window"
+    // no wakeUI(): not a touch. The window makes powerCtx() full brightness and 10 fps, so
+    // the first lit frame is drawn within 100 ms (lastRender is old: frozen while the screen
+    // was off, at most 1 s ago on a dimmed one).
+    // The amplifier on now, as the window will keep it (amplifierWanted): otherwise sfxPlay()
+    // would take its 4 s idle hold, audioBusy() would stay true for those 4 s and the loop
+    // would keep the CPU at 80/160 MHz while drawing the lit frames.
+    audioSetIdle(false);
+  }
+  // a dark PWR-off call still uses sfxPlay()'s 4 s hold, which is what it is for
+  if (a.chirp) sfxPlay(SFX_CALL);  // silent anyway if the sound is off
+
+  static const char *const NAMES[ATTN_NEEDS] = { "food", "hygiene", "energy", "joy" };
+  char what[32] = "";  // "food+hygiene+energy+joy" at most
+  int n = 0;
+  for (uint8_t i = 0; i < ATTN_NEEDS; i++)
+    if (calls & (1u << i)) n += snprintf(what + n, sizeof what - n, "%s%s", n ? "+" : "", NAMES[i]);
+  Serial.printf("call %s: %s%s\n", what, a.peek ? "peek" : a.brighten ? "brighten" : a.chirp ? "dark" : "silent",
+                a.chirp ? (audioEnabled() ? " chirp" : " (muted)") : s.quiet ? " (quiet)" : " (locked)");
+}
+
 void loop() {
   uint32_t now = millis();
+  // self-care while charging (#24): the cached USB reading, no extra I2C
+  pet.setCharger(pmuReady, usbPresent(), idleSince(now, lastInteract));
   pet.update(now);
 
   // el amplificador sigue al estado de sueno (la llamada sale sola si no cambia).
@@ -694,10 +828,10 @@ void loop() {
 
   // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
   // (incluye el caso de cumplir al despertar). canEvolveNow es false durmiendo.
-  static bool wasEvoReady = false;
-  bool evoReady = pet.wantEvolveButton();
-  if (evoReady && !wasEvoReady) sfxPlay(SFX_MEDAL);
-  wasEvoReady = evoReady;
+  // At most once per level for each form (EvoChime, pet.h): self-care on the
+  // charger keeps bringing the button back.
+  static EvoChime evoChime;
+  if (evoChime.update(pet.wantEvolveButton(), pet.speciesId, pet.level())) sfxPlay(SFX_MEDAL);
   // aviso sombrio cuando el bicho esta a punto de escaparse por abandono
   static bool wasRunReady = false;
   bool runReady = pet.canRunawayNow();
@@ -722,10 +856,15 @@ void loop() {
   // no lo desactiva: solo impide el light sleep.
   if (!screenOff && autoScreenOff(powerCtx(now)) && !pet.evolving() && !pet.ceremony) {
     screenOff = true;
+    screenOffByPwr = false;
     Serial.printf("screen off: idle %lu ms, timeout %lu ms, usb=%d\n",
                   (unsigned long)idleSince(now, lastInteract),
                   (unsigned long)powerOffMs, usbPresent() ? 1 : 0);
   }
+  // after the auto-off above (the pass where idle reaches the delay sees a timed-out
+  // screen, not an almost-off lit one) and before the panel decisions below, so a call's
+  // window lights the panel in this same pass
+  attnLoop(now);
   int tlockEdge = autoTouch.update(screenOff, now);
   if (tlockEdge > 0) {
     Serial.println("touch lock");
@@ -748,7 +887,8 @@ void loop() {
     touchBringUpPending = false;
     touchBringUp();
   }
-  bool wantSleep = screenOff;
+  bool attnShow = attnShowing(now);  // once per pass: the panel sleep and the autosave must agree
+  bool wantSleep = screenOff && !attnShow;
 #if BOARD_AMOLED_175C
   wantSleep = wantSleep || screenLock.blank(millis());
 #endif
@@ -774,7 +914,8 @@ void loop() {
 #if BOARD_AMOLED_175C
   lockBlank = screenLock.blank(millis());
 #endif
-  if (pet.savePending() && (screenOff || lockBlank || dimStage >= 1 || pet.sleeping)) {
+  // (not while a call's window lights the panel: the freeze would show)
+  if (pet.savePending() && ((screenOff && !attnShow) || lockBlank || dimStage >= 1 || pet.sleeping)) {
     pet.flushSave();
   }
 
@@ -786,6 +927,14 @@ void loop() {
     if (e) { pet.lastSeenEpoch = e; bedSample(e); }
   }
   bedApply();
+
+  // Clock reseeded after a power-off: the clock screen opens by itself once, as soon as
+  // nothing more important is on screen (clockprompt.h). A dark screen does not hold it:
+  // it is there when the screen wakes.
+  if (clockPrompt.due(bedEdge.stale(), clockPromptHold())) {
+    openClock();
+    Serial.println("clock: asking for the time (reseeded, not set yet)");
+  }
 
   // latido de salud cada 5 min (para el soak test; se descarta si no hay monitor)
   static uint32_t lastHealth = 0;
@@ -872,8 +1021,10 @@ void loop() {
 // estado de consumo actual (ver power.h)
 PowerCtx powerCtx(uint32_t now) {
   PowerCtx c;
-  c.idleMs = idleSince(now, lastInteract);
-  c.screenOff = screenOff;
+  // a call's window (attnShowUntil) reads as "just touched" without touching lastInteract
+  bool show = attnShowing(now);
+  c.idleMs = show ? 0 : idleSince(now, lastInteract);
+  c.screenOff = screenOff && !show;
 #if BOARD_AMOLED_175C
   c.screenOff = c.screenOff || screenLock.blank(now);
 #endif
@@ -895,6 +1046,7 @@ void wakeUI() {
   uint32_t iv = frameIntervalMs(powerCtx(now));
   bool slow = !iv || iv > 100;  // pantalla apagada o ritmo lento: se dibuja ya, sin esperar al frame
   lastInteract = now;
+  attnShowUntil = 0;  // a real touch ends a call's window (idle is 0 anyway)
   // el frame forzado respeta los 85 ms entre redibujados (si no, solapa el DMA del anterior)
   if (slow) lastRender = (now - lastRender >= 85) ? 0 : lastRender - 15;
   audioSetIdle(false);
@@ -1006,6 +1158,9 @@ void handleSerial() {
     rtcSetEpoch(e);
     pet.setClock(e);
     bedClockSet(e);
+    // the open screen shows the time just set (only if it took: a TIME the clock ignores
+    // must not overwrite what the player is editing)
+    if (clockOpen && clockSetTook(e, rtcEpoch())) loadClockFields(rtcEpoch());
     Serial.printf("rtc=%u\n", rtcEpoch());
     Serial.println("DONE");
   } else if (line.startsWith("RTCSET ")) {  // solo RTC (simular apagados en pruebas)
@@ -1105,6 +1260,7 @@ void handleSerial() {
 
 // ---------- entrada tactil ----------
 
+// test/test_clockprompt.cpp (ClockBadge) mirrors these bounds (x > 110): update it too.
 bool inPetZone(int16_t x, int16_t y) {
   return x > 110 && x < 356 && y > 95 && y < 310;
 }
@@ -1285,8 +1441,6 @@ void handleTouch() {
 }
 
 // deslizar vertical: abre/cierra la ficha del bicho
-void openClock();  // prototipo
-
 void onSwipeV(int dir) {
   if (pet.awaitingStarter() || pet.awaitingEgg()) return;  // bloqueado mientras elige inicial o huevo
   if (gameOpen || galleryOpen || kbOpen || sackOpen || pet.ceremony) return;
@@ -1411,6 +1565,11 @@ void onTap(int16_t x, int16_t y) {
       sfxPlay(SFX_EAT);
     }
     feedMenuUntil = 0;
+    return;
+  }
+  if (clockPrompt.asking(bedEdge.stale()) && clockBadgeHit(x, y)) {  // reloj sin poner
+    sfxPlay(SFX_TAP);
+    openClock();
     return;
   }
   if (pet.isEgg()) {
@@ -1840,6 +1999,7 @@ static uint32_t screenKey() {
     h = mixKey(h, powerOffMs);
     h = mixKey(h, touchLockMs);
     h = mixKey(h, gLang);
+    h = mixKey(h, clockPrompt.asking(bedEdge.stale()));  // the title (TIME can set it meanwhile)
   } else if (cardOpen) {
     for (uint32_t v : { (uint32_t)pet.speciesId, (uint32_t)pet.shiny, (uint32_t)pet.ageMinutes, (uint32_t)pet.streak,
                         (uint32_t)pet.bestStreak, (uint32_t)pet.bond, (uint32_t)pet.medals, (uint32_t)pet.weight,
@@ -1941,6 +2101,7 @@ bool render() {
       for (auto &c : CRACK1) gfx->fillRect(x + c[0] * s, y + c[1] * s, s, s, INK_K);
     if (pet.eggCracks() >= 2)
       for (auto &c : CRACK2) gfx->fillRect(x + c[0] * s, y + c[1] * s, s, s, INK_K);
+    drawClockBadge();
     char reg[24];
     snprintf(reg, sizeof(reg), T(S_POKEDEX_FMT), pet.registeredCount());
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
@@ -1967,6 +2128,8 @@ bool render() {
     drawPet();
     drawBath();
     drawPoops();
+    drawClockBadge();
+    drawAttnBubble();
     // panel inferior: base limpia para barras y botones sobre el paisaje
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     drawBars();
@@ -2565,11 +2728,15 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
 // El usuario pone su hora LOCAL a ojo; el firmware la usa tal cual, asi que
 // no hay que gestionar zona horaria. Preserva el dia (no rompe racha/edad).
 
-void openClock() {
-  uint32_t e = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
+static void loadClockFields(uint32_t e) {
   clockH = (e / 3600) % 24;
   clockM = (e / 60) % 60;
+}
+
+void openClock() {
+  loadClockFields(pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch());
   clockOpen = true;
+  clockPrompt.opened();  // however it opened, it does not open again by itself
 }
 
 void applyClock() {
@@ -2613,13 +2780,18 @@ static void drawLevelBars(int x, int lit) {
 void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  // reseeded after a power-off and not set yet (clockprompt.h): ask, and show the time
+  // it has in red, since that is only the last time saved before it went off
+  bool asking = clockPrompt.asking(bedEdge.stale());
+  const char *title = asking ? T(S_CLOCK_ASK) : T(S_SET_TIME);
   gfx->setTextColor(UI_INK);
   setSize(3);
-  setCur(centerX(T(S_SET_TIME), 3), 44);
-  printT(T(S_SET_TIME));
+  setCur(centerX(title, 3), 44);
+  printT(title);
 
   char t[8];
   snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
+  gfx->setTextColor(asking ? UI_BAR_BAD : UI_INK);
   setSize(7);
   setCur(CX - 105, 108);
   printT(t);
@@ -2786,6 +2958,27 @@ void clockTap(int16_t x, int16_t y) {
     return;
   }
   if (y >= 366 && y <= 402 && x >= 133 && x <= 333) { applyClock(); return; }
+}
+
+// Clock badge (clockprompt.h) while the clock was reseeded and not set: a clock face with
+// a red dot, in the sky left of the pet. A tap opens the clock screen (onTap).
+void drawClockBadge() {
+  if (!clockPrompt.asking(bedEdge.stale())) return;
+  const int x = CLOCK_BADGE_X, y = CLOCK_BADGE_Y, r = CLOCK_BADGE_R;
+  gfx->fillCircle(x, y, r, UI_WHITE);
+  gfx->drawCircle(x, y, r, UI_INK);
+  gfx->drawCircle(x, y, r - 1, UI_INK);
+  for (int i = 0; i < 4; i++) {  // marks at 12, 3, 6 and 9
+    int dx = i == 1 ? 1 : i == 3 ? -1 : 0, dy = i == 0 ? -1 : i == 2 ? 1 : 0;
+    gfx->fillCircle(x + dx * (r - 6), y + dy * (r - 6), 2, UI_INK);
+  }
+  for (int d = -1; d <= 1; d++) {  // hands 3 px thick: minute to 12, hour to 4
+    gfx->drawLine(x + d, y, x + d, y - (r - 9), UI_INK);
+    gfx->drawLine(x, y + d, x + 10, y + 6 + d, UI_INK);
+  }
+  gfx->fillCircle(x, y, 3, UI_INK);
+  gfx->fillCircle(x + r - 5, y - r + 5, 7, UI_BAR_BAD);  // "needs you" dot
+  gfx->drawCircle(x + r - 5, y - r + 5, 7, UI_WHITE);
 }
 
 // llama + numero de racha arriba a la izquierda
@@ -3801,6 +3994,36 @@ void drawPoops() {
   }
 }
 
+// The attention "!" (#9): a speech bubble beside the pet while a need is low, with the icon
+// of the button that fixes it (attnShown: the same need the status line names). Silent and
+// not tied to the call, so it is there whenever she looks. Hidden while something else is
+// going on around the pet: sleep, eating, a heart, the bath, evolution, a banner or a dialog.
+// #23's speech bubbles can reuse the shape (attnBubbleAt).
+void drawAttnBubble() {
+  static const char *const *const ICONS[ATTN_NEEDS] = { SPR_ICON_FOOD, SPR_ICON_CLEAN, SPR_ICON_LIGHT, SPR_ICON_PLAY };
+  uint8_t need = attnShown(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene));
+  if (need >= ATTN_NEEDS) return;
+  if (pet.sleeping || pet.eating() || pet.showHeart() || pet.evolving() || timeLeft(bathUntil) || pet.showMedal() ||
+      pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil)))
+    return;
+  AttnBubble b = attnBubbleAt(pmd.loaded ? (int)beh.x : CX);
+  uint16_t ink = inkColor();
+  gfx->fillRoundRect(b.x, b.y, b.w, b.h, 12, UI_WHITE);
+  gfx->drawRoundRect(b.x, b.y, b.w, b.h, 12, ink);
+  // tail: leaves the bottom edge near the pet's side and points down at it; the white
+  // triangle covers the border where it joins, the two lines redraw its outer edges
+  int base = b.y + b.h - 1, tipY = b.y + b.h + ATTN_BUBBLE_TAIL;
+  int x0 = b.right ? b.x + 10 : b.x + b.w - 24, x1 = x0 + 14;
+  int tipX = b.right ? b.x + 2 : b.x + b.w - 2;
+  gfx->fillTriangle(x0, base, x1, base, tipX, tipY, UI_WHITE);
+  gfx->drawLine(x0, base, tipX, tipY, ink);
+  gfx->drawLine(x1, base, tipX, tipY, ink);
+  // a red "!" drawn as shapes (no font: the same in every language) and the 16x16 icon at x2
+  gfx->fillRoundRect(b.x + 12, b.y + 7, 8, 21, 3, UI_BAR_BAD);
+  gfx->fillRoundRect(b.x + 12, b.y + 31, 8, 7, 3, UI_BAR_BAD);
+  drawMap(ICONS[need], 16, b.x + 30, b.y + 6, 2, false);
+}
+
 void drawBars() {
   drawBar(78, 318, T(S_BAR_FOOD), pet.fullness);
   drawBar(244, 318, T(S_BAR_JOY), pet.joy);
@@ -3837,7 +4060,7 @@ void drawBar(int x, int y, const char *label, uint8_t val) {
   int bw = 232 - (78 + gap);
   if (bw > 100) bw = 100;   // con etiquetas latinas sale 100, como estaba
   int bx = x + gap, bh = 15;
-  uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= 25) ? UI_BAR_WARN : UI_BAR_BAD;
+  uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= ATTN_LOW) ? UI_BAR_WARN : UI_BAR_BAD;
   gfx->fillRoundRect(bx, y, bw, bh, 4, UI_TRACK);
   int fw = (bw - 4) * val / 100;
   if (fw > 0) gfx->fillRoundRect(bx + 2, y + 2, fw, bh - 4, 3, fill);
@@ -3867,10 +4090,14 @@ const char *statusMsg() {
   if (pet.sleeping) return "Zzz...";
   if (pet.eating()) return T(S_EATING);
   if (pet.showHeart()) return T(S_LIKES);
-  if (pet.fullness < 25) return T(S_HUNGRY);
-  if (pet.hygiene < 25) return T(S_NEEDS_BATH);
-  if (pet.energy < 25) return T(S_EXHAUSTED);
-  if (pet.joy < 25) return T(S_SAD);
+  // the same need the "!" bubble shows (attnShown), so the text and the bubble can't disagree
+  switch (attnShown(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene))) {
+    case ATTN_FOOD: return T(S_HUNGRY);
+    case ATTN_HYGIENE: return T(S_NEEDS_BATH);
+    case ATTN_ENERGY: return T(S_EXHAUSTED);
+    case ATTN_JOY: return T(S_SAD);
+    default: break;
+  }
   if (pet.weight > 60) return T(S_CHUBBY);
   if (pet.shiny && pet.ageMinutes < 15) return T(S_IS_SHINY);
   return T(S_HAPPY);

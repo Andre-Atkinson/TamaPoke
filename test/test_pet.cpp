@@ -2146,3 +2146,364 @@ TEST(eggpick, cancelar_sale_de_la_eleccion) {
   q.begin();
   CHECK_MSG(!q.awaitingEgg(), "cancelar se guarda");
 }
+
+// ---------------------------------------------------------------- self-care while charging (#24)
+// On USB, with the PMU answering, and untouched SELFCARE_IDLE_MS: once a minute the first
+// need under 40 (food, hygiene, energy, joy) goes back up to 50.
+
+static const uint32_t LONG_IDLE = 60UL * 60 * 1000;  // an hour without a touch
+
+// Fresh Charmander with no random poops (random(100) < 15 never holds).
+static void makeQuietPet(Pet &p) {
+  makePet(p, 4);
+  mockForceRandom(99);
+}
+
+TEST(selfcare, on_usb_after_ten_idle_minutes_food_goes_back_to_half) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 41, 80, 80, 100);  // food 41 -> 39 this minute
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)SELFCARE_LEVEL);
+  CHECK_EQ(p.fullness, (uint8_t)50);  // half, not full
+  CHECK_EQ(p.joy, (uint8_t)79);       // the others only drained
+  CHECK_EQ(p.energy, (uint8_t)79);
+  CHECK_EQ(p.hygiene, (uint8_t)99);
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, a_need_at_40_or_more_is_left_alone) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 42, 41, 41, 41);  // after this minute's drain: all exactly 40
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)40);
+  CHECK_EQ(p.joy, (uint8_t)40);
+  CHECK_EQ(p.energy, (uint8_t)40);
+  CHECK_EQ(p.hygiene, (uint8_t)40);
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, food_then_hygiene_then_energy_then_joy) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 20, 20, 20, 20);
+  p.poops = 2;
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  CHECK(p.hygiene < 40);
+  CHECK(p.energy < 40);
+  CHECK(p.joy < 40);
+  advance(p, 1);
+  CHECK_EQ(p.hygiene, (uint8_t)50);
+  CHECK_EQ(p.poops, (uint8_t)0);
+  CHECK(p.energy < 40);
+  CHECK(p.joy < 40);
+  advance(p, 1);
+  CHECK_EQ(p.energy, (uint8_t)50);
+  CHECK(p.joy < 40);
+  advance(p, 1);
+  CHECK_EQ(p.joy, (uint8_t)50);
+  CHECK(p.fullness >= 40 && p.hygiene >= 40 && p.energy >= 40);
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, one_need_per_minute_and_only_on_the_minute) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 30, 30, 30, 30);
+  p.setCharger(true, true, LONG_IDLE);
+  for (int i = 0; i < 59; i++) {  // 59 loop passes within the first minute: no tick yet
+    mockAdvanceMillis(1000);
+    p.setCharger(true, true, LONG_IDLE);
+    p.update(millis());
+  }
+  CHECK_EQ(p.fullness, (uint8_t)30);
+  CHECK_EQ(p.hygiene, (uint8_t)30);
+  mockAdvanceMillis(1000);  // the minute ticks
+  p.update(millis());
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  CHECK_MSG(p.hygiene < 40 && p.energy < 40 && p.joy < 40, "only one need per minute");
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, hygiene_also_clears_the_poops) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 80, 80, 80, 41);
+  p.poops = 3;  // hygiene 41 - 1 - 12 = 28 this minute
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 1);
+  CHECK_EQ(p.hygiene, (uint8_t)50);
+  CHECK_EQ(p.poops, (uint8_t)0);
+  advance(p, 1);
+  CHECK_MSG(p.hygiene == 49, "without the poops hygiene drains 1 a minute again");
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, usb_unknown_counts_as_unplugged) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 30, 30, 30, 30);
+  // the PMU never answered: the firmware's usbPresent() reports true then
+  p.setCharger(false, true, LONG_IDLE);
+  advance(p, 3);
+  CHECK(p.fullness < 40 && p.hygiene < 40 && p.energy < 40 && p.joy < 40);
+  p.setCharger(true, true, LONG_IDLE);  // control: the same pet with a PMU that answers
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, never_on_battery) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 30, 30, 30, 30);
+  p.setCharger(true, false, LONG_IDLE);
+  advance(p, 3);
+  CHECK(p.fullness < 40 && p.hygiene < 40 && p.energy < 40 && p.joy < 40);
+  p.setCharger(true, true, LONG_IDLE);  // control: plugged in
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  mockClearForcedRandom();
+}
+
+// Like the sketch: on every pass setCharger() gets the time since the last touch, then update().
+static void chargeMinutes(Pet &p, uint32_t minutes, uint32_t lastTouch) {
+  for (uint32_t i = 0; i < minutes; i++) {
+    mockAdvanceMillis(PET_TICK_MS);
+    p.setCharger(true, true, millis() - lastTouch);
+    p.update(millis());
+  }
+}
+
+TEST(selfcare, waits_for_ten_untouched_minutes) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 80, 80, 39, 100);  // energy: 1 a minute, no slip-up in 10 minutes
+  uint32_t touch = millis();
+  chargeMinutes(p, 9, touch);
+  CHECK_MSG(p.energy == 30, "9 minutes untouched: not yet");
+  chargeMinutes(p, 1, touch);
+  CHECK_MSG(p.energy == 50, "10 minutes untouched: self-care");
+  // a touch starts the 10 minutes again
+  setStats(p, 80, 80, 39, 100);
+  touch = millis();
+  chargeMinutes(p, 9, touch);
+  CHECK_EQ(p.energy, (uint8_t)30);
+  chargeMinutes(p, 1, touch);
+  CHECK_EQ(p.energy, (uint8_t)50);
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, is_not_the_players_care) {
+  Pet p;
+  makeQuietPet(p);
+  p.setClock(100u * 86400);  // with a clock, the player's care would start a streak
+  uint16_t medals = p.medals, total = p.totalMedals;
+  setStats(p, 20, 20, 20, 20);
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 4);
+  CHECK(p.fullness >= 40 && p.hygiene >= 40 && p.energy >= 40 && p.joy >= 40);  // it did care
+  CHECK_EQ(p.streak, (uint16_t)0);
+  CHECK_EQ(p.bestStreak, (uint16_t)0);
+  CHECK_EQ(p.lastCareDay, (uint32_t)0);
+  CHECK_EQ(p.bond, (uint8_t)0);
+  CHECK_EQ(p.medals, medals);
+  CHECK_EQ(p.totalMedals, total);
+  CHECK(!p.berryKnown);
+  mockClearForcedRandom();
+}
+
+// flash wear: a top-up rides on tick()'s periodic save, never a write of its own
+TEST(selfcare, makes_no_save_of_its_own) {
+  Pet p;
+  makeQuietPet(p);  // hatching saved food 80
+  setStats(p, 20, 80, 80, 100);
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  Preferences raw;
+  raw.begin("tamapoke", true);
+  CHECK_MSG(raw.getUChar("full", 0) == 80, "the top-up is not written to flash by itself");
+  raw.end();
+  mockClearForcedRandom();
+}
+
+// a heart or the eating animation would wake the screen and restart the idle time
+TEST(selfcare, is_silent) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 20, 80, 80, 100);
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  CHECK(!p.eating());
+  CHECK(!p.showHeart());
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, off_while_asleep_and_back_after_waking) {
+  Pet p;
+  makeQuietPet(p);
+  p.toggleLight();  // asleep
+  setStats(p, 20, 80, 80, 100);  // under the sleep floor of 30: stays 20
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 5);
+  CHECK_EQ(p.fullness, (uint8_t)20);
+  CHECK(p.autoWake());  // bedtime ends; still untouched and on USB
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, off_as_an_egg) {
+  mockNvsReset();
+  mockSetMillis(0);
+  Pet p;
+  p.begin();
+  p.chooseStarter(4);  // an egg that hatches at 3 minutes
+  setStats(p, 20, 20, 20, 20);
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 2);
+  CHECK(p.isEgg());
+  CHECK_EQ(p.fullness, (uint8_t)20);
+}
+
+TEST(selfcare, off_during_a_ceremony) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 20, 20, 20, 20);
+  p.setCharger(true, true, LONG_IDLE);
+  mockAdvanceMillis(PET_TICK_MS - 5);
+  p.update(millis());
+  p.release();  // the farewell scene runs for CEREMONY_MS
+  mockAdvanceMillis(5);  // the minute ticks during the scene
+  p.update(millis());
+  CHECK(p.ceremony != CER_NONE);
+  CHECK_EQ(p.fullness, (uint8_t)20);
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, never_in_the_powered_off_catch_up) {
+  Pet p;
+  makeQuietPet(p);
+  setStats(p, 80, 80, 80, 100);
+  p.setCharger(true, true, LONG_IDLE);
+  p.setClock(1000u * 86400);
+  p.syncClock(1000u * 86400 + 600 * 60);  // 600 minutes powered off
+  CHECK_EQ(p.fullness, (uint8_t)15);  // the catch-up floor, untouched
+  CHECK_EQ(p.hygiene, (uint8_t)15);
+  advance(p, 1);  // the first live minute does self-care
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, a_need_it_lifts_this_minute_is_not_a_slip_up) {
+  Pet p;
+  makeQuietPet(p);
+  p.careMistakes = 2;
+  setStats(p, 11, 80, 80, 100);  // food 11 -> 9 this minute: a slip-up without self-care
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  CHECK_MSG(p.careMistakes == 2, "no new slip-up, and the old ones stay");
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, a_run_away_cannot_build_on_the_charger) {
+  Pet p;
+  makeQuietPet(p);
+  p.dbgRunawayReady();  // everything at 0 for an hour
+  CHECK(p.canRunawayNow());
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 1);
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  CHECK(!p.canRunawayNow());
+  mockClearForcedRandom();
+}
+
+TEST(selfcare, every_minute_in_relaxed_pace_too) {
+  Pet p;
+  makeQuietPet(p);
+  p.setPace(PACE_RELAXED);  // no drain on odd minutes
+  setStats(p, 39, 80, 80, 100);
+  p.setCharger(true, true, LONG_IDLE);
+  advance(p, 1);  // minute 1: odd, nothing drains
+  CHECK_EQ(p.joy, (uint8_t)80);
+  CHECK_EQ(p.fullness, (uint8_t)50);
+  mockClearForcedRandom();
+}
+
+// ---------------------------------------------------------------- "ready to evolve" chime
+TEST(evochime, sounds_when_the_button_appears) {
+  EvoChime c;
+  CHECK(!c.update(false, 4, 16));
+  CHECK(c.update(true, 4, 16));
+  CHECK_MSG(!c.update(true, 4, 16), "staying ready doesn't chime again");
+}
+
+TEST(evochime, once_per_level) {
+  EvoChime c;
+  CHECK(c.update(true, 4, 16));
+  CHECK(!c.update(false, 4, 16));
+  CHECK_MSG(!c.update(true, 4, 16), "back at the same level: no second chime");
+}
+
+TEST(evochime, again_at_a_new_level) {
+  EvoChime c;
+  CHECK(c.update(true, 4, 16));
+  CHECK(!c.update(false, 4, 16));  // e.g. "keep this form" until the next level
+  CHECK(c.update(true, 4, 17));
+}
+
+// the sketch keeps one EvoChime from boot: the next pet starts again at level 1, and
+// every new pet is an egg (species -1) first, which the loop sees on its way
+TEST(evochime, a_new_pet_chimes_at_the_same_level_again) {
+  EvoChime c;
+  CHECK(c.update(true, 4, 16));
+  CHECK(!c.update(false, 4, 16));  // released with the button still showing
+  CHECK(!c.update(false, -1, 1));  // the egg
+  for (uint16_t lv = 1; lv < 16; lv++) CHECK(!c.update(false, 4, lv));  // the new pet grows
+  CHECK(c.update(true, 4, 16));
+}
+
+// evolve() while the button was showing and then losing it again: the new form is
+// ready at the level the old one chimed at, and that is a new button
+TEST(evochime, a_new_form_chimes_at_the_same_level) {
+  EvoChime c;
+  CHECK(c.update(true, 4, 40));
+  CHECK(!c.update(false, 4, 40));  // a need dips under 40
+  CHECK(c.update(true, 5, 40));
+}
+
+TEST(evochime, needs_the_button_to_appear) {
+  EvoChime c;
+  CHECK(c.update(true, 4, 16));
+  CHECK_MSG(!c.update(true, 4, 17), "still ready at the next level: no chime, as before");
+  CHECK_MSG(!c.update(true, 5, 17), "a new form that is ready at once: the button never appeared");
+}
+
+// The case that needed it: a pet at its evolution level left on the charger.
+TEST(evochime, a_ready_pet_on_the_charger_chimes_once) {
+  Pet p;
+  makePet(p, 4);  // Charmander evolves at level 16
+  p.ageMinutes = 15 * MINUTES_PER_LEVEL;  // level 16 for the next hour
+  p.setCharger(true, true, LONG_IDLE);
+  EvoChime c;
+  bool was = false;
+  int chimes = 0, appearances = 0;
+  for (int m = 0; m < MINUTES_PER_LEVEL - 1; m++) {
+    advance(p, 1);
+    bool ready = p.wantEvolveButton();
+    if (ready && !was) appearances++;
+    was = ready;
+    if (c.update(ready, p.speciesId, p.level())) chimes++;
+  }
+  CHECK_EQ(p.level(), (uint16_t)16);
+  CHECK_MSG(appearances >= 3, "self-care brings the button back several times an hour");
+  CHECK_EQ(chimes, 1);
+}

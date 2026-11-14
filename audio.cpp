@@ -127,12 +127,15 @@ static const Note N_NOTE0[]  = {{523, 220}};   // notas de Berry Song: do, mi, s
 static const Note N_NOTE1[]  = {{659, 220}};
 static const Note N_NOTE2[]  = {{784, 220}};
 static const Note N_NOTE3[]  = {{1047, 220}};
+// aviso de atencion: dos notas cortas que suben (mi y la agudos) con un respiro entre medias,
+// distinto de los demas para que se aprenda que significa "te necesito"
+static const Note N_CALL[]   = {{1319, 45}, {0, 30}, {1760, 70}};
 
 struct SfxDef { const Note *n; uint8_t len; };
 static const SfxDef SFX[SFX_COUNT] = {
   {N_TAP, 1}, {N_EAT, 3}, {N_PLAY, 2}, {N_HEART, 2}, {N_HATCH, 4},
   {N_EVOLVE, 5}, {N_MEDAL, 5}, {N_DENY, 2}, {N_BYE, 3}, {N_LEVEL, 2},
-  {N_NOTE0, 1}, {N_NOTE1, 1}, {N_NOTE2, 1}, {N_NOTE3, 1},
+  {N_NOTE0, 1}, {N_NOTE1, 1}, {N_NOTE2, 1}, {N_NOTE3, 1}, {N_CALL, 3},
 };
 
 static int16_t buf[256 * 2];  // estéreo intercalado (L=R)

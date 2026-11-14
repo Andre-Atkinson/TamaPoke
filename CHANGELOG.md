@@ -10,6 +10,36 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **The clock asks for the time after a power-off.** With no time at boot (the
+  1.75C after a flat battery or a 4 s PWR hold; the original 1.75 when its RTC
+  lost backup power) the clock restarts from the last saved time, so it is wrong.
+  The clock screen now opens by itself once, after the starter or egg choice, a
+  farewell, an evolution or an open dialog, titled "WHAT TIME?" with that old
+  time in red. OK sets it (the time shown counts, changed or not); swiping up
+  skips it and leaves a small clock badge in the sky, left of the pet, on the pet
+  and egg screens; a tap on it opens the clock screen again. Setting the time any
+  way (OK, serial `TIME`, `tools/update_175c.sh`) removes both. A crash or
+  watchdog reboot keeps the clock marked as not set (in RTC memory, no new save
+  key), so bedtime stays paused and the badge stays until the time is set.
+
+- **Attention calls.** When food, joy, energy or hygiene first drops below 25
+  (the red bar), the creature calls once: a new soft two-note chirp (if sound is
+  on) and a "!" speech bubble beside it with the icon of the button that helps.
+  The same need calls again only once it is back to 40 or more. The bubble stays
+  while the need is low, silently. A call lights a screen that turned off by
+  itself, or brightens a dimmed one, for 15 s, then the normal dimming and
+  screen-off timers apply again; it does not count as a touch. On a screen that
+  turned off by itself touch stays locked if the auto touch lock is on (PWR or
+  BOOT turns the screen on for real; with the touch lock off, or not engaged
+  yet, a touch does). A card, gallery, clock or keyboard left open goes back to
+  the creature on a timed-out screen, and on a lit screen untouched for 5
+  minutes (screen-off set to never); a screen turned off with PWR stays dark
+  (chirp only); the pocket lock gets nothing. Quiet hours (the bedtime
+  window, or 22:00-07:00 with bedtime off, and while the clock is unset after a
+  power-off) are silent and dark. No calls while it sleeps, as an egg, while
+  choosing a starter or an egg, or during a farewell or a run-away; a call waits for a minigame, dialog or other screen to close. No
+  new NVS keys.
+
 - **Play starts a random minigame.** Four short touch games now take turns:
   *Keepy-uppy* (the Poke Ball game), *Berry Catch* (slide to walk the pet under
   falling berries; rotten ones cost points, its favourite berry counts double
@@ -48,6 +78,19 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   curse and shiny chance); the other two are Common eggs of other types. Time is
   paused until you pick, and the choice survives a power-off. Saved under new
   keys in the pet's NVS namespace (`eggch`, `ecpk`, `ec0`-`ec2`).
+- **Self-care while charging** (#24, always on). Plugged into USB and untouched
+  for 10 minutes, the pet looks after itself up to half: once a minute the first
+  need under 40 (food, then hygiene, which also clears the poops, then energy,
+  then joy) goes back to 50. It isn't the player's care (no streak or bond, no
+  medal of its own) and is silent. A need it lifts that minute is not a slip-up,
+  so a pet left on the charger can still earn IN SHAPE and evolve on time. Off
+  while asleep, as an egg, during an ending and in the
+  powered-off catch-up, and off when the AXP2101 doesn't answer at boot (the
+  firmware then reports USB as present). No new NVS key. Each top-up logs a
+  `self-care:` line on the serial port. The "ready to evolve" chime now sounds
+  at most once per level for each form, since the needs keep coming back over 40.
+- Simulator: `pmu none` before boot simulates a power chip that doesn't answer;
+  `sim/scripts/self-care.txt` and `self-care-no-pmu.txt` show self-care.
 - **`CARE?` serial command** prints `pace=<n> bed=<n> inbed=<0|1> stale=<0|1>
   egg=<0|1> picking=<0|1>` (`stale=1`: bedtime paused until the clock is set;
   `egg=1`: Eggs set to Choose; `picking=1`: the three-egg choice is on screen).

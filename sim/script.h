@@ -6,6 +6,8 @@
 //   battery 40 | none        bateria del PMU falso (%), "none" = sin bateria
 //   usb on|off               USB enchufado (con USB no hay light sleep)
 //   charging on|off          cargando (solo cuenta con USB)
+//   pmu ok|none              none: the AXP2101 doesn't answer at boot (USB reads as
+//                            present, no battery); before the first step only
 //   tap X Y                  toque corto en (X,Y)
 //   hold X Y DUR             mantener el dedo DUR en (X,Y)
 //   swipe left|right|up|down deslizar desde el centro
@@ -24,7 +26,7 @@
 #include <vector>
 
 enum SimOp : uint8_t {
-  OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING,
+  OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING, OP_PMU,
   OP_TAP, OP_HOLD, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
   OP_WAIT, OP_SERIAL, OP_SHOT,
 };
@@ -51,13 +53,13 @@ bool simParseClock(const std::string &s, uint32_t &epoch);
 int simLangIndex(const std::string &code);
 const char *simLangCode(int index);
 
-// Lee un guion entero. lang y clock solo valen antes del primer paso que hace correr
+// Lee un guion entero. lang, clock y pmu solo valen antes del primer paso que hace correr
 // el firmware; battery, usb y charging valen en cualquier momento, y los que van antes
 // de ese paso ya estan puestos cuando arranca el firmware.
 SimScript simParseScript(const std::string &text, const std::string &name = "script");
 
 // Indice del primer paso que hace correr el firmware (tap, hold, swipe, press, wait,
-// serial, shot): los anteriores (lang, clock, battery, usb, charging) son preparacion
+// serial, shot): los anteriores (lang, clock, battery, usb, charging, pmu) son preparacion
 // y se aplican antes de setup(). Es el mismo corte que usa el lector para rechazar un
-// lang/clock tardio, asi que no pueden discrepar. cmds.size() si no hay ninguno.
+// lang/clock/pmu tardio, asi que no pueden discrepar. cmds.size() si no hay ninguno.
 size_t simPreBootEnd(const SimScript &script);
