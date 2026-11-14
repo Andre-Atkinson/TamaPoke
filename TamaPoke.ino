@@ -36,6 +36,7 @@
 #include "screenlock.h"
 #include "touchlock.h"
 #include "bedtime.h"
+#include "clockprompt.h"
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "trainingcapture.h"
@@ -123,6 +124,10 @@ BedEdge bedEdge;                 // horario de dormir: convierte la hora en even
 BedEvent bedPending = BED_NONE;  // evento a la espera de que no haya minijuego ni dialogo abiertos
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
+ClockPrompt clockPrompt;      // asks for the time after a reseed (clockprompt.h, #10)
+// The stale flag of bedEdge, kept through soft resets: RTC memory survives a crash,
+// watchdog or ESP.restart like the 1.75C soft clock does, and power loss clears both.
+RTC_NOINIT_ATTR ClockStaleMark clockStaleMark;
 
 // escena de bano: espuma sobre el bicho y limpieza al reventar
 uint32_t bathUntil = 0;
@@ -558,7 +563,8 @@ void setup() {
   batBegin();
   pwrSetup();
   uint32_t e = rtcEpoch();
-  if (e == 0) {
+  bool reseeded = (e == 0);
+  if (reseeded) {
     // Sin pila de respaldo, el PCF85063 pierde la hora al cortar la
     // alimentacion. Sembrar siempre la fecha fija haria RETROCEDER el tiempo de
     // juego respecto a lo ya guardado, y eso rompe la racha, la edad y la hora
@@ -572,10 +578,18 @@ void setup() {
     e = rtcEpoch();
     Serial.printf("RTC sin hora: sembrado en %u%s\n", seed,
                   seen > 1767225600UL ? " (desde la ultima hora guardada)" : "");
-    // la hora es la ultima guardada, no la real: pausa el horario de dormir hasta que
-    // alguien ponga la hora (pantalla del reloj o TIME), o dormiria y despertaria a deshoras
-    bedEdge.markStale();
   }
+  // A reseeded clock has the last saved time, not the real one: bedtime pauses until
+  // somebody sets it (clock screen or TIME), or it would sleep and wake at odd hours,
+  // and the clock screen asks for the time (clockprompt.h). A soft reset keeps a clock
+  // that was never set since its reseed just as wrong, so the RTC-memory mark carries
+  // the flag over.
+  if (clockStaleAtBoot(reseeded, clockStaleMark)) {
+    bedEdge.markStale();
+    clockMarkStale(clockStaleMark, true);
+    if (!reseeded) Serial.println("clock: not set since its reseed (kept through a reset)");
+  }
+  clockPrompt.boot(bedEdge.stale(), e != 0);  // e == 0 here: no PCF85063, cannot be set
   pet.syncClock(e);
   // Sin RTC (la 1.75 original sin PCF85063) e == 0, y el minuto 0 cae dentro de toda ventana:
   // muestrear aqui dormiria al bicho en cada arranque y el bucle (que tampoco muestrea con
@@ -627,12 +641,15 @@ void bedSample(uint32_t epoch) {
 }
 
 // Alguien puso la hora (pantalla del reloj o TIME): si estaba obsoleta (sembrada tras
-// quedarse sin corriente) el horario se reanuda como si fuera un arranque. La hora
-// debe haber quedado puesta de verdad (TIME con un valor fuera de rango no cambia
-// el reloj de software de la 1.75C).
+// quedarse sin corriente) el horario se reanuda como si fuera un arranque, y el reloj
+// deja de pedir la hora (clockprompt.h lee bedEdge.stale()). La hora debe haber quedado
+// puesta de verdad (TIME con un valor fuera de rango no cambia el reloj de software de
+// la 1.75C, y sin PCF85063 la 1.75 original sigue sin hora).
 static void bedClockSet(uint32_t set) {
   uint32_t now = rtcEpoch();
-  if (!bedEdge.stale() || !now || (now > set ? now - set : set - now) > 5) return;
+  if (!clockSetTook(set, now)) return;
+  clockMarkStale(clockStaleMark, false);  // a soft reset now keeps a trusted clock
+  if (!bedEdge.stale()) return;
   bedEdge.clockSet();
   bedPending = BED_NONE;
   bedSample(now);
@@ -654,6 +671,20 @@ static bool bedBusy() {
   bool dark = screenOff || screenIsLocked();
   return (!dark && (gameOpen || sackOpen || kbOpen || clockOpen)) || timeLeft(bathUntil) || pet.evolving() ||
          pet.eating() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+}
+
+// What holds back the clock screen that opens by itself after a reseed (clockprompt.h):
+// the starter or egg choice, a ceremony, evolution, a dialog or another screen. The
+// timed dialogs are compared with timeLeft(), like bedBusy(), because render() only
+// zeroes them when it draws.
+static ClockPromptHold clockPromptHold() {
+  ClockPromptHold h;
+  h.choosing = pet.awaitingStarter() || pet.awaitingEgg();
+  h.ceremony = pet.ceremony != CER_NONE;
+  h.evolving = pet.evolving();
+  h.dialog = timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+  h.otherScreen = galleryOpen || gameOpen || sackOpen || kbOpen || clockOpen || cardOpen;
+  return h;
 }
 
 #if BOARD_AMOLED_175C
@@ -786,6 +817,14 @@ void loop() {
     if (e) { pet.lastSeenEpoch = e; bedSample(e); }
   }
   bedApply();
+
+  // Clock reseeded after a power-off: the clock screen opens by itself once, as soon as
+  // nothing more important is on screen (clockprompt.h). A dark screen does not hold it:
+  // it is there when the screen wakes.
+  if (clockPrompt.due(bedEdge.stale(), clockPromptHold())) {
+    openClock();
+    Serial.println("clock: asking for the time (reseeded, not set yet)");
+  }
 
   // latido de salud cada 5 min (para el soak test; se descarta si no hay monitor)
   static uint32_t lastHealth = 0;
@@ -1413,6 +1452,11 @@ void onTap(int16_t x, int16_t y) {
     feedMenuUntil = 0;
     return;
   }
+  if (clockPrompt.asking(bedEdge.stale()) && clockBadgeHit(x, y)) {  // reloj sin poner
+    sfxPlay(SFX_TAP);
+    openClock();
+    return;
+  }
   if (pet.isEgg()) {
     pet.eggTap();
     sfxPlay(SFX_TAP);
@@ -1840,6 +1884,7 @@ static uint32_t screenKey() {
     h = mixKey(h, powerOffMs);
     h = mixKey(h, touchLockMs);
     h = mixKey(h, gLang);
+    h = mixKey(h, clockPrompt.asking(bedEdge.stale()));  // the title (TIME can set it meanwhile)
   } else if (cardOpen) {
     for (uint32_t v : { (uint32_t)pet.speciesId, (uint32_t)pet.shiny, (uint32_t)pet.ageMinutes, (uint32_t)pet.streak,
                         (uint32_t)pet.bestStreak, (uint32_t)pet.bond, (uint32_t)pet.medals, (uint32_t)pet.weight,
@@ -1941,6 +1986,7 @@ bool render() {
       for (auto &c : CRACK1) gfx->fillRect(x + c[0] * s, y + c[1] * s, s, s, INK_K);
     if (pet.eggCracks() >= 2)
       for (auto &c : CRACK2) gfx->fillRect(x + c[0] * s, y + c[1] * s, s, s, INK_K);
+    drawClockBadge();
     char reg[24];
     snprintf(reg, sizeof(reg), T(S_POKEDEX_FMT), pet.registeredCount());
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
@@ -1967,6 +2013,7 @@ bool render() {
     drawPet();
     drawBath();
     drawPoops();
+    drawClockBadge();
     // panel inferior: base limpia para barras y botones sobre el paisaje
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     drawBars();
@@ -2570,6 +2617,7 @@ void openClock() {
   clockH = (e / 3600) % 24;
   clockM = (e / 60) % 60;
   clockOpen = true;
+  clockPrompt.opened();  // however it opened, it does not open again by itself
 }
 
 void applyClock() {
@@ -2613,13 +2661,18 @@ static void drawLevelBars(int x, int lit) {
 void renderClock() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  // reseeded after a power-off and not set yet (clockprompt.h): ask, and show the time
+  // it has in red, since that is only the last time saved before it went off
+  bool asking = clockPrompt.asking(bedEdge.stale());
+  const char *title = asking ? T(S_CLOCK_ASK) : T(S_SET_TIME);
   gfx->setTextColor(UI_INK);
   setSize(3);
-  setCur(centerX(T(S_SET_TIME), 3), 44);
-  printT(T(S_SET_TIME));
+  setCur(centerX(title, 3), 44);
+  printT(title);
 
   char t[8];
   snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
+  gfx->setTextColor(asking ? UI_BAR_BAD : UI_INK);
   setSize(7);
   setCur(CX - 105, 108);
   printT(t);
@@ -2786,6 +2839,27 @@ void clockTap(int16_t x, int16_t y) {
     return;
   }
   if (y >= 366 && y <= 402 && x >= 133 && x <= 333) { applyClock(); return; }
+}
+
+// Clock badge (clockprompt.h) while the clock was reseeded and not set: a clock face with
+// a red dot, in the sky left of the pet. A tap opens the clock screen (onTap).
+void drawClockBadge() {
+  if (!clockPrompt.asking(bedEdge.stale())) return;
+  const int x = CLOCK_BADGE_X, y = CLOCK_BADGE_Y, r = CLOCK_BADGE_R;
+  gfx->fillCircle(x, y, r, UI_WHITE);
+  gfx->drawCircle(x, y, r, UI_INK);
+  gfx->drawCircle(x, y, r - 1, UI_INK);
+  for (int i = 0; i < 4; i++) {  // marks at 12, 3, 6 and 9
+    int dx = i == 1 ? 1 : i == 3 ? -1 : 0, dy = i == 0 ? -1 : i == 2 ? 1 : 0;
+    gfx->fillCircle(x + dx * (r - 6), y + dy * (r - 6), 2, UI_INK);
+  }
+  for (int d = -1; d <= 1; d++) {  // hands 3 px thick: minute to 12, hour to 4
+    gfx->drawLine(x + d, y, x + d, y - (r - 9), UI_INK);
+    gfx->drawLine(x, y + d, x + 10, y + 6 + d, UI_INK);
+  }
+  gfx->fillCircle(x, y, 3, UI_INK);
+  gfx->fillCircle(x + r - 5, y - r + 5, 7, UI_BAR_BAD);  // "needs you" dot
+  gfx->drawCircle(x + r - 5, y - r + 5, 7, UI_WHITE);
 }
 
 // llama + numero de racha arriba a la izquierda

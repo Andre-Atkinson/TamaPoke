@@ -323,3 +323,23 @@ TEST(i18n, nombres_y_pistas_de_los_minijuegos_siguen_el_orden_de_GameId) {
   CHECK_EQ((int)S_HINT_SONG - (int)S_HINT_KEEPY, (int)GAME_SONG);
   CHECK_EQ((int)S_HINT_KEEPY - (int)S_GAME_KEEPY, (int)GAME_COUNT);
 }
+
+// Clock screen title while the clock is stale (#10): size 3 (18 px per letter) at y=44,
+// where the round panel is 272 px wide, so at most 14 letters (252 px). Japanese only in
+// kana and Korean only in hangul syllables (plus space and "?", which both U8g2 fonts
+// have), because the CJK fonts are subsets.
+TEST(i18n, the_clock_prompt_title_fits_and_uses_only_glyphs_the_cjk_fonts_have) {
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    const char *t = T(S_CLOCK_ASK);
+    CHECK_MSG(t && t[0], std::string("empty in ") + LANG_NAME[lang]);
+    if (!LANG_IS_CJK(lang)) CHECK_MSG(strlen(t) <= 14, std::string("too wide: ") + t);
+  }
+  gLang = LANG_JA;
+  for (uint32_t c : codepoints(T(S_CLOCK_ASK)))
+    CHECK_MSG((c >= 0x3041 && c <= 0x30FF) || asciiPunct(c), std::string("not kana: ") + T(S_CLOCK_ASK));
+  gLang = LANG_KO;
+  for (uint32_t c : codepoints(T(S_CLOCK_ASK)))
+    CHECK_MSG((c >= 0xAC00 && c <= 0xD7A3) || asciiPunct(c), std::string("not hangul: ") + T(S_CLOCK_ASK));
+  gLang = LANG_DEFAULT;
+}

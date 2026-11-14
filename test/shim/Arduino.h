@@ -99,6 +99,7 @@ bool mockPinIsrAttached(uint8_t pin);
 
 // ---- ESP32 -------------------------------------------------------------------
 #define IRAM_ATTR
+#define RTC_NOINIT_ATTR  // the board keeps it in RTC memory through soft resets; the PC has none
 #define PROGMEM
 #define PGM_P const char *
 #define pgm_read_byte(addr) (*(const uint8_t *)(addr))
