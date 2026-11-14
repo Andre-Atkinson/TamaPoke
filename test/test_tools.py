@@ -808,8 +808,9 @@ class TestBuildJobs(FakeArduinoCliCase):
 
 class TestBuildCache(FakeArduinoCliCase):
     """Incremental firmware builds (tools/build_cache.sh): one persistent build
-    folder per checkout and board, the gate's stable staged copy, the lock that
-    keeps two runs out of one folder, and --clean."""
+    folder per checkout and board, the sketch compiled again on every run, the
+    gate's stable staged copy, the lock that keeps two runs out of one folder,
+    --clean, and pruning the folders of checkouts that are gone."""
 
     APP0 = 0x300000   # boards/175c/partitions.csv
 
