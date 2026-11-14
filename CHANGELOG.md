@@ -108,7 +108,9 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   centred on the screen, 36 px tall instead of 26 (as tall as OK) and well inside
   the round edge, and a tap reaches exactly the pill that is drawn. The sound,
   brightness and language row moved up 14 px to make room. In Japanese and Korean
-  the time and "OK" are now centred.
+  the time and "OK" were placed for the Latin font; they are now centred on the
+  text's measured width, which brings the time from about 44 px left of centre to
+  within about 7 px.
 
 ### Fixed
 

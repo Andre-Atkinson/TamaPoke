@@ -2889,7 +2889,8 @@ void renderClock() {
   snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
   gfx->setTextColor(asking ? UI_BAR_BAD : UI_INK);
   setSize(7);
-  setCur(centerX(t, 7), 108);  // CX - 105 with the Latin font; the CJK one is narrower
+  // CX - 105 in Latin; in CJK only about centred (centerX ignores the text x offset)
+  setCur(centerX(t, 7), 108);
   printT(t);
 
   drawClockBtn(104, 190, "-");  // hora -

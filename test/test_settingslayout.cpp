@@ -81,8 +81,9 @@ TEST(SettingsLayout, no_pixel_reaches_two_targets) {
     }
 }
 
-// The hit area is exactly the drawn pill: its first and last pixel reach it, the next
-// one out (the gap, the rows above and below) reaches nothing.
+// The hit area is the drawn pill's bounding box: its first and last pixel reach it, the
+// next one out (the gap, the rows above and below) reaches nothing. (The few corner
+// pixels fillRoundRect leaves undrawn count as inside.)
 TEST(SettingsLayout, a_tap_reaches_exactly_the_drawn_pill) {
   CHECK_EQ(powerPillAt(117, 338), PILL_TOUCH_LOCK);
   CHECK_EQ(powerPillAt(233, 338), PILL_SCREEN_OFF);

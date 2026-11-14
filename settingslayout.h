@@ -23,7 +23,8 @@ constexpr int SET_EDGE_MARGIN = 12;  // minimum gap from any corner to the panel
 
 struct SetRect {
   int16_t x, y, w, h;
-  // exactly the pixels fillRoundRect(x, y, w, h, ...) covers (its bounding box)
+  // the drawn pill's bounding box: the x, y, w, h that fillRoundRect gets, so the same
+  // rect the drawing uses (it includes the few corner pixels the rounding leaves undrawn)
   constexpr bool contains(int px, int py) const {
     return px >= x && px < x + w && py >= y && py < y + h;
   }
