@@ -54,7 +54,11 @@ tools/flash_175c.sh --port /dev/ttyACM0 --out ./out      # bootloader + table + 
 adds `-DBOARD_AMOLED_175C=1` to `compiler.cpp.extra_flags`, and points the ESP32
 core's partition prebuild hook at `boards/175c/partitions.csv`. It then checks
 that the table that went into the build really is that file. Extra compiler
-flags can be added with `--flags '-DSOMETHING=1'`.
+flags can be added with `--flags '-DSOMETHING=1'`. Its build folder persists
+between runs, one per checkout (under `~/Library/Caches/tamapoke/` on macOS,
+`~/.cache/tamapoke/` elsewhere; `tools/build_cache.sh` has the details), so a
+rebuild reuses the compiled core and libraries and only compiles the sketch
+again. `--clean` builds from scratch, as CI does.
 
 There is deliberately **no `partitions.csv` in the sketch root**: the core
 copies a root `partitions.csv` into every build, whatever scheme is selected,
