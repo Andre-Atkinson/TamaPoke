@@ -185,12 +185,16 @@ TEST(TouchGesture, an_up_and_down_stroke_counts_too) {
   CHECK_EQ(f.up(), TOUCH_NONE);  // not the card or the clock
 }
 
-TEST(TouchGesture, short_legs_never_stroke) {
+TEST(TouchGesture, legs_under_20px_never_stroke_and_20px_ones_do) {
   TG g;
   Finger f(g);
   f.down(200, 200);
-  for (int i = 0; i < 40; i++) f.moveTo(i % 2 ? 200 : 200 + TG::STROKE_LEG - 1, 200, 60);
+  for (int i = 0; i < 40; i++) f.moveTo(i % 2 ? 200 : 219, 200, 60);  // 19 px each way
   CHECK_EQ(f.count(TOUCH_STROKE), 0);
+  Finger h(g, f.t + 5000);
+  h.down(200, 200);
+  for (int i = 0; i < 3; i++) h.moveTo(i % 2 ? 200 : 220, 200, 60);   // 20 px each way
+  CHECK_EQ(h.count(TOUCH_STROKE), 1);
 }
 
 TEST(TouchGesture, stroking_on_pays_one_pat_per_STROKE_EVERY_MS_at_most) {
@@ -290,8 +294,8 @@ TEST(TouchGesture, the_rest_must_last_DRAG_REST_MS) {
   TG g;
   Finger f(g);
   f.down(200, 220);
-  f.rest(TG::DRAG_REST_MS - 60);
-  f.x = 200 + TG::DRAG_START + 10;  // a jump before the rest is over
+  f.rest(200);
+  f.x = 200 + TG::DRAG_START + 10;  // a jump 220 ms in: before the 250 ms rest is over
   f.sample();
   CHECK_EQ(f.count(TOUCH_DRAG_START), 0);
 }
@@ -324,6 +328,20 @@ TEST(TouchGesture, a_drag_never_becomes_a_long_press_a_swipe_or_a_tap) {
   q.moveTo(300, 220, 200);
   CHECK_EQ(q.count(TOUCH_DRAG_START), 1);
   CHECK_EQ(q.up(), TOUCH_NONE);
+}
+
+TEST(TouchGesture, a_stroke_then_a_still_finger_is_no_long_press) {
+  TG g;
+  Finger f(g);
+  f.down(200, 200);
+  f.moveTo(225, 200, 100);  // a small stroke, never more than 25 px from the landing point
+  f.moveTo(205, 200, 100);
+  f.moveTo(225, 200, 100);
+  CHECK_EQ(f.count(TOUCH_STROKE), 1);
+  f.moveTo(205, 200, 100);
+  f.rest(4000);  // then still, inside LONG_PRESS_SLOP of where it landed
+  CHECK_EQ(f.count(TOUCH_LONG_PRESS), 0);
+  CHECK_EQ(f.up(), TOUCH_NONE);
 }
 
 TEST(TouchGesture, a_long_press_that_fired_first_keeps_the_contact) {
