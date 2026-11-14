@@ -1,0 +1,190 @@
+# The screens and overlays that screens.txt does not reach, so two builds can be
+# compared screen by screen in all 8 languages and on both boards (#41: splitting
+# TamaPoke.ino into modules must not move a pixel). Run it next to screens.txt and
+# the other scripts here, and compare the PNGs and serial.log by hash. Serial lines
+# set up what a player would take days to reach. Coordinates are the firmware's own
+# hit boxes (onTap, the CTA buttons, the choice and release dialogs).
+clock 2026-11-13 10:00
+battery 64
+
+wait 1s
+# Squirtle (third row); the egg cracks on the first and second taps
+tap 233 300
+wait 500ms
+tap 233 200
+wait 300ms
+shot 01-egg-crack1
+tap 233 200
+wait 300ms
+shot 02-egg-crack2
+tap 233 200
+wait 6s
+shot 03-main-beach
+
+# evolution, while every need is still above 40: the button, the choice dialog, the
+# effect and the new form
+serial LVL 30
+wait 1s
+shot 04-evolve-button
+tap 233 204
+wait 300ms
+shot 05-evolve-choice
+tap 233 232
+wait 500ms
+shot 06-evolving
+wait 2s
+shot 07-evolving-later
+wait 8s
+shot 08-evolved
+
+# the release dialog (a long press on the pet); NO keeps the pet
+hold 233 200 3500ms
+shot 09-release-dialog
+tap 298 278
+wait 1s
+
+# every minigame: the bag deals each one once in four plays. Untouched, each ends on
+# its own (a dropped ball, or 15 s idle) and shows its result for 4 s.
+tap 202 404
+wait 1700ms
+shot 10-game-1
+wait 3s
+shot 11-game-1-later
+wait 12s
+shot 12-game-1-end
+wait 6s
+tap 202 404
+wait 1700ms
+shot 13-game-2
+wait 3s
+shot 14-game-2-later
+wait 12s
+shot 15-game-2-end
+wait 6s
+tap 202 404
+wait 1700ms
+shot 16-game-3
+wait 3s
+shot 17-game-3-later
+wait 12s
+shot 18-game-3-end
+wait 6s
+tap 202 404
+wait 1700ms
+shot 19-game-4
+wait 3s
+shot 20-game-4-later
+wait 12s
+shot 21-game-4-end
+wait 6s
+
+# two hours on: hungrier, dirtier, poops; then the bath. Waking works on both boards:
+# on the 1.75C the screen is off with touch locked, and BOOT wakes it and unlocks
+# touch (two presses: sound off, then on again); on the original 1.75 BOOT does
+# nothing and the screen is only dimmed, so the first tap just wakes it
+wait 2h
+press boot 1
+wait 2s
+press boot 1
+wait 2s
+tap 233 30
+wait 500ms
+shot 22-two-hours-later
+tap 326 390
+wait 500ms
+shot 23-bath
+wait 6s
+shot 24-after-bath
+
+# the gallery's second page
+swipe right
+swipe left
+shot 25-gallery-page-2
+swipe right
+swipe right
+wait 500ms
+
+# shiny, a nickname and a care streak, on the main screen and the card
+serial SHINY
+serial NICK TAMA
+serial CAREDAY
+serial CAREDAY
+wait 1s
+shot 26-shiny-nick-streak
+swipe up
+shot 27-card-shiny-nick
+swipe up
+wait 500ms
+
+# the other biomes (meadow, forest, volcano, mountain, snow), then night
+serial SPEC 16
+wait 1s
+shot 28-biome-meadow
+serial SPEC 1
+wait 1s
+shot 29-biome-forest
+serial SPEC 4
+wait 1s
+shot 30-biome-volcano
+serial SPEC 27
+wait 1s
+shot 31-biome-mountain
+serial SPEC 144
+wait 1s
+shot 32-biome-snow
+serial TIME 1794607200
+wait 1s
+shot 33-night
+
+# battery: low, then charging
+battery 5
+wait 2s
+shot 34-battery-low
+usb on
+charging on
+wait 2s
+shot 35-charging
+usb off
+charging off
+battery 64
+
+# a final form old enough to say goodbye: the button, its dialog (stay), the runaway
+# button, the farewell ceremony and the next egg
+serial SPEC 9
+serial LVL 80
+wait 1s
+shot 36-farewell-button
+tap 233 205
+wait 300ms
+shot 37-farewell-choice
+tap 233 294
+wait 1s
+serial ABANDON
+wait 1s
+shot 38-runaway-button
+serial BYE
+wait 1s
+shot 39-farewell
+wait 20s
+shot 40-next-egg
+
+# hatch it and release it: the goodbye ceremony
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+hold 233 200 3500ms
+tap 168 278
+wait 1s
+shot 41-goodbye
+wait 20s
+
+# PWR and BOOT last (on the original 1.75 three presses turn the screen off and on)
+press boot 1
+wait 300ms
+shot 42-boot-press
+press pwr 3
+wait 500ms
+shot 43-pwr-triple
+wait 2s
+shot 44-pwr-triple-later
