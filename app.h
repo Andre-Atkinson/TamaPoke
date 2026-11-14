@@ -102,6 +102,3 @@ uint8_t reactAct(uint8_t kind);
 bool reacting(uint32_t now);
 void reactOffset(uint32_t now, bool animated, int &dx, int &dy);
 bool petFollowing(uint32_t now);
-int followLean(uint32_t now);
-bool heartShown(uint32_t now);
-void drawHuffPuff(int x, int y, uint32_t now);

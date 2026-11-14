@@ -27,6 +27,9 @@ static void drawPetSD();
 static void overlayEye(const Species &sp, int x, int y, int s, int col);
 static void overlayMouth(const Species &sp, int x, int y, int s, bool open);
 static void drawBar(int x, int y, const char *label, uint8_t val);
+static int followLean(uint32_t now);
+static bool heartShown(uint32_t now);
+static void drawHuffPuff(int x, int y, uint32_t now);
 
 PetBeh beh;
 static uint32_t walkLast = 0;  // instante del ultimo paso del paseo (0 = ninguno aun)
@@ -878,7 +881,7 @@ void drawMap(const char *const *map, int n, int x, int y, int s, bool silhouette
 }
 
 // The fallback sprites do not walk: they lean toward a dragging finger and ease back after.
-int followLean(uint32_t now) {
+static int followLean(uint32_t now) {
   static int lean = 0;
   static uint32_t at = 0;
   if (petFollowing(now)) {
@@ -895,11 +898,11 @@ static bool huffing(uint32_t now) { return reacting(now) && petReact.kind == REA
 
 // The heart of the pat before the huff (the 11th tap) is not drawn while the pet turns away.
 // Only the drawing skips it: pet.showHeart() is untouched for its other uses.
-bool heartShown(uint32_t now) { return pet.showHeart() && !huffing(now); }
+static bool heartShown(uint32_t now) { return pet.showHeart() && !huffing(now); }
 
 // the huff: little puffs of breath blown away from the finger, from (x, y) beside the
 // pet's head, each growing as it drifts off and up
-void drawHuffPuff(int x, int y, uint32_t now) {
+static void drawHuffPuff(int x, int y, uint32_t now) {
   if (!huffing(now)) return;
   uint32_t e = now - petReact.t0;
   for (int i = 0; i < 2; i++) {
