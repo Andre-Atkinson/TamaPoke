@@ -70,16 +70,29 @@ tp_lock() {  # tp_lock <folder>: take <folder>.lock, or say who holds it and ret
   TP_LOCKS+=("$lock")
 }
 
-tp_prepare_build() {  # tp_prepare_build <build folder> <clean: 0|1>; hold its lock first
-  local build="$1" clean="$2"
+# Get a build folder ready (hold its lock first). The compiled core and
+# libraries are reused; every sketch file is compiled again.
+tp_prepare_build() {  # tp_prepare_build <build folder> <sketch folder> <clean: 0|1>
+  local build="$1" sketch="$2" clean="$3" copy
   if [[ "$clean" -eq 1 ]]; then rm -rf "$build" || return 1; fi
-  # The sketch is always recompiled; the core and the libraries are reused.
-  # arduino-cli prints a file's warnings only when it compiles that file, so a
-  # sketch object kept from an earlier run would drop its warnings from the
-  # gate's count. And arduino-cli compiles every source it finds in its copy of
-  # the sketch, so a file deleted or renamed in the sketch would otherwise
-  # still be built from that copy.
-  rm -rf "$build/sketch" || return 1
+  if [[ -d "$build/sketch" ]]; then
+    # arduino-cli builds from its own copy of the sketch, $build/sketch: it
+    # compiles every source there and resolves the sketch's includes there. A
+    # copy of a file the sketch no longer has (deleted or renamed) would still
+    # be built or included, so then the whole copy starts over. Its own
+    # outputs there (.o, .d, .a, the merged .ino.cpp) are not copies.
+    while IFS= read -r copy; do
+      if [[ ! -e "$sketch/${copy#"$build/sketch/"}" ]]; then
+        rm -rf "$build/sketch" || return 1
+        break
+      fi
+    done < <(find "$build/sketch" -type f ! -name '*.o' ! -name '*.d' ! -name '*.a' \
+               ! -name '*.ino.cpp' ! -name '*.ino.cpp.merged')
+  fi
+  # arduino-cli prints a file's warnings only when it compiles that file, and
+  # the gate counts the sketch's: so no sketch object is kept. Its library
+  # detection there (the .libsdetect.d files) is still reused.
+  if [[ -d "$build/sketch" ]]; then find "$build/sketch" -name '*.o' -delete || return 1; fi
   mkdir -p "$build"
 }
 

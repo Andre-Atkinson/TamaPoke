@@ -888,19 +888,43 @@ class TestBuildCache(FakeArduinoCliCase):
 
     def test_a_rebuild_recompiles_the_sketch_and_reuses_the_rest(self):
         root = self.gate_root()
+        put(os.path.join(root, 'pet.cpp'))   # the real sketch has one too
         builds = [self.build_path()] + [self.opt(c, '--build-path') for c in self.gate_calls(root)]
-        for build in builds:
-            for part in ('sketch/pet.cpp.o', 'libraries/U8g2/u8g2_fonts.c.o', 'core/core.a'):
+
+        def fill(build, *extra):
+            """What arduino-cli leaves in a build folder: its copy of the sketch with
+            the objects and library-detection files, the libraries and the core."""
+            for part in ('sketch/pet.cpp', 'sketch/pet.cpp.o', 'sketch/pet.cpp.d', 'sketch/pet.cpp.libsdetect.d',
+                         'sketch/TamaPoke.ino.cpp', 'sketch/TamaPoke.ino.cpp.merged', 'sketch/TamaPoke.ino.cpp.o',
+                         'sketch/objs.a', 'libraries/U8g2/u8g2_fonts.c.o', 'core/core.a', *extra):
                 os.makedirs(os.path.dirname(os.path.join(build, part)), exist_ok=True)
                 put(os.path.join(build, part))
-        self.assertEqual(self.build_path(), builds[0])
-        self.assertEqual([self.opt(c, '--build-path') for c in self.gate_calls(root)], builds[1:])
+
+        def rebuild():
+            self.assertEqual(self.build_path(), builds[0])
+            self.assertEqual([self.opt(c, '--build-path') for c in self.gate_calls(root)], builds[1:])
+
+        for build in builds:
+            fill(build)
+        rebuild()
         for build in builds:
             with self.subTest(build=build):
                 # a kept sketch object would hide its warnings from the gate's count
-                self.assertFalse(os.path.exists(os.path.join(build, 'sketch')), 'the sketch was not recompiled')
+                for obj in ('pet.cpp.o', 'TamaPoke.ino.cpp.o'):
+                    self.assertFalse(os.path.exists(os.path.join(build, 'sketch', obj)), f'{obj} was kept')
+                self.assertTrue(os.path.exists(os.path.join(build, 'sketch', 'pet.cpp.libsdetect.d')),
+                                'library detection was not reused')
                 self.assertTrue(os.path.exists(os.path.join(build, 'libraries', 'U8g2', 'u8g2_fonts.c.o')))
                 self.assertTrue(os.path.exists(os.path.join(build, 'core', 'core.a')))
+        # A copy of a file the sketch no longer has (deleted or renamed) would
+        # still be compiled or included: arduino-cli's copy starts over.
+        for build in builds:
+            fill(build, 'sketch/renamed.cpp')
+        rebuild()
+        for build in builds:
+            with self.subTest(build=build, stale='renamed.cpp'):
+                self.assertFalse(os.path.exists(os.path.join(build, 'sketch')), 'a stale copy was kept')
+                self.assertTrue(os.path.exists(os.path.join(build, 'libraries', 'U8g2', 'u8g2_fonts.c.o')))
 
     def test_clean_builds_from_empty_folders(self):
         build = self.build_path()

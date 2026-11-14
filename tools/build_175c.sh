@@ -15,8 +15,8 @@
 #   tools/build_175c.sh --build-path DIR     # build folder (default: this checkout's, see below)
 #   TAMAPOKE_JOBS=8 tools/build_175c.sh      # parallel compile jobs: default 3, 0 = all cores
 # The build folder persists between runs (tools/build_cache.sh says where), so
-# a rebuild reuses the compiled core and libraries. The sketch itself is
-# recompiled on every run. One run at a time per build folder.
+# a rebuild reuses the compiled core and libraries. Every sketch file is
+# compiled again on every run. One run at a time per build folder.
 # CI runs this same script (with --clean), so a green CI means this command works.
 set -euo pipefail
 
@@ -67,7 +67,7 @@ APP_MAX="${APP_MAX_OVERRIDE:-$APP0_SIZE}"
 [[ -n "$BUILD" ]] || BUILD="$(tp_cache_dir "$ROOT")/build-175c"
 trap tp_unlock_all EXIT
 tp_lock "$BUILD" || exit 1
-tp_prepare_build "$BUILD" "$CLEAN"
+tp_prepare_build "$BUILD" "$ROOT" "$CLEAN"
 mkdir -p "$OUT"
 # The checks below must read what this run produced, never a leftover: the
 # hook writes the table again and arduino-cli exports a new image.

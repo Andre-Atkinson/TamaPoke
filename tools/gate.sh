@@ -222,7 +222,7 @@ if [[ "$BUILD" -eq 1 ]]; then
 
   echo "== build 1.75 (original, $how) =="
   rc=0
-  tp_prepare_build "$CACHE/build-175" "$CLEAN" >"$TMP/b175.log" 2>&1 || rc=$?
+  tp_prepare_build "$CACHE/build-175" "$STAGE" "$CLEAN" >"$TMP/b175.log" 2>&1 || rc=$?
   if [[ "$rc" -eq 0 ]]; then
     arduino-cli compile --warnings=all --jobs "$JOBS" ${CLEAN_ARG[@]+"${CLEAN_ARG[@]}"} \
       --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB" \
