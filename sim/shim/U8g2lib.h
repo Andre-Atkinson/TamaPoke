@@ -1,4 +1,4 @@
-// Simulador: solo las fuentes CJK que usa TamaPoke.ino. Los datos salen de la
+// Simulador: solo las fuentes CJK que usa uitext.cpp. Los datos salen de la
 // libreria U8g2 instalada (clib/u8g2_fonts.c), extraidos por sim/extract_fonts.py
 // al compilar; Arduino_GFX trae su propio decodificador de fuentes U8g2.
 #pragma once

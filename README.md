@@ -507,8 +507,9 @@ tools/sim_shots.sh        # every main screen in all 8 languages -> shots/<lang>
 ```
 
 `sim/scripts/every-screen.txt` reaches what `screens.txt` does not (evolution,
-the dialogs, every minigame, the biomes, the endings, the BOOT and PWR presses),
-so with the other scripts there two builds can be compared screen by screen.
+the dialogs, every minigame, the biomes, the endings, the BOOT and PWR presses).
+Run with the other scripts in `sim/scripts/`, it lets two builds be compared
+screen by screen.
 
 A script is one step per line (the full list is in `sim/script.h`):
 `tap X Y`, `hold X Y 3s`, `swipe left|right|up|down`, `press pwr 3`,
