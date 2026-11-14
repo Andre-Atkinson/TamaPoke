@@ -876,3 +876,37 @@ void drawMap(const char *const *map, int n, int x, int y, int s, bool silhouette
             [&](int c0, int len, int k) { gfx->fillRect(x + c0 * s, y + r * s, len * s, s, silhouette ? INK_K : spriteColor((char)k)); });
   }
 }
+
+// The fallback sprites do not walk: they lean toward a dragging finger and ease back after.
+int followLean(uint32_t now) {
+  static int lean = 0;
+  static uint32_t at = 0;
+  if (petFollowing(now)) {
+    lean = constrain((int)touchG.dragX - CX, -60, 60);
+    at = now;
+    return lean;
+  }
+  uint32_t e = now - at;
+  if (e >= 400) lean = 0;
+  return lean * (int)(400 - (e < 400 ? e : 400)) / 400;
+}
+
+static bool huffing(uint32_t now) { return reacting(now) && petReact.kind == REACT_HUFF; }
+
+// The heart of the pat before the huff (the 11th tap) is not drawn while the pet turns away.
+// Only the drawing skips it: pet.showHeart() is untouched for its other uses.
+bool heartShown(uint32_t now) { return pet.showHeart() && !huffing(now); }
+
+// the huff: little puffs of breath blown away from the finger, from (x, y) beside the
+// pet's head, each growing as it drifts off and up
+void drawHuffPuff(int x, int y, uint32_t now) {
+  if (!huffing(now)) return;
+  uint32_t e = now - petReact.t0;
+  for (int i = 0; i < 2; i++) {
+    uint32_t pe = (e + i * 350) % 700;  // each puff lives 700 ms
+    int r = 6 + (int)(pe / 70);
+    int px = x + petReact.away * (int)(pe / 10), py = y - (int)(pe / 25);
+    gfx->fillCircle(px, py, r, UI_WHITE);
+    gfx->drawCircle(px, py, r, UI_TRACK);
+  }
+}
