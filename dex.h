@@ -4,6 +4,9 @@
 
 // GENERADO por tools/gen_dex.py desde tools/dex_data.py - no editar
 
+// The tables and functions are inline (C++17), not static: the linker keeps one
+// copy however many source files include this header (#41).
+
 #define DEX_COUNT 151
 #define DEX_EEVEE 133  // rama al azar: 134/135/136
 
@@ -20,7 +23,7 @@ struct DexEntry {
   uint8_t biome;        // 0 pradera 1 playa 2 bosque 3 volcan 4 montana 5 nieve
 };
 
-static const DexEntry DEX_TBL[DEX_COUNT + 1] = {
+inline const DexEntry DEX_TBL[DEX_COUNT + 1] = {
   { "?", 0, 0, 0, 0x2946, 50, 50, 50, 50, 0 },  // 0: sin usar
   { "BULBASAUR", 2, 16, R_COMUN, 0x3C49, 45, 49, 49, 45, 2 },  // 1 planta
   { "IVYSAUR", 3, 32, R_EVO, 0x3C49, 60, 62, 63, 60, 2 },  // 2 planta
@@ -178,7 +181,7 @@ static const DexEntry DEX_TBL[DEX_COUNT + 1] = {
 // Nombres oficiales por idioma. FR y DE son los unicos latinos que difieren
 // del ingles en gen 1 (ES/IT/PT usan el de DEX_TBL); JA y KO van en UTF-8,
 // que se pinta con la fuente U8g2. nullptr = sin nombre propio.
-static const char *const DEX_NAME_FR[DEX_COUNT + 1] = {
+inline const char *const DEX_NAME_FR[DEX_COUNT + 1] = {
   nullptr, "BULBIZARRE", "HERBIZARRE", "FLORIZARRE",
   "SALAMECHE", "REPTINCEL", "DRACAUFEU", "CARAPUCE",
   "CARABAFFE", "TORTANK", "CHENIPAN", "CHRYSACIER",
@@ -219,7 +222,7 @@ static const char *const DEX_NAME_FR[DEX_COUNT + 1] = {
   "DRACO", "DRACOLOSSE", nullptr, nullptr,
 };
 
-static const char *const DEX_NAME_DE[DEX_COUNT + 1] = {
+inline const char *const DEX_NAME_DE[DEX_COUNT + 1] = {
   nullptr, "BISASAM", "BISAKNOSP", "BISAFLOR",
   "GLUMANDA", "GLUTEXO", "GLURAK", "SCHIGGY",
   "SCHILLOK", "TURTOK", "RAUPY", "SAFCON",
@@ -260,7 +263,7 @@ static const char *const DEX_NAME_DE[DEX_COUNT + 1] = {
   "DRAGONIR", "DRAGORAN", "MEWTU", nullptr,
 };
 
-static const char *const DEX_NAME_JA[DEX_COUNT + 1] = {
+inline const char *const DEX_NAME_JA[DEX_COUNT + 1] = {
   nullptr, "フシギダネ", "フシギソウ", "フシギバナ",
   "ヒトカゲ", "リザード", "リザードン", "ゼニガメ",
   "カメール", "カメックス", "キャタピー", "トランセル",
@@ -301,7 +304,7 @@ static const char *const DEX_NAME_JA[DEX_COUNT + 1] = {
   "ハクリュー", "カイリュー", "ミュウツー", "ミュウ",
 };
 
-static const char *const DEX_NAME_KO[DEX_COUNT + 1] = {
+inline const char *const DEX_NAME_KO[DEX_COUNT + 1] = {
   nullptr, "이상해씨", "이상해풀", "이상해꽃",
   "파이리", "리자드", "리자몽", "꼬부기",
   "어니부기", "거북왕", "캐터피", "단데기",
@@ -344,7 +347,7 @@ static const char *const DEX_NAME_KO[DEX_COUNT + 1] = {
 
 // Nombre de la especie en el idioma activo (cae al de DEX_TBL si ese
 // idioma no tiene nombre propio para ella).
-static inline const char *dexName(int16_t dex) {
+inline const char *dexName(int16_t dex) {
   if (dex < 1 || dex > DEX_COUNT) return DEX_TBL[0].name;
   const char *n = (gLang == LANG_FR)   ? DEX_NAME_FR[dex]
                   : (gLang == LANG_DE) ? DEX_NAME_DE[dex]
@@ -355,5 +358,5 @@ static inline const char *dexName(int16_t dex) {
 }
 
 // el primer huevo de la partida: iniciales clasicos
-static const int16_t CLASSIC_DEX[] = { 1, 4, 7, 25, 133 };
+inline const int16_t CLASSIC_DEX[] = { 1, 4, 7, 25, 133 };
 #define NUM_CLASSIC_DEX 5

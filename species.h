@@ -4,6 +4,9 @@
 // GENERADO por tools/sprites.py - edita alli y ejecuta:
 //   python3 tools/sprites.py emit
 
+// The tables and functions are inline (C++17), not static: the linker keeps one
+// copy however many source files include this header (#41).
+
 #define SPRITE_W 32
 #define SPRITE_H 32
 
@@ -46,7 +49,7 @@ struct Species {
 };
 
 // caracter de sprite -> RGB565
-static inline uint16_t spriteColor(char ch) {
+inline uint16_t spriteColor(char ch) {
   switch (ch) {
     case 'k': return 0x18C4;  // #1b1b25
     case 'w': return 0xFFFF;  // #ffffff
@@ -78,7 +81,7 @@ static inline uint16_t spriteColor(char ch) {
   }
 }
 
-static const char* const SPR_CHARMANDER[32] = {  // 32x32
+inline const char* const SPR_CHARMANDER[32] = {  // 32x32
   "................................",
   "................................",
   "................................",
@@ -113,7 +116,7 @@ static const char* const SPR_CHARMANDER[32] = {  // 32x32
   "................................",
 };
 
-static const char* const SPR_CHARMELEON[32] = {  // 32x32
+inline const char* const SPR_CHARMELEON[32] = {  // 32x32
   ".....................k..........",
   "....................kk..........",
   "...................kk...........",
@@ -148,7 +151,7 @@ static const char* const SPR_CHARMELEON[32] = {  // 32x32
   "................................",
 };
 
-static const char* const SPR_CHARIZARD[32] = {  // 32x32
+inline const char* const SPR_CHARIZARD[32] = {  // 32x32
   "................................",
   "..........kk.......kk...........",
   "..........kk.......kk...........",
@@ -183,7 +186,7 @@ static const char* const SPR_CHARIZARD[32] = {  // 32x32
   ".......kkkkkk.....kkkkkk........",
 };
 
-static const char* const SPR_BULBASAUR[32] = {  // 32x32
+inline const char* const SPR_BULBASAUR[32] = {  // 32x32
   "................................",
   "....................kkk.........",
   "....................kGk.........",
@@ -218,7 +221,7 @@ static const char* const SPR_BULBASAUR[32] = {  // 32x32
   "................................",
 };
 
-static const char* const SPR_IVYSAUR[32] = {  // 32x32
+inline const char* const SPR_IVYSAUR[32] = {  // 32x32
   ".....................kk.........",
   "....................kPpk........",
   "...................kpPppk.......",
@@ -253,7 +256,7 @@ static const char* const SPR_IVYSAUR[32] = {  // 32x32
   "................................",
 };
 
-static const char* const SPR_VENUSAUR[32] = {  // 32x32
+inline const char* const SPR_VENUSAUR[32] = {  // 32x32
   "................................",
   "................................",
   ".................kkkkkkkkk......",
@@ -288,7 +291,7 @@ static const char* const SPR_VENUSAUR[32] = {  // 32x32
   "................................",
 };
 
-static const char* const SPR_SQUIRTLE[32] = {  // 32x32
+inline const char* const SPR_SQUIRTLE[32] = {  // 32x32
   "................................",
   "................................",
   "..........kkkkkkk...............",
@@ -323,7 +326,7 @@ static const char* const SPR_SQUIRTLE[32] = {  // 32x32
   "................................",
 };
 
-static const char* const SPR_WARTORTLE[32] = {  // 32x32
+inline const char* const SPR_WARTORTLE[32] = {  // 32x32
   "....k.............k.............",
   "...klk...........klk............",
   "..klLk...........kLlk...........",
@@ -358,7 +361,7 @@ static const char* const SPR_WARTORTLE[32] = {  // 32x32
   "................................",
 };
 
-static const char* const SPR_BLASTOISE[32] = {  // 32x32
+inline const char* const SPR_BLASTOISE[32] = {  // 32x32
   "................................",
   "................................",
   "................................",
@@ -393,7 +396,7 @@ static const char* const SPR_BLASTOISE[32] = {  // 32x32
   ".......kkkkkk......kkkkkk.......",
 };
 
-static const char* const SPR_ICON_FOOD[16] = {  // 16x16
+inline const char* const SPR_ICON_FOOD[16] = {  // 16x16
   "................",
   "................",
   "...........k....",
@@ -412,7 +415,7 @@ static const char* const SPR_ICON_FOOD[16] = {  // 16x16
   "................",
 };
 
-static const char* const SPR_ICON_PLAY[16] = {  // 16x16
+inline const char* const SPR_ICON_PLAY[16] = {  // 16x16
   "................",
   "................",
   ".......kkk......",
@@ -431,7 +434,7 @@ static const char* const SPR_ICON_PLAY[16] = {  // 16x16
   "................",
 };
 
-static const char* const SPR_ICON_LIGHT[16] = {  // 16x16
+inline const char* const SPR_ICON_LIGHT[16] = {  // 16x16
   "................",
   "................",
   "................",
@@ -450,7 +453,7 @@ static const char* const SPR_ICON_LIGHT[16] = {  // 16x16
   "................",
 };
 
-static const char* const SPR_ICON_CLEAN[16] = {  // 16x16
+inline const char* const SPR_ICON_CLEAN[16] = {  // 16x16
   "................",
   "................",
   "................",
@@ -469,7 +472,7 @@ static const char* const SPR_ICON_CLEAN[16] = {  // 16x16
   "................",
 };
 
-static const char* const SPR_ICON_BERRY_B[16] = {  // 16x16
+inline const char* const SPR_ICON_BERRY_B[16] = {  // 16x16
   "................",
   "................",
   "...........k....",
@@ -488,7 +491,7 @@ static const char* const SPR_ICON_BERRY_B[16] = {  // 16x16
   "................",
 };
 
-static const char* const SPR_ICON_BERRY_G[16] = {  // 16x16
+inline const char* const SPR_ICON_BERRY_G[16] = {  // 16x16
   "................",
   "................",
   "...........k....",
@@ -507,7 +510,7 @@ static const char* const SPR_ICON_BERRY_G[16] = {  // 16x16
   "................",
 };
 
-static const char* const SPR_ICON_CANDY[16] = {  // 16x16
+inline const char* const SPR_ICON_CANDY[16] = {  // 16x16
   "................",
   "................",
   "................",
@@ -526,7 +529,7 @@ static const char* const SPR_ICON_CANDY[16] = {  // 16x16
   "................",
 };
 
-static const char* const SPR_ICON_ROTTEN[16] = {  // 16x16
+inline const char* const SPR_ICON_ROTTEN[16] = {  // 16x16
   "................",
   "..s.............",
   "...........k....",
@@ -545,7 +548,7 @@ static const char* const SPR_ICON_ROTTEN[16] = {  // 16x16
   "................",
 };
 
-static const char* const SPR_ICON_BUSH[16] = {  // 16x16
+inline const char* const SPR_ICON_BUSH[16] = {  // 16x16
   "................",
   "................",
   "................",
@@ -564,7 +567,7 @@ static const char* const SPR_ICON_BUSH[16] = {  // 16x16
   "................",
 };
 
-static const char* const SPR_ICON_NOTE[16] = {  // 16x16
+inline const char* const SPR_ICON_NOTE[16] = {  // 16x16
   "................",
   "................",
   ".......kkkkkkk..",
@@ -583,7 +586,7 @@ static const char* const SPR_ICON_NOTE[16] = {  // 16x16
   "................",
 };
 
-static const char* const SPR_EGG[32] = {  // 32x32
+inline const char* const SPR_EGG[32] = {  // 32x32
   "................................",
   "................................",
   "................................",
@@ -618,7 +621,7 @@ static const char* const SPR_EGG[32] = {  // 32x32
   "................................",
 };
 
-static const char* const SPR_POOP[32] = {  // 32x32
+inline const char* const SPR_POOP[32] = {  // 32x32
   "................................",
   "................................",
   "................................",
@@ -653,7 +656,7 @@ static const char* const SPR_POOP[32] = {  // 32x32
   "................................",
 };
 
-static const char* const SPR_HEART[32] = {  // 32x32
+inline const char* const SPR_HEART[32] = {  // 32x32
   "................................",
   "................................",
   "................................",
@@ -688,7 +691,7 @@ static const char* const SPR_HEART[32] = {  // 32x32
   "................................",
 };
 
-static const Species SPECIES[NUM_SPECIES] = {
+inline const Species SPECIES[NUM_SPECIES] = {
   { "CHARMANDER", TYPE_FUEGO, SPR_CHARMANDER, 5, SP_CHARMELEON, 16, 6, 9, 17, 12, 13, 0xF427, 0xEA87 },
   { "CHARMELEON", TYPE_FUEGO, SPR_CHARMELEON, 6, SP_CHARIZARD, 36, 6, 8, 16, 12, 12, 0xEA87, 0xEA87 },
   { "CHARIZARD", TYPE_FUEGO, SPR_CHARIZARD, 7, -1, 0, 6, 10, 18, 12, 14, 0xF427, 0xEA87 },
@@ -700,5 +703,5 @@ static const Species SPECIES[NUM_SPECIES] = {
   { "BLASTOISE", TYPE_AGUA, SPR_BLASTOISE, 7, -1, 0, 6, 11, 19, 12, 15, 0x3B74, 0x4C98 },
 };
 
-static const int8_t STARTERS[] = { SP_CHARMANDER, SP_BULBASAUR, SP_SQUIRTLE };
+inline const int8_t STARTERS[] = { SP_CHARMANDER, SP_BULBASAUR, SP_SQUIRTLE };
 #define NUM_STARTERS 3

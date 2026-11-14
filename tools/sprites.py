@@ -686,6 +686,7 @@ def emit_c(path="species.h"):
     out.append("#pragma once\n#include <stdint.h>\n\n")
     out.append("// GENERADO por tools/sprites.py - edita alli y ejecuta:\n")
     out.append("//   python3 tools/sprites.py emit\n\n")
+    out.append("// The tables and functions are inline (C++17), not static: the linker keeps one\n// copy however many source files include this header (#41).\n\n")
     out.append(f"#define SPRITE_W {W}\n#define SPRITE_H {H}\n\n")
     for name, hexcol in UI_COLORS.items():
         out.append(f"#define {name} 0x{rgb565(hexcol):04X}  // {hexcol}\n")
@@ -709,16 +710,16 @@ def emit_c(path="species.h"):
         "  uint16_t accent;     // color UI del tipo\n"
         "};\n\n")
     out.append("// caracter de sprite -> RGB565\n")
-    out.append("static inline uint16_t spriteColor(char ch) {\n  switch (ch) {\n")
+    out.append("inline uint16_t spriteColor(char ch) {\n  switch (ch) {\n")
     for ch, hexcol in PALETTE.items():
         out.append(f"    case '{ch}': return 0x{rgb565(hexcol):04X};  // {hexcol}\n")
     out.append("    default: return 0;\n  }\n}\n\n")
     for name, rows in SPRITES.items():
-        out.append(f"static const char* const SPR_{name}[{len(rows)}] = {{  // {len(rows)}x{len(rows)}\n")
+        out.append(f"inline const char* const SPR_{name}[{len(rows)}] = {{  // {len(rows)}x{len(rows)}\n")
         for row in rows:
             out.append(f'  "{row}",\n')
         out.append("};\n\n")
-    out.append("static const Species SPECIES[NUM_SPECIES] = {\n")
+    out.append("inline const Species SPECIES[NUM_SPECIES] = {\n")
     for name in ids:
         typ, evo, lvl, scale = SPECIES_META[name]
         a = ANCHORS[name]
@@ -729,7 +730,7 @@ def emit_c(path="species.h"):
             f"{a['eyeRow']}, {a['eyeL']}, {a['eyeR']}, {a['mouthRow']}, {a['mouthCol']}, "
             f"0x{body:04X}, 0x{acc:04X} }},\n")
     out.append("};\n\n")
-    out.append("static const int8_t STARTERS[] = { SP_CHARMANDER, SP_BULBASAUR, SP_SQUIRTLE };\n")
+    out.append("inline const int8_t STARTERS[] = { SP_CHARMANDER, SP_BULBASAUR, SP_SQUIRTLE };\n")
     out.append("#define NUM_STARTERS 3\n")
     open(path, 'w').write(''.join(out))
     print(f"guardado {path}")
