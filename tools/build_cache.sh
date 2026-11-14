@@ -60,13 +60,14 @@ tp_lock() {  # tp_lock <folder>: take <folder>.lock, or say who holds it and ret
       rmdir "$lock.stale"
     fi
     if ! mkdir "$lock" 2>/dev/null; then
-      echo "$1 is in use by another run (${owner:-owner not recorded yet}; lock: $lock)." >&2
+      owner="$(cat "$lock/owner" 2>/dev/null)"
+      echo "$1 is in use by another run (pid and start: ${owner:-not recorded yet})." >&2
       echo "Wait for it to finish: two runs must not share a build folder." >&2
-      echo "If no gate or build is running, delete $lock and try again." >&2
+      echo "If no gate or build is running, remove the lock and try again: rm -rf '$lock' '$lock.stale'" >&2
       return 1
     fi
   fi
-  printf '%s\n' "$me" >"$lock/owner" || { rmdir "$lock"; return 1; }
+  printf '%s\n' "$me" >"$lock/owner" || { rm -rf "$lock"; return 1; }
   TP_LOCKS+=("$lock")
 }
 
