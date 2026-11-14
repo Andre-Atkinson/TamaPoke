@@ -662,10 +662,6 @@ static ClockPromptHold clockPromptHold() {
   return h;
 }
 
-#if BOARD_AMOLED_175C
-void leaveSack();
-#endif
-
 void bedApply() {
   if (bedPending == BED_NONE || bedBusy()) return;
   BedEvent ev = bedPending;

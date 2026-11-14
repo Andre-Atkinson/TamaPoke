@@ -94,7 +94,9 @@ void showControlToast(const char *text, uint32_t duration = 1200);
 #endif
 void flushUI();   // every renderer sends its frame through this
 void wakeUI();
-void leaveSack();
+#if BOARD_AMOLED_175C
+void leaveSack();   // the sack screen's exit (defined in TamaPoke.ino)
+#endif
 // the pet's reactions to gestures (touchgesture.h), drawn by drawPet*
 uint8_t reactAct(uint8_t kind);
 bool reacting(uint32_t now);
