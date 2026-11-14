@@ -6,8 +6,11 @@
 #include "Arduino_GFX_Library.h"
 #include "board.h"
 #include "bedtime.h"
+#include "clockprompt.h"
 #include "pet.h"
+#include "power.h"
 #include "sdmon.h"
+#include "touchgesture.h"
 #if BOARD_AMOLED_175C
 #include "screenlock.h"
 #include "trainingcapture.h"
@@ -63,7 +66,40 @@ extern bool panelAsleep;       // syncPanelPower() has put the CO5300 to sleep
 #if BOARD_AMOLED_175C
 extern ScreenLock screenLock;
 extern TrainingCapture trainingCapture;
+extern bool trainingCaptureReady;  // the training capture task started
 #endif
+extern PmdMon evoPmd;          // the form before an evolution, during its flash
+extern PetReact petReact;      // the pet's reaction to a gesture (touchgesture.h)
+extern Btn buttons[4];         // the four care buttons along the bottom arc
+extern uint32_t feedMenuUntil;  // the food picker is open until this millis()
+extern uint32_t confirmUntil;   // the "release?" dialog is open until this millis()
+extern uint8_t choiceKind;      // the choice dialog: 0 none, 1 evolve, 2 farewell
+extern uint32_t choiceUntil;    // the choice dialog closes by itself at this millis()
+extern bool batAsPercent;       // settings: the battery as "87%" instead of the icon
+extern ClockPrompt clockPrompt;
+extern TouchGesture touchG;     // the gesture in progress
+extern uint8_t dimStage;        // 0 awake, 1 dimmed, 2 nearly off
+extern bool screenOff;
+extern bool holdFired;          // this touch already fired its long press
+extern bool swallowGesture;     // the touch that wakes the screen does nothing else
+extern bool wasPressed;         // a finger was on the glass at the last poll
 
 void bedClockSet(uint32_t set);  // the clock was set: the bedtime edge starts over
 void loadClockFields(uint32_t e);  // the clock screen's fields from an epoch
+int flashIdxForDex(int16_t dex);   // the flash sprite of a dex number, -1 = none
+PowerCtx powerCtx(uint32_t now);
+bool screenIsLocked();
+#if BOARD_AMOLED_175C
+void showControlToast(const char *text, uint32_t duration = 1200);
+#endif
+void flushUI();   // every renderer sends its frame through this
+void wakeUI();
+void leaveSack();
+// the pet's reactions to gestures (touchgesture.h), drawn by drawPet*
+uint8_t reactAct(uint8_t kind);
+bool reacting(uint32_t now);
+void reactOffset(uint32_t now, bool animated, int &dx, int &dy);
+bool petFollowing(uint32_t now);
+int followLean(uint32_t now);
+bool heartShown(uint32_t now);
+void drawHuffPuff(int x, int y, uint32_t now);

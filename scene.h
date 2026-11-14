@@ -35,3 +35,50 @@ static const uint16_t BIOME_SOIL[6] = {
   C565(0xa8, 0x90, 0x6a),  // 4 montana
   C565(0xe6, 0xee, 0xf5),  // 5 nieve
 };
+
+extern PetBeh beh;          // the pet's walk and one-shot actions (behNext())
+extern bool gNight;         // the night scene: render() sets it from the hour or sleep
+extern uint32_t bathUntil;  // the bath runs until this millis()
+
+uint16_t inkColor();  // the UI ink for day or night
+uint16_t lerp565(uint16_t a, uint16_t b, int i, int n);
+int sceneHour();      // 0-23 from the last clock reading, 13 without one
+void drawScene(uint8_t biome, uint32_t now, bool night);
+uint16_t batteryColor(int pc, bool charging, uint16_t ink);
+void drawBatteryGlyph(int x, int y, int w, int h, int pc, bool charging, uint16_t col, uint16_t bolt);
+void drawClockBadge();
+void drawStreakBadge();
+void drawCelebration();
+void drawHeader(const char *name, uint16_t nameColor, const char *msg);
+void drawCeremony();
+void drawChoiceDialog();
+void drawEvolveButton();
+void drawFarewellButton();
+void drawRunawayButton();
+void drawPet();
+void startBath();
+void drawBath();
+void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS);
+void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS);
+void drawPoops();
+void drawAttnBubble();
+void drawBars();
+void drawButtons();
+const char *eggMsg();
+const char *statusMsg();
+void drawMap(const char *const *map, int n, int x, int y, int s, bool silhouette);
+
+// Used only inside scene.cpp once the code has moved there (#41); a later commit
+// makes them static there.
+void drawClouds(uint32_t now, uint16_t col);
+void drawBattery();
+void drawEvolveFX(uint32_t now);
+uint32_t pmdActTotalMs(const PmdAct &a);
+uint8_t pmdFrameAt(const PmdAct &a, uint32_t t, bool loop);
+void behNext();
+void drawPetPMD();
+void drawPetSD();
+void overlayEye(const Species &sp, int x, int y, int s, int col);
+void overlayMouth(const Species &sp, int x, int y, int s, bool open);
+int barLabelGap();
+void drawBar(int x, int y, const char *label, uint8_t val);

@@ -210,7 +210,7 @@ static bool takeTouchIrq() {
   return pending;
 }
 TrainingCapture trainingCapture;
-static bool trainingCaptureReady = false;
+bool trainingCaptureReady = false;
 static bool trainingCaptureStarted = false;  // worker task exists (begin() runs once)
 static bool trainingNeedsRelease = false;
 #else
@@ -270,7 +270,7 @@ bool screenIsLocked() {
 }
 
 #if BOARD_AMOLED_175C
-void showControlToast(const char *text, uint32_t duration = 1200) {
+void showControlToast(const char *text, uint32_t duration) {
   if (screenIsLocked()) return;  // sync/pet/serial feedback cannot wake a pocketed device
   snprintf(controlToast, sizeof(controlToast), "%s", text);
   controlToastUntil = millis() + duration;
@@ -302,7 +302,7 @@ void flushUI() {
 }
 #else
 // Original board: no overlays, the flush is exactly the old one.
-inline void flushUI() { gfx->flush(); }
+void flushUI() { gfx->flush(); }
 #endif
 
 #if BOARD_AMOLED_175C
@@ -1211,7 +1211,7 @@ static bool onPetBody(int16_t x, int16_t y) {
 // walks and HOP; only about one species in five has POSE, NOD, BREATH or SIT, so the IDLE
 // fallbacks get their movement from reactOffset(). The hop never uses PMD_HOP: its canvas
 // is tall enough for the jump, so drawPmdActM() would draw most pets smaller mid-hop.
-static uint8_t reactAct(uint8_t kind) {
+uint8_t reactAct(uint8_t kind) {
   switch (kind) {
     case REACT_GIGGLE: return pmd.has(PMD_POSE) ? PMD_POSE : pmd.has(PMD_NOD) ? PMD_NOD : PMD_IDLE;
     case REACT_HUFF: {  // turns its back, or else its side (one still frame); never PMD_HURT
@@ -1225,7 +1225,7 @@ static uint8_t reactAct(uint8_t kind) {
   return PMD_IDLE;
 }
 
-static bool reacting(uint32_t now) {
+bool reacting(uint32_t now) {
   return petReact.kind != REACT_NONE && (int32_t)(petReact.until - now) > 0;
 }
 
@@ -1291,7 +1291,7 @@ static void petHeldGesture(TouchAct a) {
 
 // How a reaction moves the sprite, in px. animated: the sprite plays its own action for it
 // (reactAct); the IDLE fallbacks, the B/W SdMon and the built-in sprite pass false.
-static void reactOffset(uint32_t now, bool animated, int &dx, int &dy) {
+void reactOffset(uint32_t now, bool animated, int &dx, int &dy) {
   if (!reacting(now)) return;
   uint32_t e = now - petReact.t0;
   if (petReact.kind == REACT_HOP) {
@@ -1306,12 +1306,12 @@ static void reactOffset(uint32_t now, bool animated, int &dx, int &dy) {
 
 // A hold-then-drag is being followed: the finger is dragging and the gestures are still
 // live (a pet that fell asleep mid-drag stops following it).
-static bool petFollowing(uint32_t now) {
+bool petFollowing(uint32_t now) {
   return touchG.dragging(now) && petGesturesLive(petGestureGate());
 }
 
 // The fallback sprites do not walk: they lean toward a dragging finger and ease back after.
-static int followLean(uint32_t now) {
+int followLean(uint32_t now) {
   static int lean = 0;
   static uint32_t at = 0;
   if (petFollowing(now)) {
@@ -1328,11 +1328,11 @@ static bool huffing(uint32_t now) { return reacting(now) && petReact.kind == REA
 
 // The heart of the pat before the huff (the 11th tap) is not drawn while the pet turns away.
 // Only the drawing skips it: pet.showHeart() is untouched for its other uses.
-static bool heartShown(uint32_t now) { return pet.showHeart() && !huffing(now); }
+bool heartShown(uint32_t now) { return pet.showHeart() && !huffing(now); }
 
 // the huff: little puffs of breath blown away from the finger, from (x, y) beside the
 // pet's head, each growing as it drifts off and up
-static void drawHuffPuff(int x, int y, uint32_t now) {
+void drawHuffPuff(int x, int y, uint32_t now) {
   if (!huffing(now)) return;
   uint32_t e = now - petReact.t0;
   for (int i = 0; i < 2; i++) {
@@ -2302,7 +2302,7 @@ void drawGameScene() {
 
 // ---------- dibujo de los minijuegos ----------
 
-static bool gameNight() {
+bool gameNight() {
   int h = sceneHour();
   return h < 6 || h >= 20;
 }
@@ -2653,7 +2653,7 @@ static void drawLevelBars(int x, int lit) {
 }
 
 // battery colour: green while charging, else `ink` down to 40 %, then amber, then red
-static uint16_t batteryColor(int pc, bool charging, uint16_t ink) {
+uint16_t batteryColor(int pc, bool charging, uint16_t ink) {
   return charging ? UI_BAR_OK : pc >= 40 ? ink : pc >= 15 ? UI_BAR_WARN : UI_BAR_BAD;
 }
 
@@ -2661,7 +2661,7 @@ static uint16_t batteryColor(int pc, bool charging, uint16_t ink) {
 // a terminal on its right. The header draws it 24 x 11; the battery pill draws it larger,
 // and every length scales from the 11 px design (at h = 11 nothing changes). From h = 14
 // the outline is 2 px thick, so the bigger glyph keeps the weight of the pill's other icons.
-static void drawBatteryGlyph(int x, int y, int w, int h, int pc, bool charging, uint16_t col, uint16_t bolt) {
+void drawBatteryGlyph(int x, int y, int w, int h, int pc, bool charging, uint16_t col, uint16_t bolt) {
   auto s = [h](int v) { return (v * h + 5) / 11; };  // a length at h = 11, scaled to h
   int th = h >= 14 ? 2 : 1;
   for (int i = 0; i < th; i++) gfx->drawRoundRect(x + i, y + i, w - 2 * i, h - 2 * i, 2, col);
@@ -4009,7 +4009,7 @@ void drawBars() {
 // dentro de la barra. Se deriva de la etiqueta mas larga, con el 48 de suelo
 // para que en los idiomas latinos no cambie nada.
 // Requiere el tamano de texto 2 ya puesto, porque textW() lo necesita.
-static int barLabelGap() {
+int barLabelGap() {
   const StrId ids[] = { S_BAR_FOOD, S_BAR_JOY, S_BAR_ENE, S_BAR_HYG };
   int ancho = 0;
   for (StrId id : ids) {
