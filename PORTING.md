@@ -54,7 +54,21 @@ tools/flash_175c.sh --port /dev/ttyACM0 --out ./out      # bootloader + table + 
 adds `-DBOARD_AMOLED_175C=1` to `compiler.cpp.extra_flags`, and points the ESP32
 core's partition prebuild hook at `boards/175c/partitions.csv`. It then checks
 that the table that went into the build really is that file. Extra compiler
-flags can be added with `--flags '-DSOMETHING=1'`.
+flags can be added with `--flags '-DSOMETHING=1'`. Its build folder persists
+between runs, one per checkout (under `~/Library/Caches/tamapoke/` on macOS,
+`~/.cache/tamapoke/` elsewhere; `tools/build_cache.sh` has the details), so a
+rebuild reuses the compiled core and libraries and only compiles the sketch
+again. `--clean` builds from scratch, as CI does. One catch: arduino-cli
+rebuilds everything when the set of source-like files (`.h`, `.c`, `.cpp`,
+`.md`, `.json`, ...) anywhere under the sketch folder changes, hidden folders
+included, so adding or removing a file in `test/`, `sim/`, `docs/`, `web/` or
+`.claude/worktrees/` makes the next standalone run a full build. `tools/gate.sh`
+avoids this by building a staged copy without those folders.
+`tools/update_175c.sh` always builds with `--clean`, so the image that goes on
+the board never reuses an object from an earlier build. Each build folder takes
+about 1.5 GB; those of removed worktrees are deleted by the next build, and any
+folder under `~/Library/Caches/tamapoke/` can be deleted by hand while no build
+is running (the next build there is then a full one).
 
 There is deliberately **no `partitions.csv` in the sketch root**: the core
 copies a root `partitions.csv` into every build, whatever scheme is selected,

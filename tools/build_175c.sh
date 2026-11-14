@@ -11,13 +11,26 @@
 #   tools/build_175c.sh                      # -> ../out (or $TAMAPOKE_OUT)
 #   tools/build_175c.sh --out DIR
 #   tools/build_175c.sh --flags '-DSOME_FLAG=1'   # extra compiler flags
+#   tools/build_175c.sh --clean              # full build: reuse nothing from earlier builds
+#   tools/build_175c.sh --build-path DIR     # build folder (default: this checkout's, see below)
 #   TAMAPOKE_JOBS=8 tools/build_175c.sh      # parallel compile jobs: default 3, 0 = all cores
-# CI runs this same script, so a green CI means this command works.
+# The build folder persists between runs (tools/build_cache.sh says where), so
+# a rebuild reuses the compiled core and libraries. Every sketch file is
+# compiled again on every run. One run at a time per build folder.
+# This script builds the checkout itself, and arduino-cli rebuilds everything
+# when the set of source-like files (.h .c .cpp .S .md .json ...) anywhere under
+# the sketch folder changes, hidden folders such as .claude/worktrees/ included.
+# So adding or removing a file in test/, sim/, docs/, web/ or an agent worktree
+# makes the next run a full build. tools/gate.sh avoids that by building a
+# narrowed staged copy.
+# CI runs this same script (with --clean), so a green CI means this command works.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${TAMAPOKE_OUT:-${ROOT}/../out}"
 EXTRA=""
+BUILD=""
+CLEAN=0
 FQBN="${FQBN_175C:-esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=32M,PSRAM=opi,PartitionScheme=custom}"
 PARTS="${ROOT}/boards/175c/partitions.csv"
 # arduino-cli's own default is every core; a few builds at once made a 10-core
@@ -30,7 +43,9 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --out)   OUT="$2"; shift 2 ;;
     --flags) EXTRA="$2"; shift 2 ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    --build-path) BUILD="$2"; shift 2 ;;
+    --clean) CLEAN=1; shift ;;
+    -h|--help) awk 'NR > 1 && /^set -/ { exit } NR > 1' "$0"; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -52,14 +67,29 @@ APP0_SIZE="$(printf '%d' "$APP0_HEX" 2>/dev/null || true)"
 [[ "$APP0_SIZE" =~ ^[0-9]+$ && "$APP0_SIZE" -gt 0 ]] || { echo "Could not read app0 size from $PARTS" >&2; exit 1; }
 APP_MAX="${APP_MAX_OVERRIDE:-$APP0_SIZE}"
 [[ "$APP_MAX" =~ ^[0-9]+$ && "$APP_MAX" -gt 0 && "$APP_MAX" -le "$APP0_SIZE" ]] || APP_MAX="$APP0_SIZE"
+
+# shellcheck source=build_cache.sh
+. "${ROOT}/tools/build_cache.sh"
+if [[ -z "$BUILD" ]]; then
+  CACHE="$(tp_cache_dir "$ROOT")"
+  tp_cache_prune "$CACHE" "$ROOT" || exit 1
+  BUILD="$CACHE/build-175c"
+fi
+trap tp_unlock_all EXIT
+tp_lock "$BUILD" || exit 1
+tp_prepare_build "$BUILD" "$ROOT" "$CLEAN"
 mkdir -p "$OUT"
-BUILD="$(mktemp -d "${TMPDIR:-/tmp}/tamapoke-175c.XXXXXX")"
-trap 'rm -rf "$BUILD"' EXIT
+# The checks below must read what this run produced, never a leftover: the
+# hook writes the table again (tp_prepare_build removed the old one) and
+# arduino-cli exports a new image.
+rm -f "$OUT/TamaPoke.ino.bin"
 
 # The ESP32 core's first prebuild hook copies a sketch-root partitions.csv into
 # the build folder. Point that hook at the 1.75C table instead, so the table is
 # used on every build (even after arduino-cli cleans the build folder).
-arduino-cli compile --warnings=all --jobs "$JOBS" \
+CLEAN_ARG=()
+if [[ "$CLEAN" -eq 1 ]]; then CLEAN_ARG=(--clean); fi
+arduino-cli compile --warnings=all --jobs "$JOBS" ${CLEAN_ARG[@]+"${CLEAN_ARG[@]}"} \
   --fqbn "$FQBN" \
   --build-path "$BUILD" \
   --build-property "upload.maximum_size=${APP_MAX}" \
@@ -70,6 +100,7 @@ arduino-cli compile --warnings=all --jobs "$JOBS" \
 
 # arduino-cli checks the sum of the sections; the .bin also carries headers and
 # padding (about 250 bytes more), so check the real file against app0 as well.
+[[ -f "$OUT/TamaPoke.ino.bin" ]] || { echo "The build wrote no $OUT/TamaPoke.ino.bin" >&2; exit 1; }
 BIN_SIZE="$(wc -c < "$OUT/TamaPoke.ino.bin" | tr -d ' ')"
 if (( BIN_SIZE > APP_MAX )); then
   echo "TamaPoke.ino.bin is $BIN_SIZE bytes, larger than app0 ($APP_MAX)." >&2

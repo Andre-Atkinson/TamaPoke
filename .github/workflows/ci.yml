@@ -13,39 +13,126 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request cancels that PR's older run. Pushes to main
+# and manual runs each get a group of their own, so they are never cancelled.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# The ESP32 core and the libraries the firmware builds against, pinned. Bump
+# them by hand and on purpose: a new core version has broken third-party
+# libraries before. They are also the key of the cache below.
+env:
+  ESP32_CORE: esp32:esp32@3.3.10
+  ARDUINO_LIBRARIES: |
+    GFX Library for Arduino@1.6.9
+    SensorLib@0.5.2
+    XPowersLib@0.3.3
+    U8g2@2.36.19
+
 jobs:
-  firmware:
-    name: Compile firmware
+  # The two boards compile in parallel, each from scratch: CI keeps no build
+  # output between runs, only the installed core and libraries.
+  firmware-build:
+    name: Compile firmware (${{ matrix.board }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ["1.75", "1.75C"]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install arduino-cli
         uses: arduino/setup-arduino-cli@v2
 
-      # Fijado a la version del core verificada para compilar este sketch. Subirla
-      # a mano y a proposito: alguna version nueva del core ha roto librerias de
-      # terceros antes.
-      - name: Install ESP32 core
+      - name: Cache key
+        id: key
         run: |
-          arduino-cli config init --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          libs="$(printf '%s\n' "$ESP32_CORE" "$ARDUINO_LIBRARIES" | sha256sum | cut -c1-16)"
+          echo "key=arduino-${{ runner.os }}-${ESP32_CORE//:/-}-$libs" >> "$GITHUB_OUTPUT"
+
+      # The installed core, toolchains and libraries (not the downloaded
+      # archives in staging/). Saved from runs on main and manual runs only;
+      # pull requests read main's cache, so they don't fill the repo's quota.
+      - name: Restore the ESP32 core and libraries
+        id: cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.arduino15
+            !~/.arduino15/staging
+            ~/Arduino/libraries
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Install the ESP32 core and libraries
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          arduino-cli config init --overwrite --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           arduino-cli core update-index
-          arduino-cli core install esp32:esp32@3.3.10
+          arduino-cli core install "$ESP32_CORE"
+          mapfile -t libs < <(printf '%s\n' "$ARDUINO_LIBRARIES" | sed '/^$/d')
+          arduino-cli lib install "${libs[@]}"
 
-      - name: Install libraries
-        run: arduino-cli lib install "GFX Library for Arduino" SensorLib XPowersLib U8g2
+      - name: Save the ESP32 core and libraries
+        if: steps.cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request' && matrix.board == '1.75C'
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ~/.arduino15
+            !~/.arduino15/staging
+            ~/Arduino/libraries
+          key: ${{ steps.key.outputs.key }}
 
-      - name: Compile
+      # Fails if the cache (or the install) holds anything but the pinned versions.
+      - name: Check the installed versions
+        run: |
+          arduino-cli core list
+          arduino-cli lib list
+          arduino-cli core list --json | python3 -c '
+          import json, os, sys
+          name, version = os.environ["ESP32_CORE"].split("@")
+          platforms = json.load(sys.stdin).get("platforms", [])
+          got = [p.get("installed_version") for p in platforms if p.get("id") == name]
+          sys.exit(0 if got == [version] else f"{name}: want {version}, got {got}")'
+          arduino-cli lib list --json | python3 -c '
+          import json, os, sys
+          want = dict(l.rsplit("@", 1) for l in os.environ["ARDUINO_LIBRARIES"].splitlines() if l)
+          got = {l["library"]["name"]: l["library"]["version"]
+                 for l in json.load(sys.stdin).get("installed_libraries", [])}
+          sys.exit(0 if all(got.get(n) == v for n, v in want.items()) else f"want {want}, got {got}")'
+
+      - name: Compile (original 1.75)
+        if: matrix.board == '1.75'
         run: >
-          arduino-cli compile --warnings=all
+          arduino-cli compile --warnings=all --clean
           --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
           .
 
       # Waveshare AMOLED 1.75C (experimental): mismo codigo con
       # -DBOARD_AMOLED_175C=1 y su tabla de particiones (boards/175c/). Se
       # compila con el mismo script que se usa en casa para que no se oxide.
+      # From scratch (--clean) and on every core, like the 1.75 build.
       - name: Compile (Waveshare AMOLED 1.75C)
-        run: tools/build_175c.sh --out "$RUNNER_TEMP/out-175c"
+        if: matrix.board == '1.75C'
+        env:
+          TAMAPOKE_JOBS: "0"
+        run: tools/build_175c.sh --clean --out "$RUNNER_TEMP/out-175c"
+
+  # The "Protect main" ruleset requires a check named exactly "Compile
+  # firmware": this job, which passes only if both boards compiled. It runs
+  # even when a build failed or the run was cancelled (always()), because a
+  # skipped required check would count as passing.
+  firmware:
+    name: Compile firmware
+    needs: firmware-build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Both boards compiled
+        run: |
+          echo "board builds: ${{ needs.firmware-build.result }}"
+          test "${{ needs.firmware-build.result }}" = success
 
   generated:
     name: Generated headers up to date

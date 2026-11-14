@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Update the firmware on a 1.75C without losing the pet, in one go:
 #   1. back up the pet's save           (tools/pet_save.sh backup)
-#   2. build the 1.75C firmware         (tools/build_175c.sh; skip with --no-build)
+#   2. build the 1.75C firmware         (tools/build_175c.sh --clean, from scratch; skip with --no-build)
 #   3. flash the app partition only     (tools/flash_175c.sh --app-only)
 #   4. set the board clock from this computer once it is back up
 #
@@ -43,7 +43,9 @@ echo "== 1/4 backing up the pet"
 
 if [[ "$BUILD" -eq 1 ]]; then
   echo "== 2/4 building"
-  step 'Sketch uses|build OK' "${ROOT}/tools/build_175c.sh" --out "$OUT"
+  # From scratch: the image that goes on the board never reuses an object from
+  # an earlier build (see tools/build_cache.sh for what an incremental one keeps).
+  step 'Sketch uses|build OK' "${ROOT}/tools/build_175c.sh" --clean --out "$OUT"
 else
   echo "== 2/4 skipping the build (--no-build)"
 fi
