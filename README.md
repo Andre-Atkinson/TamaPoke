@@ -301,7 +301,11 @@ If one bottoms out it counts as a *slip-up*.
   Progress / Care; swipe between them; tap the name on Profile to rename; on Battle the
   "Train strength" button opens the bag; on Care two big buttons cycle the pace
   Normal ↔ Relaxed and the bedtime Off → 21–07 → 22–07 → 23–08).
-- Swipe down = **set the clock** and pick the **language** + sound on/off. After a full
+- Swipe down = **set the clock** and the **settings**. The first row is sound, brightness and
+  language. Under it, each pill shows an icon and a number: the touch lock (a padlock and the
+  seconds after the screen goes off, `0s` = as it goes off; an open padlock and "off" = never),
+  the screen-off time (a screen and the seconds without a touch, or "off" = never) and the
+  battery in the header (its icon or `87%`, with the live level). After a full
   power-off the clock screen opens by itself once to ask for the time; skip it (swipe up)
   and a small clock badge in the sky opens it again until the time is set.
 - Long press (3 s) on the creature = **release** dialog.
