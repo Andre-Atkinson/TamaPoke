@@ -426,12 +426,13 @@ beach, forest, volcano, mountain, snow). Sleeping forces night.
 
 ## Layout
 
-- `TamaPoke.ino` — init, game loop, touch and gestures, `render()` and the screens not split out yet (card, clock, keyboard, gallery, starter and egg choice), audio
+- `TamaPoke.ino` — init, game loop, hardware bring-up, buttons and power, the care glue (bedtime, attention calls, clock prompt), touch and gestures, and `render()`, which picks the screen to draw
 - `app.h` — what `TamaPoke.ino` shares with the modules split out of it (#41)
 - `serialcmd.h` / `serialcmd.cpp` — the USB serial console (SD provisioning and debug commands)
 - `uitext.h` / `uitext.cpp` — text size, cursor and font in every language
 - `scene.h` / `scene.cpp` — the main screen: sky and biome, the pet's PMD animation and walk, bath, poops, header, bars, buttons, the endings and their buttons
 - `gameui.h` / `gameui.cpp` — the minigames' screens and the strength-training sack (their logic is in `minigames.h`)
+- `screens.h` / `screens.cpp` — the other screens: starter and egg choice, the pet card's pages, clock and settings, the nickname keyboard, the Pokédex gallery
 - `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
 - `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)
 - `rtcbat.h` / `rtcbat.cpp` — PCF85063 RTC + AXP2101 PMU (battery, brightness, PWR button)
