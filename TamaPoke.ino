@@ -1048,7 +1048,9 @@ void handleSerial() {
     rtcSetEpoch(e);
     pet.setClock(e);
     bedClockSet(e);
-    if (clockOpen) loadClockFields(rtcEpoch());  // the open screen shows the time just set
+    // the open screen shows the time just set (only if it took: a TIME the clock ignores
+    // must not overwrite what the player is editing)
+    if (clockOpen && clockSetTook(e, rtcEpoch())) loadClockFields(rtcEpoch());
     Serial.printf("rtc=%u\n", rtcEpoch());
     Serial.println("DONE");
   } else if (line.startsWith("RTCSET ")) {  // solo RTC (simular apagados en pruebas)
