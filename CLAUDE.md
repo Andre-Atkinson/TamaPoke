@@ -72,13 +72,16 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
 
 ```bash
 tools/gate.sh              # everything; real exit codes, one summary line per step
-tools/gate.sh --no-build   # quick runs: skips the two firmware builds
+tools/gate.sh --no-build   # quick runs: skips the firmware builds and the desktop simulator
 ```
 
 It runs: `test/run_tests.sh --asan` (host logic + ASan/UBSan + tools tests),
-`tools/test_i18n_formats.py`, the no-network check, and both firmware builds
+`tools/test_i18n_formats.py`, the no-network check, both firmware builds
 (1.75C via `tools/build_175c.sh`, original 1.75 via `arduino-cli compile
---warnings=all`) with `--warnings=all`. The builds run from a staged copy of
+--warnings=all`) with `--warnings=all`, and the desktop simulator for both
+boards (`tools/sim.sh --board 175c|175 --lang en --script
+sim/scripts/screens.txt --out <dir> --quiet`, then the PNG count must equal the
+`shot` lines in that script). The builds run from a staged copy of
 the working tree in a folder named `TamaPoke`, because arduino-cli rejects a
 sketch whose folder name differs from the `.ino` (every agent worktree). Never
 run the builds by hand through a `grep` pipe: it hides failures and the exit
@@ -186,17 +189,25 @@ rounds before it is merged. Both are mandatory, and two is also the cap.
 
 **Reviewers take the firmware builds from CI** (owner's decision,
 2026-11-14). A `pr-reviewer` runs `tools/gate.sh --no-build`, not the full
-gate. For the builds, it checks CI's `Compile firmware` on the PR's head
-commit: `gh pr checks <n> --repo Andre-Atkinson/TamaPoke` reports that commit,
-and `Compile firmware` must be listed and passing. If it is still running or
-failed, the reviewer says so in its report instead of building to find out.
-It builds locally only when a finding or a mutation needs the firmware
-compiler (code behind `#if BOARD_AMOLED_175C`, the `app0` size cap), and then
-within the two-builds limit above. CI compiles both boards but does not count
-sketch warnings, so the `WARN_BASELINE` check stays with the full gate that
-the author, the round-1 fixer and the main session run. Why: reviews were
-rebuilding commits that CI builds anyway, and with at most two builds at a
-time, parallel sessions queued behind them.
+gate, and also the simulator step for both boards as the gate runs it (the
+`tools/sim.sh` command above, then the screenshot-count check): CI has no
+simulator job, and it uses the host compiler, so it is not a firmware build and
+does not count toward the two-builds limit. For the firmware builds, the
+reviewer checks CI's `Compile firmware` on the PR's head commit:
+`gh pr checks <n> --repo Andre-Atkinson/TamaPoke` must list it as passing. If
+it is missing, still running or failed, the reviewer says so in its report,
+with the status `gh pr checks` shows, instead of building to find out. That
+command shows no SHA, so the reviewer also confirms that `gh pr view <n> --repo
+Andre-Atkinson/TamaPoke --json headRefOid` matches the `git rev-parse HEAD` it
+reviewed, and says so if a push has moved it. On pull requests CI builds the
+head merged with `main`. A reviewer builds locally only when a specific finding
+or mutation can be checked only by the firmware compiler (a mutation in code
+that only the firmware build compiles, behind `#if BOARD_AMOLED_175C`, or a
+check of the `app0` size cap), and then within the two-builds limit above. CI
+compiles both boards but does not count sketch warnings, so the `WARN_BASELINE`
+check stays with the full gate that the author, the round-1 fixer and the main
+session run. Why: reviews were rebuilding commits that CI builds anyway, and
+with at most two builds at a time, parallel sessions queued behind them.
 
 If two review rounds feels wrong for a change (too few or too many), say so
 and ask the owner rather than exceeding the cap.
