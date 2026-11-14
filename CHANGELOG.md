@@ -14,10 +14,15 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   (the red bar), the creature calls once: a new soft two-note chirp (if sound is
   on) and a "!" speech bubble beside it with the icon of the button that helps.
   The same need calls again only once it is back to 40 or more. The bubble stays
-  while the need is low, silently. A screen that turned off by itself lights for
-  15 s with touch still locked until PWR, and goes back to the creature if the
-  card, gallery, clock or keyboard was left open; a screen turned off with PWR
-  stays dark (chirp only); the pocket lock gets nothing. Quiet hours (the bedtime
+  while the need is low, silently. A call lights a screen that turned off by
+  itself, or brightens a dimmed one, for 15 s, then the normal dimming and
+  screen-off timers apply again; it does not count as a touch. On a screen that
+  turned off by itself touch stays locked if the auto touch lock is on (PWR or
+  BOOT turns the screen on for real; with the touch lock off, or not engaged
+  yet, a touch does). A card, gallery, clock or keyboard left open goes back to
+  the creature on a timed-out screen, and on a lit screen untouched for 5
+  minutes (screen-off set to never); a screen turned off with PWR stays dark
+  (chirp only); the pocket lock gets nothing. Quiet hours (the bedtime
   window, or 22:00-07:00 with bedtime off, and while the clock is unset after a
   power-off) are silent and dark. No calls while it sleeps, as an egg or during
   a farewell; a call waits for a minigame, dialog or other screen to close. No

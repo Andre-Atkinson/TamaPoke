@@ -274,9 +274,33 @@ TEST(Attention, a_view_left_open_behind_pwr_off_is_not_closed) {
   CHECK(!a.peek);
 }
 
+// ---------------------------------------------------------------- the screen's state
+TEST(Attention, a_lit_screen_is_lit_until_it_is_almost_off) {
+  CHECK_EQ(attnScreen(false, false, false, false), (uint8_t)ATTN_SCR_LIT);
+  CHECK_EQ(attnScreen(false, false, false, true), (uint8_t)ATTN_SCR_LIT_IDLE);
+  // offByPwr only means something while the screen is off (it is not cleared on wake)
+  CHECK_EQ(attnScreen(false, false, true, false), (uint8_t)ATTN_SCR_LIT);
+  CHECK_EQ(attnScreen(false, false, true, true), (uint8_t)ATTN_SCR_LIT_IDLE);
+}
+
+TEST(Attention, a_dark_screen_is_pwr_off_or_timed_out) {
+  CHECK_EQ(attnScreen(false, true, true, false), (uint8_t)ATTN_SCR_PWR_OFF);
+  CHECK_EQ(attnScreen(false, true, false, false), (uint8_t)ATTN_SCR_TIMED_OUT);
+  // almost-off doesn't matter once it is dark
+  CHECK_EQ(attnScreen(false, true, true, true), (uint8_t)ATTN_SCR_PWR_OFF);
+  CHECK_EQ(attnScreen(false, true, false, true), (uint8_t)ATTN_SCR_TIMED_OUT);
+}
+
+TEST(Attention, the_pocket_lock_wins_over_every_other_state) {
+  // the auto-off can set screenOff while the pocket lock is on
+  for (int bits = 0; bits < 8; bits++)
+    CHECK_EQ(attnScreen(true, bits & 1, bits & 2, bits & 4), (uint8_t)ATTN_SCR_POCKET);
+}
+
 // ---------------------------------------------------------------- where the bubble goes
 // Inside the round panel (radius 233 around 233,233) with a margin, below the status
-// line, and above the evolve / farewell / run-away buttons (top at y 173 at their smallest).
+// line, and above the evolve / farewell / run-away buttons (the evolve button's top reaches y 167 at the biggest pulse:
+// EVO_BTN_Y 172 - 5).
 static bool insideRound(int x, int y, int margin) {
   long dx = x - 233, dy = y - 233, r = 233 - margin;
   return dx * dx + dy * dy <= r * r;
@@ -290,7 +314,7 @@ TEST(Attention, bubble_stays_on_the_round_screen_and_clear_of_the_text_and_butto
     CHECK(insideRound(b.x, b.y + b.h + ATTN_BUBBLE_TAIL, 8));
     CHECK(insideRound(b.x + b.w, b.y + b.h + ATTN_BUBBLE_TAIL, 8));
     CHECK(b.y >= 108);
-    CHECK(b.y + b.h + ATTN_BUBBLE_TAIL < 173);
+    CHECK(b.y + b.h + ATTN_BUBBLE_TAIL < 167);
   }
 }
 

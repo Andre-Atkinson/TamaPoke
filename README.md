@@ -94,9 +94,20 @@ While **awake**, per minute:
   moon, bubbles). The same need calls again only after getting back to **40** or
   more, so a quick cuddle can't make it call twice. The bubble stays, silently,
   while a need is under 25 (the one the status line names), and hides while it sleeps.
-  - A screen that turned off by itself lights for **15 s**, with touch still locked
-    until PWR (a PWR press turns it on as usual); a stat card, gallery, clock or
-    keyboard left open goes back to the creature first. A dimmed screen brightens.
+  - A call is **not a touch**: it lights or brightens the screen for **15 s**, then the
+    screen goes back to what its real idle time says (dim, or off), and anything that
+    waits for the creature to be left alone (the self-care top-ups while charging) keeps
+    counting from your last real touch.
+  - A screen that turned off by itself lights for 15 s. Touch stays locked if the auto
+    touch lock is on; PWR or BOOT turns the screen on for real, and with the touch lock
+    off (or not engaged yet) a touch does, and that first touch is swallowed. A stat
+    card, gallery, clock or keyboard left open goes back to the creature first. A
+    dimmed screen brightens.
+  - A lit screen that has sat untouched for 5 minutes (screen-off set to never, the
+    original 1.75 default) counts as left behind, like a timed-out one: a call closes a
+    gallery, card, clock or keyboard left open, shows the creature, brightens and chirps.
+    A screen that is on and not yet that idle waits instead, until you are back on the
+    creature screen.
   - A screen you turned off with PWR stays dark (the chirp still plays), and the
     triple-press pocket lock gets nothing.
   - **Quiet hours** (the bedtime window, or 22:00–07:00 if bedtime is off, and any
@@ -421,9 +432,10 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
   a short PWR press wakes it. The CPU runs at 240 MHz in use, 160 MHz once dimmed or asleep and 80 MHz with the
   screen off (a minigame stays at 240). The original 1.75 keeps its previous behaviour by default (screen-off and touch lock set to
   never) but can pick either in the settings, and CPU scaling applies to both boards.
-- **Attention calls** light a screen that turned off by itself for 15 s at most (not in quiet hours), and only
-  when a need first drops below 25, so a few times a day. They are noticed by the loop that already runs
-  with the screen off (no extra wakeups).
+- **Attention calls** light a screen that turned off by itself, or brighten a dimmed one, for 15 s (not in quiet
+  hours), and only when a need first drops below 25, so a few times a day. They are noticed by the loop that
+  already runs with the screen off (no extra wakeups). During those 15 s the screen draws at 10 fps with no
+  light sleep, then the normal dimming and screen-off timers apply again; a call does not count as a touch.
 - **Low battery (< 20 %, not charging):** brightness capped (100, then 60 under 10 %) and frames twice as slow.
 - **Battery reads over I2C** every 10 s instead of 2 s when the screen is off or almost off.
 - The pet walks by real time, so lower frame rates do not slow it down.

@@ -8,9 +8,9 @@
 // at most POWER_SLEEP_MS between passes), so a need that drops in Pet::tick() is seen on
 // the same pass, with no extra wakeup.
 //
-// When a need first drops below ATTN_LOW it "calls" once: the screen wakes (or lights
-// briefly if it timed out), one soft chirp plays, and a "!" bubble with the need's icon
-// shows next to the pet. The same need can call again only after it is back at
+// When a need first drops below ATTN_LOW it "calls" once: the screen lights (or brightens)
+// for ATTN_PEEK_MS without counting as a touch, one soft chirp plays, and a "!" bubble with
+// the need's icon shows next to the pet. The same need can call again only after it is back at
 // ATTN_REARM or more, so a small top-up (a +5 cuddle from 24 to 29) cannot make it call
 // twice in a few minutes. The bubble itself is not tied to the call: it shows whenever a
 // need is low (attnShown), silently.
@@ -22,8 +22,9 @@ enum AttnNeed : uint8_t { ATTN_FOOD = 0, ATTN_HYGIENE, ATTN_ENERGY, ATTN_JOY, AT
 #define ATTN_NONE 0xFF
 
 #define ATTN_LOW 25           // below this a need is low: red bar, status text, sad pet, call
+                              // (Pet::mood() in pet.cpp has its own 25: keep them in step)
 #define ATTN_REARM 40         // a need that called may call again once it is back to this
-#define ATTN_PEEK_MS 15000UL  // a call lights a screen that timed out for this long
+#define ATTN_PEEK_MS 15000UL  // a call lights a dark screen, or brightens a dim one, for this long
 
 struct AttnLevels { uint8_t v[ATTN_NEEDS]; };
 
@@ -109,6 +110,15 @@ enum AttnScreen : uint8_t {
   ATTN_SCR_POCKET,      // 1.75C triple-press pocket lock: nothing gets through
 };
 
+// The screen's state for AttnScene::screen. The pocket lock wins over everything (the
+// auto-off can set screenOff while it is on); a dark screen is PWR-off or timed out; a lit
+// one is LIT_IDLE once it is almost off (`almostOff`: dimStageNow() == DIM_OFF).
+inline uint8_t attnScreen(bool pocketLocked, bool screenOff, bool offByPwr, bool almostOff) {
+  if (pocketLocked) return ATTN_SCR_POCKET;
+  if (screenOff) return offByPwr ? ATTN_SCR_PWR_OFF : ATTN_SCR_TIMED_OUT;
+  return almostOff ? ATTN_SCR_LIT_IDLE : ATTN_SCR_LIT;
+}
+
 struct AttnScene {
   bool busy;        // evolving, eating, bathing, or a dialog open: wait, whatever the screen
   bool playing;     // a minigame or the training bag is open
@@ -120,9 +130,12 @@ struct AttnScene {
 struct AttnAction {
   bool wait;        // keep the call waiting; ask again on a later pass
   bool chirp;       // one SFX_CALL (silent anyway if the sound is off)
-  bool brighten;    // lit screen: back to full brightness (wakeUI)
-  bool peek;        // timed-out screen: light it for ATTN_PEEK_MS; it stays logically off,
-                    // so the touch lock holds until PWR
+  bool brighten;    // lit screen: full brightness for ATTN_PEEK_MS
+  bool peek;        // timed-out screen: light it for ATTN_PEEK_MS; it stays logically off
+                    // (screenOff), so the auto touch lock, if on, keeps holding
+  // Both open the sketch's "showing" window (attnShowUntil): full brightness, no auto-off
+  // and no dimming until it ends, and no touch is recorded (lastInteract is left alone), so
+  // idle-based features (charging self-care, #36) keep counting from her last real touch.
   bool closeViews;  // go back to the pet screen first (drops an unsaved clock edit or a
                     // half-typed name, both left behind when the screen timed out)
 };
@@ -152,7 +165,7 @@ inline AttnAction attnDecide(const AttnScene &s) {
 
 // Where the bubble goes: beside the pet's head, on the side with more room, clear of the
 // status line above (ends near y 106) and of the evolve/farewell/run-away buttons below
-// (start at y 173 at their smallest pulse). The tail points down at the pet.
+// (the evolve button's top reaches y 167 at the biggest pulse: EVO_BTN_Y 172 - 5). The tail points down at the pet.
 #define ATTN_BUBBLE_W 72
 #define ATTN_BUBBLE_H 44
 #define ATTN_BUBBLE_Y 112

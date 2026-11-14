@@ -124,7 +124,7 @@ BedEdge bedEdge;                 // horario de dormir: convierte la hora en even
 BedEvent bedPending = BED_NONE;  // evento a la espera de que no haya minijuego ni dialogo abiertos
 // Attention calls (attention.h, #9): see attnLoop()
 AttnArm attnArm;
-uint32_t attnPeekUntil = 0;   // a call lights a timed-out screen until this millis() (0 = no peek)
+uint32_t attnShowUntil = 0;   // a call lights (or brightens) the screen until this millis() (0 = none)
 bool screenOffByPwr = false;  // the screen went dark with a PWR press, not the timeout: calls leave it dark
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
@@ -406,6 +406,7 @@ void pollPwrButton() {
     Serial.println("PWR short");
     screenOff = !screenOff;
     screenOffByPwr = screenOff;
+    attnShowUntil = 0;  // PWR wins over a call's window
     if (!screenOff) wakeUI();
   }
 #else
@@ -417,6 +418,7 @@ void pollPwrButton() {
     if (pwrShortPressed()) {
       screenOff = !screenOff;
       screenOffByPwr = screenOff;
+      attnShowUntil = 0;  // PWR wins over a call's window
       if (!screenOff) wakeUI();
     }
   }
@@ -657,10 +659,17 @@ static void bedClockSet(uint32_t set) {
 // borde mas) dependen de pet.sleeping, y al dormir el juego y el saco se abandonan sin
 // premio (bedApply). El bano se compara con timeLeft, no en bruto: bathUntil solo se
 // pone a 0 en drawBath(), que no corre con la pantalla apagada.
+//
+// careBusy() is the part that does not depend on the screen: bedBusy() and the attention
+// calls (attnLoop) both wait while it holds.
+static bool careBusy() {
+  return timeLeft(bathUntil) || pet.evolving() || pet.eating() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) ||
+         (choiceKind && timeLeft(choiceUntil));
+}
+
 static bool bedBusy() {
   bool dark = screenOff || screenIsLocked();
-  return (!dark && (gameOpen || sackOpen || kbOpen || clockOpen)) || timeLeft(bathUntil) || pet.evolving() ||
-         pet.eating() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+  return (!dark && (gameOpen || sackOpen || kbOpen || clockOpen)) || careBusy();
 }
 
 #if BOARD_AMOLED_175C
@@ -695,13 +704,20 @@ void bedApply() {
 // (it light-sleeps at most POWER_SLEEP_MS between passes), so a need that drops in
 // Pet::tick() is seen on the same pass, with no extra wakeup.
 //
-// A call on a screen that timed out is a "peek": the panel lights for ATTN_PEEK_MS while
-// screenOff stays true, so the auto touch lock holds (TouchLock only sees screenOff), PWR
-// and BOOT still turn the screen on for real, and when the peek ends the panel just goes
-// dark again. powerCtx(), the panel sleep and the autosave treat a peek as a lit screen.
+// A call opens a "showing" window of ATTN_PEEK_MS (attnShowUntil) and does NOT count as a
+// touch: lastInteract is left alone (a later feature waits for 10 untouched minutes, #36).
+// powerCtx() reads the window as "just touched" (idle 0, panel on), so the screen is lit
+// at full brightness, drawn at 10 fps, with no auto-off, no dimming and no light sleep for
+// its length; when it ends the real idle applies again (dim, or off, or dark).
+//  - A screen that timed out (a "peek"): screenOff stays true, so the auto touch lock, if
+//    on, keeps holding (TouchLock only sees screenOff). PWR and BOOT turn the screen on for
+//    real (the existing path, which unlocks touch); with the touch lock off, or not engaged
+//    yet, a touch does, and that first touch is swallowed.
+//  - A lit screen (dimmed, or almost off): it brightens for the window.
+// PWR off, a touch, BOOT or anything else that calls wakeUI() ends the window.
 
-static bool attnPeeking(uint32_t now) {
-  return screenOff && attnPeekUntil && (int32_t)(attnPeekUntil - now) > 0;
+static bool attnShowing(uint32_t now) {
+  return attnShowUntil && (int32_t)(attnShowUntil - now) > 0;
 }
 
 // back to the pet screen, as if each had been left by hand without finishing (no rename,
@@ -718,21 +734,18 @@ static void attnCloseViews() {
 }
 
 void attnLoop(uint32_t now) {
-  // the peek ended, or the screen came on for real (PWR, BOOT, a touch): forget the
-  // deadline, so an old one can't read as "still lit" once millis() wraps
-  if (attnPeekUntil && !attnPeeking(now)) attnPeekUntil = 0;
+  // the window ended, or the screen came on for real (PWR, BOOT, a touch): forget the
+  // deadline, so an old one can't read as "showing" once millis() wraps
+  if (attnShowUntil && !attnShowing(now)) attnShowUntil = 0;
   bool away = pet.sleeping || pet.isEgg() || pet.ceremony || pet.awaitingStarter() || pet.awaitingEgg();
   uint8_t calls = attnArm.update(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene), away);
   if (!calls) return;
 
   AttnScene s;
-  s.busy = pet.evolving() || pet.eating() || timeLeft(bathUntil) || timeLeft(confirmUntil) ||
-           timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+  s.busy = careBusy();
   s.playing = gameOpen || sackOpen;
   s.browsing = kbOpen || clockOpen || galleryOpen || cardOpen;
-  if (screenIsLocked()) s.screen = ATTN_SCR_POCKET;
-  else if (screenOff) s.screen = screenOffByPwr ? ATTN_SCR_PWR_OFF : ATTN_SCR_TIMED_OUT;
-  else s.screen = dimStageNow(powerCtx(now)) == DIM_OFF ? ATTN_SCR_LIT_IDLE : ATTN_SCR_LIT;
+  s.screen = attnScreen(screenIsLocked(), screenOff, screenOffByPwr, dimStageNow(powerCtx(now)) == DIM_OFF);
   // the loop refreshes lastSeenEpoch from the clock every 30 s: no I2C read here
   uint32_t e = pet.lastSeenEpoch;
   s.quiet = attnQuiet(pet.bedPreset, e && !bedEdge.stale(), bedMinuteOfDay(e));
@@ -741,12 +754,16 @@ void attnLoop(uint32_t now) {
 
   attnArm.done();
   if (a.closeViews) attnCloseViews();
-  if (a.peek) {
-    attnPeekUntil = now + ATTN_PEEK_MS;
-    if (!attnPeekUntil) attnPeekUntil = 1;  // 0 means "no peek"
+  if (a.peek || a.brighten) {
+    attnShowUntil = now + ATTN_PEEK_MS;
+    if (!attnShowUntil) attnShowUntil = 1;  // 0 means "no window"
+    // no wakeUI(): not a touch. The window makes powerCtx() full brightness and 10 fps, so
+    // the first lit frame is drawn within 100 ms (lastRender is old: frozen while the screen
+    // was off, at most 1 s ago on a dimmed one).
   }
-  if (a.peek || a.brighten) wakeUI();  // full brightness, and the amplifier on before the chirp
-  if (a.chirp) sfxPlay(SFX_CALL);      // silent anyway if the sound is off
+  // sfxPlay() holds the amplifier for 4 s when audio is idle (then the loop's audioSetIdle
+  // sees the window as in use), so the chirp is heard without wakeUI()'s audioSetIdle(false)
+  if (a.chirp) sfxPlay(SFX_CALL);  // silent anyway if the sound is off
 
   static const char *const NAMES[ATTN_NEEDS] = { "food", "hygiene", "energy", "joy" };
   char what[32] = "";  // "food+hygiene+energy+joy" at most
@@ -790,7 +807,6 @@ void loop() {
 #if !BOARD_AMOLED_175C
   pollPwrButton();  // original board: same PEK short press as before
 #endif
-  attnLoop(now);  // before the screen-off and panel decisions below, so a peek lights this pass
 
   // Apagado por inactividad en cualquier pantalla, tambien el reloj y la galeria
   // (son estaticas: fps 0 no significa que el temporizador este parado). El USB
@@ -802,6 +818,10 @@ void loop() {
                   (unsigned long)idleSince(now, lastInteract),
                   (unsigned long)powerOffMs, usbPresent() ? 1 : 0);
   }
+  // after the auto-off above (the pass where idle reaches the delay sees a timed-out
+  // screen, not an almost-off lit one) and before the panel decisions below, so a call's
+  // window lights the panel in this same pass
+  attnLoop(now);
   int tlockEdge = autoTouch.update(screenOff, now);
   if (tlockEdge > 0) {
     Serial.println("touch lock");
@@ -824,7 +844,8 @@ void loop() {
     touchBringUpPending = false;
     touchBringUp();
   }
-  bool wantSleep = screenOff && !attnPeeking(now);
+  bool attnShow = attnShowing(now);  // once per pass: the panel sleep and the autosave must agree
+  bool wantSleep = screenOff && !attnShow;
 #if BOARD_AMOLED_175C
   wantSleep = wantSleep || screenLock.blank(millis());
 #endif
@@ -850,8 +871,8 @@ void loop() {
 #if BOARD_AMOLED_175C
   lockBlank = screenLock.blank(millis());
 #endif
-  // (not during a call's peek: the panel is lit then, and the freeze would show)
-  if (pet.savePending() && ((screenOff && !attnPeeking(now)) || lockBlank || dimStage >= 1 || pet.sleeping)) {
+  // (not while a call's window lights the panel: the freeze would show)
+  if (pet.savePending() && ((screenOff && !attnShow) || lockBlank || dimStage >= 1 || pet.sleeping)) {
     pet.flushSave();
   }
 
@@ -949,8 +970,10 @@ void loop() {
 // estado de consumo actual (ver power.h)
 PowerCtx powerCtx(uint32_t now) {
   PowerCtx c;
-  c.idleMs = idleSince(now, lastInteract);
-  c.screenOff = screenOff && !attnPeeking(now);  // a call's peek lights the panel like a screen that is on
+  // a call's window (attnShowUntil) reads as "just touched" without touching lastInteract
+  bool show = attnShowing(now);
+  c.idleMs = show ? 0 : idleSince(now, lastInteract);
+  c.screenOff = screenOff && !show;
 #if BOARD_AMOLED_175C
   c.screenOff = c.screenOff || screenLock.blank(now);
 #endif
@@ -972,6 +995,7 @@ void wakeUI() {
   uint32_t iv = frameIntervalMs(powerCtx(now));
   bool slow = !iv || iv > 100;  // pantalla apagada o ritmo lento: se dibuja ya, sin esperar al frame
   lastInteract = now;
+  attnShowUntil = 0;  // a real touch ends a call's window (idle is 0 anyway)
   // el frame forzado respeta los 85 ms entre redibujados (si no, solapa el DMA del anterior)
   if (slow) lastRender = (now - lastRender >= 85) ? 0 : lastRender - 15;
   audioSetIdle(false);
@@ -3945,7 +3969,7 @@ void drawBar(int x, int y, const char *label, uint8_t val) {
   int bw = 232 - (78 + gap);
   if (bw > 100) bw = 100;   // con etiquetas latinas sale 100, como estaba
   int bx = x + gap, bh = 15;
-  uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= 25) ? UI_BAR_WARN : UI_BAR_BAD;
+  uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= ATTN_LOW) ? UI_BAR_WARN : UI_BAR_BAD;
   gfx->fillRoundRect(bx, y, bw, bh, 4, UI_TRACK);
   int fw = (bw - 4) * val / 100;
   if (fw > 0) gfx->fillRoundRect(bx + 2, y + 2, fw, bh - 4, 3, fill);
@@ -3975,10 +3999,14 @@ const char *statusMsg() {
   if (pet.sleeping) return "Zzz...";
   if (pet.eating()) return T(S_EATING);
   if (pet.showHeart()) return T(S_LIKES);
-  if (pet.fullness < 25) return T(S_HUNGRY);
-  if (pet.hygiene < 25) return T(S_NEEDS_BATH);
-  if (pet.energy < 25) return T(S_EXHAUSTED);
-  if (pet.joy < 25) return T(S_SAD);
+  // the same need the "!" bubble shows (attnShown), so the text and the bubble can't disagree
+  switch (attnShown(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene))) {
+    case ATTN_FOOD: return T(S_HUNGRY);
+    case ATTN_HYGIENE: return T(S_NEEDS_BATH);
+    case ATTN_ENERGY: return T(S_EXHAUSTED);
+    case ATTN_JOY: return T(S_SAD);
+    default: break;
+  }
   if (pet.weight > 60) return T(S_CHUBBY);
   if (pet.shiny && pet.ageMinutes < 15) return T(S_IS_SHINY);
   return T(S_HAPPY);

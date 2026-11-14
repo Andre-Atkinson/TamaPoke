@@ -1,9 +1,16 @@
-# Attention calls (#9). A need that drops below 25 calls once. With the screen timed out
-# the call lights it for 15 s (a "peek": touch stays locked until PWR) with a "!" bubble
-# beside the pet, and a view left open is closed first. At night (22:00-07:00 with bedtime
-# off) the call is silent and dark, and the bubble is there when she looks.
+# Attention calls (#9). A need that drops below 25 calls once, and a call is not a touch.
+#   A. dimmed screen: brightens for 15 s, then the real idle applies (dim, then off on schedule)
+#   B. timed-out screen: a 15 s "peek" with the "!" bubble beside the pet, touch still locked
+#      (the auto touch lock is on); a view left open is closed first; PWR turns it on for real
+#   C. quiet hours (22:00-07:00 with bedtime off): silent and dark
+#   D. screen turned off with PWR: the call chirps and the panel stays dark
+#   E. pocket lock (three quick PWR presses): the call is spent silently, panel stays dark
+# A manual check: run it and read the log and the shots; nothing compares them automatically.
 #   tools/sim.sh --script attention-calls --serial-log calls.log --out shots/
-# The serial log shows each call: "call hygiene: peek chirp", "call joy: silent (quiet)".
+# Each call is one serial line: "call hygiene: brighten chirp", "call food: peek chirp",
+# "call joy: silent (quiet)", "call energy: dark chirp", "call hygiene: silent (locked)".
+# "serial HEALTH" lines only stamp the simulated time ("up=...s") into the log.
+# The shots do not show brightness (the simulator draws the same picture at any level).
 battery 80
 
 # new game: pick Charmander, hatch the egg (the clock is 2026-11-13 10:00)
@@ -15,33 +22,111 @@ tap 233 200
 wait 6s
 shot 1-fresh
 
-# the screen turns off at 60 s and touch locks 10 s later. At ~16 min the poops take
-# hygiene under 25, and its call lights the screen for 15 s
-wait 957s
-shot 2-hygiene-call
-# PWR during the peek turns the screen on for real and unlocks touch; a bath ends it
+# A. a call on a dimmed screen. The screen is woken at ~925 s; it dims after 30 s untouched and
+# would turn off at 60 s. Hygiene's call (~960 s) brightens it for 15 s without counting as a
+# touch, then the real idle applies again: dim at ~975 s, off at ~985 s ("screen off: idle 60000")
+wait 918s
 press pwr
 wait 1s
-shot 3-pwr-on
+serial HEALTH
+wait 30s
+serial HEALTH
+shot 2-dimmed-before-the-call
+wait 6s
+serial HEALTH
+shot 3-call-brightens
+wait 10s
+serial HEALTH
+shot 4-still-lit
+wait 5s
+serial HEALTH
+shot 5-dim-again
+wait 10s
+serial HEALTH
+shot 6-off-on-schedule
+
+# PWR turns it on for real and unlocks touch; a bath clears the bubble
+press pwr
+wait 1s
+shot 7-pwr-on
 tap 326 390
 wait 4s
-shot 4-bathed
+shot 8-bathed
 
-# the stat card is left open and the screen times out; food's call (~28 min) goes back
-# to the pet screen before lighting it
+# B. the stat card is left open and the screen times out; food's call (~28 min) goes back
+# to the pet screen before lighting it (a peek: touch stays locked)
 swipe up
 wait 1s
-shot 5-card-left-open
-wait 715s
-shot 6-food-call-closed-the-card
-wait 20s
-shot 7-dark-again
-
-# 23:00 with bedtime off: quiet hours. Joy's call (~34 min) stays dark and silent; PWR
-# shows the bubble (food first, like the status line)
-serial TIME 1794610800
-wait 350s
-shot 8-quiet-call-stayed-dark
+shot 9-card-left-open
+wait 685s
+serial HEALTH
+shot 10-food-peek-closed-the-card
+# PWR during the peek turns the screen on for real; it then times out again
 press pwr
 wait 1s
-shot 9-night-bubble
+shot 11-pwr-during-the-peek
+wait 75s
+shot 12-dark-again
+
+# C. 23:00 with bedtime off: quiet hours. Hygiene's and joy's calls (~30-34 min) stay dark and
+# silent; PWR shows the bubble (the first low need in status-line order, like the status line)
+serial TIME 1794610800
+wait 300s
+shot 13-quiet-call-stayed-dark
+press pwr
+wait 1s
+shot 14-night-bubble
+
+# D. next day, 10:00: a bath and five berries, then the screen is turned off with PWR. Energy's
+# call (~55 min) chirps and the panel stays dark
+serial TIME 1794650400
+wait 2s
+tap 326 390
+wait 6s
+tap 140 390
+tap 131 320
+wait 8s
+tap 140 390
+tap 131 320
+wait 8s
+tap 140 390
+tap 131 320
+wait 8s
+tap 140 390
+tap 131 320
+wait 8s
+tap 140 390
+tap 131 320
+wait 8s
+shot 15-bathed-and-fed
+press pwr
+wait 1s
+shot 16-pwr-off
+wait 300s
+serial HEALTH
+wait 300s
+serial HEALTH
+wait 300s
+serial HEALTH
+wait 300s
+serial HEALTH
+wait 300s
+serial HEALTH
+shot 17-pwr-off-call-stayed-dark
+
+# E. PWR on, then the pocket lock. Hygiene's call (~65 min) and food's (~70 min) are spent
+# silently and the panel stays dark (the auto-off also fires under the lock: the lock wins)
+press pwr
+wait 2s
+press pwr 3
+wait 2s
+shot 18-pocket-locked
+wait 300s
+serial HEALTH
+wait 300s
+serial HEALTH
+wait 300s
+serial HEALTH
+wait 300s
+serial HEALTH
+shot 19-pocket-calls-stayed-dark
