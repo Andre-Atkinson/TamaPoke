@@ -835,6 +835,7 @@ class TestBuildCache(FakeArduinoCliCase):
 
     @staticmethod
     def hold(folder, owner):
+        shutil.rmtree(folder + '.lock', ignore_errors=True)
         os.makedirs(folder + '.lock')
         put(os.path.join(folder + '.lock', 'owner'), (owner + '\n').encode())
 
@@ -943,7 +944,7 @@ class TestBuildCache(FakeArduinoCliCase):
         build = self.build_path()
         self.hold(build, owner)
         r = self.build_175c()
-        self.assertNotEqual(r.returncode, 0)
+        self.assertNotEqual(r.returncode, 0, 'built in a folder another run holds')
         self.assertIn('in use by another run', r.stderr)
         self.assertIn(str(os.getpid()), r.stderr)
         self.assertEqual(self.calls(), [], 'built in a folder another run holds')
