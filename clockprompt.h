@@ -21,9 +21,13 @@
 // ---------------------------------------------------------------- across soft resets
 // The flag is also kept in ESP32 RTC memory (RTC_NOINIT_ATTR in the sketch). A soft
 // reset (crash, watchdog, ESP.restart) keeps that memory and also keeps the soft clock
-// of the 1.75C running, still wrong; only power loss clears them, and then the clock
-// has no time and is reseeded anyway. RTC memory holds garbage after power-on, so the
-// mark is a magic word plus its complement: garbage reads as "not stale".
+// of the 1.75C running, still wrong; on the 1.75C only power loss clears them, and then
+// the clock has no time and is reseeded anyway. On the original 1.75 a PCF85063 still
+// on its backup cell would keep a never-set seeded time through a power-off while this
+// mark is lost, so that time is stale with no flag (rare: its backup cell is never
+// charged, see disableButtonBatteryCharge() in rtcbat.cpp). RTC memory holds garbage
+// after power-on, so the mark is a magic word plus its complement: garbage reads as
+// "not stale".
 // Keep it a plain struct with no initializers: a constructor would run at every boot
 // and wipe the copy the reset was meant to keep.
 struct ClockStaleMark {

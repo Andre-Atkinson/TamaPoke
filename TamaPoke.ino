@@ -204,12 +204,12 @@ int8_t eggSel = -1;     // huevo tocado una vez (-1 = ninguno); solo UI, no se g
 #define EVO_BTN_W 256
 #define EVO_BTN_H 64
 #define EVO_BTN_X (CX - EVO_BTN_W / 2)
-#define EVO_BTN_Y 172
+#define EVO_BTN_Y 172  // test/test_clockprompt.cpp (ClockBadge) mirrors this: update it too
 // boton-CTA de despedida (mas ancho: lleva el nombre + frase)
 #define FAR_BTN_W 408
 #define FAR_BTN_H 58
 #define FAR_BTN_X (CX - FAR_BTN_W / 2)
-#define FAR_BTN_Y 176
+#define FAR_BTN_Y 176  // mirrored in test/test_clockprompt.cpp (ClockBadge) too
 // el CST9217 avisa por el pin INT cuando hay datos tactiles; lo usamos para no
 // leer el bus I2C mientras el chip esta dormido (esa lectura se colgaba ~1s)
 volatile bool gTouchIrq = false;
@@ -1048,6 +1048,7 @@ void handleSerial() {
     rtcSetEpoch(e);
     pet.setClock(e);
     bedClockSet(e);
+    if (clockOpen) loadClockFields(rtcEpoch());  // the open screen shows the time just set
     Serial.printf("rtc=%u\n", rtcEpoch());
     Serial.println("DONE");
   } else if (line.startsWith("RTCSET ")) {  // solo RTC (simular apagados en pruebas)
@@ -1147,6 +1148,7 @@ void handleSerial() {
 
 // ---------- entrada tactil ----------
 
+// test/test_clockprompt.cpp (ClockBadge) mirrors these bounds (x > 110): update it too.
 bool inPetZone(int16_t x, int16_t y) {
   return x > 110 && x < 356 && y > 95 && y < 310;
 }
@@ -2613,10 +2615,13 @@ void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint1
 // El usuario pone su hora LOCAL a ojo; el firmware la usa tal cual, asi que
 // no hay que gestionar zona horaria. Preserva el dia (no rompe racha/edad).
 
-void openClock() {
-  uint32_t e = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
+static void loadClockFields(uint32_t e) {
   clockH = (e / 3600) % 24;
   clockM = (e / 60) % 60;
+}
+
+void openClock() {
+  loadClockFields(pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch());
   clockOpen = true;
   clockPrompt.opened();  // however it opened, it does not open again by itself
 }

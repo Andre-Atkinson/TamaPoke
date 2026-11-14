@@ -22,6 +22,14 @@ shot 4-pet-badge
 tap 233 40
 tap 76 125
 shot 5-asks-again
+# a serial TIME while the clock screen is open (update_175c.sh sends it a second after the
+# reboot): the screen must now show that time (10:00), and OK must keep it, not put the
+# time that was on screen before back
+serial TIME 1794564000
+wait 1s
+shot 5b-time-sent
 tap 233 384
+wait 1s
+serial TIME
 wait 1s
 shot 6-set

@@ -326,9 +326,10 @@ TEST(i18n, nombres_y_pistas_de_los_minijuegos_siguen_el_orden_de_GameId) {
 
 // Clock screen title while the clock is stale (#10): size 3 (18 px per letter) at y=44,
 // where the round panel is 272 px wide, so at most 14 letters (252 px). Japanese only in
-// kana and Korean only in hangul syllables (plus space and "?", which both U8g2 fonts
-// have), because the CJK fonts are subsets.
-TEST(i18n, the_clock_prompt_title_fits_and_uses_only_glyphs_the_cjk_fonts_have) {
+// kana and Korean only in hangul syllables (plus space and "?"), because the CJK fonts
+// are subsets. This only checks the script; that every Korean syllable is one the font has
+// (the 2,350 of KS X 1001) is checked for all Korean strings by tools/test_i18n_formats.py.
+TEST(i18n, the_clock_prompt_title_fits_and_is_kana_or_hangul_only) {
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;
     const char *t = T(S_CLOCK_ASK);
