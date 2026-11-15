@@ -193,6 +193,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   one skipped (`alert evolve: silent (quiet)`, likewise `run-away`, `level N` and
   `medal`) and for each evolve or run-away alert that sounds. No new NVS keys.
 
+- **The run-away button goes as soon as the pet is no longer neglected.** It
+  stayed for up to a minute after a care, or after a night's sleep had brought the
+  energy back, so the "about to run away" warning could sound at the morning wake
+  and the button could still be pressed. It now needs all four needs still at 0.
+
 - **A time the clock does not take no longer reaches the pet's save.** Serial
   `TIME` saved the time it was sent as the pet's last-seen time even when the
   clock ignored it (a stray `TIME 5`, a mistyped epoch it could not keep), so

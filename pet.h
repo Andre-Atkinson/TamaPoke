@@ -274,6 +274,7 @@ private:
   void playReward(uint8_t n);  // recompensa de un minijuego, n = 0..GAME_SCORE_CAP
   void addBond(uint8_t amt);
   void checkMedals();
+  bool allNeedsEmpty() const { return fullness == 0 && joy == 0 && energy == 0 && hygiene == 0; }
   void tick();
   void drainBody();  // parte del goteo de necesidades (comida, energia, caca, higiene)
   void drainJoy();   // ...y la felicidad (depende de comida e higiene ya bajadas)

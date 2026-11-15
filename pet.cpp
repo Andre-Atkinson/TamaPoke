@@ -198,7 +198,7 @@ void Pet::tick() {
 
   // abandono total: con TODO a cero durante una hora queda lista para escaparse;
   // NO se va sola, la dispara el usuario con el boton (final triste, lo presencia)
-  if (fullness == 0 && joy == 0 && energy == 0 && hygiene == 0) {
+  if (allNeedsEmpty()) {
     if (neglectTicks < RUNAWAY_TICKS) neglectTicks++;
   } else {
     neglectTicks = 0;  // un solo cuidado la salva
@@ -509,8 +509,12 @@ bool Pet::canFarewellNow() const {
 
 // abandono total durante 1h: lista para escaparse. La dispara el usuario con el
 // boton (final triste); cuidarla un solo tick la salva (neglectTicks se resetea)
+// The four needs must still be at 0 too: tick() resets neglectTicks only on its next
+// minute, so a care, or a night's sleep (asleep, tick() stops before the count and the
+// energy comes back), left the button and its warning for up to a minute after the pet
+// was no longer neglected, and the button could still be pressed then.
 bool Pet::canRunawayNow() const {
-  return !isEgg() && !sleeping && ceremony == CER_NONE && neglectTicks >= RUNAWAY_TICKS;
+  return !isEgg() && !sleeping && ceremony == CER_NONE && neglectTicks >= RUNAWAY_TICKS && allNeedsEmpty();
 }
 
 void Pet::startFarewell() {
