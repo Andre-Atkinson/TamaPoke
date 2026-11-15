@@ -1,0 +1,29 @@
+# The language pill (#61): an EN | PT toggle on the settings screen. Each tap switches to
+# the other language and the screen redraws in it at once (that the choice is saved and
+# read back is in test/test_i18n.cpp).
+#   tools/sim.sh --lang en --script language-toggle --out shots/
+clock 2026-11-15 10:00
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+wait 1s
+serial HATCH
+wait 2s
+shot 1-pet
+
+# settings (swipe down): EN filled; a tap on the pill gives PT, another gives EN back
+swipe down
+shot 2-settings
+tap 384 297
+wait 300ms
+shot 3-settings-other
+tap 384 297
+wait 300ms
+shot 4-settings-back
+# once more to the other language, then back to the pet in it
+tap 384 297
+wait 300ms
+swipe up
+wait 1s
+shot 5-pet-other

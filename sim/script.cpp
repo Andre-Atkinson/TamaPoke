@@ -6,7 +6,7 @@
 #include <sstream>
 #include "../clockprompt.h"  // clockEpochValid
 
-static const char *const LANG_CODES[] = { "es", "en", "fr", "de", "it", "pt", "ja", "ko" };
+static const char *const LANG_CODES[] = { "en", "pt" };  // Lang order (i18n.h)
 static const int LANG_N = (int)(sizeof LANG_CODES / sizeof LANG_CODES[0]);
 
 int simLangIndex(const std::string &code) {
@@ -165,7 +165,7 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
     if (op == "lang") {
       if (n != 2) return fail("usage: lang CODE");
       if (running) return fail("lang must come before the first step that runs the firmware");
-      if (simLangIndex(w[1]) < 0) return fail("unknown language '" + w[1] + "' (es en fr de it pt ja ko)");
+      if (simLangIndex(w[1]) < 0) return fail("unknown language '" + w[1] + "' (en pt)");
       c.op = OP_LANG;
       c.a = simLangIndex(w[1]);
       c.text = w[1];

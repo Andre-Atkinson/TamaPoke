@@ -1,5 +1,5 @@
 # The screens and overlays that screens.txt does not reach, so two builds can be
-# compared screen by screen in all 8 languages and on both boards (#41: splitting
+# compared screen by screen in both languages and on both boards (#41: splitting
 # TamaPoke.ino into modules must not move a pixel). Run it next to screens.txt and
 # the other scripts here, and compare the PNGs and serial.log by hash. Serial lines
 # set up what a player would take days to reach. Coordinates are the firmware's own

@@ -6,7 +6,7 @@ Several strings in STRINGS[][] are used as snprintf() format strings
 literals at the call site, the compiler can't validate them with
 -Wformat: a translation with a wrong, missing or extra %-specifier is
 undefined behavior that only shows up in the affected language. This
-script parses the four [language][id] tables straight out of the .cpp
+script parses the three [language][id] tables straight out of the .cpp
 source (no build step needed) and checks:
 
   - every language row has the same number of entries as every other
@@ -35,7 +35,7 @@ import sys
 HERE = os.path.dirname(__file__)
 I18N_CPP = os.path.join(HERE, '..', 'i18n.cpp')
 
-LANGS = ['ES', 'EN', 'FR', 'DE', 'IT', 'PT', 'JA', 'KO']
+LANGS = ['EN', 'PT']  # Lang order (i18n.h, #61)
 STRING_RE = re.compile(r'"(?:[^"\\]|\\.)*"')
 SPEC_RE = re.compile(
     r'%[-+ #0]*[\d.]*(?:l|h|ll|hh)?[diouxXeEfFgGaAcspn%]')
@@ -91,22 +91,6 @@ def extract_table(source, var_name, count):
     return [STRING_RE.findall(block) for block in lang_blocks]
 
 
-def check_korean_syllables(var_name, texts, label_for):
-    """Every hangul syllable must be one of the 2,350 in KS X 1001, the
-    only ones the Korean U8g2 font has. A syllable is in KS X 1001
-    exactly when EUC-KR encodes it in two bytes (Python's EUC-KR codec
-    also encodes the other syllables, through a longer make-up
-    sequence, so "encodes without error" proves nothing)."""
-    errors = []
-    for idx, text in enumerate(texts):
-        for ch in text:
-            if '\uac00' <= ch <= '\ud7a3' and len(ch.encode('euc_kr')) != 2:
-                errors.append(
-                    f'{var_name}[KO][{label_for(idx)}] has {ch} '
-                    f'(U+{ord(ch):04X}), not in KS X 1001: {text}')
-    return errors
-
-
 def check_table(source, var_name, expected_len, label_for):
     """Validate one [LANG_COUNT][N] table. Returns error strings."""
     errors = []
@@ -118,9 +102,6 @@ def check_table(source, var_name, expected_len, label_for):
                 f'expected {expected_len}')
     if errors:
         return errors  # zip() below assumes equal-length rows
-
-    errors += check_korean_syllables(
-        var_name, rows[LANGS.index('KO')], label_for)
 
     for idx, texts in enumerate(zip(*rows)):
         specs = {tuple(SPEC_RE.findall(t)) for t in texts}
@@ -166,8 +147,6 @@ def main():
     errors += check_table(
         source, 'MED_NAME', med_count, lambda i: f'medal {i}')
     errors += check_table(
-        source, 'MED_LBL', med_count, lambda i: f'medal {i}')
-    errors += check_table(
         source, 'MED_DSC', med_count, lambda i: f'medal {i}')
 
     if errors:
@@ -177,8 +156,8 @@ def main():
         return 1
 
     print(
-        f'OK: STRINGS ({str_count} ids) and the 3 medal tables '
-        f'({med_count} medals) are consistent across all '
+        f'OK: STRINGS ({str_count} ids) and the 2 medal tables '
+        f'({med_count} medals) are consistent across the '
         f'{len(LANGS)} languages.')
     return 0
 

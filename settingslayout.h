@@ -33,7 +33,7 @@ struct SetRect {
 // first row: sound (cycles high, medium, low, off), brightness, language
 #define LANG_PILL_Y 282
 #define LANG_PILL_H 30
-#define LANG_PILL_X 336  // language pill (cycles LANG_COUNT on a tap)
+#define LANG_PILL_X 336  // language pill (an EN | PT toggle, #61)
 #define LANG_PILL_W 96
 #define SND_PILL_X 34    // sound pill
 #define SND_PILL_W 96

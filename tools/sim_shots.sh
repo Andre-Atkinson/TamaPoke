@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Screenshots of every main screen in all 8 languages, with the desktop simulator.
+# Screenshots of every main screen in both languages (EN, PT), with the desktop simulator.
 #
 #   tools/sim_shots.sh                 -> shots/<lang>/*.png (git-ignored)
 #   tools/sim_shots.sh --out DIR       -> DIR/<lang>/*.png
@@ -22,8 +22,8 @@ done
 
 SCRIPT="$ROOT/sim/scripts/screens.txt"
 start=$SECONDS
-for lang in es en fr de it pt ja ko; do
+for lang in en pt; do
   "$ROOT/tools/sim.sh" --board "$BOARD" --lang "$lang" --script "$SCRIPT" --out "$OUT/$lang" --quiet
 done
 per="$(grep -cE '^[[:space:]]*shot[[:space:]]' "$SCRIPT")"
-echo "sim_shots: 8 languages x $per screens in $OUT ($((SECONDS - start)) s)"
+echo "sim_shots: 2 languages x $per screens in $OUT ($((SECONDS - start)) s)"

@@ -8,12 +8,10 @@
 BOARD        ?= 175c
 ARDUINO_LIBS ?= $(HOME)/Documents/Arduino/libraries
 CXX          ?= c++
-CC           ?= cc
 PYTHON       ?= python3
 
 REPO  := ..
 GFX   := $(ARDUINO_LIBS)/GFX_Library_for_Arduino/src
-U8G2  := $(ARDUINO_LIBS)/U8g2/src
 BUILD := build/$(BOARD)
 BIN   := $(BUILD)/tamapoke_sim
 WINBIN := $(BUILD)/tamapoke_window
@@ -29,13 +27,10 @@ endif
 DEFS     := $(BOARD_FLAG) -DHOST_SIM=1
 INCLUDES := -Ishim -I$(REPO)/test/shim -I$(GFX) -I$(REPO)
 # -funsigned-char: char es sin signo en el ESP32-S3 (Xtensa) y con signo en el Mac
-# (arm64 de Apple, x86). Sin esto, el decodificador UTF-8 de Arduino_GFX
-# (charBounds(char c) compara c >= 0xf0) mide mal el texto CJK y lo descentra.
+# (arm64 de Apple, x86); asi un byte acentuado (>= 0x80) se trata igual que en la placa.
 CXXFLAGS ?= -O2 -g
 CXXFLAGS += -std=gnu++17 -funsigned-char -MMD -MP $(DEFS) $(INCLUDES)
 WARN     := -Wall -Wextra -Wno-unused-parameter
-CFLAGS   ?= -O2
-CFLAGS   += -funsigned-char
 
 # el firmware tal cual (rtcbat.cpp y audio.cpp los sustituyen rtcbat_sim.cpp y el audio
 # mudo de test/shim/shim.cpp)
@@ -47,16 +42,13 @@ SIM_SRCS := main.cpp $(COMMON_SRCS)
 # the window: only built by the `window` target, the only one that uses SDL
 WIN_SRCS := interactive.cpp window.cpp main_window.cpp
 GFX_SRCS := Arduino_GFX.cpp Arduino_G.cpp Arduino_DataBus.cpp canvas/Arduino_Canvas.cpp
-# must list the fonts that uitext.cpp's CJK_FONT_JA and CJK_FONT_KO name
-FONTS    := u8g2_font_unifont_t_japanese3 u8g2_font_unifont_t_korean2
 
 # everything both programs link, without their main()
 CORE_OBJS := $(BUILD)/sketch/TamaPoke_ino.o \
         $(addprefix $(BUILD)/fw/,$(FW_SRCS:.cpp=.o)) \
         $(addprefix $(BUILD)/sim/,$(COMMON_SRCS:.cpp=.o)) \
         $(BUILD)/shim/shim.o \
-        $(addprefix $(BUILD)/gfx/,$(GFX_SRCS:.cpp=.o)) \
-        $(BUILD)/fonts/u8g2_fonts.o
+        $(addprefix $(BUILD)/gfx/,$(GFX_SRCS:.cpp=.o))
 OBJS     := $(CORE_OBJS) $(BUILD)/sim/main.o
 WIN_OBJS := $(addprefix $(BUILD)/win/,$(WIN_SRCS:.cpp=.o))
 
@@ -74,7 +66,6 @@ window: check-libs check-sdl $(WINBIN)
 
 check-libs:
 	@test -f "$(GFX)/Arduino_GFX.h" || { echo "sim: GFX Library for Arduino not found in $(ARDUINO_LIBS) (set ARDUINO_LIBS)" >&2; exit 1; }
-	@test -f "$(U8G2)/clib/u8g2_fonts.c" || { echo "sim: U8g2 not found in $(ARDUINO_LIBS) (set ARDUINO_LIBS)" >&2; exit 1; }
 
 check-sdl:
 	@sdl2-config --version >/dev/null 2>&1 || { echo "sim: SDL2 not found (no sdl2-config): the window needs it. Ask the owner before installing it." >&2; exit 1; }
@@ -116,13 +107,6 @@ $(BUILD)/shim/shim.o: $(REPO)/test/shim/shim.cpp
 $(BUILD)/gfx/%.o: $(GFX)/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -w -c -o $@ $<
-
-$(BUILD)/fonts/u8g2_fonts.c: extract_fonts.py
-	@mkdir -p $(dir $@)
-	$(PYTHON) extract_fonts.py $(U8G2)/clib/u8g2_fonts.c $@ $(FONTS)
-
-$(BUILD)/fonts/u8g2_fonts.o: $(BUILD)/fonts/u8g2_fonts.c
-	$(CC) $(CFLAGS) -w -c -o $@ $<
 
 clean:
 	rm -rf build

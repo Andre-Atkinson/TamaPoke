@@ -1,7 +1,7 @@
 // TamaPoke en el Mac: corre el TamaPoke.ino real con la placa simulada (simhw.h) y
 // un guion de pasos (script.h), y guarda capturas PNG de lo que muestra el panel.
 //
-//   tamapoke_sim [--lang ja] [--clock "2026-11-13 10:00"] [--script FILE]
+//   tamapoke_sim [--lang pt] [--clock "2026-11-13 10:00"] [--script FILE]
 //                [--out DIR] [--sprites DIR] [--serial-log FILE] [--square] [--quiet]
 //
 // tools/sim.sh compila y llama a este programa.
@@ -46,7 +46,7 @@ void usage() {
   fprintf(stderr,
           "usage: tamapoke_sim [--lang CODE] [--clock \"YYYY-MM-DD HH:MM\"|none] [--script FILE]\n"
           "                    [--out DIR] [--sprites DIR] [--serial-log FILE] [--square] [--quiet]\n"
-          "  languages: es en fr de it pt ja ko (default: the script's, else en)\n"
+          "  languages: en pt (default: the script's, else en)\n"
           "  the default clock is 2026-11-13 10:00; none = boot with no time (1.75C after a power cut)\n");
 }
 

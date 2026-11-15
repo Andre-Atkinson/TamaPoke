@@ -4,6 +4,7 @@
 #include "framework.h"
 #include "../owner.h"
 #include "../i18n.h"
+#include "../ptglyphs.h"
 #include <Preferences.h>
 #include <string.h>
 #include <string>
@@ -58,8 +59,8 @@ TEST(Owner, plain_names_and_no_name_are_fine) {
   CHECK_EQ(ownerNameCheck("a !~"), OWNER_OK);  // every printable ASCII character draws
 }
 
-TEST(Owner, every_accented_letter_the_latin_font_has_is_fine) {
-  CHECK_EQ((int)OWNER_LETTER_COUNT, 31);
+TEST(Owner, every_accented_letter_the_font_has_is_fine) {
+  CHECK_EQ((int)OWNER_LETTER_COUNT, 43);  // 31 from CP437, 12 from ptglyphs.h (#61)
   for (const OwnerLetter &l : OWNER_LETTERS) {
     std::string n = "X" + u8(l.cp);
     CHECK_MSG(ownerNameCheck(n.c_str()) == OWNER_OK, "refused U+" + std::to_string(l.cp));
@@ -67,9 +68,10 @@ TEST(Owner, every_accented_letter_the_latin_font_has_is_fine) {
 }
 
 TEST(Owner, letters_the_fonts_cannot_draw_are_refused) {
-  // accented capitals and letters CP437 lacks, ae and sharp s (in CP437, but no accented
-  // letters and no one-letter plain form for the CJK fonts), symbols, other scripts, control characters
-  const uint32_t refused[] = { 0xC1, 0xCD, 0xD3, 0xDA, 0xC0, 0xC8, 0xE3, 0xF5, 0xE6, 0xC6, 0xDF, 0xA1, 0xB0,
+  // accented letters neither CP437 nor ptglyphs.h has (the capitals E` I` O` U` E" I^ U^,
+  // eth), ae and sharp s (in CP437, but not accented letters), symbols, other scripts,
+  // control characters
+  const uint32_t refused[] = { 0xC8, 0xCC, 0xD2, 0xD9, 0xCB, 0xCE, 0xDB, 0xF0, 0xE6, 0xC6, 0xDF, 0xA1, 0xB0,
                                0x0153, 0x3042, 0xAC00, 0x1F600, 0x09, 0x0A, 0x7F, 0x80, 0x9F, 0xA0, 0xAD };
   for (uint32_t cp : refused) {
     std::string n = "Ab" + u8(cp) + "c";
@@ -196,22 +198,43 @@ TEST(Owner, a_name_line_that_does_not_fit_is_cut_and_still_refused) {
   CHECK_EQ(ownerNameCheck(n.c_str()), OWNER_TOO_LONG);
 }
 
-// ---------------------------------------------------------------- for each font
-TEST(Owner, the_latin_font_gets_cp437_bytes_and_the_cjk_fonts_plain_letters) {
+// ---------------------------------------------------------------- the font's bytes
+TEST(Owner, each_letter_becomes_the_byte_the_font_draws) {
   std::string n = u8(0xD1) + "and" + u8(0xFA) + " " + u8(0xC9) + "x";  // "Nandu Ex", accented
   char out[OWNER_NAME_MAX + 1];
-  ownerNameForFont(n.c_str(), false, out, sizeof out);
+  ownerNameForFont(n.c_str(), out, sizeof out);
   CHECK_STREQ(out, "\xA5" "and\xA3 \x90x");
-  ownerNameForFont(n.c_str(), true, out, sizeof out);
-  CHECK_STREQ(out, "Nandu Ex");
   for (const OwnerLetter &l : OWNER_LETTERS) {
     std::string one = u8(l.cp);
-    ownerNameForFont(one.c_str(), false, out, sizeof out);
-    CHECK_EQ((uint8_t)out[0], l.cp437);
+    ownerNameForFont(one.c_str(), out, sizeof out);
+    CHECK_EQ((uint8_t)out[0], l.font);
     CHECK_EQ(out[1], 0);
-    ownerNameForFont(one.c_str(), true, out, sizeof out);
-    CHECK_EQ(out[0], l.plain);
-    CHECK((l.plain >= 'a' && l.plain <= 'z') || (l.plain >= 'A' && l.plain <= 'Z'));
+  }
+}
+
+// #61: the Portuguese letters CP437 lacks are accepted and drawn from ptglyphs.h, on
+// their Latin-1 byte: "Joao" with a tilde, "SIMAO", "ANGELA" with a circumflex, "INES"...
+TEST(Owner, portuguese_names_use_the_extra_glyphs) {
+  struct Case { std::string utf8; const char *font; };
+  const Case cases[] = {
+    {"Jo" + u8(0xE3) + "o", "Jo\xE3o"},
+    {"SIM" + u8(0xC3) + "O", "SIM\xC3O"},
+    {u8(0xC2) + "NGELA", "\xC2NGELA"},
+    {"In" + u8(0xEA) + "s " + u8(0xC1) + "vila", "In\x88s \xC1vila"},  // e^ is CP437's
+    {"Le" + u8(0xF5) + "es", "Le\xF5" "es"},
+    {u8(0xC0) + u8(0xCA) + u8(0xCD) + u8(0xD3) + u8(0xD4) + u8(0xD5) + u8(0xDA), "\xC0\xCA\xCD\xD3\xD4\xD5\xDA"},
+  };
+  for (const Case &c : cases) {
+    CHECK_MSG(ownerNameCheck(c.utf8.c_str()) == OWNER_OK, "refused " + c.utf8);
+    char out[OWNER_NAME_MAX + 1];
+    ownerNameForFont(c.utf8.c_str(), out, sizeof out);
+    CHECK_STREQ(out, c.font);
+  }
+  // every ptglyphs.h letter is a name letter, drawn from its own Latin-1 byte
+  for (int g = 0; g < PTG_COUNT; g++) {
+    const OwnerLetter *l = ownerLetter(PT_GLYPHS[g].code);
+    CHECK_MSG(l != nullptr, "missing U+" + std::to_string(PT_GLYPHS[g].code));
+    if (l) CHECK_EQ((int)l->font, (int)PT_GLYPHS[g].code);
   }
 }
 
@@ -220,21 +243,19 @@ TEST(Owner, the_longest_name_fits_its_font_buffer) {
   for (int i = 0; i < 12; i++) twelve += u8(0xFC);
   char out[OWNER_NAME_MAX + 1];
   memset(out, 'x', sizeof out);
-  ownerNameForFont(twelve.c_str(), false, out, sizeof out);
-  CHECK_EQ((int)strlen(out), OWNER_NAME_MAX);
-  ownerNameForFont(twelve.c_str(), true, out, sizeof out);
+  ownerNameForFont(twelve.c_str(), out, sizeof out);
   CHECK_EQ((int)strlen(out), OWNER_NAME_MAX);
   char small[4];
-  ownerNameForFont("Player", false, small, sizeof small);
+  ownerNameForFont("Player", small, sizeof small);
   CHECK_STREQ(small, "Pla");  // cut, never overrun
-  ownerNameForFont("Player", false, small, 0);  // nothing written
+  ownerNameForFont("Player", small, 0);  // nothing written
 }
 
 TEST(Owner, a_name_the_check_refuses_is_never_drawn) {
   char out[OWNER_NAME_MAX + 1] = "x";
-  ownerNameForFont("Abcdefghijklm", false, out, sizeof out);
+  ownerNameForFont("Abcdefghijklm", out, sizeof out);
   CHECK_STREQ(out, "");
-  ownerNameForFont("Pl\xE9yer", true, out, sizeof out);
+  ownerNameForFont("Pl\xE9yer", out, sizeof out);  // Latin-1, not UTF-8
   CHECK_STREQ(out, "");
 }
 
@@ -282,9 +303,9 @@ TEST(Owner, a_refused_name_changes_nothing) {
   mockNvsReset();
   CHECK_EQ(ownerSet("Player"), OWNER_OK);
   uint32_t bad = 0;
-  std::string n = "Pl" + u8(0xC1) + "yer";
+  std::string n = "Pl" + u8(0xC8) + "yer";  // E-grave capital: no glyph for it
   CHECK_EQ(ownerSet(n.c_str(), &bad), OWNER_BAD_CHAR);
-  CHECK_EQ(bad, 0xC1u);
+  CHECK_EQ(bad, 0xC8u);
   CHECK_EQ(ownerSet("Abcdefghijklm"), OWNER_TOO_LONG);
   CHECK_STREQ(ownerName(), "Player");
   ownerLoad();
@@ -338,20 +359,16 @@ TEST(Owner, a_stored_name_that_fails_the_check_loads_as_no_name) {
   CHECK_EQ(ownerNameCheck(ownerName()), OWNER_OK);
 }
 
-TEST(Owner, the_active_font_follows_the_language) {
+TEST(Owner, the_stored_name_draws_the_same_in_both_languages) {
   mockNvsReset();
-  std::string n = "Z" + u8(0xF6) + "e";
+  std::string n = "Z" + u8(0xF6) + "e " + u8(0xC3);
   ownerSet(n.c_str());
   char out[OWNER_NAME_MAX + 1];
-  gLang = LANG_DE;
-  ownerNameForActiveFont(out, sizeof out);
-  CHECK_STREQ(out, "Z\x94" "e");
-  gLang = LANG_JA;
-  ownerNameForActiveFont(out, sizeof out);
-  CHECK_STREQ(out, "Zoe");
-  gLang = LANG_KO;
-  ownerNameForActiveFont(out, sizeof out);
-  CHECK_STREQ(out, "Zoe");
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    ownerNameForScreen(out, sizeof out);
+    CHECK_STREQ(out, "Z\x94" "e \xC3");
+  }
   gLang = LANG_DEFAULT;
   ownerSet("");
 }

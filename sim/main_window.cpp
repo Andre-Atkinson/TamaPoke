@@ -2,7 +2,7 @@
 // (simhw.h) in an SDL2 window. Mouse = finger, keys = PWR/BOOT, the terminal = the
 // serial console. Opt-in: only `make window` / `tools/sim.sh --window` build it.
 //
-//   tamapoke_window [--lang ja] [--clock "2026-11-13 10:00"|none] [--sprites DIR]
+//   tamapoke_window [--lang pt] [--clock "2026-11-13 10:00"|none] [--sprites DIR]
 //                   [--square] [--out DIR] [--serial-log FILE] [--quiet]
 //                   [--quit-after DUR] [--selftest]
 //
@@ -41,7 +41,7 @@ void usage() {
           "usage: tamapoke_window [--lang CODE] [--clock \"YYYY-MM-DD HH:MM\"|none] [--sprites DIR]\n"
           "                       [--square] [--out DIR] [--serial-log FILE] [--quiet]\n"
           "                       [--quit-after DUR] [--selftest]\n"
-          "  languages: es en fr de it pt ja ko (default: en)\n"
+          "  languages: en pt (default: en)\n"
           "  the default clock is this computer's local time; none = boot with no time\n"
           "  --out is where S saves screenshots; --quit-after is wall time (2m, 30s...)\n"
           "  firmware serial output goes to the terminal unless --serial-log FILE\n"

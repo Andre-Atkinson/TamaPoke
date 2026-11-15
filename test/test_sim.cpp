@@ -79,16 +79,12 @@ TEST(SimScript, una_hora_que_el_reloj_no_toma_se_rechaza) {
 
 // ---------------------------------------------------------------- idiomas
 TEST(SimScript, los_codigos_de_idioma_siguen_el_orden_de_i18n) {
-  CHECK_EQ(simLangIndex("es"), (int)LANG_ES);
   CHECK_EQ(simLangIndex("en"), (int)LANG_EN);
-  CHECK_EQ(simLangIndex("fr"), (int)LANG_FR);
-  CHECK_EQ(simLangIndex("de"), (int)LANG_DE);
-  CHECK_EQ(simLangIndex("it"), (int)LANG_IT);
   CHECK_EQ(simLangIndex("pt"), (int)LANG_PT);
-  CHECK_EQ(simLangIndex("ja"), (int)LANG_JA);
-  CHECK_EQ(simLangIndex("ko"), (int)LANG_KO);
   CHECK_EQ(simLangIndex("xx"), -1);
-  CHECK_EQ((int)LANG_COUNT, 8);  // un idioma nuevo tambien necesita su codigo en sim/script.cpp
+  for (const char *gone : {"es", "fr", "de", "it", "ja", "ko"})  // removed in #61
+    CHECK_EQ(simLangIndex(gone), -1);
+  CHECK_EQ((int)LANG_COUNT, 2);  // un idioma nuevo tambien necesita su codigo en sim/script.cpp
   for (int i = 0; i < LANG_COUNT; i++) CHECK_EQ(simLangIndex(simLangCode(i)), i);
 }
 
@@ -96,7 +92,7 @@ TEST(SimScript, los_codigos_de_idioma_siguen_el_orden_de_i18n) {
 TEST(SimScript, un_guion_completo_se_lee_en_orden) {
   SimScript s = simParseScript(
       "# preparacion\n"
-      "lang ja\n"
+      "lang pt\n"
       "clock 2026-11-13 22:30\n"
       "battery 40\n"
       "usb on   # enchufado\n"
@@ -113,7 +109,7 @@ TEST(SimScript, un_guion_completo_se_lee_en_orden) {
   CHECK_EQ(s.error, std::string(""));
   CHECK_EQ(s.cmds.size(), (size_t)13);
   if (s.cmds.size() != 13) return;
-  CHECK_EQ((int)s.cmds[0].op, (int)OP_LANG);    CHECK_EQ(s.cmds[0].a, (int32_t)LANG_JA);
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_LANG);    CHECK_EQ(s.cmds[0].a, (int32_t)LANG_PT);
   CHECK_EQ((int)s.cmds[1].op, (int)OP_CLOCK);   CHECK_EQ(s.cmds[1].ms, (uint64_t)(1794564000UL + 12 * 3600 + 1800));
   CHECK_EQ((int)s.cmds[2].op, (int)OP_BATTERY); CHECK_EQ(s.cmds[2].a, (int32_t)40);
   CHECK_EQ((int)s.cmds[3].op, (int)OP_USB);     CHECK_EQ(s.cmds[3].a, (int32_t)1);
@@ -149,9 +145,9 @@ TEST(SimScript, los_deslizamientos_cortos_superan_el_umbral_del_firmware) {
 // La preparacion antes de arrancar: lang, clock, battery, usb y charging. main() aplica
 // todo lo que hay antes de simPreBootEnd() y deja el resto al bucle de pasos.
 TEST(SimScript, la_preparacion_llega_hasta_el_primer_paso_que_corre_el_firmware) {
-  SimScript s = simParseScript("battery 40\nlang ja\nusb on\nclock 2026-11-13 23:30\ncharging on\ntap 1 1\nlang_after\n");
+  SimScript s = simParseScript("battery 40\nlang pt\nusb on\nclock 2026-11-13 23:30\ncharging on\ntap 1 1\nlang_after\n");
   CHECK(!s.error.empty());  // paso desconocido
-  s = simParseScript("battery 40\nlang ja\nusb on\nclock 2026-11-13 23:30\ncharging on\ntap 1 1\nbattery 10\n");
+  s = simParseScript("battery 40\nlang pt\nusb on\nclock 2026-11-13 23:30\ncharging on\ntap 1 1\nbattery 10\n");
   CHECK_EQ(s.error, std::string(""));
   CHECK_EQ(simPreBootEnd(s), (size_t)5);
   CHECK_EQ((int)s.cmds[0].op, (int)OP_BATTERY);
@@ -160,7 +156,7 @@ TEST(SimScript, la_preparacion_llega_hasta_el_primer_paso_que_corre_el_firmware)
 }
 
 TEST(SimScript, battery_antes_de_lang_no_deja_el_idioma_para_despues_del_arranque) {
-  SimScript s = simParseScript("battery 40\nlang ja\ntap 1 1\n");
+  SimScript s = simParseScript("battery 40\nlang pt\ntap 1 1\n");
   CHECK_EQ(s.error, std::string(""));
   CHECK_EQ(simPreBootEnd(s), (size_t)2);  // el lang (indice 1) esta antes del arranque
   s = simParseScript("usb on\nclock 2026-11-13 23:30\nwait 1s\n");
@@ -170,7 +166,7 @@ TEST(SimScript, battery_antes_de_lang_no_deja_el_idioma_para_despues_del_arranqu
 TEST(SimScript, sin_pasos_de_preparacion_o_sin_pasos_que_corran) {
   CHECK_EQ(simPreBootEnd(simParseScript("wait 1s\n")), (size_t)0);
   CHECK_EQ(simPreBootEnd(simParseScript("")), (size_t)0);
-  CHECK_EQ(simPreBootEnd(simParseScript("lang es\nbattery 5\n")), (size_t)2);  // solo preparacion
+  CHECK_EQ(simPreBootEnd(simParseScript("lang en\nbattery 5\n")), (size_t)2);  // solo preparacion
 }
 
 // cada paso que corre el firmware cierra la preparacion: un lang o clock detras se rechaza
@@ -180,15 +176,15 @@ TEST(SimScript, todos_los_pasos_que_corren_cierran_la_preparacion) {
                               "press pwr", "press boot", "wait 1s", "advance 1s", "serial X", "shot a",
                               "idle doze", "say hi" };
   for (const char *step : RUN) {
-    std::string s = std::string(step) + "\nlang ja\n";
+    std::string s = std::string(step) + "\nlang pt\n";
     CHECK_EQ(simParseScript(s, "r.txt").error, std::string("r.txt:2: lang must come before the first step that runs the firmware"));
     CHECK_EQ(simPreBootEnd(simParseScript(std::string(step) + "\n")), (size_t)0);
   }
-  CHECK(simParseScript("battery 5\nusb on\ncharging off\nlang ja\nclock none\n").error.empty());
+  CHECK(simParseScript("battery 5\nusb on\ncharging off\nlang pt\nclock none\n").error.empty());
 }
 
 TEST(SimScript, lang_y_clock_tras_un_paso_que_corre_se_rechazan_pero_battery_vale) {
-  CHECK(!simParseScript("wait 1s\nlang ja\n").error.empty());
+  CHECK(!simParseScript("wait 1s\nlang pt\n").error.empty());
   CHECK(!simParseScript("wait 1s\nclock 2026-11-13 10:00\n").error.empty());
   CHECK(simParseScript("wait 1s\nbattery 5\nusb on\ncharging on\n").error.empty());
 }
@@ -206,7 +202,7 @@ TEST(SimScript, un_deslizamiento_de_menos_de_160ms_se_rechaza) {
 
 TEST(SimScript, los_errores_dicen_fichero_y_linea) {
   CHECK_EQ(simParseScript("wait 1s\ntapp 1 2\n", "x.txt").error, std::string("x.txt:2: unknown step 'tapp'"));
-  SimScript late = simParseScript("tap 1 2\nlang ja\n", "y.txt");
+  SimScript late = simParseScript("tap 1 2\nlang pt\n", "y.txt");
   CHECK_EQ(late.error, std::string("y.txt:2: lang must come before the first step that runs the firmware"));
   CHECK(late.cmds.empty());
   CHECK(!simParseScript("tap 466 10\n").error.empty());     // fuera del panel

@@ -1,7 +1,7 @@
 // Guion del simulador: lectura de los ficheros de pasos (sin tocar el firmware, para
 // poder probarlo en test/). Un paso por linea; '#' empieza un comentario.
 //
-//   lang ja                  idioma antes de arrancar (es en fr de it pt ja ko)
+//   lang pt                  idioma antes de arrancar (en pt)
 //   clock 2026-11-13 10:00   hora del reloj al arrancar ("none" = sin hora)
 //   battery 40 | none        bateria del PMU falso (%), "none" = sin bateria
 //   usb on|off               USB enchufado (con USB no hay light sleep)
