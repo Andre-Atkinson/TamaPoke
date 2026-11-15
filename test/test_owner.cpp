@@ -291,6 +291,22 @@ TEST(Owner, a_refused_name_changes_nothing) {
   CHECK_STREQ(ownerName(), "Player");
 }
 
+// a failed NVS write (full, broken): OWNER_NOT_SAVED, and the stored name and the copy in
+// RAM both stay what they were, so ownerName() never shows a name that is not saved
+TEST(Owner, a_failed_write_keeps_the_old_name) {
+  mockNvsReset();
+  CHECK_EQ(ownerSet("Player"), OWNER_OK);
+  mockNvsFailWrites(true);
+  CHECK_EQ(ownerSet("Other"), OWNER_NOT_SAVED);
+  CHECK_STREQ(ownerName(), "Player");
+  CHECK_EQ(ownerSet(""), OWNER_NOT_SAVED);  // clearing fails too
+  CHECK_STREQ(ownerName(), "Player");
+  mockNvsFailWrites(false);
+  ownerLoad();
+  CHECK_STREQ(ownerName(), "Player");
+  mockNvsReset();
+}
+
 TEST(Owner, a_stored_name_that_fails_the_check_loads_as_no_name) {
   const char *badOnes[] = { "Abcdefghijklm", "Pl\xE9yer", " Player", "Player ", "Ab\x01", "Player\xC3",
                             "\xE3\x81\x82" };

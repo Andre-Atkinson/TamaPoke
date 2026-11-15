@@ -62,7 +62,7 @@ void bubbleLoop(uint32_t now, bool free) {
   // the loop refreshes lastSeenEpoch from the clock every 30 s: no I2C read here
   uint32_t e = pet.lastSeenEpoch;
   in.clockKnown = e && !bedEdge.stale();
-  in.hour = (uint8_t)((e / 3600) % 24);  // the same hour as the scene (sceneHour)
+  in.hour = (uint8_t)sceneHour();  // the scene's own hour: the stars line only with the stars drawn
   in.named = ownerName()[0] != 0;
   in.last = bubbleLine;
   uint8_t line = bubblePick(in, (uint32_t)random(0x7FFFFFFF));

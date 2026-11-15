@@ -207,7 +207,9 @@ inline BubbleBox bubbleBoxAt(int petX, int textW, int lines, bool badge) {
 }
 
 // ---- the sketch's side (bubble.cpp) ----
-void bubbleLoop(uint32_t now, bool free);  // every loop pass, after attnLoop(); free: the sketch's bubbleFree()
+// every loop pass, after attnLoop() and updateBrightness() (dimStage is then this pass's),
+// before render(); free: the sketch's bubbleFree()
+void bubbleLoop(uint32_t now, bool free);
 bool bubbleShowing();                      // a bubble is up: the "!" bubble steps aside (drawAttnBubble)
 void drawSpeechBubble();                   // render(), on the pet screen, after the "!" bubble
 #if HOST_SIM

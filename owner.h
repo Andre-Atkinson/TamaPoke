@@ -6,7 +6,7 @@
 // uses (uitext.cpp):
 //  - the Latin languages print the classic 5x7 font, a CP437 table: plain ASCII plus
 //    the accented letters below (not the accented capitals A/I/O/U/A`/E`, or a~/o~, which
-//    CP437 lacks; ae and sharp s are in CP437 but are no accented letters and have no
+//    CP437 lacks; ae and sharp s are in CP437 but are not accented letters and have no
 //    one-letter plain form for the CJK fonts, so they are left out too);
 //  - Japanese and Korean print unifont_t_japanese3 / unifont_t_korean2, which have plain
 //    ASCII (0x20-0x7E) and no accented Latin letter at all, so there an accented letter
