@@ -216,7 +216,8 @@ TEST(Travel, the_scene_changes_only_while_nobody_is_looking) {
 TEST(Travel, the_first_frame_takes_the_place_of_today) {
   SceneLatch l;
   CHECK_EQ(l.shown, (uint8_t)SCENE_AUTO);
-  CHECK_EQ(l.frame(5000, PLACE_VOLCANO, false, false), (uint8_t)PLACE_VOLCANO);
+  // soon after boot, so the gap since the "last frame" (0) is under SCENE_UNSEEN_MS
+  CHECK_EQ(l.frame(100, PLACE_VOLCANO, false, false), (uint8_t)PLACE_VOLCANO);
   CHECK_EQ(l.shown, (uint8_t)PLACE_VOLCANO);
 }
 
