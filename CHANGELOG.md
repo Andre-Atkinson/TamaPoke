@@ -180,6 +180,28 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **The creature's own sounds keep out of quiet hours** (#44). The "ready to
+  evolve" chime, the "about to run away" warning, the hourly level-up and the
+  sound of a medal that time earned (level 10, 25 or 50, IN SHAPE) could play at
+  night, most of all with bedtime off, where the level-up sounded every hour.
+  They now follow the attention calls' quiet hours: the bedtime window, or
+  22:00-07:00 with bedtime off, and while the clock is unset after a power-off.
+  One that comes due then is skipped for good, not played in the morning; the
+  buttons, the level and the medal banner show as usual. Sounds the player
+  starts, and medals the player's care earns (the favourite berry, the streak,
+  the bond, a final form), play as before, and so does an IN SHAPE the player
+  earns by playing or training (exercise burns weight too; the medal comes with
+  the next minute, as before, after the game's result screen). Only a medal of
+  time alone, noticed by the minute tick with no game or training just before,
+  is silent. The serial log has one line for each
+  one skipped (`alert evolve: silent (quiet)`, likewise `run-away`, `level N` and
+  `medal`) and for each evolve or run-away alert that sounds. No new NVS keys.
+
+- **The run-away button goes as soon as the pet is no longer neglected.** It
+  stayed for up to a minute after a care, or after a night's sleep had brought the
+  energy back, so the "about to run away" warning could sound at the morning wake
+  and the button could still be pressed. It now needs all four needs still at 0.
+
 - **A time the clock does not take no longer reaches the pet's save.** Serial
   `TIME` saved the time it was sent as the pet's last-seen time even when the
   clock ignored it (a stray `TIME 5`, a mistyped epoch it could not keep), so

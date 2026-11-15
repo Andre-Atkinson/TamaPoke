@@ -123,6 +123,8 @@ void Pet::tick() {
                             // inicial o huevo: si el tiempo corriera aqui, el
                             // huevo eclosionaria solo a los 3 min con la especie
                             // sorteada y se perderia la eleccion del jugador
+  bool afterExercise = exercised;  // a minigame or the bag since the last tick (#44)
+  exercised = false;
   ageMinutes++;
 
   if (isEgg()) {
@@ -142,12 +144,16 @@ void Pet::tick() {
       joy = dropTo(joy, 1, 35);
     }
     if (ageMinutes % 3 == 0) hygiene = dropTo(hygiene, 1, 45);
-    checkMedals();  // aun puede cruzar un nivel por edad mientras duerme
+    checkMedals(true);  // aun puede cruzar un nivel por edad mientras duerme
     if (++ticksSinceSave >= 5) pendingSave = true;
     return;
   }
 
-  if (ageMinutes % MINUTES_PER_LEVEL == 0) sfxPlay(SFX_LEVEL);  // subio de nivel (despierto)
+  // subio de nivel (despierto); in quiet hours silently (#44): nobody asked for it
+  if (ageMinutes % MINUTES_PER_LEVEL == 0) {
+    if (!quietHours) sfxPlay(SFX_LEVEL);
+    else Serial.printf("alert level %u: silent (quiet)\n", level());
+  }
 
   // Goteo de necesidades. Ritmo normal: cada minuto. Ritmo relajado: solo los
   // minutos pares (la mitad de rapido). Todo lo demas de este tick (edad, peso,
@@ -190,11 +196,16 @@ void Pet::tick() {
                            // podia ganar en todo un dia y el vinculo se atascaba
   }
 
-  checkMedals();  // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick
+  // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick.
+  // Exercise burns weight too: right after a minigame or the bag this tick's medals count as
+  // the player's (#44), so an IN SHAPE that the exercise completed sounds in quiet hours. It
+  // is gained here, a minute at most after the game, as before #44: gained inside the game,
+  // its banner would run out under the result screen.
+  checkMedals(!afterExercise);
 
   // abandono total: con TODO a cero durante una hora queda lista para escaparse;
   // NO se va sola, la dispara el usuario con el boton (final triste, lo presencia)
-  if (fullness == 0 && joy == 0 && energy == 0 && hygiene == 0) {
+  if (allNeedsEmpty()) {
     if (neglectTicks < RUNAWAY_TICKS) neglectTicks++;
   } else {
     neglectTicks = 0;  // un solo cuidado la salva
@@ -435,7 +446,7 @@ void Pet::registerCare() {
     lastMilestone = ms;
     milestoneUntil = millis() + 4500;
   }
-  checkMedals();
+  checkMedals(false);  // de una accion del jugador, no del tick
   save();
 }
 
@@ -445,7 +456,8 @@ void Pet::addBond(uint8_t amt) {
   bondToday += amt;
 }
 
-void Pet::checkMedals() {
+// byTick: the minute tick is the caller and no exercise came before it (see MED_BY_TIME).
+void Pet::checkMedals(bool byTick) {
   if (isEgg()) return;
   uint16_t before = medals;
   if (level() >= 10) medals |= MED_LV10;
@@ -461,7 +473,11 @@ void Pet::checkMedals() {
     for (uint16_t m = gained; m; m &= (m - 1)) totalMedals++;
     newMedal = gained;
     medalUntil = millis() + 4000;
-    if (!sleeping) sfxPlay(SFX_MEDAL);
+    // a medal that only time earned, noticed by the tick, is silent in quiet hours (#44);
+    // the banner shows anyway. One the player's action gains (exercise burns weight too) sounds.
+    bool byTimeOnly = !(gained & ~MED_BY_TIME);
+    if (!sleeping && byTick && quietHours && byTimeOnly) Serial.println("alert medal: silent (quiet)");
+    else if (!sleeping) sfxPlay(SFX_MEDAL);
     save();
   }
 }
@@ -502,8 +518,12 @@ bool Pet::canFarewellNow() const {
 
 // abandono total durante 1h: lista para escaparse. La dispara el usuario con el
 // boton (final triste); cuidarla un solo tick la salva (neglectTicks se resetea)
+// The four needs must still be at 0 too: tick() resets neglectTicks only on its next
+// minute, so a care, or a night's sleep (asleep, tick() stops before the count and the
+// energy comes back), left the button and its warning for up to a minute after the pet
+// was no longer neglected, and the button could still be pressed then.
 bool Pet::canRunawayNow() const {
-  return !isEgg() && !sleeping && ceremony == CER_NONE && neglectTicks >= RUNAWAY_TICKS;
+  return !isEgg() && !sleeping && ceremony == CER_NONE && neglectTicks >= RUNAWAY_TICKS && allNeedsEmpty();
 }
 
 void Pet::startFarewell() {
@@ -550,7 +570,7 @@ void Pet::hatch() {
   newMedal = 0;
   nick[0] = 0;
   registerSpecies(speciesId);  // criado = registrado en la pokedex
-  checkMedals();     // por si nace ya en forma final (legendario)
+  checkMedals(false);  // por si nace ya en forma final (legendario)
   sfxPlay(SFX_HATCH);
   save();
 }
@@ -651,6 +671,7 @@ void Pet::playReward(uint8_t n) {
   if (n >= 5) heartUntil = millis() + HEART_MS;
   addBond(2);
   registerCare();
+  exercised = true;  // el ejercicio quema peso: el proximo tick ve un IN SHAPE como del jugador (#44)
   save();
 }
 
@@ -673,6 +694,7 @@ uint8_t Pet::trainStrength(uint16_t hits) {
   if (hits > strHi) strHi = hits;   // record de golpes
   addBond(2);
   registerCare();
+  exercised = true;  // idem (#44)
   save();
   return gain;
 }
