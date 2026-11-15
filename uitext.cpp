@@ -27,8 +27,9 @@ int centerX(const char *s, uint8_t size) { return CX - textW(s, size) / 2; }
 //    and the wrap test (cursor_x + 6 * size - 1 past the right edge) are the same;
 //  - yAdvance 8 is the classic line height, used only if a line wraps.
 // With a background colour (a two-argument setTextColor()) the GFXfont path of
-// Arduino_GFX::drawChar() fills a box that starts baseline * size above the cursor, and
-// the baseline here is PTG_ROWS, so it would be misplaced behind these 12 letters only.
+// Arduino_GFX::drawChar() fills a box that starts baseline * size above the cursor, its
+// baseline being yAdvance * 2 / 3 (5 rows here), so it would be misplaced behind these 12
+// letters only.
 // No text in the UI sets a background: test_tools.py checks that every setTextColor()
 // has one argument.
 // The glyphs sit at PTG_FIRST + index in this font. PTG_FIRST keeps them clear of
