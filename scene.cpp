@@ -97,6 +97,13 @@ uint8_t scenePlace() {
 // own rain, drawCeremony()).
 WxNow sceneWeather() { return sceneWx(pet.ceremony, sceneForceWx, scenePlace(), sceneClock(), sceneForceSeason); }
 
+// The clock's weather is the weather now at today's place (the forced place, if any): the
+// latched place only moves when drawScene() draws a frame, which the standby clock never does.
+WxNow sceneWeatherNow() {
+  uint8_t place = sceneForcePlace < PLACES ? sceneForcePlace : sceneToday();
+  return sceneWx(pet.ceremony, sceneForceWx, place, sceneClock(), sceneForceSeason);
+}
+
 uint8_t sceneSeason() { return sceneSeasonOf(pet.ceremony, sceneForceSeason, sceneClock()); }
 
 bool sceneStarsOut() { return wxStarsOut(sceneWeather()); }
@@ -413,7 +420,7 @@ static void drawIconCloud(int cx, int cy, int s, uint16_t col) {
   gfx->fillRect(cx - s * 7 / 10, cy + s / 5, s * 14 / 10, s * 2 / 3, col);
 }
 
-// today's weather as a small picture centred on (cx, cy), ~64 px across (no words: the
+// the weather now as a small picture centred on (cx, cy), ~64 px across (no words: the
 // same in every language)
 static void drawWxIcon(uint8_t kind, int cx, int cy) {
   const uint16_t sun = C565(0xf0, 0xc8, 0x5a), cloud = C565(0xb4, 0xbc, 0xca), dark = C565(0x6c, 0x74, 0x86),

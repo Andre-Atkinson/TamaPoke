@@ -8,7 +8,10 @@
 // off) ends it; an attention call shows the pet for its window and the clock comes back after;
 // self-care while charging (#24) carries on (the clock doesn't count as a touch). Nothing
 // changes on battery, while the pet sleeps (the screen goes dark as before), or while the
-// clock is not trusted (after a power cut, until the time is set).
+// clock is not trusted (after a power cut, until the time is set). The auto touch lock waits
+// for a real screen-off: it never engages while the clock shows, so any touch still brings
+// the pet back. When the clock comes up the other views (settings, the keyboard, the gallery)
+// are put away (the same as an attention peek does), so that touch finds the pet.
 #pragma once
 #include <stdint.h>
 #include "power.h"  // POWER_DIM1_MS
@@ -33,7 +36,7 @@ inline bool standbyAllowed(const StandbyIn &s) {
 inline bool standbyStarts(const StandbyIn &s) { return standbyAllowed(s) && s.idleMs >= standbyAfterMs(s.offMs); }
 
 // Where its lines sit (drawStandby(), scene.cpp), before the burn-in step: the time at size
-// 9 (72 px tall), the date at size 3, today's weather as a picture, the battery.
+// 9 (72 px tall), the date at size 3, the weather now as a picture, the battery.
 #define STANDBY_TIME_Y 128
 #define STANDBY_DATE_Y 222
 #define STANDBY_WX_Y 300

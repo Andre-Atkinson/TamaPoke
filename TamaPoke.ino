@@ -806,8 +806,13 @@ void loop() {
   if (standby && !standbyAllowed(sby)) {
     standby = false;
     Serial.println("standby clock: off");
-  } else if (!standby && !pet.evolving() && !pet.ceremony && standbyStarts(sby)) {
+  } else if (!standby && standbyStarts(sby)) {
     standby = true;
+    // A touch brings the pet back (standby.h), so the views left open go now, the way an
+    // attention peek puts them away: bedtime waits while settings, the keyboard or the
+    // clock screen is open and lit (bedBusy), and the gallery grid draws only when dirty,
+    // so a touch would show a frozen frame of the clock.
+    attnCloseViews();
     Serial.printf("standby clock: idle %lu ms\n", (unsigned long)sby.idleMs);
   }
 
@@ -999,7 +1004,11 @@ PowerCtx powerCtx(uint32_t now) {
   c.batPct = batPercent();
   c.userDim = userDim;
   c.offMs = powerOffMs;
-  c.standby = standby && !show;  // a call's window shows the pet at full brightness
+  // A call (attnLoop) while the clock shows: the window reads as "just touched" and shows the
+  // pet at full brightness, so the clock is off for its length (here and in standbyShown()).
+  // `standby` itself stays set, because a call is not a touch (wakeUI() clears it): the
+  // window ends, the idle time is still past the delay, and the clock is back at once.
+  c.standby = standby && !show;
   return c;
 }
 
@@ -1017,7 +1026,14 @@ static StandbyIn standbyIn(uint32_t now) {
   return s;
 }
 
-// the standby clock is on screen: up, and no call's window showing the pet
+// The standby clock's time: the clock read, or the last reading (lastSeenEpoch) when the
+// 1.75's PCF85063 read fails (rtcEpoch() returns 0), never 1 Jan 1970.
+static uint32_t standbyEpoch() {
+  uint32_t e = rtcEpoch();
+  return e ? e : pet.lastSeenEpoch;
+}
+
+// the standby clock is on screen: up, and no call's window showing the pet (see powerCtx())
 static bool standbyShown(uint32_t now) { return standby && !attnShowing(now); }
 
 // el usuario ha interactuado: vuelve el ritmo normal de dibujo (sin esperar al proximo
@@ -1629,11 +1645,11 @@ static uint32_t mixKey(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
 static uint32_t screenKey() {
   uint32_t h = 2166136261u;
   if (standbyShown(millis())) {
-    // the clock's minute (rtcEpoch(): the 1.75C's software clock, or one PCF85063 read a
+    // the clock's minute (standbyEpoch(): the 1.75C's software clock, or one PCF85063 read a
     // second on the 1.75), the weather, the battery and the language of its date
     h = mixKey(h, 0x5B);
-    h = mixKey(h, rtcEpoch() / 60);
-    h = mixKey(h, sceneWeather().kind);
+    h = mixKey(h, standbyEpoch() / 60);
+    h = mixKey(h, sceneWeatherNow().kind);
     h = mixKey(h, (uint32_t)batPercent());
     h = mixKey(h, batCharging());
     h = mixKey(h, gLang);
@@ -1704,7 +1720,7 @@ bool render() {
     screenKeyValid = false;
   }
   if (standbyShown(millis())) {  // the standby clock (standby.h, #60) in place of screen-off
-    drawStandby(rtcEpoch(), sceneWeather().kind, batPercent(), batCharging());
+    drawStandby(standbyEpoch(), sceneWeatherNow().kind, batPercent(), batCharging());
     return true;
   }
   if (pet.awaitingStarter()) {  // primera partida: elegir inicial (prioridad total)

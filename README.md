@@ -505,12 +505,15 @@ the board from the clock alone: no network, and nothing new is saved (`weather.h
 ## Standby clock (plugged in)
 
 Plugged in and left alone, the screen shows a dim clock instead of going dark: the time,
-the date and a picture of today's weather on black, with the battery charging under them
+the date and a picture of the weather now on black, with the battery charging under them
 (`standby.h`, #60). It comes when the screen would turn off (the screen-off setting), or
 at 90 s when that is *Never*, and steps a few pixels each minute so the AMOLED doesn't
 burn in. Any touch (the first only wakes) or BOOT brings the creature back, PWR turns the
 screen fully off, and an attention call shows the creature for its window, then the clock
-again. Self-care while charging carries on underneath. Nothing changes on battery, while
+again. The auto touch lock waits for a real screen-off, so it never engages while the clock
+shows. Settings, the keyboard or the gallery left open are put away when the clock comes
+up, so a touch finds the creature (and bedtime isn't held up by a screen left open).
+Self-care while charging carries on underneath. Nothing changes on battery, while
 the creature sleeps (the screen goes dark as before), or before the clock is set after a
 power cut.
 
@@ -592,7 +595,7 @@ is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on scree
 `SCENE <place|auto> [weather|auto] [season|auto]` (forces the place, `meadow beach forest
 volcano mountain snow`, the weather, `clear cloudy rain storm snow fog`, and the season,
 `spring summer autumn winter none`, in RAM only: `SCENE auto` or a restart gives them back
-to the clock) · `SCENE?` (read-only: `place today home wx prev mix season clock particles`,
+to the clock) · `SCENE?` (read-only: `place today home wx prev mix season clock particles standby`,
 `*` after a forced value) · `LS` / `PUT` (SD files). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.
 
@@ -616,8 +619,10 @@ the dialogs, every minigame, the biomes, the endings, the BOOT and PWR presses).
 `weather.txt` shows every kind of weather by day, at dusk and at night, `seasons.txt` each
 season and the longest titles under the sun and the moon, and
 `travel.txt` checks that the place changes only while nobody is looking (read its
-`SCENE?` lines in `serial.log`), and `standby.txt` the standby clock plugged in, on
-battery and asleep (its `standby clock` lines).
+`SCENE?` lines in `serial.log`), and `standby.txt` the standby clock plugged in, over a
+gallery, with PWR and the pocket lock, on battery (no petals when dimmed), and with settings
+left open across a bedtime (its `standby clock` lines and `SCENE?`'s `standby=`), and `standby-place.txt` its weather picture
+across the 06:00 change of place.
 Run with the other scripts in `sim/scripts/`, it lets two builds be compared
 screen by screen.
 

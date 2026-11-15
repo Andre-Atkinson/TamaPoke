@@ -19,12 +19,12 @@
 // season, with "*" after a value the SCENE command forced.
 static void printScene() {
   WxNow w = sceneWeather();
-  Serial.printf("scene place=%s%s today=%s home=%s wx=%s%s prev=%s mix=%u season=%s%s clock=%d particles=%d\n",
+  Serial.printf("scene place=%s%s today=%s home=%s wx=%s%s prev=%s mix=%u season=%s%s clock=%d particles=%d standby=%d\n",
                 PLACE_KEYS[scenePlace()], sceneForcePlace < PLACES ? "*" : "", PLACE_KEYS[sceneToday()],
                 PLACE_KEYS[sceneHome()], WX_KEYS[w.kind], sceneForceWx < WX_KINDS ? "*" : "", WX_KEYS[w.prev],
                 w.mix, SEASON_KEYS[sceneSeason()], sceneForceSeason < SEASONS ? "*" : "",
                 pet.lastSeenEpoch && !bedEdge.stale() ? 1 : 0,
-                wxParticlesLive(frameIntervalMs(powerCtx(millis()))) ? 1 : 0);
+                wxParticlesLive(frameIntervalMs(powerCtx(millis()))) ? 1 : 0, standby ? 1 : 0);
 }
 
 void handleSerial() {

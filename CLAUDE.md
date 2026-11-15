@@ -56,7 +56,7 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
   place, weather and season in RAM only; a restart or `SCENE auto` clears it), `PUT`.
   Read-only: `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`,
   `CARE?` (prints `pace bed inbed stale egg picking`), `OWNER?`, `SCENE?`
-  (prints `place today home wx prev mix season clock particles`), `LS`, `SDINFO`, `LOCK?`,
+  (prints `place today home wx prev mix season clock particles standby`), `LS`, `SDINFO`, `LOCK?`,
   `TRAINTRACE?`. `LOCK?` and `TRAINTRACE` exist on the 1.75C only. These
   scripts send state-changing commands: `tools/board.py` (`clock` sends
   `TIME <epoch>`, `save` sends `SAVE`, `cmd` sends anything),

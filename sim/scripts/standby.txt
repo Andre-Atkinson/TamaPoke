@@ -2,7 +2,13 @@
 # and the weather takes the place of screen-off (the 1.75C turns its screen off at 60 s;
 # the original 1.75's default is Never, so its clock comes at 90 s). A touch brings the pet
 # back; unplugged or asleep, the screen's usual rules apply. Its "standby clock" lines are
-# in serial.log.
+# in serial.log, and SCENE? ends with standby=<0|1>.
+#
+# After the clock itself: a gallery left open when the clock came up (the touch shows the
+# pet, not a frozen clock), PWR and the pocket lock (1.75C) while the clock shows, the
+# season's falling petals only at the full frame rate, and settings left open across a
+# bedtime (the views are put away when the clock comes up, so the pet goes to bed; the
+# clock does not stay lit all night). Where the two boards differ it is said in the step.
 
 usb on
 charging on
@@ -28,6 +34,60 @@ tap 233 233
 wait 1s
 shot standby-3-pet-again
 
+# the gallery left open: the clock comes up over it and puts it away, so a touch shows the
+# pet, not a frozen frame of the clock (the grid draws only when it changes)
+swipe right
+wait 1s
+shot standby-3a-gallery
+wait 100s
+shot standby-3b-gallery-clock
+tap 233 300
+wait 2s
+shot standby-3c-gallery-touch-pet
+wait 5s
+shot standby-3d-gallery-later
+
+# PWR while the clock shows turns the screen fully off ("standby clock: off"), and again on
+wait 100s
+press pwr
+wait 2s
+shot standby-3e-pwr-off
+press pwr
+wait 1s
+shot standby-3f-pwr-on
+
+# the pocket lock (1.75C: three PWR presses; the original 1.75 has none, so there the three
+# presses only turn its screen off, on, off, and the second three on, off, on): the clock
+# gives way to the lock's dark screen, and unlocking shows the pet
+wait 100s
+press pwr 3
+wait 300ms
+shot standby-3g-lock-hint
+wait 3s
+press pwr 3
+wait 1500ms
+shot standby-3h-unlocked
+
+# the season's petals fall only at the full frame rate: unplugged and untouched the screen
+# dims (the 1.75C at 30 s, the original 1.75 at 90 s), and a dimmed frame has the sky but
+# no petals. The shot at 40 s is dimmed on the 1.75C and lit on the 1.75 (petals); the one at
+# 100 s is dark on the 1.75C and dimmed on the 1.75 (none)
+serial SCENE meadow clear spring
+tap 233 233
+wait 1s
+shot standby-3i-petals-lit
+usb off
+charging off
+wait 40s
+shot standby-3j-dimmed-40s
+wait 60s
+shot standby-3k-dimmed-100s
+tap 233 233
+wait 1s
+usb on
+charging on
+serial SCENE auto
+
 # unplugged: no clock. The 1.75C's screen goes off at 60 s (its touch lock follows 10 s
 # later, so a touch at 62 s still wakes it); the 1.75 (Never) stays lit
 usb off
@@ -37,10 +97,39 @@ shot standby-4-on-battery
 tap 233 233
 wait 1s
 
-# plugged in again but asleep: no clock either (the 1.75C's screen goes dark at 60 s, the
-# 1.75 dims)
+# settings left open across a bedtime. The care page's bedtime is set (the first preset,
+# 21:00), the settings opened and left alone at 20:5x. When the clock comes up it puts the
+# open views away, so bedtime is not held and the pet goes to bed on USB, the clock gone
+# ("standby clock: off"); with the views left open the pet would stay up and the clock
+# would stay lit all night. Plugged in and asleep there is no clock either (the 1.75C's
+# screen goes dark at 60 s, the original 1.75 dims): CARE? says inbed=1, and BOOT lights the
+# screen to show the pet asleep.
 usb on
 charging on
-tap 264 404
+press boot
+wait 10h35m
+tap 233 233
+wait 1s
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+tap 233 192
+wait 1s
+shot standby-5a-care-bedtime
+swipe up
+wait 1s
+swipe down
+wait 1s
+shot standby-5b-settings
+serial TIME
 wait 100s
-shot standby-5-asleep
+shot standby-5c-clock-over-settings
+wait 15m
+serial CARE?
+serial TIME
+shot standby-5d-asleep
+press boot
+wait 1s
+shot standby-5e-asleep-lit

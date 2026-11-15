@@ -11,12 +11,13 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 ### Added
 
 - **Standby clock.** Plugged in and left alone, the screen shows a dim clock with the
-  date and a picture of today's weather on black, and the battery charging, instead of
+  date and a picture of the weather now on black, and the battery charging, instead of
   going dark: when the screen would turn off, or at 90 s with screen-off set to *Never*.
   It steps a few pixels each minute so the screen doesn't burn in. A touch or BOOT brings
   the creature back, PWR turns the screen off, and an attention call still shows the
-  creature. Nothing changes on battery, while the creature sleeps, or before the clock is
-  set after a power cut. Idea from Mu-Muu/TamaPoke, re-implemented offline.
+  creature. Settings, the keyboard or the gallery left open are put away when it comes up,
+  so a touch finds the creature and bedtime isn't held up. Nothing changes on battery,
+  while the creature sleeps, or before the clock is set after a power cut. Idea from Mu-Muu/TamaPoke, re-implemented offline.
 
 - **Seasons.** Spring flowers and falling blossom, summer butterflies by day and
   fireflies at night, autumn's russet ground and falling leaves, and winter's snow cover

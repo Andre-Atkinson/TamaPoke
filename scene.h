@@ -50,12 +50,13 @@ uint8_t sceneHome();      // the pet's home place: its biome (the meadow for an 
 uint8_t sceneToday();     // where the clock puts it today (home while the clock is unknown)
 uint8_t scenePlace();     // the place on screen (today's before the first frame)
 WxNow sceneWeather();     // the weather at scenePlace() now (fair during a ceremony)
+WxNow sceneWeatherNow();  // the weather now at today's place (the standby clock's: the latch moves only in drawScene())
 uint8_t sceneSeason();    // the season the scene shows (none during a ceremony or without a clock)
 bool sceneStarsOut();     // the night sky shows its stars (the speech bubbles' night line)
 // The sky, the place and the weather. The place changes only while nobody is looking
 // (SceneLatch), so call this only for a frame of the main scene that is drawn.
 void drawScene(uint32_t now, bool night);
-// The standby clock (standby.h, #60): the time, the date and today's weather on black, and
+// The standby clock (standby.h, #60): the time, the date and the weather now on black, and
 // the battery; it steps a few px each minute. Draws the whole frame and flushes it.
 void drawStandby(uint32_t epoch, uint8_t wxKind, int batPct, bool charging);
 uint16_t batteryColor(int pc, bool charging, uint16_t ink);
