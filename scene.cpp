@@ -360,8 +360,7 @@ void drawStreakBadge() {
 // banner temporal: medalla nueva o hito de racha
 void drawCelebration() {
   const char *l1 = nullptr, *l2 = nullptr;
-  // 32 y no 20: "%u にちれんぞく！" ya pasa de 20 con una sola cifra, y snprintf
-  // cortaba a mitad de un caracter de 3 bytes.
+  // TestBuffersDeTexto (test/test_tools.py) vigila que "%u DIAS SEGUIDOS!" quepa.
   char buf[32];
   if (pet.showMedal()) {
     for (int i = 0; i < MED_COUNT; i++)
@@ -949,12 +948,8 @@ void drawBars() {
   drawBar(244, 346, T(S_BAR_HYG), pet.hygiene);
 }
 
-// Separacion entre la etiqueta y su barra en la fila de necesidades. Estaba fija
-// en 48 px, justo lo que ocupan 4 letras latinas a escala 2, sin margen. Las
-// etiquetas japonesas son mas anchas (ごきげん son 4 kana, ~64 px) y se metian
-// dentro de la barra. Se deriva de la etiqueta mas larga, con el 48 de suelo
-// para que en los idiomas latinos no cambie nada.
-// Requiere el tamano de texto 2 ya puesto, porque textW() lo necesita.
+// Separacion entre la etiqueta y su barra en la fila de necesidades: se deriva de
+// la etiqueta mas larga a escala 2, con 48 px (4 letras) de suelo.
 static int barLabelGap() {
   const StrId ids[] = { S_BAR_FOOD, S_BAR_JOY, S_BAR_ENE, S_BAR_HYG };
   int ancho = 0;
