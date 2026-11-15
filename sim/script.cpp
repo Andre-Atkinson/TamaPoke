@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <sstream>
+#include "../clockprompt.h"  // clockEpochValid
 
 static const char *const LANG_CODES[] = { "es", "en", "fr", "de", "it", "pt", "ja", "ko" };
 static const int LANG_N = (int)(sizeof LANG_CODES / sizeof LANG_CODES[0]);
@@ -68,11 +69,13 @@ static int64_t daysFromCivil(int y, unsigned m, unsigned d) {
 
 static bool leap(int y) { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0; }
 
+// Only a time the clock takes (clockEpochValid, 2025-2099): anything else would boot the
+// simulator with no time and no message. A script that wants no time says `clock none`.
 bool simParseClock(const std::string &s, uint32_t &epoch) {
   if (allDigits(s)) {
     if (s.size() > 10) return false;
     uint64_t v = strtoull(s.c_str(), nullptr, 10);
-    if (v > 0xFFFFFFFFULL) return false;
+    if (!clockEpochValid((int64_t)v)) return false;  // a time the clock would ignore
     epoch = (uint32_t)v;
     return true;
   }
@@ -93,7 +96,7 @@ bool simParseClock(const std::string &s, uint32_t &epoch) {
   int dim = DIM[mo - 1] + (mo == 2 && leap(y) ? 1 : 0);
   if (d < 1 || d > dim) return false;
   int64_t e = daysFromCivil(y, (unsigned)mo, (unsigned)d) * 86400 + h * 3600 + mi * 60 + sec;
-  if (e < 0 || e > 0xFFFFFFFFLL) return false;
+  if (!clockEpochValid(e)) return false;  // the clock would ignore it and boot with no time
   epoch = (uint32_t)e;
   return true;
 }

@@ -5,6 +5,7 @@
 #include "bedtime.h"
 #include "blit.h"
 #include "clockprompt.h"
+#include "clockset.h"
 #include "dex.h"
 #include "gameui.h"
 #include "i18n.h"
@@ -219,9 +220,7 @@ void openClock() {
 static void applyClock() {
   uint32_t base = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
   uint32_t e = (base / 86400) * 86400 + (uint32_t)clockH * 3600 + (uint32_t)clockM * 60;
-  rtcSetEpoch(e);
-  pet.setClock(e);
-  bedClockSet(e);
+  setWallClock(pet, e, bedClockSet);  // the pet's saved time follows only if the clock took it
   clockOpen = false;
 }
 

@@ -65,6 +65,16 @@ TEST(SimScript, horas_imposibles_se_rechazan) {
   CHECK_EQ(e, (uint32_t)5);
 }
 
+TEST(SimScript, una_hora_que_el_reloj_no_toma_se_rechaza) {
+  uint32_t e = 5;
+  CHECK(!simParseClock("2024-12-31 23:59:59", e));  // antes de 2025: el reloj no tendria hora
+  CHECK(!simParseClock("2100-01-01 00:00", e));     // desde 2100 tampoco (clockEpochValid)
+  CHECK(!simParseClock("1735689599", e));
+  CHECK(!simParseClock("4102444800", e));
+  CHECK_EQ(e, (uint32_t)5);
+  CHECK(simParseClock("2099-12-31 23:59:59", e));   CHECK_EQ(e, (uint32_t)4102444799UL);
+}
+
 // ---------------------------------------------------------------- idiomas
 TEST(SimScript, los_codigos_de_idioma_siguen_el_orden_de_i18n) {
   CHECK_EQ(simLangIndex("es"), (int)LANG_ES);

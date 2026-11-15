@@ -1,5 +1,6 @@
 #include "batcurve.h"
 #include "rtcbat.h"
+#include "clockprompt.h"  // clockEpochValid
 #include "board.h"
 #include "pin_config.h"  // define XPOWERS_CHIP_AXP2101
 #include <Wire.h>
@@ -17,13 +18,14 @@ static bool pmuOk = false;
 // clock screen and the scene hour still work; it is lost when the AXP cuts
 // power, like the original board when its RTC loses backup power.
 #include <sys/time.h>
-static const uint32_t kSoftMinEpoch = 1735689600UL;  // 2025-01-01: below = no time
+// Outside clockEpochValid() (clockprompt.h) there is no time: a set is ignored and
+// softEpoch() gives 0, so a value past 2106 never wraps in the uint32_t.
 static uint32_t softEpoch() {
   time_t now = time(nullptr);
-  return now < (time_t)kSoftMinEpoch ? 0 : (uint32_t)now;
+  return clockEpochValid((int64_t)now) ? (uint32_t)now : 0;
 }
 static void softSetEpoch(uint32_t e) {
-  if (e < kSoftMinEpoch) return;
+  if (!clockEpochValid(e)) return;
   struct timeval tv = { (time_t)e, 0 };
   settimeofday(&tv, nullptr);
 }
@@ -61,7 +63,11 @@ void rtcSetEpoch(uint32_t e) {
   softSetEpoch(e);
   return;
 #endif
-  if (!rtcOk) return;
+  // The PCF85063 keeps a two-digit year (SensorLib reads it back as 2000-2099), so a
+  // time outside clockEpochValid() would leave it on a wrong year (TIME 5 reads back as
+  // 2070). The loop sets pet.lastSeenEpoch from rtcEpoch() every 30 s, and the next
+  // save writes it to NVS `seen` (#45). Ignore such a value, as the 1.75C does.
+  if (!rtcOk || !clockEpochValid(e)) return;
   time_t tt = e;
   struct tm tmv;
   gmtime_r(&tt, &tmv);

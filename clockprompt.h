@@ -49,8 +49,17 @@ inline bool clockStaleAtBoot(bool reseeded, const ClockStaleMark &m) {
   return reseeded || clockMarkedStale(m);
 }
 
+// The times the wall clock accepts and reports, the same on both boards and in the
+// simulator: [2025-01-01, 2100-01-01). Anything else is "no time" (rtcEpoch() gives 0)
+// and a set with such a value is ignored. The upper bound is the original 1.75's
+// PCF85063, which keeps a two-digit year (2000-2099). The 1.75C soft clock uses it too,
+// because rtcEpoch() returns a uint32_t, and a time past 2106 would wrap to a tiny one.
+const uint32_t CLOCK_EPOCH_MIN = 1735689600UL;  // 2025-01-01
+const uint32_t CLOCK_EPOCH_END = 4102444800UL;  // 2100-01-01, the first time refused
+inline bool clockEpochValid(int64_t e) { return e >= CLOCK_EPOCH_MIN && e < CLOCK_EPOCH_END; }
+
 // Did setting the clock take? `readBack` is the clock read right after the set. The
-// 1.75C soft clock ignores values before 2025, and a missing PCF85063 keeps reading 0:
+// clock ignores a value outside the range above, and a missing PCF85063 keeps reading 0:
 // then the clock is still what it was and nothing counts as set.
 inline bool clockSetTook(uint32_t requested, uint32_t readBack) {
   if (!readBack) return false;
