@@ -416,7 +416,7 @@ TEST(SceneCmd, takes_a_place_and_a_weather_or_auto) {
 
 TEST(SceneCmd, refuses_anything_else_and_changes_nothing) {
   for (const char *bad : { "", "   ", "beach rain storm", "lava", "beach hail", "beachrain", "beac", "beaches",
-                           "rain", "beach rain auto" }) {
+                           "rain", "beach rain auto", "beach rain storm fog", "a b c d e" }) {
     uint8_t p = 7, k = 9;
     CHECK_MSG(!sceneCmdParse(bad, p, k), std::string("'") + bad + "'");
     CHECK_EQ(p, (uint8_t)7);
