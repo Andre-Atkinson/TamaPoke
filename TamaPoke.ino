@@ -729,25 +729,13 @@ void attnLoop(uint32_t now) {
 }
 
 // ---------- speech bubbles (bubble.h, #23) ----------
-// The pet screen is what render() draws, with nothing on or around the pet: no other
-// screen, starter or egg choice, ceremony or egg; no care animation or dialog
-// (careBusy()); no heart or medal/streak banner; and no attention call lighting the
-// screen (attnShowUntil). Whether the pet is asleep and whether the screen is dimmed are
-// left to the caller. The speech bubbles use it, and anything else that draws beside the
-// pet can.
-bool mainScreenFree(uint32_t now) {
-  if (galleryOpen || gameOpen || sackOpen || kbOpen || clockOpen || cardOpen) return false;
-  if (pet.awaitingStarter() || pet.awaitingEgg() || pet.ceremony || pet.isEgg()) return false;
-  if (careBusy() || pet.showHeart() || pet.showMedal() || pet.showMilestone()) return false;
-  return !attnShowing(now);
-}
-
-// A bubble may show: the pet screen is free, the pet awake, and the screen on, unlocked and
-// not dimmed. Read once per pass, before render(); it never wakes or lights the screen and
-// does not touch lastInteract, so it cannot keep the screen awake.
+// A bubble may show: petSceneFree() (the pet awake on the lit, undimmed main screen with
+// nothing over it), and no heart, no medal or streak banner, and no attention call lighting
+// the screen (during attnShowUntil powerCtx() reads "just touched", so dimStage is
+// DIM_AWAKE then). Read once per pass, before render(); it never wakes or lights the screen
+// and does not touch lastInteract, so it cannot keep the screen awake.
 static bool bubbleFree(uint32_t now) {
-  if (pet.sleeping || screenOff || screenIsLocked() || !mainScreenFree(now)) return false;
-  return dimStageNow(powerCtx(now)) == DIM_AWAKE;
+  return petSceneFree() && !pet.showHeart() && !pet.showMedal() && !pet.showMilestone() && !attnShowing(now);
 }
 
 void loop() {
@@ -1155,6 +1143,16 @@ static PetGestureGate petGestureGate() {
   // dialog it learns later turns the gestures off too
   g.dialog = careBusy();
   return g;
+}
+
+// The pet awake on the lit main screen with nothing over it: the gesture gate, with "dark"
+// meaning the screen is off, pocket-locked or not fully awake (dimStage, updated once per
+// pass by updateBrightness()). Shared by what draws beside the pet (the speech bubbles,
+// #23; the idle emotes, #22), each adding its own conditions.
+bool petSceneFree() {
+  PetGestureGate g = petGestureGate();
+  g.dark = screenOff || screenIsLocked() || dimStage != DIM_AWAKE;
+  return petGesturesLive(g);
 }
 
 // A touch onTap() would give to the pet: in the pet zone and not on the evolve, runaway or
