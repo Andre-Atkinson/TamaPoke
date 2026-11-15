@@ -642,15 +642,20 @@ class TestBoardScripts(unittest.TestCase):
 
     def test_update_says_why_the_clock_was_not_set(self):
         # A refused TIME (#45) must fail the update with the board's reason, not "did not
-        # answer". board.py is a stub, and `sleep` a no-op so the ten retries take no time.
+        # answer", and must not be retried: the refusal would come again. board.py is a
+        # stub that logs each clock call, and `sleep` a no-op so a retry loop is quick.
         root = os.path.join(self.tmp, 'repo')
         shutil.copytree(TOOLS, os.path.join(root, 'tools'), ignore=shutil.ignore_patterns('build', '__pycache__'))
         shutil.copytree(os.path.join(ROOT, 'boards'), os.path.join(root, 'boards'))
         reason = "clock not set; the board said: ERR clock not set: it did not take 5; " \
                  "the pet's saved time is unchanged"
+        clock_log = os.path.join(self.tmp, 'clock_calls')
         with open(os.path.join(root, 'tools', 'board.py'), 'w') as fh:
             fh.write('import sys\n'
-                     f'sys.exit({reason!r} if "clock" in sys.argv else 1)\n')
+                     'if "clock" in sys.argv:\n'
+                     f'    open({clock_log!r}, "a").write("clock\\n")\n'
+                     f'    sys.exit({reason!r})\n'
+                     'sys.exit(1)\n')
         bindir = os.path.join(self.tmp, 'bin')
         os.makedirs(bindir)
         with open(os.path.join(bindir, 'sleep'), 'w') as fh:
@@ -668,6 +673,8 @@ class TestBoardScripts(unittest.TestCase):
         self.assertIn(reason, r.stderr)
         self.assertNotIn('did not answer on', r.stderr)
         self.assertNotIn('Update done', r.stdout)
+        with open(clock_log) as fh:
+            self.assertEqual(fh.read().split(), ['clock'], 'a refused TIME is sent once, not retried')
 
     def test_backup_reads_the_nvs_partition_with_the_rom_loader(self):
         dest = os.path.join(self.tmp, 'b', 'pet.nvs.bin')

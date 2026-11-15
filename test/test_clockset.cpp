@@ -78,3 +78,63 @@ TEST(ClockSet, a_time_the_clock_takes_reaches_the_bedtime_clock) {
   CHECK_EQ(bedCalls, 1);
   CHECK_EQ(bedLast, t1);
 }
+
+// "TIME -5" reaches the firmware as (uint32_t)-5 = 4294967291 (2106). A clock that took
+// it would wrap to a tiny time within seconds, and the loop would copy that into the pet.
+static const uint32_t PAST_RANGE[] = {4294967291UL, 4102444800UL};  // 2106-02-07, 2100-01-01
+
+static void rawSeen(uint32_t v) {  // the pet's saved time written behind its back
+  Preferences raw;
+  raw.begin("tamapoke", false);
+  raw.putUInt("seen", v);
+  raw.end();
+}
+
+TEST(ClockSet, a_time_past_2099_is_refused_and_leaves_everything_alone) {
+  ClockedPet c;
+  uint8_t joy = savedJoy();
+  c.p.joy = joy == 50 ? 51 : 50;  // RAM only: any save would write it
+  for (uint32_t bad : PAST_RANGE) {
+    CHECK(!setWallClock(c.p, bad, bedFollow));
+    CHECK_EQ(c.p.savedEpoch(), T0);
+    CHECK_EQ(c.p.lastSeenEpoch, T0);
+    CHECK_EQ(savedJoy(), joy);
+    CHECK_EQ(rtcEpoch(), T0);
+    CHECK_EQ(bedCalls, 0);
+  }
+}
+
+TEST(ClockSet, the_last_second_of_2099_is_taken) {
+  ClockedPet c;
+  CHECK(setWallClock(c.p, 4102444799UL, bedFollow));
+  CHECK_EQ(rtcEpoch(), (uint32_t)4102444799UL);
+  CHECK_EQ(c.p.lastSeenEpoch, (uint32_t)4102444799UL);
+}
+
+TEST(ClockSet, the_clock_reads_no_time_once_it_runs_past_2099_and_never_wraps) {
+  ClockedPet c;
+  simClockSet(4102444799UL);  // 2099-12-31 23:59:59
+  CHECK_EQ(rtcEpoch(), (uint32_t)4102444799UL);
+  mockAdvanceMillis(2000);
+  CHECK_EQ(rtcEpoch(), (uint32_t)0);
+  mockAdvanceMillis(86400000UL);
+  CHECK_EQ(rtcEpoch(), (uint32_t)0);
+}
+
+// A pet saved while the old TIME bug could hold a time past 2099. setup() seeds the clock
+// from savedEpoch(), and the clock refuses such a time, so it reads as none.
+TEST(ClockSet, savedEpoch_is_0_for_a_saved_time_past_2099) {
+  ClockedPet c;
+  rawSeen(4294967291UL);
+  CHECK_EQ(c.p.savedEpoch(), (uint32_t)0);
+  rawSeen(4102444800UL);
+  CHECK_EQ(c.p.savedEpoch(), (uint32_t)0);
+}
+
+TEST(ClockSet, savedEpoch_returns_a_valid_saved_time_unchanged) {
+  ClockedPet c;
+  rawSeen(4102444799UL);
+  CHECK_EQ(c.p.savedEpoch(), (uint32_t)4102444799UL);
+  rawSeen(T0);
+  CHECK_EQ(c.p.savedEpoch(), T0);
+}

@@ -54,9 +54,9 @@ echo "== 3/4 flashing the app (pet, settings and sprites stay)"
 step 'Wrote|verified' "${ROOT}/tools/flash_175c.sh" --port "$PORT" --out "$OUT" --app-only
 
 echo "== 4/4 setting the clock"
-# The board is rebooting: retry quietly, and on the last failure say why (board.py's
+# The board is rebooting: retry quietly, and when giving up say why (board.py's
 # message: no answer yet, or the clock refused the time, which leaves the pet's saved
-# time alone).
+# time alone). A refusal is the board's answer and would come again, so it ends the loop.
 why="the board did not answer on $PORT"
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   sleep 1
@@ -67,6 +67,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
     exit 0
   fi
   why="${msg:-$why}"
+  case "$msg" in *"clock not set; the board said: ERR"*) break ;; esac
 done
 echo "The new app is on the board, but its clock is not set: ${why}" >&2
 echo "Set it later with: python3 tools/board.py clock" >&2

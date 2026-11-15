@@ -155,8 +155,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   count the gap to the real time as up to two weeks offline. Now the save and
   the bedtime clock follow only a time the clock took; otherwise `TIME` answers
   `ERR clock not set: ...` and changes nothing. The clock screen's OK works the
-  same way. On the original 1.75 a time before 2025 or after 2099 no longer
-  reaches the PCF85063 (it kept a two-digit year, so 1970 read back as 2070).
+  same way. Both boards now refuse a time outside 2025 to 2099 (a mistyped
+  `TIME -5` became 2106 and the 1.75C clock then wrapped to a tiny time; on the
+  original 1.75 the PCF85063 kept a two-digit year, so 1970 read back as 2070),
+  and a saved time past 2099 no longer seeds the clock after a power cut.
   `tools/update_175c.sh` now says why the clock was not set instead of "did not
   answer".
 
