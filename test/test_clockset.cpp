@@ -1,8 +1,8 @@
 // Setting the wall clock (clockset.h, #45): serial TIME and the clock screen's OK. The
 // pet's saved time (NVS `seen`) and the bedtime clock follow only when the clock took the
 // value. The clock here is the simulator's (sim/rtcbat_sim.cpp), which behaves like the
-// 1.75C soft clock: a value before 2025 is ignored. The original 1.75's PCF85063 path in
-// rtcbat.cpp is not compiled on the PC.
+// 1.75C soft clock: a value outside 2025-2099 (clockEpochValid) is ignored. The original
+// 1.75's PCF85063 path in rtcbat.cpp is not compiled on the PC.
 #include "framework.h"
 #include "../clockset.h"
 #include "../sim/simhw.h"
@@ -136,5 +136,38 @@ TEST(ClockSet, savedEpoch_returns_a_valid_saved_time_unchanged) {
   rawSeen(4102444799UL);
   CHECK_EQ(c.p.savedEpoch(), (uint32_t)4102444799UL);
   rawSeen(T0);
+  CHECK_EQ(c.p.savedEpoch(), T0);
+}
+
+TEST(ClockSet, the_first_second_of_2025_is_taken_and_the_one_before_is_refused) {
+  ClockedPet c;
+  CHECK(!setWallClock(c.p, CLOCK_EPOCH_MIN - 1, bedFollow));
+  CHECK_EQ(c.p.savedEpoch(), T0);
+  CHECK_EQ(rtcEpoch(), T0);
+  CHECK(setWallClock(c.p, CLOCK_EPOCH_MIN, bedFollow));
+  CHECK_EQ(rtcEpoch(), CLOCK_EPOCH_MIN);
+  CHECK_EQ(c.p.savedEpoch(), CLOCK_EPOCH_MIN);
+}
+
+// A pet saved with a time the clock cannot hold (the old TIME bug, or the clock screen's
+// OK on a 1.75 with no PCF85063) gets no offline time when the clock has a real time.
+TEST(ClockSet, a_saved_time_before_2025_counts_no_offline_time) {
+  ClockedPet c;
+  const uint32_t age = c.p.ageMinutes;
+  const uint8_t full = c.p.fullness;
+  rawSeen(STRAY);
+  c.p.syncClock(T0);
+  CHECK_EQ(c.p.ageMinutes, age);
+  CHECK_EQ(c.p.fullness, full);
+  CHECK_EQ(c.p.savedEpoch(), T0);
+}
+
+// ...while a valid saved time still counts the time the board was off
+TEST(ClockSet, a_valid_saved_time_still_counts_its_offline_time) {
+  ClockedPet c;
+  const uint32_t age = c.p.ageMinutes;
+  rawSeen(T0 - 600 * 60);
+  c.p.syncClock(T0);
+  CHECK_EQ(c.p.ageMinutes, age + 600);
   CHECK_EQ(c.p.savedEpoch(), T0);
 }

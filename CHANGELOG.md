@@ -151,14 +151,17 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 - **A time the clock does not take no longer reaches the pet's save.** Serial
   `TIME` saved the time it was sent as the pet's last-seen time even when the
-  clock ignored it (a stray `TIME 5`, a mistyped epoch), so the next boot could
-  count the gap to the real time as up to two weeks offline. Now the save and
+  clock ignored it (a stray `TIME 5`, a mistyped epoch it could not keep), so
+  the next boot could count the gap to the real time as up to two weeks
+  offline. Now the save and
   the bedtime clock follow only a time the clock took; otherwise `TIME` answers
   `ERR clock not set: ...` and changes nothing. The clock screen's OK works the
   same way. Both boards now refuse a time outside 2025 to 2099 (a mistyped
   `TIME -5` became 2106 and the 1.75C clock then wrapped to a tiny time; on the
   original 1.75 the PCF85063 kept a two-digit year, so 1970 read back as 2070),
-  and a saved time past 2099 no longer seeds the clock after a power cut.
+  and a saved time past 2099 no longer seeds the clock after a power cut. A pet
+  already saved with a time outside that range gets no offline time from it at
+  its next boot.
   `tools/update_175c.sh` now says why the clock was not set instead of "did not
   answer".
 
