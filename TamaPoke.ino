@@ -1674,8 +1674,9 @@ bool render() {
   int h = sceneHour();
   gNight = pet.sleeping || h < 6 || h >= 20;
   // drawScene cubre los 466x466 completos: sin fillScreen(NEGRO) previo para
-  // que un flush DMA solapado nunca capture negro a medias (anti-parpadeo)
-  drawScene(pet.isEgg() ? 0 : DEX_TBL[pet.speciesId].biome, millis(), gNight);
+  // que un flush DMA solapado nunca capture negro a medias (anti-parpadeo). The place the
+  // pet is at today and the weather come from the clock (weather.h, #60).
+  drawScene(millis(), gNight);
 
   if (pet.ceremony) {
     const DexEntry &d = DEX_TBL[pet.speciesId];

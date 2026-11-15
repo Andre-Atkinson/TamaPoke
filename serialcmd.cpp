@@ -8,11 +8,23 @@
 #include "dex.h"
 #include "owner.h"
 #include "rtcbat.h"
+#include "scene.h"
 #include "screens.h"
 #include "sdmon.h"
 #include "serialcmd.h"
 
 // ---------- consola serie (provision de SD + depuracion) ----------
+
+// SCENE and SCENE? (#60): the place on screen, today's, the home place and the weather,
+// with "*" after a value the SCENE command forced.
+static void printScene() {
+  WxNow w = sceneWeather();
+  Serial.printf("scene place=%s%s today=%s home=%s wx=%s%s prev=%s mix=%u clock=%d particles=%d\n",
+                PLACE_KEYS[scenePlace()], sceneForcePlace < PLACES ? "*" : "", PLACE_KEYS[sceneToday()],
+                PLACE_KEYS[sceneHome()], WX_KEYS[w.kind], sceneForceWx < WX_KINDS ? "*" : "", WX_KEYS[w.prev],
+                w.mix, pet.lastSeenEpoch && !bedEdge.stale() ? 1 : 0,
+                wxParticlesLive(frameIntervalMs(powerCtx(millis()))) ? 1 : 0);
+}
 
 void handleSerial() {
   if (!Serial.available()) return;
@@ -116,6 +128,20 @@ void handleSerial() {
     Serial.printf("pace=%u bed=%u inbed=%d stale=%d egg=%u picking=%d\n", pet.pace, pet.bedPreset,
                   e && isBedtime(pet.bedPreset, bedMinuteOfDay(e)) ? 1 : 0, bedEdge.stale() ? 1 : 0,
                   pet.eggPickMode, pet.awaitingEgg() ? 1 : 0);
+    Serial.println("DONE");
+  } else if (line == "SCENE?") {  // read-only: the place and the weather (weather.h, #60)
+    printScene();
+    Serial.println("DONE");
+  } else if (line == "SCENE" || line.startsWith("SCENE ")) {  // forces them, in RAM only
+    uint8_t place, wx;
+    if (sceneCmdParse(line.c_str() + 5, place, wx)) {
+      sceneForcePlace = place;
+      sceneForceWx = wx;
+    } else {
+      Serial.println("ERR usage: SCENE <meadow|beach|forest|volcano|mountain|snow|auto> "
+                     "[clear|cloudy|rain|storm|snow|fog|auto]");
+    }
+    printScene();
     Serial.println("DONE");
   } else if (line == "BEEP") {
     sfxPlay(SFX_HATCH);  // prueba de audio

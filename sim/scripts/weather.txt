@@ -1,0 +1,89 @@
+# Weather and travelling (#60, weather.h): every kind of weather by day, at dusk and at
+# night, each place, and the clock's own choice. SCENE forces the place and the weather
+# (RAM only); SCENE auto gives them back to the clock. A tap on the sky at the left
+# (outside the pet zone) keeps the 1.75C's screen from timing out.
+
+clock 2026-11-13 10:00
+wait 1s
+# Charmander, then three taps hatch the egg
+tap 233 220
+wait 500ms
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial SCENE?
+shot wx-00-auto
+
+serial SCENE meadow clear
+wait 1s
+shot wx-01-day-clear
+serial SCENE meadow cloudy
+wait 1s
+shot wx-02-day-cloudy
+serial SCENE meadow rain
+wait 1s
+shot wx-03-day-rain
+serial SCENE meadow storm
+tap 60 200
+wait 1s
+shot wx-04-day-storm
+serial SCENE mountain snow
+wait 1s
+shot wx-05-day-snow
+serial SCENE forest fog
+wait 1s
+shot wx-06-day-fog
+serial SCENE beach rain
+tap 60 200
+wait 1s
+shot wx-07-beach-rain
+serial SCENE volcano cloudy
+wait 1s
+shot wx-08-volcano-cloudy
+serial SCENE snow snow
+wait 1s
+shot wx-09-snowfield-snow
+serial SCENE snow clear
+tap 60 200
+wait 1s
+shot wx-10-snowfield-clear
+
+# dusk (19:00)
+serial TIME 1794596400
+serial SCENE meadow cloudy
+wait 1s
+shot wx-11-dusk-cloudy
+serial SCENE beach rain
+tap 60 200
+wait 1s
+shot wx-12-dusk-rain
+
+# night (22:00)
+serial TIME 1794607200
+serial SCENE meadow clear
+wait 1s
+shot wx-13-night-clear
+serial SCENE meadow cloudy
+wait 1s
+shot wx-14-night-cloudy
+serial SCENE meadow rain
+tap 60 200
+wait 1s
+shot wx-15-night-rain
+serial SCENE meadow storm
+wait 1s
+shot wx-16-night-storm
+serial SCENE mountain snow
+wait 1s
+shot wx-17-night-snow
+serial SCENE forest fog
+tap 60 200
+wait 1s
+shot wx-18-night-fog
+
+# back to the clock
+serial SCENE auto
+wait 1s
+serial SCENE?
+shot wx-19-night-auto

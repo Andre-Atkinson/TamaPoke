@@ -90,6 +90,26 @@ shot 17-sleeping
 tap 264 404
 wait 1s
 
+# made-up weather (#60, weather.h): each kind, forced with SCENE (RAM only), then back to
+# the clock's own place and weather
+serial SCENE meadow cloudy
+wait 1s
+shot 18-weather-cloudy
+serial SCENE beach rain
+wait 1s
+shot 19-weather-rain
+serial SCENE meadow storm
+wait 1s
+shot 20-weather-storm
+serial SCENE mountain snow
+wait 1s
+shot 21-weather-snow
+serial SCENE forest fog
+wait 1s
+shot 22-weather-fog
+serial SCENE auto
+wait 1s
+
 # Care page, Eggs -> Choose; a runaway (serial RUN) then offers three eggs
 swipe up
 swipe left
@@ -100,10 +120,10 @@ tap 233 288
 swipe up
 serial RUN
 wait 12s
-shot 18-egg-choice
+shot 23-egg-choice
 tap 233 220
 wait 500ms
-shot 19-egg-look
+shot 24-egg-look
 tap 233 220
 wait 1s
-shot 20-egg-picked
+shot 25-egg-picked

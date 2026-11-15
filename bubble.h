@@ -42,7 +42,8 @@ inline const char *const BUBBLE_KEYS[BUB_LINES] = {
 #define BUBBLE_GAP_SPAN_MS 60000UL // ...plus up to this much (random)
 
 // The morning and night lines' hours. Night is the night scene's (render(): h < 6 or
-// h >= 20), so "look at the stars" only shows when the stars are drawn.
+// h >= 20), and with BubbleIn::starsOut "look at the stars" only shows when the stars are
+// drawn (not under cloud, rain, snow or fog, #60).
 #define BUBBLE_MORNING_FROM 6
 #define BUBBLE_MORNING_TO 10  // exclusive
 #define BUBBLE_NIGHT_FROM 20
@@ -52,6 +53,7 @@ struct BubbleIn {
   AttnLevels needs;
   bool clockKnown;  // the clock is set and not stale (attnLoop's test)
   uint8_t hour;     // 0-23; only read when clockKnown
+  bool starsOut = true;  // the night sky shows its stars (sceneStarsOut(), weather.h, #60)
   bool named;       // the player's name is set
   uint8_t last;     // the previous line, or BUB_NONE
 };
@@ -66,7 +68,8 @@ inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
   uint8_t friendly = (uint8_t)(BUB_HI + (r / 100) % BUB_FRIENDLY);
   uint8_t line;
   if (in.clockKnown && p < 30 && in.hour >= BUBBLE_MORNING_FROM && in.hour < BUBBLE_MORNING_TO) line = BUB_MORNING;
-  else if (in.clockKnown && p < 30 && (in.hour >= BUBBLE_NIGHT_FROM || in.hour < BUBBLE_NIGHT_TO)) line = BUB_STARS;
+  else if (in.clockKnown && in.starsOut && p < 30 && (in.hour >= BUBBLE_NIGHT_FROM || in.hour < BUBBLE_NIGHT_TO))
+    line = BUB_STARS;
   else if (p < 80) line = friendly;
   else line = in.named ? BUB_LOVE_NAME : BUB_LOVE;
   if (line != in.last) return line;

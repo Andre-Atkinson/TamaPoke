@@ -63,6 +63,7 @@ void bubbleLoop(uint32_t now, bool free) {
   uint32_t e = pet.lastSeenEpoch;
   in.clockKnown = e && !bedEdge.stale();
   in.hour = (uint8_t)sceneHour();  // the scene's own hour: the stars line only with the stars drawn
+  in.starsOut = sceneStarsOut();   // ...and not under cloud, rain, snow or fog (#60)
   in.named = ownerName()[0] != 0;
   in.last = bubbleLine;
   uint8_t line = bubblePick(in, (uint32_t)random(0x7FFFFFFF));

@@ -10,6 +10,22 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Travelling and made-up weather.** The creature no longer spends its whole life
+  in one scene. Each day from 06:00 it is at home (its type's place) about 4 days in
+  10, and at the meadow, beach, forest, volcano, mountain or snowfield the rest of the
+  time. The scene only changes while nobody is looking, so you find it somewhere new
+  rather than seeing it jump. Over each place there is weather: clear, cloudy, rain,
+  a storm with a little lightning, snow or fog, with odds that suit the place (never
+  snow at the volcano). A spell lasts from 3 to 15 hours and a change fades in over 20
+  minutes. It is only scenery and never touches the needs. Clouds hide the stars, and
+  on a covered night the creature doesn't ask you to look at them. Falling rain and
+  snow are drawn only at the full frame rate, never while dimmed, while it sleeps
+  untouched or with the screen off. Before the clock is set after a power cut: fair
+  weather at home. Worked out on the board from the clock alone: no network, and
+  nothing new is saved. Serial `SCENE` forces a place and weather for screenshots, and
+  `SCENE?` shows them. Idea from Mu-Muu/TamaPoke (real weather over Wi-Fi),
+  re-implemented offline.
+
 - **A life of its own.** Left alone on a lit screen, the creature keeps itself
   busy: every few seconds it stands, looks around, strolls, rests, dozes, hops,
   chases and kicks a ball, strikes a pose (where its species has one) or, when
