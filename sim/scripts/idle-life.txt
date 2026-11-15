@@ -104,6 +104,32 @@ tap 400 200
 idle ball
 wait 33s
 shot 14-dimmed-calm
+
+# dimming cuts a doze short: it strolls or stands instead, and the cut nap gives nothing
+# (no "idle:" line). The screen dims 30 s after the tap.
+tap 400 200
+wait 25s
+idle doze
+wait 2s
+shot 14b-dozing-before-the-dim
+wait 4s
+shot 14c-the-dim-cut-the-doze
+wait 15s
+
+# an emote showing when the screen dims goes at once (dims 30 s after the tap). The two
+# looks only shift the simulator's fixed random sequence so that this stand comes with a
+# heart (a 1-in-3 roll); 14d shows it, 14e (dimmed, the heart's time not yet up) doesn't.
+idle look
+wait 300ms
+idle look
+wait 300ms
+tap 400 200
+wait 28800ms
+idle stand
+shot 14d-stand-emote-before-the-dim
+wait 800ms
+shot 14e-no-emote-once-dimmed
+
 tap 400 200
 wait 500ms
 
@@ -114,13 +140,20 @@ wait 300ms
 shot 15-heart-no-emote
 wait 2s
 
-# the evolve button sits over the pet: no bubble while it shows
-serial LVL 16
+# the evolve button sits over the pet: no bubble while it shows. Rhyhorn is tall enough for
+# the bubble to show above the button.
+serial SPEC 111
+wait 1s
+serial LVL 42
 wait 1s
 tap 400 200
 idle rest
 wait 500ms
 shot 16-evolve-button-no-emote
+serial SPEC 4
+wait 1s
+serial LVL 1
+wait 1s
 
 # the tallest pets (Dugtrio, Venusaur) keep the emote under the status line; the smallest
 # (Snorlax lies low) keep it by the head
