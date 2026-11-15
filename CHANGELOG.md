@@ -25,6 +25,22 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   creature strolls, gestures or stands as before, with no bubbles, ball or perks. Nothing new is
   saved. Idea from Mu-Muu/TamaPoke, re-implemented offline.
 
+- **Speech bubbles.** Now and then the creature says something in a bubble above
+  it for about 4.5 s: first what it needs ("I'm hungry!", "I need a bath!", "I'm
+  tired...", "I'm bored...", the same need and threshold as the "!" bubble), or else
+  "Good morning!" or "Look at the stars!" when the clock is set, a friendly line, or
+  "I love you, <name>!". One is due 1–2 minutes after the last and waits for the
+  creature's screen to be awake and free, then shows 3 s later. Never while the
+  screen is dimmed or off, asleep, on an egg, in an ending, a dialog, a minigame or
+  another screen, or while an attention call lights the screen; it never wakes or
+  lights the screen. All 8 languages. The name is the player's, set from a computer
+  with the new serial command `OWNER <name>` (`OWNER` alone clears it, `OWNER?` shows
+  it), up to 12 characters with at least one letter: plain letters, digits, spaces
+  and punctuation, plus the accented letters the font has (`OWNER ?` is refused
+  and shows the stored name, like `OWNER?`). It is
+  a new save key (`owner`), checked on load; nothing else in the save changes. Idea
+  from Mu-Muu/TamaPoke, re-implemented offline.
+
 - **Touch gestures on the creature.** Besides a tap (a pat, at once as before):
   a double tap makes it hop; stroking back and forth over it pats it about once
   a second while you go on; six quick taps in a row tickle it into giggles, and

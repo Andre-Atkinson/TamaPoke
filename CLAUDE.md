@@ -51,8 +51,9 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
   command needs its own request: `WIPE`, `BYE`, `RUN`, `HATCH`, `SPEC`,
   `LVL`, `NICK`, `SHINY`, `CAREDAY`, `ABANDON`, `TIME <epoch>`, `RTCSET`,
   `GAL`, `BEEP`, `TRAINTRACE ON|OFF`, `SAVE` (writes pending pet changes to
-  NVS), `PUT`. Read-only: `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`,
-  `CARE?` (prints `pace bed inbed stale egg picking`), `LS`, `SDINFO`, `LOCK?`,
+  NVS), `OWNER <name>` (writes the player's name to NVS; `OWNER` alone clears
+  it), `PUT`. Read-only: `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`,
+  `CARE?` (prints `pace bed inbed stale egg picking`), `OWNER?`, `LS`, `SDINFO`, `LOCK?`,
   `TRAINTRACE?`. `LOCK?` and `TRAINTRACE` exist on the 1.75C only. These
   scripts send state-changing commands: `tools/board.py` (`clock` sends
   `TIME <epoch>`, `save` sends `SAVE`, `cmd` sends anything),

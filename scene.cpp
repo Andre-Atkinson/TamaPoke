@@ -3,6 +3,7 @@
 #include "app.h"
 #include "attention.h"
 #include "blit.h"
+#include "bubble.h"
 #include "clockprompt.h"
 #include "dex.h"
 #include "i18n.h"
@@ -763,12 +764,12 @@ void drawPoops() {
 // The attention "!" (#9): a speech bubble beside the pet while a need is low, with the icon
 // of the button that fixes it (attnShown: the same need the status line names). Silent and
 // not tied to the call, so it is there whenever she looks. Hidden while something else is
-// going on around the pet: sleep, eating, a heart, the bath, evolution, a banner or a dialog.
-// #23's speech bubbles can reuse the shape (attnBubbleAt).
+// going on around the pet: sleep, eating, a heart, the bath, evolution, a banner or a dialog,
+// and while a speech bubble (#23, bubble.h) shows, which says the same need in words.
 void drawAttnBubble() {
   static const char *const *const ICONS[ATTN_NEEDS] = { SPR_ICON_FOOD, SPR_ICON_CLEAN, SPR_ICON_LIGHT, SPR_ICON_PLAY };
   uint8_t need = attnShown(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene));
-  if (need >= ATTN_NEEDS) return;
+  if (need >= ATTN_NEEDS || bubbleShowing()) return;
   if (pet.sleeping || pet.eating() || pet.showHeart() || pet.evolving() || timeLeft(bathUntil) || pet.showMedal() ||
       pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil)))
     return;

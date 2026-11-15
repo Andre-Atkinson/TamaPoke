@@ -16,6 +16,10 @@
 //   press boot [N]           N pulsaciones de BOOT (1 = silenciar)
 //   wait DUR                 dejar correr el firmware DUR (alias: advance)
 //   serial LINEA             mandar una linea por la consola serie (HATCH, SPEC 25...)
+//   say LINE                 show a speech bubble now (#23, bubble.h): hungry bath tired
+//                            bored morning stars hi happy pat love-name love. It is laid
+//                            out as if it had come up by itself and still ends at once on
+//                            a screen that is not free (asleep, dimmed, another screen...)
 //   shot NOMBRE              guardar NOMBRE.png con lo que muestra el panel
 //   idle ACT                 the pet's next idle activity (#22: stand look walk rest doze hop
 //                            ball gesture seek), at once on a free, lit main screen; ignored
@@ -31,7 +35,7 @@
 enum SimOp : uint8_t {
   OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING, OP_PMU,
   OP_TAP, OP_HOLD, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
-  OP_WAIT, OP_SERIAL, OP_SHOT, OP_IDLE,
+  OP_WAIT, OP_SERIAL, OP_SHOT, OP_IDLE, OP_SAY,
 };
 
 struct SimCmd {

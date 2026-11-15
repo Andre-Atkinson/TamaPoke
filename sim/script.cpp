@@ -1,5 +1,6 @@
 #include "script.h"
 #include "../idleplan.h"  // IDLE_ACT_NAMES
+#include "../bubble.h"
 #include <ctype.h>
 #include <stdlib.h>
 #include <sstream>
@@ -247,6 +248,12 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       if (c.a < 0) return fail("usage: idle stand|look|walk|rest|doze|hop|ball|gesture|seek");
       c.op = OP_IDLE;
       c.text = w[1];
+    } else if (op == "say") {
+      c.a = -1;
+      for (int i = 0; n == 2 && i < BUB_LINES; i++)
+        if (w[1] == BUBBLE_KEYS[i]) c.a = i;
+      if (c.a < 0) return fail("usage: say hungry|bath|tired|bored|morning|stars|hi|happy|pat|love-name|love");
+      c.op = OP_SAY;
     } else if (op == "shot") {
       if (n != 2) return fail("usage: shot NAME");
       for (char ch : w[1])

@@ -6,6 +6,7 @@
 #include "clockprompt.h"
 #include "clockset.h"
 #include "dex.h"
+#include "owner.h"
 #include "rtcbat.h"
 #include "screens.h"
 #include "sdmon.h"
@@ -27,6 +28,8 @@ void handleSerial() {
 #endif
   if (sdSerialCommand(line)) return;
 
+  char ownerArg[OWNER_CMD_NAME_BYTES];  // the name of an OWNER <name> line (owner.h)
+  OwnerCmd ownerCmd;
   if (line == "HATCH") {
     pet.eggTap(); pet.eggTap(); pet.eggTap();
     Serial.println("DONE");
@@ -81,6 +84,21 @@ void handleSerial() {
   } else if (line.startsWith("NICK ")) {
     pet.rename(line.substring(5).c_str());
     Serial.printf("nick=%s\n", pet.nick);
+    Serial.println("DONE");
+  } else if ((ownerCmd = ownerParse(line.c_str(), ownerArg, sizeof ownerArg)) != OWNER_CMD_NONE) {
+    // the player's name in the speech bubbles (owner.h): "OWNER?" only reads it, "OWNER <name>"
+    // sets it (empty clears it)
+    if (ownerCmd == OWNER_CMD_SET) {
+      uint32_t bad = 0;
+      OwnerCheck c = ownerSet(ownerArg, &bad);
+      if (c == OWNER_TOO_LONG) Serial.printf("owner not set: more than %d characters\n", OWNER_NAME_MAX);
+      else if (c == OWNER_BAD_CHAR) Serial.printf("owner not set: U+%04lX cannot be drawn\n", (unsigned long)bad);
+      else if (c == OWNER_BAD_UTF8) Serial.println("owner not set: not UTF-8 text");
+      else if (c == OWNER_NO_LETTER) Serial.println("owner not set: a name needs a letter");
+      else if (c == OWNER_NOT_SAVED) Serial.println("owner not set: the flash write failed");
+      else if (c != OWNER_OK) Serial.println("owner not set");
+    }
+    Serial.printf("owner=%s\n", ownerName());  // what is stored now
     Serial.println("DONE");
   } else if (line == "CAREDAY") {  // simula un dia nuevo cuidado (pruebas)
     pet.setClock(pet.lastSeenEpoch + 86400);

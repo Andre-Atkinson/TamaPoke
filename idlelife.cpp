@@ -2,6 +2,7 @@
 // from drawPetPMD() (scene.cpp), with the ball and the emotes it draws over the pet.
 #include <Arduino.h>
 #include "app.h"
+#include "bubble.h"
 #include "idlelife.h"
 #include "idleplan.h"
 #include "scene.h"
@@ -186,12 +187,12 @@ uint8_t idleFrameAct(uint32_t now, int &dy, uint32_t &t0, bool &loop) {
   }
 }
 
-// Something else is by its head or over the pet: the heart of a pat, a medal or streak
-// banner, the evolve, farewell or run-away button. (#23's speech bubbles go first too:
-// whichever of #22 and #23 merges second adds its check here.)
+// Something else is by its head or over the pet: a speech bubble (#23: it goes first, and
+// draws in the same band beside the head), the heart of a pat, a medal or streak banner, the
+// evolve, farewell or run-away button.
 static bool emoteAllowed() {
-  return !pet.showHeart() && !pet.showMedal() && !pet.showMilestone() && !pet.wantEvolveButton() &&
-         !pet.canRunawayNow() && !pet.wantFarewellButton();
+  return !bubbleShowing() && !pet.showHeart() && !pet.showMedal() && !pet.showMilestone() &&
+         !pet.wantEvolveButton() && !pet.canRunawayNow() && !pet.wantFarewellButton();
 }
 
 // a "z" `s` px across with its top-left at (x, y), 2 px strokes

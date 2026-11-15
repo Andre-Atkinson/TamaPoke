@@ -148,6 +148,17 @@ wait 300ms
 shot 15-heart-no-emote
 wait 2s
 
+# a speech bubble (#23) goes first: while one shows, no emote (the rest's "..." is hidden;
+# the bubble draws in the same band beside the head). The "say" step is the simulator's.
+tap 400 200
+idle rest
+wait 500ms
+say hi
+wait 300ms
+shot 15b-speech-bubble-no-emote
+wait 5s
+shot 15c-bubble-gone
+
 # the evolve button sits over the pet: no bubble while it shows. Rhyhorn is tall enough for
 # the bubble to show above the button.
 serial SPEC 111
@@ -163,7 +174,8 @@ wait 1s
 serial LVL 1
 wait 1s
 
-# the tallest pets (Dugtrio, Venusaur) keep the emote under the status line; the smallest
+# the tallest pets (Dugtrio, Venusaur) keep the emote under the status line (a speech
+# bubble that comes up by itself (#23) takes its place instead, as in 17); the smallest
 # (Snorlax lies low) keep it by the head
 serial SPEC 51
 wait 1s

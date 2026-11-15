@@ -208,6 +208,32 @@ class TestSketchSanity(unittest.TestCase):
 
 
 
+class TestOwnerLetters(unittest.TestCase):
+    """owner.h's accented letters (#23) against Python's own CP437 codec and Unicode data.
+
+    The name's letters must be exactly the ones the classic 5x7 font (a CP437 table)
+    has: every byte 0x80-0xFF that is one ASCII letter plus one accent. Each entry's
+    CP437 byte must be that letter's glyph, and its plain letter (drawn by the CJK
+    fonts, which have no accents) the letter without its accent."""
+
+    def test_the_table_is_the_cp437_accented_letters(self):
+        import unicodedata
+        with open(os.path.join(ROOT, 'owner.h'), encoding='utf-8') as fh:
+            text = fh.read()
+        table = re.search(r'OWNER_LETTERS\[\]\s*=\s*\{(.*?)\};', text, re.S).group(1)
+        rows = [(int(cp, 16), int(b, 16), plain) for cp, b, plain in
+                re.findall(r"\{0x([0-9A-Fa-f]+),\s*0x([0-9A-Fa-f]+),\s*'(.)'\}", table)]
+        self.assertTrue(rows)
+        want = {}
+        for b in range(0x80, 0x100):
+            ch = bytes([b]).decode('cp437')
+            d = unicodedata.normalize('NFD', ch)
+            if unicodedata.category(ch).startswith('L') and len(d) == 2 and d[0].isascii() and d[0].isalpha():
+                want[ord(ch)] = (b, d[0])
+        self.assertEqual({cp: (b, plain) for cp, b, plain in rows}, want)
+        self.assertEqual(len(rows), len(want), 'a letter is listed twice')
+
+
 class TestBuffersDeTexto(unittest.TestCase):
     """Cada snprintf(buf, sizeof(buf), T(S_x), ...) cabe en su buffer en TODOS los idiomas.
 
@@ -222,6 +248,8 @@ class TestBuffersDeTexto(unittest.TestCase):
       %lu      -> 10 cifras
       %s       -> lo que declare ARGS_S; un %s sin declarar hace fallar el
                   test, para que quien lo anada piense cuanto puede ocupar
+                  ('dueno': the player's name in the font's encoding, one
+                  byte per character, OWNER_NAME_MAX in owner.h)
     """
 
     ARGS_S = {  # que puede llegar por cada %s, en orden
@@ -230,6 +258,7 @@ class TestBuffersDeTexto(unittest.TestCase):
         'S_INFO_FMT': ('baya',),
         'S_FAREWELL_BTN': ('nombre_o_apodo',),
         'S_RUNAWAY_BTN': ('nombre_o_apodo',),
+        'S_SAY_LOVE_FMT': ('dueno',),
     }
     CIFRAS = {'u': 5, 'd': 5, 'lu': 10}
     ESPEC = re.compile(r'%0?\d*(lu|u|d|s)')
@@ -251,6 +280,7 @@ class TestBuffersDeTexto(unittest.TestCase):
         cls.LIT = {sid: [fila[k] for fila in filas] for k, sid in enumerate(ids)}
         cls.sources = {name: text.splitlines() for name, text in sketch_sources().items()}
         cls.APODO = int(re.search(r'char\s+nick\[(\d+)\]', leer('pet.h')).group(1)) - 1
+        cls.DUENO = int(re.search(r'#define\s+OWNER_NAME_MAX\s+(\d+)', leer('owner.h')).group(1))
         base = max(len(row[2].encode()) for row in DEX)
         cls.NOMBRE = {}
         for lang in cls.LANGS:
@@ -290,6 +320,8 @@ class TestBuffersDeTexto(unittest.TestCase):
                 total += self.NOMBRE[lang]
             elif arg == 'nombre_o_apodo':
                 total += max(self.NOMBRE[lang], self.APODO)
+            elif arg == 'dueno':
+                total += self.DUENO
             elif arg == 'baya':
                 total += max(self.bytes_literal(self.LIT[b][li]) for b in
                              ('S_BERRY_UNK', 'S_BERRY_RED', 'S_BERRY_BLUE', 'S_BERRY_GREEN'))
@@ -1607,6 +1639,21 @@ class TestBoardPy(unittest.TestCase):
         with self.assertRaises(self.board.NoReply) as cm:
             con.command('FOO', timeout=1, idle=3.0)
         self.assertIn('unknown command', str(cm.exception))
+
+    def test_cmd_sends_accents_precomposed_and_keeps_the_spaces(self):
+        # OWNER <name> (#23): a name typed with a combining accent (as some macOS
+        # input gives it) reaches the board as the precomposed letter the firmware
+        # accepts; the words are joined with single spaces, a quoted name keeps its own
+        got = []
+
+        def board_side(master):
+            got.append(os.read(master, 256))
+            os.write(master, b'DONE\n')
+        self.run_cmd(board_side, 'OWNER', 'N\u0303andu\u0301', 'Player')
+        self.assertEqual(got[0], 'OWNER \u00d1and\u00fa Player\n'.encode('utf-8'))
+        got.clear()
+        self.run_cmd(board_side, 'OWNER', 'Pla  yer')
+        self.assertEqual(got[0], b'OWNER Pla  yer\n')
 
     def test_an_unplugged_board_gives_a_message_not_a_traceback(self):
         for port in ('/dev/does-not-exist', __file__):   # missing, and not a tty

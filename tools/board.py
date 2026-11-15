@@ -8,6 +8,7 @@ Linux; the board's USB port must not be open in another program.
   python3 tools/board.py save             # write any pending pet changes to flash now
   python3 tools/board.py status           # HEALTH + STATS
   python3 tools/board.py cmd TIME         # any console command; prints the reply up to DONE
+  python3 tools/board.py cmd OWNER Name   # the player's name for the speech bubbles (#23)
   python3 tools/board.py --port /dev/cu.usbmodem101 clock
 
 The firmware keeps local wall-clock time as if it were UTC: the clock screen
@@ -25,6 +26,7 @@ import select
 import sys
 import termios
 import time
+import unicodedata
 
 BAUD = termios.B115200
 
@@ -171,8 +173,10 @@ def run(args):
             # after some output ends the call; 3 s leaves room for a reply that
             # follows an unsolicited line (the HEALTH heartbeat) after a ~1 s
             # NVS write. A command with no reply at all (unknown) times out.
-            con.command(' '.join(args.line), timeout=10, idle=3.0,
-                        on_line=lambda t: print(t, flush=True))
+            # NFC: a letter typed as a base letter plus a combining accent goes as the
+            # one precomposed letter the firmware knows (OWNER <name>, owner.h)
+            line = unicodedata.normalize('NFC', ' '.join(args.line))
+            con.command(line, timeout=10, idle=3.0, on_line=lambda t: print(t, flush=True))
     finally:
         con.close()
 

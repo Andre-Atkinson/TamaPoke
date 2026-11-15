@@ -168,7 +168,9 @@ uint32_t mockSfxCount() { return gSfxCount; }
 typedef std::map<std::string, std::vector<uint8_t> > KV;
 static std::map<std::string, KV> gStore;
 
-void mockNvsReset() { gStore.clear(); }
+static bool gNvsFailWrites = false;
+void mockNvsReset() { gStore.clear(); gNvsFailWrites = false; }
+void mockNvsFailWrites(bool fail) { gNvsFailWrites = fail; }
 size_t mockNvsKeyCount(const char *ns) {
   std::map<std::string, KV>::iterator it = gStore.find(ns);
   return it == gStore.end() ? 0 : it->second.size();
@@ -192,13 +194,13 @@ bool Preferences::isKey(const char *key) {
   return kv.find(key) != kv.end();
 }
 bool Preferences::remove(const char *key) {
-  if (!open_ || ro_) return false;
+  if (!open_ || ro_ || gNvsFailWrites) return false;
   return gStore[ns_].erase(key) > 0;
 }
 
 static size_t rawPut(std::map<std::string, KV> &store, const std::string &ns, bool open,
                      bool ro, const char *k, const void *v, size_t len) {
-  if (!open || ro) return 0;
+  if (!open || ro || gNvsFailWrites) return 0;
   const uint8_t *p = (const uint8_t *)v;
   store[ns][k].assign(p, p + len);
   return len;
