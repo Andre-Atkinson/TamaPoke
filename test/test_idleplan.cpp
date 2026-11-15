@@ -340,6 +340,12 @@ TEST(IdleBall, it_slows_bounces_and_never_leaves_its_range) {
   e.x = NAN;
   idleBallRoll(e, 0.1f);
   CHECK_EQ(e.x, (float)IDLE_BALL_MIN);
+  IdleBall f;  // an infinite speed would bounce forever: it stops
+  f.x = 200;
+  f.vx = INFINITY;
+  idleBallRoll(f, 0.1f);
+  CHECK_EQ(f.x, 200.0f);
+  CHECK_EQ(f.vx, 0.0f);
 }
 
 TEST(IdleBall, the_pet_stands_beside_it_and_kicks_it_away) {
@@ -357,6 +363,7 @@ TEST(IdleBall, the_pet_stands_beside_it_and_kicks_it_away) {
     for (float pet : { 160.0f, 300.0f }) {
       float s = idleBallSpot(b.x, pet);
       CHECK_MSG(idleBallKickable(b, s), "ball at " + std::to_string(x));
+      CHECK_RANGE(s, (float)IDLE_WALK_MIN, (float)IDLE_WALK_MAX);
     }
   }
   IdleBall b;

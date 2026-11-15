@@ -344,16 +344,20 @@ inline void idleBallRoll(IdleBall &b, float dt) {
 
 #define IDLE_BALL_KICK_AT (IDLE_BALL_REACH + 4)  // within this, it can kick
 
-// Where the pet heads in a ball game: beside the ball on the side it is already on, inside
-// its walk range. Already within kicking reach, it stays where it is (it never backs off).
+// The spot beside the ball is always inside the walk range, so the pet can reach every ball.
+static_assert(IDLE_BALL_MIN + IDLE_BALL_REACH >= IDLE_WALK_MIN && IDLE_BALL_MAX - IDLE_BALL_REACH <= IDLE_WALK_MAX,
+              "the pet must be able to stand beside the ball anywhere in its range");
+static_assert(IDLE_WALK_MIN - IDLE_BALL_MIN <= IDLE_BALL_KICK_AT && IDLE_BALL_MAX - IDLE_WALK_MAX <= IDLE_BALL_KICK_AT,
+              "a ball at either end must be within kicking reach of the walk's end");
+
+// Where the pet heads in a ball game: beside the ball on the side it is already on (inside
+// its walk range: the asserts above). Already within kicking reach, it stays where it is
+// (it never backs off).
 inline float idleBallSpot(float ballX, float petX) {
   if (petX < IDLE_WALK_MIN) petX = IDLE_WALK_MIN;
   if (petX > IDLE_WALK_MAX) petX = IDLE_WALK_MAX;
   if (fabsf(ballX - petX) <= IDLE_BALL_KICK_AT) return petX;
-  float s = ballX >= petX ? ballX - IDLE_BALL_REACH : ballX + IDLE_BALL_REACH;
-  if (s < IDLE_WALK_MIN) s = IDLE_WALK_MIN;
-  if (s > IDLE_WALK_MAX) s = IDLE_WALK_MAX;
-  return s;
+  return ballX >= petX ? ballX - IDLE_BALL_REACH : ballX + IDLE_BALL_REACH;
 }
 
 // Within reach and nearly stopped: time for a kick.

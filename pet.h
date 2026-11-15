@@ -145,7 +145,7 @@ public:
   // A finished doze or ball game on the main screen (#22, idleplan.h): a little energy or
   // joy, already capped per hour by the caller. Never lowers anything, and is not the
   // player's care: no streak, bond, heart or save of its own (the periodic one keeps it).
-  // Nothing as an egg, asleep, during a ceremony or a starter or egg choice.
+  // Nothing as an egg (a starter or egg choice included), asleep or during a ceremony.
   void idlePerk(uint8_t energyUp, uint8_t joyUp);
   void startFarewell();  // tambien usable desde la consola serie (BYE)
   void startRunaway();   // tambien usable desde la consola serie (RUN)

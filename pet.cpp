@@ -260,7 +260,7 @@ void Pet::selfCare() {
 }
 
 void Pet::idlePerk(uint8_t energyUp, uint8_t joyUp) {
-  if (ceremony != CER_NONE || starterPick || eggPick || isEgg() || sleeping) return;
+  if (ceremony != CER_NONE || isEgg() || sleeping) return;  // a starter or egg choice is an egg too
   energy = clamp100(energy + energyUp);
   joy = clamp100(joy + joyUp);
 }
