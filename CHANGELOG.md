@@ -20,7 +20,9 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   another screen, or while an attention call lights the screen; it never wakes or
   lights the screen. All 8 languages. The name is the player's, set from a computer
   with the new serial command `OWNER <name>` (`OWNER` alone clears it, `OWNER?` shows
-  it), up to 12 characters, plain letters plus the accented ones the font has. It is
+  it), up to 12 characters with at least one letter: plain letters, digits, spaces
+  and punctuation, plus the accented letters the font has (`OWNER ?` is refused
+  and shows the stored name, like `OWNER?`). It is
   a new save key (`owner`), checked on load; nothing else in the save changes. Idea
   from Mu-Muu/TamaPoke, re-implemented offline.
 

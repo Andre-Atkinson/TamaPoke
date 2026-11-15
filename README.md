@@ -124,7 +124,8 @@ While **awake**, per minute:
   is the player's, set once from a computer with the serial command `OWNER <name>`
   (`python3 tools/board.py cmd OWNER Name`; `OWNER` alone clears it, `OWNER?` shows
   it); with no name it says "I love you!". Names can use plain letters, digits,
-  spaces and punctuation, up to 12 characters, plus the accented letters the font has
+  spaces and punctuation, up to 12 characters with at least one letter, plus the
+  accented letters the font has
   (é è ê ë á à â ä å í ì î ï ó ò ô ö ú ù û ü ñ Ñ ç Ç ÿ Ä Å É Ö Ü); in Japanese and Korean the
   accents drop to the plain letter. A bubble is due 1–2 minutes after the last one and
   waits for the creature's screen to be awake and free, then shows 3 s later, so waking
@@ -132,7 +133,7 @@ While **awake**, per minute:
   dimmed or off, while the creature sleeps, on an egg, during an ending, a dialog, a
   minigame or another screen, while it eats, bathes or shows a heart or a banner, or while
   an attention call lights the screen; it takes the "!" bubble's place while it shows. It
-  never wakes or lights the screen, and a tap on it reaches the creature as usual. Idea
+  never wakes or lights the screen, and the bubble is not a touch target: taps work as before. Idea
   from Mu-Muu/TamaPoke.
 - ❗ **Attention calls:** when FOOD, JOY, ENE or HYG first drops **below 25** (where
   its bar turns red), the creature calls once: one soft chirp (if sound is on) and a

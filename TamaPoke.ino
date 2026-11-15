@@ -732,8 +732,9 @@ void attnLoop(uint32_t now) {
 // A bubble may show: petSceneFree() (the pet awake on the lit, undimmed main screen with
 // nothing over it), and no heart, no medal or streak banner, and no attention call lighting
 // the screen (during attnShowUntil powerCtx() reads "just touched", so dimStage is
-// DIM_AWAKE then). Read once per pass, before render(); it never wakes or lights the screen
-// and does not touch lastInteract, so it cannot keep the screen awake.
+// DIM_AWAKE then). Read once per pass, after updateBrightness() (so dimStage is this
+// pass's) and before render(); it never wakes or lights the screen and does not touch
+// lastInteract, so it cannot keep the screen awake.
 static bool bubbleFree(uint32_t now) {
   return petSceneFree() && !pet.showHeart() && !pet.showMedal() && !pet.showMilestone() && !attnShowing(now);
 }
@@ -788,7 +789,6 @@ void loop() {
   // screen, not an almost-off lit one) and before the panel decisions below, so a call's
   // window lights the panel in this same pass
   attnLoop(now);
-  bubbleLoop(now, bubbleFree(now));  // after attnLoop(): a call that lights the screen now ends a bubble
   int tlockEdge = autoTouch.update(screenOff, now);
   if (tlockEdge > 0) {
     Serial.println("touch lock");
@@ -820,6 +820,10 @@ void loop() {
   syncPanelPower(wantSleep, wakeBri);
   now = millis();  // the CO5300 sequence waits 120 ms per command
   if (!panelAsleep) updateBrightness(now);
+  // After attnLoop() (a call that lights the screen now ends a bubble) and after
+  // updateBrightness() (dimStage is this pass's, so a screen that has just dimmed is not
+  // free in the pass that lowers the panel), before render().
+  bubbleLoop(now, bubbleFree(now));
 
   // bateria al limite seguro (sin USB): se guarda la partida y se apaga el PMU antes de que la
   // celda baje mas; el RTC conserva la hora
@@ -1146,9 +1150,10 @@ static PetGestureGate petGestureGate() {
 }
 
 // The pet awake on the lit main screen with nothing over it: the gesture gate, with "dark"
-// meaning the screen is off, pocket-locked or not fully awake (dimStage, updated once per
-// pass by updateBrightness()). Shared by what draws beside the pet (the speech bubbles,
-// #23; the idle emotes, #22), each adding its own conditions.
+// meaning the screen is off, pocket-locked or not fully awake (dimStage, a cache that
+// updateBrightness() sets once per pass: a caller reads this pass's value only after it
+// has run, as the speech bubbles do). Shared by what draws beside the pet (the speech
+// bubbles, #23; the idle emotes, #22), each adding its own conditions.
 bool petSceneFree() {
   PetGestureGate g = petGestureGate();
   g.dark = screenOff || screenIsLocked() || dimStage != DIM_AWAKE;

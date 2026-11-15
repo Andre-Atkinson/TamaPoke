@@ -5,19 +5,22 @@
 // The name must draw in every language, so it is checked against the fonts the bubble
 // uses (uitext.cpp):
 //  - the Latin languages print the classic 5x7 font, a CP437 table: plain ASCII plus
-//    the accented letters below (not the accented capitals A/I/O/U/A`/E`, a~/o~, ae or
-//    sharp s, which CP437 lacks);
+//    the accented letters below (not the accented capitals A/I/O/U/A`/E`, or a~/o~, which
+//    CP437 lacks; ae and sharp s are in CP437 but are no accented letters and have no
+//    one-letter plain form for the CJK fonts, so they are left out too);
 //  - Japanese and Korean print unifont_t_japanese3 / unifont_t_korean2, which have plain
 //    ASCII (0x20-0x7E) and no accented Latin letter at all, so there an accented letter
 //    drops to its plain one (an e with an acute shows as a plain e).
-// Anything else is refused, and a stored name that fails the check (a damaged page, an
-// older or other firmware) loads as no name.
+// A name also needs at least one letter (an ASCII letter or one of the accented ones), so
+// "?" or "123" is no name. Anything else is refused, and a stored name that fails the
+// check (a damaged page, an older or other firmware) loads as no name.
 //
 // The checks and the conversions are pure (test/test_owner.cpp); owner.cpp keeps the
 // stored copy and talks to NVS.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #define OWNER_NAME_MAX 12  // characters; "I love you, <name>!" must fit the bubble in every language
 // UTF-8 bytes, worst case: each accented letter is two bytes, plus the terminator
@@ -79,13 +82,20 @@ enum OwnerCheck : uint8_t {
   OWNER_BAD_UTF8,   // not valid UTF-8
   OWNER_BAD_CHAR,   // a character the fonts cannot draw (*bad says which)
   OWNER_BAD_SPACE,  // starts or ends with a space (the serial line is trimmed, NVS is not)
+  OWNER_NO_LETTER,  // not empty, but not one letter in it ("123", "?", "-")
   OWNER_NOT_SAVED,  // ownerSet(): the NVS write failed; the old name stays
 };
+
+// A letter a name can count: an ASCII letter or one of OWNER_LETTERS.
+inline bool ownerIsLetter(uint32_t cp) {
+  return (cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z') || ownerLetter(cp);
+}
 
 // Is `s` a name the bubble can draw? "" is fine (no name). *bad gets the first refused
 // code point for OWNER_BAD_CHAR.
 inline OwnerCheck ownerNameCheck(const char *s, uint32_t *bad = nullptr) {
   int chars = 0;
+  bool letter = false;
   const char *p = s;
   while (*p) {
     uint32_t cp;
@@ -96,10 +106,42 @@ inline OwnerCheck ownerNameCheck(const char *s, uint32_t *bad = nullptr) {
       return OWNER_BAD_CHAR;
     }
     if (++chars > OWNER_NAME_MAX) return OWNER_TOO_LONG;
+    if (ownerIsLetter(cp)) letter = true;
     p += n;
   }
   if (chars && (s[0] == ' ' || p[-1] == ' ')) return OWNER_BAD_SPACE;
+  if (chars && !letter) return OWNER_NO_LETTER;
   return OWNER_OK;
+}
+
+// The serial commands about the name, as handleSerial() reads them (serialcmd.cpp).
+enum OwnerCmd : uint8_t {
+  OWNER_CMD_NONE = 0,  // not ours
+  OWNER_CMD_QUERY,     // "OWNER?"
+  OWNER_CMD_SET,       // "OWNER", "OWNER <name>": the name to set is in `name` ("" clears it)
+};
+#define OWNER_CMD_NAME_BYTES 64  // room for a name line; longer is cut, and is refused anyway
+
+// Reads one serial line (already trimmed by handleSerial). "OWNER?" is a query, "OWNER" or
+// "OWNER " plus text sets the name, with the spaces at both ends of the text dropped.
+// Anything else ("OWNERX", "OWNER?x", "owner x") is not ours. The name is copied into
+// `name` (nameSize bytes, always terminated). A name too long for it is cut, which still
+// fails ownerNameCheck() (the cut is longer than OWNER_NAME_BYTES), so the cut never turns
+// a refused name into an accepted one. The name is not checked here.
+inline OwnerCmd ownerParse(const char *line, char *name, size_t nameSize) {
+  if (nameSize) name[0] = 0;
+  if (strcmp(line, "OWNER?") == 0) return OWNER_CMD_QUERY;
+  if (strncmp(line, "OWNER", 5) != 0 || (line[5] != 0 && line[5] != ' ')) return OWNER_CMD_NONE;
+  const char *a = line + 5;
+  while (*a == ' ') a++;
+  size_t n = strlen(a);
+  while (n && a[n - 1] == ' ') n--;
+  if (nameSize) {
+    if (n > nameSize - 1) n = nameSize - 1;
+    memcpy(name, a, n);
+    name[n] = 0;
+  }
+  return OWNER_CMD_SET;
 }
 
 // A checked name in the encoding of the active font: CP437 bytes for the classic font,

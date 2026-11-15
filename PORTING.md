@@ -162,8 +162,9 @@ python3 tools/board.py cmd 'OWNER?'       # show the stored name
   and `WIPE` erases it. Several words can follow `OWNER` unquoted (they are sent
   with single spaces); quote the name to keep two spaces. `board.py` sends accents
   precomposed (NFC), the form the firmware checks. The reply is `owner=<name>`, after
-  an `owner not set: ...` line when the name is refused (over 12 characters, or a
-  character the fonts cannot draw; the stored name is then unchanged).
+  an `owner not set: ...` line when the name is refused (over 12 characters, a
+  character the fonts cannot draw, or no letter in it, as in `OWNER ?` or `OWNER 123`;
+  the stored name is then unchanged).
 - `board.py` uses only the Python standard library (no venv needed) and
   needs the serial port to itself: close any serial monitor first.
 

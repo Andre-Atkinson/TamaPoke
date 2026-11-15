@@ -67,7 +67,8 @@ TEST(Owner, every_accented_letter_the_latin_font_has_is_fine) {
 }
 
 TEST(Owner, letters_the_fonts_cannot_draw_are_refused) {
-  // accented capitals and letters CP437 lacks, symbols, other scripts, control characters
+  // accented capitals and letters CP437 lacks, ae and sharp s (in CP437, but no accented
+  // letters and no one-letter plain form for the CJK fonts), symbols, other scripts, control characters
   const uint32_t refused[] = { 0xC1, 0xCD, 0xD3, 0xDA, 0xC0, 0xC8, 0xE3, 0xF5, 0xE6, 0xC6, 0xDF, 0xA1, 0xB0,
                                0x0153, 0x3042, 0xAC00, 0x1F600, 0x09, 0x0A, 0x7F, 0x80, 0x9F, 0xA0, 0xAD };
   for (uint32_t cp : refused) {
@@ -101,6 +102,98 @@ TEST(Owner, spaces_at_either_end_are_refused_inside_are_fine) {
   CHECK_EQ(ownerNameCheck("Player "), OWNER_BAD_SPACE);
   CHECK_EQ(ownerNameCheck(" "), OWNER_BAD_SPACE);
   CHECK_EQ(ownerNameCheck("Pla yer"), OWNER_OK);
+}
+
+TEST(Owner, a_name_needs_a_letter) {
+  CHECK_EQ(ownerNameCheck("123"), OWNER_NO_LETTER);
+  CHECK_EQ(ownerNameCheck("?"), OWNER_NO_LETTER);
+  CHECK_EQ(ownerNameCheck("-"), OWNER_NO_LETTER);
+  CHECK_EQ(ownerNameCheck("1 2.3!"), OWNER_NO_LETTER);
+  CHECK_EQ(ownerNameCheck(""), OWNER_OK);  // no name is not a name without a letter
+  CHECK_EQ(ownerNameCheck("R2-D2"), OWNER_OK);
+  CHECK_EQ(ownerNameCheck("a"), OWNER_OK);
+  CHECK_EQ(ownerNameCheck("7z"), OWNER_OK);
+  CHECK_EQ(ownerNameCheck("Zo\xC3\xAB"), OWNER_OK);    // an accented letter counts
+  std::string only = "1" + u8(0xE9);                    // a lone accented letter among digits
+  CHECK_EQ(ownerNameCheck(only.c_str()), OWNER_OK);
+  CHECK_EQ(ownerNameCheck("@[`{"), OWNER_NO_LETTER);    // the characters next to the ASCII letter ranges
+  // a stored name without a letter loads as no name (the same check)
+  mockNvsReset();
+  putRaw("123");
+  ownerLoad();
+  CHECK_STREQ(ownerName(), "");
+  CHECK_EQ(ownerSet("?"), OWNER_NO_LETTER);
+}
+
+// ---------------------------------------------------------------- the serial line
+static OwnerCmd parse(const char *line, std::string *name = nullptr) {
+  char out[OWNER_CMD_NAME_BYTES];
+  memset(out, 'x', sizeof out);  // proves the name is always terminated
+  OwnerCmd c = ownerParse(line, out, sizeof out);
+  if (name) *name = out;
+  return c;
+}
+
+TEST(Owner, owner_alone_clears_the_name) {
+  std::string n = "stale";
+  CHECK_EQ(parse("OWNER", &n), OWNER_CMD_SET);
+  CHECK_STREQ(n.c_str(), "");
+  n = "stale";
+  CHECK_EQ(parse("OWNER ", &n), OWNER_CMD_SET);
+  CHECK_STREQ(n.c_str(), "");
+  CHECK_EQ(parse("OWNER    ", &n), OWNER_CMD_SET);
+  CHECK_STREQ(n.c_str(), "");
+}
+
+TEST(Owner, owner_with_a_name_sets_it_trimmed_at_both_ends) {
+  std::string n;
+  CHECK_EQ(parse("OWNER Player", &n), OWNER_CMD_SET);
+  CHECK_STREQ(n.c_str(), "Player");
+  CHECK_EQ(parse("OWNER   Ab  c  ", &n), OWNER_CMD_SET);
+  CHECK_STREQ(n.c_str(), "Ab  c");  // inside, the spaces stay
+  CHECK_EQ(parse("OWNER Zo\xC3\xAB", &n), OWNER_CMD_SET);
+  CHECK_STREQ(n.c_str(), "Zo\xC3\xAB");
+}
+
+TEST(Owner, owner_question_mark_is_the_query) {
+  std::string n = "stale";
+  CHECK_EQ(parse("OWNER?", &n), OWNER_CMD_QUERY);
+  CHECK_STREQ(n.c_str(), "");
+}
+
+TEST(Owner, other_lines_are_not_ours) {
+  CHECK_EQ(parse("OWNERX"), OWNER_CMD_NONE);
+  CHECK_EQ(parse("OWNER?x"), OWNER_CMD_NONE);
+  CHECK_EQ(parse("OWNER? "), OWNER_CMD_NONE);
+  CHECK_EQ(parse("owner x"), OWNER_CMD_NONE);
+  CHECK_EQ(parse("OWNE"), OWNER_CMD_NONE);
+  CHECK_EQ(parse("NICK OWNER"), OWNER_CMD_NONE);
+  CHECK_EQ(parse(""), OWNER_CMD_NONE);
+  std::string n = "stale";
+  parse("OWNERX", &n);
+  CHECK_STREQ(n.c_str(), "");  // nothing is left to be mistaken for a name
+}
+
+TEST(Owner, owner_space_question_mark_is_a_set_the_check_refuses) {
+  std::string n;
+  CHECK_EQ(parse("OWNER ?", &n), OWNER_CMD_SET);  // not the query
+  CHECK_STREQ(n.c_str(), "?");
+  mockNvsReset();
+  CHECK_EQ(ownerSet("Player"), OWNER_OK);
+  CHECK_EQ(ownerSet(n.c_str()), OWNER_NO_LETTER);
+  CHECK_STREQ(ownerName(), "Player");  // the stored name is unchanged
+}
+
+TEST(Owner, a_name_line_that_does_not_fit_is_cut_and_still_refused) {
+  char small[8];
+  CHECK_EQ(ownerParse("OWNER Abcdefghij", small, sizeof small), OWNER_CMD_SET);
+  CHECK_STREQ(small, "Abcdefg");  // cut, never overrun
+  CHECK_EQ(ownerParse("OWNER Abc", small, 0), OWNER_CMD_SET);  // no room: nothing written
+  std::string longName = "OWNER " + std::string(200, 'a');
+  std::string n;
+  CHECK_EQ(parse(longName.c_str(), &n), OWNER_CMD_SET);
+  CHECK_EQ((int)n.size(), OWNER_CMD_NAME_BYTES - 1);
+  CHECK_EQ(ownerNameCheck(n.c_str()), OWNER_TOO_LONG);
 }
 
 // ---------------------------------------------------------------- for each font
