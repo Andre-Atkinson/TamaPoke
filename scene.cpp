@@ -420,13 +420,23 @@ static void drawIconCloud(int cx, int cy, int s, uint16_t col) {
   gfx->fillRect(cx - s * 7 / 10, cy + s / 5, s * 14 / 10, s * 2 / 3, col);
 }
 
+// a crescent moon of radius r centred on (cx, cy), cut out of the black standby screen
+static void drawIconMoon(int cx, int cy, int r, uint16_t col) {
+  gfx->fillCircle(cx, cy, r, col);
+  gfx->fillCircle(cx + r * 2 / 5, cy - r * 3 / 10, r * 4 / 5, 0x0000);
+}
+
 // the weather now as a small picture centred on (cx, cy), ~64 px across (no words: the
-// same in every language)
-static void drawWxIcon(uint8_t kind, int cx, int cy) {
+// same in every language); at night a moon where the sun would be
+static void drawWxIcon(uint8_t kind, int cx, int cy, bool night) {
   const uint16_t sun = C565(0xf0, 0xc8, 0x5a), cloud = C565(0xb4, 0xbc, 0xca), dark = C565(0x6c, 0x74, 0x86),
                  rain = C565(0x6a, 0x9c, 0xe0), bolt = C565(0xff, 0xe0, 0x60);
   switch (kind) {
     case WX_CLEAR:
+      if (night) {
+        drawIconMoon(cx, cy, 18, C565(0xe8, 0xee, 0xf5));
+        break;
+      }
       gfx->fillCircle(cx, cy, 14, sun);
       for (int i = 0; i < 8; i++) {  // rays every 45 degrees
         static const int8_t D[8][2] = { { 0, -1 }, { 1, -1 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, { -1, 1 }, { -1, 0 }, { -1, -1 } };
@@ -437,7 +447,8 @@ static void drawWxIcon(uint8_t kind, int cx, int cy) {
       }
       break;
     case WX_CLOUDY:
-      gfx->fillCircle(cx + 12, cy - 10, 13, sun);  // the sun behind a cloud
+      if (night) drawIconMoon(cx + 12, cy - 10, 13, C565(0xe8, 0xee, 0xf5));  // the moon behind a cloud
+      else gfx->fillCircle(cx + 12, cy - 10, 13, sun);                         // the sun behind a cloud
       drawIconCloud(cx - 4, cy + 4, 15, cloud);
       break;
     case WX_RAIN:
@@ -461,7 +472,7 @@ static void drawWxIcon(uint8_t kind, int cx, int cy) {
   }
 }
 
-void drawStandby(uint32_t epoch, uint8_t wxKind, int batPct, bool charging) {
+void drawStandby(uint32_t epoch, uint8_t wxKind, bool night, int batPct, bool charging) {
   gfx->fillScreen(0x0000);  // black: an AMOLED lights only the digits
   int dx, dy;
   standbyShift(epoch / 60, dx, dy);
@@ -478,7 +489,7 @@ void drawStandby(uint32_t epoch, uint8_t wxKind, int batPct, bool charging) {
   setSize(3);
   setCur(centerX(date, 3) + dx, STANDBY_DATE_Y + dy);
   printT(date);
-  drawWxIcon(wxKind, CX + dx, STANDBY_WX_Y + dy);
+  drawWxIcon(wxKind, CX + dx, STANDBY_WX_Y + dy, night);
   if (batPct >= 0) {  // the glyph (a bolt while charging) and the percentage
     char s[8];
     batteryPctLabel(s, sizeof s, batPct, charging);

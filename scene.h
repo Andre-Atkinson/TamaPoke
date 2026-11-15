@@ -58,7 +58,7 @@ bool sceneStarsOut();     // the night sky shows its stars (the speech bubbles' 
 void drawScene(uint32_t now, bool night);
 // The standby clock (standby.h, #60): the time, the date and the weather now on black, and
 // the battery; it steps a few px each minute. Draws the whole frame and flushes it.
-void drawStandby(uint32_t epoch, uint8_t wxKind, int batPct, bool charging);
+void drawStandby(uint32_t epoch, uint8_t wxKind, bool night, int batPct, bool charging);
 uint16_t batteryColor(int pc, bool charging, uint16_t ink);
 void drawBatteryGlyph(int x, int y, int w, int h, int pc, bool charging, uint16_t col, uint16_t bolt);
 void drawClockBadge();

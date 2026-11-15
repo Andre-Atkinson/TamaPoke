@@ -15,7 +15,8 @@ static StandbyIn plugged(uint32_t idle, uint32_t offMs) {
   s.usb = true;
   s.clockKnown = true;
   s.petAwake = true;
-  s.screenOn = true;
+  s.pwrOff = false;
+  s.locked = false;
   s.gameOpen = false;
   s.idleMs = idle;
   s.offMs = offMs;
@@ -34,6 +35,19 @@ TEST(Standby, it_comes_up_when_the_screen_would_turn_off_or_at_90_s_with_never) 
 
 // Only plugged in, with a trusted clock, an awake pet, the screen on and no game; any of
 // them going ends it (and the screen's usual rules apply again).
+// A screen that timed out (not PWR, not locked) may light up with the clock by itself: the
+// pet waking on the charger in the morning, or a board plugged in after its screen went dark
+// on battery (the owner's decision on #74). The sketch turns screenOff off when it starts.
+TEST(Standby, a_timed_out_screen_lights_up_with_it_but_pwr_off_stays_dark) {
+  StandbyIn s = plugged(8UL * 3600 * 1000, 60000);  // dark all night, the pet just woke
+  CHECK(standbyStarts(s));
+  s.pwrOff = true;
+  CHECK(!standbyStarts(s));
+  s.pwrOff = false;
+  s.usb = false;  // still on battery: dark as before
+  CHECK(!standbyStarts(s));
+}
+
 TEST(Standby, it_needs_power_a_clock_an_awake_pet_and_the_screen_on) {
   CHECK(standbyAllowed(plugged(70000, 60000)));
   StandbyIn s = plugged(70000, 60000);
@@ -47,7 +61,10 @@ TEST(Standby, it_needs_power_a_clock_an_awake_pet_and_the_screen_on) {
   s.petAwake = false;  // asleep: the screen goes dark as before
   CHECK(!standbyAllowed(s));
   s = plugged(70000, 60000);
-  s.screenOn = false;  // PWR, or the pocket lock
+  s.pwrOff = true;  // turned off with PWR: it stays dark
+  CHECK(!standbyAllowed(s));
+  s = plugged(70000, 60000);
+  s.locked = true;  // the pocket lock
   CHECK(!standbyAllowed(s));
   s = plugged(70000, 60000);
   s.gameOpen = true;

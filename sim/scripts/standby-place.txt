@@ -4,7 +4,8 @@
 # 06:00 and the weather from rain to a storm; the clock left on across 06:00 shows the storm
 # (cloud and lightning), where the latched place would still give the meadow's rain. The
 # touch then draws the pet at the mountain: the same storm (read it in the SCENE? lines of
-# serial.log: standby=1 before the touch, wx=storm after it).
+# serial.log: standby=1 before the touch, wx=storm after it). Then, at night, the picture's
+# moon where the sun would be (a forced clear sky, then cloud; #74).
 
 usb on
 charging on
@@ -26,3 +27,11 @@ tap 233 233
 wait 2s
 shot place-2-pet-after-touch
 serial SCENE?
+
+serial TIME 1794006000
+serial SCENE meadow clear
+wait 100s
+shot place-3-night-clear-moon
+serial SCENE meadow cloudy
+wait 2s
+shot place-4-night-cloudy-moon

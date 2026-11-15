@@ -508,14 +508,19 @@ Plugged in and left alone, the screen shows a dim clock instead of going dark: t
 the date and a picture of the weather now on black, with the battery charging under them
 (`standby.h`, #60). It comes when the screen would turn off (the screen-off setting), or
 at 90 s when that is *Never*, and steps a few pixels each minute so the AMOLED doesn't
-burn in. Any touch (the first only wakes) or BOOT brings the creature back, PWR turns the
-screen fully off, and an attention call shows the creature for its window, then the clock
-again. The auto touch lock waits for a real screen-off, so it never engages while the clock
-shows. Settings, the keyboard or the gallery left open are put away when the clock comes
-up, so a touch finds the creature (and bedtime isn't held up by a screen left open).
-Self-care while charging carries on underneath. Nothing changes on battery, while
-the creature sleeps (the screen goes dark as before), or before the clock is set after a
-power cut.
+burn in. A screen that had gone dark lights up with the clock by itself as soon as it may
+show: when the creature wakes on the charger in the morning, or when a board whose screen
+timed out on battery is plugged in. Only a screen turned off with PWR (or pocket-locked)
+stays dark. At night the picture shows a moon where the sun would be. Any touch (the first
+only wakes) or BOOT brings the creature back, PWR turns the screen fully off, and an
+attention call shows the creature for its window, then the clock again. The auto touch lock
+waits for a real screen-off, so it never engages while the clock shows. Whatever was open is
+put away when the clock comes up, as when an attention call lights a timed-out screen, so a
+touch finds the creature and bedtime isn't held up: settings (each choice is already saved),
+the card, the gallery, and the keyboard and the clock screen, which drop a half-typed name or
+a time not yet confirmed. Self-care while charging carries on underneath. Nothing changes on
+battery, while the creature sleeps (the screen goes dark as before), or before the clock is
+set after a power cut.
 
 ## Layout
 
@@ -621,8 +626,10 @@ season and the longest titles under the sun and the moon, and
 `travel.txt` checks that the place changes only while nobody is looking (read its
 `SCENE?` lines in `serial.log`), and `standby.txt` the standby clock plugged in, over a
 gallery, with PWR and the pocket lock, on battery (no petals when dimmed), and with settings
-left open across a bedtime (its `standby clock` lines and `SCENE?`'s `standby=`), and `standby-place.txt` its weather picture
-across the 06:00 change of place.
+left open across a bedtime, an attention call over it, the morning and a plug-in lighting a
+dark screen, and PWR keeping it dark (its `standby clock` lines and `SCENE?`'s `standby=`),
+and `standby-place.txt` its weather picture across the 06:00 change of place and its moon at
+night.
 Run with the other scripts in `sim/scripts/`, it lets two builds be compared
 screen by screen.
 

@@ -1,6 +1,6 @@
 // The sky's layout on the round panel (skylayout.h, #70): the sun and the moon clear of the
 // header however long its text, inside the panel, clear of the sleeping "Zz" and the clock
-// badge; the stars below the header; the longest title drawn small enough to fit. Pure numbers.
+// badge; the stars below the header. Pure numbers.
 #include "framework.h"
 #include "../clockprompt.h"
 #include "../skylayout.h"

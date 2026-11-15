@@ -799,19 +799,25 @@ void loop() {
 
   // The standby clock (standby.h, #60): plugged in and left alone, a dim clock takes the place
   // of screen-off. It ends as soon as it is no longer allowed (unplugged, asleep, the screen
-  // turned off or locked, the clock not trusted...), and the screen's usual rules apply again
-  // in this same pass; a touch or BOOT ends it in wakeUI(). Not counted as a touch, so
-  // self-care while charging (#24) carries on.
+  // turned off with PWR or locked, the clock not trusted...), and the screen's usual rules
+  // apply again in this same pass; a touch or BOOT ends it in wakeUI(). Not counted as a
+  // touch, so self-care while charging (#24) carries on.
   StandbyIn sby = standbyIn(now);
   if (standby && !standbyAllowed(sby)) {
     standby = false;
     Serial.println("standby clock: off");
   } else if (!standby && standbyStarts(sby)) {
     standby = true;
+    // A screen that timed out lights up with the clock (the pet woke on the charger, or the
+    // board was plugged in after its screen went dark on battery): the panel wakes below in
+    // this same pass, and the auto touch lock lets go (it follows screenOff).
+    screenOff = false;
     // A touch brings the pet back (standby.h), so the views left open go now, the way an
-    // attention peek puts them away: bedtime waits while settings, the keyboard or the
-    // clock screen is open and lit (bedBusy), and the gallery grid draws only when dirty,
-    // so a touch would show a frozen frame of the clock.
+    // attention call puts them away when it lights a timed-out screen: settings (each choice
+    // is saved already), the card, the gallery, and the keyboard and the clock screen, which
+    // drop a half-typed name or a time not yet confirmed. Bedtime waits while settings, the
+    // keyboard or the clock screen is open and lit (bedBusy), and the gallery grid draws only
+    // when dirty, so a touch would show a frozen frame of the clock.
     attnCloseViews();
     Serial.printf("standby clock: idle %lu ms\n", (unsigned long)sby.idleMs);
   }
@@ -1019,7 +1025,8 @@ static StandbyIn standbyIn(uint32_t now) {
   s.usb = pmuReady && usbPresent();
   s.clockKnown = pet.lastSeenEpoch && !bedEdge.stale();
   s.petAwake = !pet.sleeping && !pet.ceremony && !pet.evolving() && !pet.awaitingStarter() && !pet.awaitingEgg();
-  s.screenOn = !screenOff && !screenIsLocked();
+  s.pwrOff = screenOff && screenOffByPwr;  // a timed-out screen may light up with the clock
+  s.locked = screenIsLocked();
   s.gameOpen = gameOpen || sackOpen;
   s.idleMs = idleSince(now, lastInteract);
   s.offMs = powerOffMs;
@@ -1031,6 +1038,13 @@ static StandbyIn standbyIn(uint32_t now) {
 static uint32_t standbyEpoch() {
   uint32_t e = rtcEpoch();
   return e ? e : pet.lastSeenEpoch;
+}
+
+// The night scene: the pet asleep, or the night hours (the standby clock's weather picture
+// shows a moon then too).
+static bool sceneNight() {
+  int h = sceneHour();
+  return pet.sleeping || h < 6 || h >= 20;
 }
 
 // the standby clock is on screen: up, and no call's window showing the pet (see powerCtx())
@@ -1650,6 +1664,7 @@ static uint32_t screenKey() {
     h = mixKey(h, 0x5B);
     h = mixKey(h, standbyEpoch() / 60);
     h = mixKey(h, sceneWeatherNow().kind);
+    h = mixKey(h, sceneNight());  // the picture's sun or moon
     h = mixKey(h, (uint32_t)batPercent());
     h = mixKey(h, batCharging());
     h = mixKey(h, gLang);
@@ -1720,7 +1735,7 @@ bool render() {
     screenKeyValid = false;
   }
   if (standbyShown(millis())) {  // the standby clock (standby.h, #60) in place of screen-off
-    drawStandby(standbyEpoch(), sceneWeatherNow().kind, batPercent(), batCharging());
+    drawStandby(standbyEpoch(), sceneWeatherNow().kind, sceneNight(), batPercent(), batCharging());
     return true;
   }
   if (pet.awaitingStarter()) {  // primera partida: elegir inicial (prioridad total)
@@ -1756,8 +1771,7 @@ bool render() {
     renderCard();
     return true;
   }
-  int h = sceneHour();
-  gNight = pet.sleeping || h < 6 || h >= 20;
+  gNight = sceneNight();
   // drawScene cubre los 466x466 completos: sin fillScreen(NEGRO) previo para
   // que un flush DMA solapado nunca capture negro a medias (anti-parpadeo). The place the
   // pet is at today and the weather come from the clock (weather.h, #60).

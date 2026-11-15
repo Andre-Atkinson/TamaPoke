@@ -8,7 +8,10 @@
 # pet, not a frozen clock), PWR and the pocket lock (1.75C) while the clock shows, the
 # season's falling petals only at the full frame rate, and settings left open across a
 # bedtime (the views are put away when the clock comes up, so the pet goes to bed; the
-# clock does not stay lit all night). Where the two boards differ it is said in the step.
+# clock does not stay lit all night), an attention call while the clock shows, then the
+# morning: the pet wakes on the charger and the dark screen lights up with the clock, as does
+# a board plugged in after its screen timed out on battery; a screen turned off with PWR stays
+# dark. Where the two boards differ it is said in the step.
 
 usb on
 charging on
@@ -126,10 +129,43 @@ shot standby-5b-settings
 serial TIME
 wait 100s
 shot standby-5c-clock-over-settings
-wait 15m
+# a call while the clock shows (255-265 s after the shot above on both boards; the 1.75 has
+# another earlier): the pet at full brightness, its rain falling at the full frame rate, for
+# the call's 15 s window, then the clock again
+wait 255s
+shot standby-5c1-call
+wait 5s
+shot standby-5c2-call
+wait 5s
+shot standby-5c3-call
+wait 635s
 serial CARE?
 serial TIME
 shot standby-5d-asleep
 press boot
 wait 1s
 shot standby-5e-asleep-lit
+
+# The morning (#74): the pet wakes on the charger at 07:00 and the screen, dark all night on
+# the 1.75C, lights up with the clock by itself (the 1.75's dimmed one turns into it)
+wait 10h
+serial SCENE?
+shot standby-6-morning-clock
+
+# a board whose screen timed out on battery lights up with the clock when plugged in
+tap 233 233
+wait 1s
+usb off
+charging off
+wait 100s
+shot standby-7a-dark-on-battery
+usb on
+charging on
+wait 2s
+shot standby-7b-plugged-in-clock
+
+# a screen turned off with PWR stays dark, plugged in or not
+press pwr
+wait 100s
+serial SCENE?
+shot standby-8-pwr-off-dark
