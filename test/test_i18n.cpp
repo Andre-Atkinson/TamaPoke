@@ -439,8 +439,8 @@ TEST(i18n, the_clock_cancel_hint_fits_the_round_edge) {
   gLang = LANG_DEFAULT;
 }
 
-// The 1.75C toasts (#61): size 2 in a 380 px box (flushUI), so 28 letters leave a letter's
-// margin at each end.
+// The 1.75C toasts (#61): size 2 in a 380 px box (flushUI), kept a letter (12 px) clear of
+// each end: at most 356 px, 29 letters.
 TEST(i18n, the_toasts_fit_their_box) {
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;

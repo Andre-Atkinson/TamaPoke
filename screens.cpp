@@ -171,7 +171,6 @@ void eggSelectTap(int16_t x, int16_t y) {
 // x donde arrancan las barras de la ficha. Se calcula a partir de la etiqueta mas
 // larga para que las cuatro barras sigan alineadas en cualquier idioma, con 150
 // como suelo (las etiquetas de 3 o 4 letras caben de sobra).
-// Requiere tener ya puesto el tamano de texto 2, porque textW() lo necesita.
 static int statBarX() {
   const StrId ids[] = { S_STAT_ATK, S_STAT_DEF, S_STAT_SPE, S_STAT_WGT, S_VIN };
   int ancho = 0;
