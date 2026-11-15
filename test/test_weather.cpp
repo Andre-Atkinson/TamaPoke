@@ -192,6 +192,36 @@ TEST(Season, the_scene_shows_no_season_in_a_ceremony_else_the_forced_or_the_cloc
   CHECK(sawSnow);
 }
 
+// The meadow, the forest and the mountain show the season; the beach, the volcano and the
+// snowfield look the same all year.
+TEST(Season, the_green_places_show_it_on_the_ground) {
+  for (int p = 0; p < PLACES; p++) {
+    bool green = p == PLACE_MEADOW || p == PLACE_FOREST || p == PLACE_MOUNTAIN;
+    CHECK_EQ(seasonShows((uint8_t)p), green);
+    CHECK_EQ(seasonGround(SEASON_SPRING, (uint8_t)p), (uint8_t)(green ? GROUND_FLOWERS : GROUND_PLAIN));
+    CHECK_EQ(seasonGround(SEASON_AUTUMN, (uint8_t)p), (uint8_t)(green ? GROUND_AUTUMN : GROUND_PLAIN));
+    CHECK_EQ(seasonGround(SEASON_WINTER, (uint8_t)p), (uint8_t)(green ? GROUND_SNOW : GROUND_PLAIN));
+    CHECK_EQ(seasonGround(SEASON_SUMMER, (uint8_t)p), (uint8_t)GROUND_PLAIN);
+    CHECK_EQ(seasonGround(SEASON_NONE, (uint8_t)p), (uint8_t)GROUND_PLAIN);  // no clock, or a ceremony
+  }
+  CHECK(!seasonShows(PLACES));
+}
+
+// What flies or falls with the season, only under a sky light enough for the sun or the moon.
+TEST(Season, what_flies_or_falls_with_it) {
+  WxNow clear = wxFixed(WX_CLEAR), cloudy = wxFixed(WX_CLOUDY);
+  CHECK_EQ(seasonFx(SEASON_SPRING, PLACE_MEADOW, false, clear), (uint8_t)SEASON_FX_PETALS);
+  CHECK_EQ(seasonFx(SEASON_SUMMER, PLACE_FOREST, false, cloudy), (uint8_t)SEASON_FX_BUTTERFLIES);
+  CHECK_EQ(seasonFx(SEASON_SUMMER, PLACE_FOREST, true, clear), (uint8_t)SEASON_FX_FIREFLIES);
+  CHECK_EQ(seasonFx(SEASON_AUTUMN, PLACE_MOUNTAIN, true, clear), (uint8_t)SEASON_FX_LEAVES);
+  CHECK_EQ(seasonFx(SEASON_WINTER, PLACE_MEADOW, false, clear), (uint8_t)SEASON_FX_NONE);  // its snow is the weather's
+  CHECK_EQ(seasonFx(SEASON_NONE, PLACE_MEADOW, false, clear), (uint8_t)SEASON_FX_NONE);
+  CHECK_EQ(seasonFx(SEASON_SPRING, PLACE_BEACH, false, clear), (uint8_t)SEASON_FX_NONE);
+  for (uint8_t k : { WX_RAIN, WX_STORM, WX_SNOW, WX_FOG })  // the weather brings only its own
+    for (uint8_t se = SEASON_SPRING; se <= SEASON_AUTUMN; se++)
+      CHECK_EQ(seasonFx(se, PLACE_MEADOW, false, wxFixed(k)), (uint8_t)SEASON_FX_NONE);
+}
+
 // ---------------------------------------------------------------- the clock
 TEST(Weather, without_a_trusted_clock_it_is_fair_weather_at_home) {
   CHECK_EQ(sceneEpoch(SOME_DAY, true), 0u);  // reseeded and not set since

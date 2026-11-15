@@ -73,6 +73,17 @@ TEST(Standby, the_power_policy_while_it_is_up) {
   c.screenOff = true;  // PWR off wins
   CHECK_EQ((int)brightnessFor(c), 0);
   CHECK_EQ(frameIntervalMs(c), 0u);
+  // with screen-off set to Never it comes at the first dim (90 s): it still reads as the
+  // nearly-off stage (1 s frames, 80 MHz), not the first dim's 250 ms and 160 MHz
+  c.offMs = 0;
+  c.screenOff = false;
+  c.idleMs = POWER_DIM1_MS + 10000;
+  c.standby = false;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_LOW);
+  c.standby = true;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_OFF);
+  CHECK_EQ(frameIntervalMs(c), 1000u);
+  CHECK_EQ(cpuMhzFor(c), 80u);
   // a dim the player can read, but well under the lit screen's
   PowerCtx lit = {};
   lit.usb = true;
