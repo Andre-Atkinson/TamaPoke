@@ -2,15 +2,11 @@
 // serial command `OWNER <name>` (an empty name clears it); there is no screen for it.
 // It lives in NVS namespace `tamapoke`, key "owner", as UTF-8, and never in the repo.
 //
-// The name must draw in every language, so it is checked against the fonts the bubble
-// uses (uitext.cpp):
-//  - the Latin languages print the classic 5x7 font, a CP437 table: plain ASCII plus
-//    the accented letters below (not the accented capitals A/I/O/U/A`/E`, or a~/o~, which
-//    CP437 lacks; ae and sharp s are in CP437 but are not accented letters and have no
-//    one-letter plain form for the CJK fonts, so they are left out too);
-//  - Japanese and Korean print unifont_t_japanese3 / unifont_t_korean2, which have plain
-//    ASCII (0x20-0x7E) and no accented Latin letter at all, so there an accented letter
-//    drops to its plain one (an e with an acute shows as a plain e).
+// The name must draw with the UI font (uitext.cpp), so it is checked against it: plain
+// ASCII plus the accented letters below, which are the classic 5x7 font's (a CP437
+// table) and the 12 Portuguese letters it draws from ptglyphs.h (a~ o~ and the accented
+// capitals A' A` A^ A~ E^ I' O' O^ O~ U', #61). ae and sharp s are in CP437 but are not
+// accented letters, so they are left out.
 // A name also needs at least one letter (an ASCII letter or one of the accented ones), so
 // "?" or "123" is no name. Anything else is refused, and a stored name that fails the
 // check (a damaged page, an older or other firmware) loads as no name.
@@ -26,22 +22,23 @@
 // UTF-8 bytes, worst case: each accented letter is two bytes, plus the terminator
 #define OWNER_NAME_BYTES (OWNER_NAME_MAX * 2 + 1)
 
-// The accented letters a name may use: their Unicode code point, their CP437 byte (the
-// classic font's glyph) and the plain ASCII letter the CJK fonts draw instead.
+// The accented letters a name may use: their Unicode code point and the byte the UI
+// font draws them from. The first 31 are CP437 bytes; the last 12 are the Portuguese
+// letters of ptglyphs.h, whose byte is their Latin-1 code, the code point itself.
 struct OwnerLetter {
   uint16_t cp;
-  uint8_t cp437;
-  char plain;
+  uint8_t font;
 };
 inline const OwnerLetter OWNER_LETTERS[] = {
-  {0x00C7, 0x80, 'C'}, {0x00FC, 0x81, 'u'}, {0x00E9, 0x82, 'e'}, {0x00E2, 0x83, 'a'},
-  {0x00E4, 0x84, 'a'}, {0x00E0, 0x85, 'a'}, {0x00E5, 0x86, 'a'}, {0x00E7, 0x87, 'c'},
-  {0x00EA, 0x88, 'e'}, {0x00EB, 0x89, 'e'}, {0x00E8, 0x8A, 'e'}, {0x00EF, 0x8B, 'i'},
-  {0x00EE, 0x8C, 'i'}, {0x00EC, 0x8D, 'i'}, {0x00C4, 0x8E, 'A'}, {0x00C5, 0x8F, 'A'},
-  {0x00C9, 0x90, 'E'}, {0x00F4, 0x93, 'o'}, {0x00F6, 0x94, 'o'}, {0x00F2, 0x95, 'o'},
-  {0x00FB, 0x96, 'u'}, {0x00F9, 0x97, 'u'}, {0x00FF, 0x98, 'y'}, {0x00D6, 0x99, 'O'},
-  {0x00DC, 0x9A, 'U'}, {0x00E1, 0xA0, 'a'}, {0x00ED, 0xA1, 'i'}, {0x00F3, 0xA2, 'o'},
-  {0x00FA, 0xA3, 'u'}, {0x00F1, 0xA4, 'n'}, {0x00D1, 0xA5, 'N'},
+  {0x00C7, 0x80}, {0x00FC, 0x81}, {0x00E9, 0x82}, {0x00E2, 0x83}, {0x00E4, 0x84}, {0x00E0, 0x85},
+  {0x00E5, 0x86}, {0x00E7, 0x87}, {0x00EA, 0x88}, {0x00EB, 0x89}, {0x00E8, 0x8A}, {0x00EF, 0x8B},
+  {0x00EE, 0x8C}, {0x00EC, 0x8D}, {0x00C4, 0x8E}, {0x00C5, 0x8F}, {0x00C9, 0x90}, {0x00F4, 0x93},
+  {0x00F6, 0x94}, {0x00F2, 0x95}, {0x00FB, 0x96}, {0x00F9, 0x97}, {0x00FF, 0x98}, {0x00D6, 0x99},
+  {0x00DC, 0x9A}, {0x00E1, 0xA0}, {0x00ED, 0xA1}, {0x00F3, 0xA2}, {0x00FA, 0xA3}, {0x00F1, 0xA4},
+  {0x00D1, 0xA5},
+  // ptglyphs.h (#61)
+  {0x00E3, 0xE3}, {0x00F5, 0xF5}, {0x00C1, 0xC1}, {0x00C0, 0xC0}, {0x00C2, 0xC2}, {0x00C3, 0xC3},
+  {0x00CA, 0xCA}, {0x00CD, 0xCD}, {0x00D3, 0xD3}, {0x00D4, 0xD4}, {0x00D5, 0xD5}, {0x00DA, 0xDA},
 };
 #define OWNER_LETTER_COUNT (sizeof(OWNER_LETTERS) / sizeof(OWNER_LETTERS[0]))
 
@@ -144,10 +141,10 @@ inline OwnerCmd ownerParse(const char *line, char *name, size_t nameSize) {
   return OWNER_CMD_SET;
 }
 
-// A checked name in the encoding of the active font: CP437 bytes for the classic font,
-// plain ASCII for a CJK font. One byte per character either way, so `out` needs
-// OWNER_NAME_MAX + 1 bytes. A name that fails ownerNameCheck() gives "".
-inline void ownerNameForFont(const char *utf8, bool cjk, char *out, size_t outSize) {
+// A checked name in the UI font's encoding: ASCII as it is, an accented letter as its
+// OWNER_LETTERS byte. One byte per character, so `out` needs OWNER_NAME_MAX + 1 bytes.
+// A name that fails ownerNameCheck() gives "".
+inline void ownerNameForFont(const char *utf8, char *out, size_t outSize) {
   if (!outSize) return;
   out[0] = 0;
   if (ownerNameCheck(utf8) != OWNER_OK) return;
@@ -156,7 +153,7 @@ inline void ownerNameForFont(const char *utf8, bool cjk, char *out, size_t outSi
     uint32_t cp;
     p += ownerUtf8(p, &cp);
     const OwnerLetter *l = ownerLetter(cp);
-    out[k++] = !l ? (char)cp : cjk ? l->plain : (char)l->cp437;
+    out[k++] = !l ? (char)cp : (char)l->font;
   }
   out[k] = 0;
 }
@@ -165,4 +162,4 @@ inline void ownerNameForFont(const char *utf8, bool cjk, char *out, size_t outSi
 void ownerLoad();                                  // setup(): read and check the NVS copy
 const char *ownerName();                           // UTF-8, "" when no name is set
 OwnerCheck ownerSet(const char *utf8, uint32_t *bad = nullptr);  // store ("" clears); refused names change nothing
-void ownerNameForActiveFont(char *out, size_t outSize);  // ownerName() for the active language's font
+void ownerNameForScreen(char *out, size_t outSize);  // ownerName() in the UI font's encoding

@@ -1,133 +1,93 @@
-// Text size, cursor and font in every language (uitext.h). Moved out of
-// TamaPoke.ino (#41).
+// Text size, cursor and the extra Portuguese letters (uitext.h). Moved out of
+// TamaPoke.ino (#41); the Japanese and Korean fonts went with #61.
 #include <Arduino.h>
-#include <U8g2lib.h>
 #include "app.h"
-#include "i18n.h"
+#include "ptglyphs.h"
 #include "uitext.h"
 
-// fuente CJK activa: de momento siempre false, la carga llegara con el
-// soporte de japones/coreano/chino (ver PR #13)
-static bool gCjkFont = false;
+// The classic 5x7 font anchors the cursor at the TOP of the text, and every y in
+// the UI is written that way. It advances 6 px per character at size 1, and every
+// character is one byte, so a width is strlen(s) * 6 * size.
+void setSize(uint8_t n) { gfx->setTextSize(n); }
 
-// ---------- texto: tamano y cursor (preparado para fuentes CJK) ----------
-// La fuente clasica ancla el cursor en la ESQUINA SUPERIOR del texto, y las 74
-// coordenadas Y del codigo estan escritas asi. Las fuentes U8g2 lo anclan en la
-// LINEA BASE (drawChar hace curY = y - baseline*size), asi que al cambiar de
-// fuente todo el texto subiria. setCur() compensa esa diferencia en un solo
-// sitio, para que la Y siga significando "arriba" con cualquier fuente.
-//
-// setSize() existe solo porque la libreria tiene textsize_x protegido y setCur()
-// necesita saber la escala activa para multiplicar el ascenso.
-//
-// Con la fuente clasica gFontAscent es 0, asi que setCur(x,y) es exactamente
-// setCur(x,y): esto no mueve un pixel en los seis idiomas actuales.
-static uint8_t gTextSize = 1;
-static int gFontAscent = 0;  // px del borde superior a la linea base, 0 = fuente clasica
+void setCur(int x, int y) { gfx->setCursor(x, y); }
 
-// --- ajuste de la fuente CJK (los dos valores van juntos) ---
-// La fuente clasica mide 8 px de alto a escala 1. Si la CJK mide mas, hay que
-// dividir la escala para que los tamanos cuadren... pero dividir ADELGAZA el
-// trazo: a escala 1 la unifont pinta lineas de 1 px mientras el latino a escala
-// 2 las pinta de 2, y el japones se ve tenue aunque mida igual.
-//
-// Por eso conviene una fuente base pequena Y EN NEGRITA (_b_), que permita usar
-// la MISMA escala que el latino: asi el grosor coincide y no hay que dividir.
-//
-// Se probo una fuente realmente negrita (b10_b) y NO sirve a este tamano: los
-// trazos se juntan y los kana pierden detalle, ilegibles incluso para un lector
-// nativo. Se vuelve a la unifont, que es la mas legible, y el trazo fino se
-// compensa en printT() repintando 1 px desplazado (pseudo-negrita).
-// japanese3 y no japanese1: los subconjuntos 1 y 2 traen kana y kanji pero
-// NINGUNA puntuacion CJK, y Arduino_GFX no dibuja nada cuando le falta el
-// glifo (ni avanza el cursor), asi que los 25 signos ！ y ？ de las cadenas
-// desaparecian. Es la misma familia unifont: cabecera de metricas identica y
-// superconjunto estricto, comprobado glifo a glifo sobre los 226 codepoints
-// que usa el firmware. Cuesta 102 KB mas de flash y no mueve un pixel.
-// El coreano necesita una fuente con hangul, y CJK_FONT era un solo #define.
-// En vez de dar por hecho que un subconjunto sirve para las dos escrituras, la
-// fuente se elige por idioma. korean2 y no korean1: el coreano de aqui usa 296
-// silabas distintas y todas estan en KS X 1001, el conjunto de 2350 que es el
-// tamano medido para korean2; korean1 trae 478. La comprobacion mira la
-// pertenencia a KS X 1001, no recorre la tabla de la fuente, asi que se apoya
-// en que el conjunto de korean2 sea ese; el ASCII se da por presente.
-// Sin comprobar en placa: si CJK_SIZE_DIV 2 le sienta a korean2 igual que a la
-// japonesa. El ascenso si se mide en tiempo de ejecucion en applyLangFont().
-#define CJK_FONT_JA u8g2_font_unifont_t_japanese3
-#define CJK_FONT_KO u8g2_font_unifont_t_korean2
-#define CJK_SIZE_DIV 2
-
-void setSize(uint8_t n) {
-  // gTextSize guarda la escala REALMENTE aplicada, no la pedida: setCur()
-  // multiplica el ascenso por ella y tiene que cuadrar con lo que se pinta.
-  gTextSize = gCjkFont ? (n >= CJK_SIZE_DIV ? n / CJK_SIZE_DIV : 1) : n;
-  gfx->setTextSize(gTextSize);
-}
-
-void setCur(int x, int y) {
-  gfx->setCursor(x, y + gFontAscent * gTextSize);
-}
-
-// Fija la fuente del idioma activo. Es el UNICO sitio que la toca: el resto del
-// codigo dibuja igual para todos los idiomas gracias a textW()/setCur().
-//
-// El ascenso se mide en vez de codificarlo: getTextBounds() devuelve y1 como
-// desplazamiento del borde superior respecto al cursor, negativo con las fuentes
-// U8g2 (que anclan en la linea base). Asi setCur() puede seguir tratando la Y
-// como "arriba" sea cual sea la fuente, sin constantes magicas por fuente.
-void applyLangFont() {
-  gCjkFont = LANG_IS_CJK(gLang);
-  if (!gCjkFont) {
-    gfx->setFont();            // 5x7 clasica, CP437: la Y ya es el borde superior
-    gfx->setUTF8Print(false);
-    gFontAscent = 0;
-    return;
-  }
-  gfx->setFont((gLang == LANG_KO) ? CJK_FONT_KO : CJK_FONT_JA);
-  gfx->setUTF8Print(true);     // las cadenas CJK son UTF-8 multibyte
-  int16_t x1, y1;
-  uint16_t w, h;
-  uint8_t antes = gTextSize;
-  gfx->setTextSize(1);
-  gfx->getTextBounds("A", 0, 0, &x1, &y1, &w, &h);
-  gFontAscent = -y1;           // y1 negativo: subir desde la linea base
-  gfx->setTextSize(antes);
-}
-
-// ---------- medida de texto (preparado para fuentes CJK) ----------
-// La fuente clasica de Arduino_GFX avanza 6 px por caracter a tamano 1, y la UI
-// centraba con strlen(s)*6*n a pelo. Eso solo vale para un byte por caracter y
-// ancho fijo: con una fuente U8g2 para japones/coreano/chino, ni strlen() cuenta
-// caracteres (UTF-8 es multibyte) ni todos miden lo mismo. Centralizarlo aqui es
-// lo que permitira anadir esos idiomas sin tocar cada punto de dibujado.
-//
-// Para la fuente clasica devuelve EXACTAMENTE la misma cuenta que habia antes,
-// asi que este cambio no mueve un pixel en los seis idiomas actuales.
-uint16_t textW(const char *s, uint8_t size) {
-  if (!gCjkFont) return (uint16_t)strlen(s) * 6 * size;
-  int16_t x1, y1;
-  uint16_t w, h;
-  gfx->getTextBounds(s, 0, 0, &x1, &y1, &w, &h);
-  return w;
-}
+uint16_t textW(const char *s, uint8_t size) { return (uint16_t)strlen(s) * 6 * size; }
 
 // x del cursor para dejar el texto centrado en CX
 int centerX(const char *s, uint8_t size) { return CX - textW(s, size) / 2; }
 
-// Imprime respetando la fuente activa. Con la CJK repinta el texto desplazado
-// 1 px: la unifont a escala reducida deja trazos de 1 px y se ve tenue, y una
-// fuente de verdad negrita a este tamano junta los trazos y estropea los kana.
-// Repintar engorda el trazo sin deformar el glifo. Probado en placa por
-// usakomint, que comparo las dos opciones en japones.
-// El teclado de apodos es solo alfabeto (se deja asi a proposito), de modo que
-// aqui nunca hay CJK y no hace falta engordar nada.
-void printT(char c) { gfx->print(c); }
+// ---------- the 12 Portuguese letters the classic font lacks (#61) ----------
+// They are drawn from a small Adafruit-style GFXfont built from ptglyphs.h, swapped
+// in for that one character. Arduino_GFX then draws it with the text colour and size
+// and moves the cursor exactly as it does for a classic glyph:
+//  - yOffset 0 puts the glyph's row 0 at the cursor y, where the classic font puts
+//    its row 0 (the GFXfont path draws row r at y + yOffset + r);
+//  - width and xAdvance 6 match the classic font's 6 px cell, so the cursor advance
+//    and the wrap test (cursor_x + 6 * size - 1 past the right edge) are the same;
+//  - yAdvance 8 is the classic line height, used only if a line wraps.
+// With a background colour (a two-argument setTextColor()) the GFXfont path of
+// Arduino_GFX::drawChar() fills a box that starts baseline * size above the cursor, its
+// baseline being yAdvance * 2 / 3 (5 rows here), so it would be misplaced behind these 12
+// letters only.
+// No text in the UI sets a background: test_tools.py checks that every setTextColor()
+// has one argument.
+// The glyphs sit at PTG_FIRST + index in this font. PTG_FIRST keeps them clear of
+// '\n' and '\r', which write() handles before drawing.
+#define PTG_FIRST 0x80
+
+struct PtGfxGlyphs {
+  GFXglyph g[PTG_COUNT];
+};
+static constexpr PtGfxGlyphs ptGfxGlyphs() {
+  PtGfxGlyphs out{};
+  for (int i = 0; i < PTG_COUNT; i++)
+    out.g[i] = {(uint16_t)(i * PTG_BYTES), PTG_COLS, PTG_ROWS, PTG_COLS, 0, 0};
+  return out;
+}
+static constexpr PtGfxGlyphs PT_GFX_GLYPHS = ptGfxGlyphs();
+static constexpr uint8_t PT_Y_ADVANCE = PTG_ROWS;
+static constexpr bool ptMetricsAre(uint16_t w, uint8_t xAdv, int8_t xOff, int8_t yOff) {
+  for (int i = 0; i < PTG_COUNT; i++) {
+    const GFXglyph &g = PT_GFX_GLYPHS.g[i];
+    if (g.width != w || g.xAdvance != xAdv || g.xOffset != xOff || g.yOffset != yOff) return false;
+  }
+  return true;
+}
+// The metrics above must stay the classic font's cell, or these 12 letters would sit
+// or advance differently from the rest of a line. Checked when the sketch is built.
+static_assert(ptMetricsAre(6, 6, 0, 0),
+              "PT glyph metrics: width and xAdvance must be 6 (the classic font's 6 px cell, so the cursor advance and the wrap test match), xOffset and yOffset 0 (column 0 and row 0 go at the cursor, as in the classic font)");
+// Each glyph's bits start at its own PTG_BYTES block of PT_GLYPH_BITS (ptglyphs.h packs
+// them so) and are PTG_ROWS tall, or Arduino_GFX would draw another glyph's bits.
+static constexpr bool ptBitsLaidOutAsPacked() {
+  for (int i = 0; i < PTG_COUNT; i++) {
+    const GFXglyph &g = PT_GFX_GLYPHS.g[i];
+    if (g.bitmapOffset != i * PTG_BYTES || g.height != PTG_ROWS) return false;
+  }
+  return true;
+}
+static_assert(ptBitsLaidOutAsPacked(),
+              "PT glyph bitmapOffset must be index * PTG_BYTES and height PTG_ROWS, the layout ptGlyphPack() writes");
+static_assert(PT_Y_ADVANCE == 8, "PT font yAdvance must be 8, the classic font's line height (used when a line wraps)");
+static_assert(PTG_FIRST > '\r', "PTG_FIRST must stay above '\\n' and '\\r', which write() handles before drawing");
+static_assert(PTG_FIRST + PTG_COUNT - 1 <= 0xFF, "PTG_FIRST + PTG_COUNT - 1 must fit the one byte write() takes");
+static const GFXfont PT_FONT = {(uint8_t *)PT_GLYPH_BITS.b, (GFXglyph *)PT_GFX_GLYPHS.g, PTG_FIRST,
+                                PTG_FIRST + PTG_COUNT - 1, PT_Y_ADVANCE};
+
+static void writeByte(uint8_t c) {
+  int i = ptGlyphIndex(c);
+  if (i < 0) {
+    gfx->write(c);  // the classic font: every byte but the 12
+    return;
+  }
+  gfx->setFont(&PT_FONT);
+  gfx->write((uint8_t)(PTG_FIRST + i));
+  gfx->setFont();  // back to the classic 5x7 font
+}
+
+void printT(char c) { writeByte((uint8_t)c); }
 
 void printT(const char *s) {
-  if (gCjkFont) {
-    int16_t x = gfx->getCursorX(), y = gfx->getCursorY();
-    gfx->print(s);
-    gfx->setCursor(x + 1, y);
-  }
-  gfx->print(s);
+  while (*s) writeByte((uint8_t)*s++);
 }

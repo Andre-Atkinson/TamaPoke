@@ -1,5 +1,5 @@
 # The Care page (pace, bedtime and eggs) before and after changing all three settings.
-#   tools/sim.sh --lang ja --script sim/scripts/care-page.txt --out shots/
+#   tools/sim.sh --lang pt --script sim/scripts/care-page.txt --out shots/
 
 # new game: pick Charmander, hatch the egg
 wait 1s

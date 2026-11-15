@@ -23,8 +23,7 @@ static uint16_t bubbleW1 = 0, bubbleW2 = 0;  // each line's width in px
 
 static bool badgeShowing() { return clockPrompt.asking(bedEdge.stale()); }
 
-// Width of the first `len` bytes of s at size 2, in the active font (setSize(2) first:
-// textW() measures CJK text at the current size).
+// Width of the first `len` bytes of s at size 2.
 static int measure(const char *s, int len) {
   char t[sizeof bubbleText];
   if (len >= (int)sizeof t) len = (int)sizeof t - 1;
@@ -38,7 +37,7 @@ static bool compose(uint8_t line) {
   char say[48];
   if (line == BUB_LOVE_NAME) {
     char name[OWNER_NAME_MAX + 1];
-    ownerNameForActiveFont(name, sizeof name);
+    ownerNameForScreen(name, sizeof name);
     snprintf(say, sizeof(say), T(S_SAY_LOVE_FMT), name);
   } else {
     snprintf(say, sizeof say, "%s", T((StrId)(S_SAY_HUNGRY + line)));

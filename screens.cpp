@@ -168,12 +168,9 @@ void eggSelectTap(int16_t x, int16_t y) {
 
 // ---------- ficha del bicho (deslizar vertical) ----------
 
-// x donde arrancan las barras de la ficha. Estaba fijo en 150, que daba de sobra
-// para etiquetas latinas de 3 caracteres pero no para las japonesas, mas anchas:
-// こうげき se metia dentro de la barra. Se calcula a partir de la etiqueta mas
-// larga para que las cuatro barras sigan alineadas en cualquier idioma, con el
-// valor original como suelo (asi en los idiomas latinos no cambia nada).
-// Requiere tener ya puesto el tamano de texto 2, porque textW() lo necesita.
+// x donde arrancan las barras de la ficha. Se calcula a partir de la etiqueta mas
+// larga para que las cuatro barras sigan alineadas en cualquier idioma, con 150
+// como suelo (las etiquetas de 3 o 4 letras caben de sobra).
 static int statBarX() {
   const StrId ids[] = { S_STAT_ATK, S_STAT_DEF, S_STAT_SPE, S_STAT_WGT, S_VIN };
   int ancho = 0;
@@ -234,7 +231,7 @@ static void drawClockBtn(int x, int y, const char *l) {
 }
 
 // the pills' and the OK button's rects are in settingslayout.h (shared with clockTap)
-static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT", "JA", "KO" };
+static const char *const LANG_CODES[LANG_COUNT] = { "EN", "PT" };
 
 // tres barras crecientes (brillo, volumen); las `lit` primeras van rellenas
 static void drawLevelBars(int x, int lit) {
@@ -338,7 +335,6 @@ void renderClock() {
   snprintf(t, sizeof(t), "%02d:%02d", clockH, clockM);
   gfx->setTextColor(asking ? UI_BAR_BAD : UI_INK);
   setSize(7);
-  // CX - 105 in Latin; in CJK only about centred (centerX ignores the text x offset)
   setCur(centerX(t, 7), 108);
   printT(t);
 
@@ -385,15 +381,19 @@ void renderClock() {
     drawLevelBars(BRI_PILL_X + 52, BRIGHT_LEVELS - userDim);
   }
 
-  // selector de idioma: una pildora que cicla los 6 idiomas al tocar
+  // language (#61): an EN | PT toggle showing both, the active half filled; a tap
+  // anywhere on the pill switches to the other one
   gfx->fillRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_WHITE);
   gfx->drawRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_INK);
-  char lp[10];
-  snprintf(lp, sizeof(lp), "%s >", LANG_CODES[gLang]);
-  gfx->setTextColor(UI_INK);
   setSize(2);
-  setCur(LANG_PILL_X + (LANG_PILL_W - textW(lp, 2)) / 2, LANG_PILL_Y + 8);
-  printT(lp);
+  for (int l = 0; l < LANG_COUNT; l++) {
+    const int hw = LANG_PILL_W / LANG_COUNT, hx = LANG_PILL_X + l * hw;
+    bool on = (l == gLang);
+    if (on) gfx->fillRoundRect(hx + 3, LANG_PILL_Y + 3, hw - 6, LANG_PILL_H - 6, 6, UI_INK);
+    gfx->setTextColor(on ? UI_WHITE : UI_INK);
+    setCur(hx + (hw - textW(LANG_CODES[l], 2)) / 2, LANG_PILL_Y + 8);
+    printT(LANG_CODES[l]);
+  }
 
   drawPowerPills();
 
@@ -446,9 +446,8 @@ void clockTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     return;
   }
-  if (LANG_PILL.contains(x, y)) {  // cicla idioma
-    setLang((Lang)((gLang + 1) % LANG_COUNT));
-    applyLangFont();  // la fuente cambia con el idioma
+  if (LANG_PILL.contains(x, y)) {  // EN <-> PT
+    setLang(gLang == LANG_EN ? LANG_PT : LANG_EN);
     sfxPlay(SFX_TAP);
     return;
   }
@@ -489,12 +488,8 @@ static void renderCardProfile() {
   snprintf(head, sizeof(head), T(S_NAME_FMT), pet.shiny ? "*" : "", nm, pet.level());
   gfx->setTextColor(d.accent);
   // auto-encoge: a tamano 3 los nombres largos no caben en la franja estrecha de
-  // arriba de la pantalla redonda, asi que se cortaban por el borde. El ancho se
-  // MIDE con textW(): strlen() cuenta bytes, y en una fila UTF-8 no hay un byte
-  // por caracter ni todos miden lo mismo. Con la fuente clasica textW() devuelve
-  // strlen()*6*size, o sea exactamente la cuenta anterior: no mueve un pixel en
-  // los seis idiomas latinos (11 caracteres a tamano 3 son esos 198 px).
-  setSize(3);
+  // arriba de la pantalla redonda, asi que se cortaban por el borde (11 caracteres
+  // a tamano 3 son esos 198 px).
   int hts = (textW(head, 3) <= 198) ? 3 : 2;
   setSize(hts);
   setCur(centerX(head, hts), hts == 3 ? 34 : 40);
@@ -516,7 +511,7 @@ static void renderCardProfile() {
   int sx = 138, sy = 224;
   gfx->fillTriangle(sx + 8, sy, sx + 1, sy + 18, sx + 15, sy + 18, UI_BAR_BAD);
   gfx->fillTriangle(sx + 8, sy + 7, sx + 4, sy + 18, sx + 12, sy + 18, UI_BAR_WARN);
-  char rl[40];  // en japones pierde cifras con 30 a partir de 100 dias
+  char rl[40];
   snprintf(rl, sizeof(rl), T(S_STREAK_FMT), pet.streak, pet.bestStreak);
   gfx->setTextColor(UI_INK);
   setSize(2);
@@ -843,9 +838,7 @@ void renderGallery() {
     snprintf(head, sizeof(head), "N.%03d %s%s", galleryDetail,
              pet.isShinyRegistered(galleryDetail) ? "*" : "", reg ? dexName(galleryDetail) : "???");
     gfx->setTextColor(reg ? d.accent : UI_INK);
-    // auto-encoge nombres largos (no caben a t3), midiendo en vez de contar
-    // bytes; 13 caracteres a tamano 3 son los 234 px de antes.
-    setSize(3);
+    // auto-encoge nombres largos (no caben a t3): 13 caracteres a tamano 3 son 234 px.
     int gts = (textW(head, 3) <= 234) ? 3 : 2;
     setSize(gts);
     setCur(centerX(head, gts), gts == 3 ? 56 : 60);

@@ -126,8 +126,7 @@ class BubbleTimer {
   uint32_t freeFrom_ = 0, startedAt_ = 0, gap_ = 0;
 };
 
-// Text size 2: 16 px per line in every font (the classic font 8 px at x2; unifont 16 px
-// at x1, uitext.cpp divides the size by 2).
+// Text size 2: 16 px per line (the classic font is 8 px tall at x2).
 #define BUBBLE_LINE_H 16
 #define BUBBLE_PAD_X 12
 #define BUBBLE_PAD_Y 6

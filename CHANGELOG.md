@@ -175,9 +175,25 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 - Strings for the Care page and the egg choice in all eight languages.
 - Simulator: `sim/scripts/every-screen.txt` reaches what `screens.txt` does not
   (evolution, the dialogs, every minigame, the biomes, the endings, BOOT and PWR),
-  so two builds can be compared screen by screen in all 8 languages.
+  so two builds can be compared screen by screen in every language.
 
 ### Changed
+
+- **Two languages: English and European Portuguese** (#61). Spanish, French,
+  German, Italian, Japanese and Korean are gone. **A board set to one of them
+  switches to English on its first update**; the saved choice is kept as it is
+  (an older firmware would still read it), and one tap on the language pill picks
+  English or Portuguese again. English and Portuguese choices carry over as they
+  are. The Portuguese is rewritten as European Portuguese with *tu* throughout
+  ("A evoluir!", "Toca no ovo...", "A tua vez!", "Adoro-te!"), and now has every
+  letter it needs: ã, õ and the accented capitals the font lacked (Á À Â Ã Ê Í Ó Ô
+  Õ Ú) are 12 new glyphs, so "NÃO", "QUE HORAS SÃO?" and "EVOLUÇÃO" read right.
+  The player's name (`OWNER`) may use those letters too ("João"). The language
+  pill shows `EN | PT` with the active one filled. On the 1.75C the BOOT and lock
+  toasts ("Sound on", "Muted", "Locked", "Unlocked") follow the language. Pokémon
+  names stay in English, as in the Portuguese games. The Japanese and Korean fonts
+  and the other languages' text leave the image (about 250 KB), and the U8g2
+  library is no longer needed. The unused short medal labels went too (#59).
 
 - **`TamaPoke.ino` is split into modules** (#41), moving code without changing
   it: the serial console is `serialcmd.cpp`, the text helpers `uitext.cpp`, the
@@ -214,9 +230,7 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 - **The sun and the moon no longer sit on the name** (#70). They moved right of the sky,
   below the name and the status line, and the stars moved out from behind the status
-  line too. A name too wide for the round screen at the large size (a shiny nickname at
-  level 100, or a 10-letter species at level 100) is drawn a size smaller instead of
-  losing its ends to the round edge.
+  line too.
 
 - **The creature's own sounds keep out of quiet hours** (#44). The "ready to
   evolve" chime, the "about to run away" warning, the hourly level-up and the

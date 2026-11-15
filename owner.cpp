@@ -2,7 +2,6 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <string.h>
-#include "i18n.h"
 #include "owner.h"
 
 static char gOwner[OWNER_NAME_BYTES] = "";  // checked, UTF-8; "" = no name
@@ -39,6 +38,6 @@ OwnerCheck ownerSet(const char *utf8, uint32_t *bad) {
   return OWNER_OK;
 }
 
-void ownerNameForActiveFont(char *out, size_t outSize) {
-  ownerNameForFont(gOwner, LANG_IS_CJK(gLang), out, outSize);
+void ownerNameForScreen(char *out, size_t outSize) {
+  ownerNameForFont(gOwner, out, outSize);
 }

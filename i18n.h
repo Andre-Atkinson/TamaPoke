@@ -1,16 +1,27 @@
 #pragma once
 #include <Arduino.h>
 
-// Idiomas soportados. La fuente 5x7 de Arduino_GFX es una tabla CP437 completa
-// (256 glifos), asi que SI hay acentos, dieresis y enes: van como byte suelto en
-// octal (\240 a, \244 n~, \202 e, \204 a"...), nunca en UTF-8, porque la UI centra
-// con strlen(t)*6 y un caracter de dos bytes descuadraria las etiquetas.
-// No estan en CP437: las mayusculas acentuadas salvo E (\220), ni a~/o~ del portugues.
-enum Lang : uint8_t { LANG_ES = 0, LANG_EN, LANG_FR, LANG_DE, LANG_IT, LANG_PT,
-                     LANG_JA, LANG_KO, LANG_COUNT };
-// idiomas que necesitan una fuente U8g2 y texto UTF-8 en vez de la tabla CP437
-#define LANG_IS_CJK(l) ((l) == LANG_JA || (l) == LANG_KO)
-#define LANG_DEFAULT LANG_EN  // idioma por defecto: ingles
+// The UI languages (#61): English and European Portuguese.
+//
+// Text is drawn with Arduino_GFX's classic 5x7 font, a full CP437 table, so the
+// accented letters go in as single bytes in octal (\240 a-acute, \207 c-cedilla,
+// \202 e-acute...), never as UTF-8: the UI centres with strlen(t)*6, and a two-byte
+// character would throw the labels off. The 12 Portuguese letters CP437 lacks (a~ o~
+// and the accented capitals but C-cedilla and E-acute) are extra glyphs on their
+// Latin-1 bytes (\303 A~, \343 a~...): see ptglyphs.h.
+enum Lang : uint8_t { LANG_EN = 0, LANG_PT, LANG_COUNT };
+#define LANG_DEFAULT LANG_EN  // the default language: English
+
+// The `lang` key in NVS namespace `tamapoke` keeps the codes of the old eight-language
+// enum (ES 0, EN 1, FR 2, DE 3, IT 4, PT 5, JA 6, KO 7), so the player's choice survives
+// the update, and an older image flashed later still reads it. 1 is English and 5 is
+// Portuguese; anything else (a removed language, a missing key, garbage) loads as
+// English. loadLang() never rewrites the key: a board on a removed language keeps its
+// byte until the player taps the language pill.
+#define LANG_NVS_EN 1
+#define LANG_NVS_PT 5
+inline Lang langFromNvs(uint8_t v) { return v == LANG_NVS_PT ? LANG_PT : LANG_EN; }
+inline uint8_t langToNvs(Lang l) { return l == LANG_PT ? LANG_NVS_PT : LANG_NVS_EN; }
 
 extern Lang gLang;  // idioma activo (definido en i18n.cpp)
 
@@ -32,7 +43,7 @@ enum StrId : uint8_t {
   S_HITS_FMT, S_STR_GAIN_FMT, S_NEW_RECORD, S_RECORD_FMT, S_HIT_FAST,
   S_SCORE_FMT, S_GREAT_JOY, S_PLUS_JOY,
   // reloj / ajustes
-  S_SET_TIME, S_HOUR, S_MIN, S_CLOCK_CANCEL, S_LANG_LABEL,
+  S_SET_TIME, S_HOUR, S_MIN, S_CLOCK_CANCEL,
   S_CLOCK_ASK,  // clock screen title while the clock is stale (reseeded after a power-off)
   // celebracion
   S_MEDAL_BANNER, S_GREAT, S_STREAK_DAYS_FMT,
@@ -75,13 +86,14 @@ enum StrId : uint8_t {
   // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
   S_SAY_HUNGRY, S_SAY_BATH, S_SAY_TIRED, S_SAY_BORED, S_SAY_MORNING, S_SAY_STARS,
   S_SAY_HI, S_SAY_HAPPY, S_SAY_PAT, S_SAY_LOVE_FMT, S_SAY_LOVE,
+  // 1.75C toasts (#61): the BOOT button's sound toggle and the screen lock
+  S_TOAST_SOUND_ON, S_TOAST_MUTED, S_TOAST_LOCKED, S_TOAST_UNLOCKED,
   STR_COUNT
 };
 
 const char *T(StrId id);       // texto en el idioma activo
 const char *medalName(int i);  // banner de medalla (MED_COUNT)
-const char *medalLabel(int i); // etiqueta corta de medalla
 const char *medalDesc(int i);  // descripcion larga de medalla
 
-void loadLang();             // lee el idioma de NVS (llamar en setup)
-void setLang(Lang l);        // cambia y persiste el idioma
+void loadLang();             // reads the language from NVS (call in setup); never writes
+void setLang(Lang l);        // switches and saves the language (an invalid one is ignored)

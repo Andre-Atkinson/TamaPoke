@@ -4,6 +4,7 @@
 #include "framework.h"
 #include "../clockprompt.h"
 #include "../skylayout.h"
+#include "../uitext.h"  // the name's sizes and places (HEADER_Y3, HEADER_Y2)
 #include <string>
 
 // the gap between a circle and a rectangle (negative: they overlap)
@@ -34,6 +35,8 @@ TEST(SkyLayout, the_round_panels_chord) {
 // nearly the panel's width, so anything behind them above SKY_HEADER_BOTTOM would be covered.
 TEST(SkyLayout, the_sun_and_the_moon_sit_below_the_header_inside_the_panel) {
   CHECK(SKY_HEADER_BOTTOM >= HEADER_STATUS_Y + 2 * 8);  // the status line is size 2: 16 px
+  CHECK(HEADER_STATUS_Y >= HEADER_Y3 + 3 * 8);           // under the name at size 3 (24 px)...
+  CHECK(HEADER_STATUS_Y >= HEADER_Y2 + 2 * 8);           // ...or at size 2
   CHECK(SKY_SUN_Y - SKY_SUN_R >= SKY_HEADER_BOTTOM);
   CHECK(SKY_MOON_Y - SKY_MOON_R >= SKY_HEADER_BOTTOM);
   CHECK(insidePanel(SKY_SUN_X, SKY_SUN_Y, SKY_SUN_R));
@@ -54,23 +57,4 @@ TEST(SkyLayout, the_stars_sit_below_the_header_and_off_the_moon) {
     CHECK_MSG(circleRectGap(SKY_MOON_X, SKY_MOON_Y, SKY_MOON_R, st[0], st[1], st[0] + SKY_STAR_SIZE, st[1] + SKY_STAR_SIZE) > 0,
               "star " + at + " on the moon");
   }
-}
-
-// Up to 16 characters fit the round edge at size 3 on the title's top row; longer titles
-// (a 10-letter name at level 100, any shiny nickname) are drawn at size 2, and the longest,
-// "*" + an 11-letter nickname + " Niv.100" (20 characters), fits there.
-TEST(SkyLayout, a_title_too_wide_for_the_round_edge_is_drawn_smaller) {
-  const int W3 = 18, W2 = 12;  // the classic font's 6 px a character, at sizes 3 and 2
-  CHECK_EQ(headerTitleSize(16 * W3), (uint8_t)3);  // "BUTTERFREE Lv.99"
-  CHECK_EQ(headerTitleSize(17 * W3), (uint8_t)2);  // "BUTTERFREE Lv.100"
-  CHECK_EQ(headerTitleSize(18 * W3), (uint8_t)2);  // "*KANGASKHAN Lv.100"
-  CHECK_EQ(headerTitleSize(0), (uint8_t)3);
-  for (int n = 1; n <= 20; n++) {
-    uint8_t s = headerTitleSize(n * W3);
-    int w = n * (s == 3 ? W3 : W2), y = headerTitleY(s);
-    CHECK_MSG(w + 2 * HEADER_TITLE_MARGIN <= roundChordW(y), std::to_string(n) + " characters at size " + std::to_string(s));
-  }
-  CHECK_EQ(headerTitleY(3), HEADER_TITLE_Y);
-  CHECK_EQ(headerTitleY(2), HEADER_TITLE_Y + 4);  // centred in the size-3 band (24 px vs 16)
-  CHECK(headerTitleY(2) + 2 * 8 <= HEADER_STATUS_Y);
 }

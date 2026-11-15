@@ -1,6 +1,7 @@
-// Where things sit in the main scene's sky on the round panel (#70): the header's title and
-// status line, the sun, the moon, the stars and the sleeping "Zz". Pure numbers and helpers,
-// host-tested in test/test_skylayout.cpp; scene.cpp and render() (TamaPoke.ino) draw them.
+// Where things sit in the main scene's sky on the round panel (#70): below the header's name
+// and status line, the sun, the moon and the stars, and the sleeping "Zz". Pure numbers and a
+// helper, host-tested in test/test_skylayout.cpp; scene.cpp and render() (TamaPoke.ino) draw
+// them. The name's own size and place are uitext.h's (headerSize(), HEADER_Y3/HEADER_Y2).
 #pragma once
 #include <stdint.h>
 
@@ -16,21 +17,11 @@ inline int roundChordW(int y) {
   return 2 * r;
 }
 
-// The header (drawHeader(), scene.cpp): the title at size 3 from y 52 and the status line
-// at size 2 from y 90; the sky below SKY_HEADER_BOTTOM is clear of both, however long.
-#define HEADER_TITLE_Y 52
+// The header (drawHeader(), scene.cpp): the name at size 3 from y 52 (or size 2 from y 56,
+// uitext.h) and the status line at size 2 from y 90. Each can run nearly the panel's width,
+// so the sky below SKY_HEADER_BOTTOM is clear of both, however long.
 #define HEADER_STATUS_Y 90
 #define SKY_HEADER_BOTTOM 112
-#define HEADER_TITLE_MARGIN 2  // px kept inside the panel's edge at each end
-
-// A title too wide for size 3 on its top row (the longest: a shiny nickname at level 100,
-// "*" + 11 letters + " Lv.100", 19 characters) is drawn at size 2, so the round edge never
-// cuts its ends off. `w3` is its width at size 3.
-inline uint8_t headerTitleSize(int w3) {
-  return w3 <= roundChordW(HEADER_TITLE_Y) - 2 * HEADER_TITLE_MARGIN ? 3 : 2;
-}
-// a size-2 title sits in the middle of the size-3 title's band (8 px a row at size 1)
-inline int headerTitleY(uint8_t size) { return HEADER_TITLE_Y + (3 - size) * 8 / 2; }
 
 // The sun and the moon, right of the sky below the header, mirroring the clock badge on
 // the left (clockprompt.h, x 76) and clear of the sleeping "Zz".

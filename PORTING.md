@@ -195,7 +195,7 @@ work against LittleFS.
 | `screenlock.cpp` / `screenlock.h` | **New.** PWR triple-press detector and lock state (pure logic, compile-time and host tests). |
 | `bootbutton.cpp` / `bootbutton.h` | **New.** BOOT single/double/long gesture detector (pure logic, tests). |
 | `trainingtouch.*` / `trainingcapture.*` | **New.** 1.75C strength-training tap policy, CST9217 report decoder and the capture worker. |
-| `i18n.cpp` / `i18n.h` | One new string, `S_HOLD_EXIT`, in all 8 languages. |
+| `i18n.cpp` / `i18n.h` | The 1.75C's strings: `S_HOLD_EXIT`, and the BOOT and lock toasts (`S_TOAST_*`, #61), in both languages. |
 | `TamaPoke.ino` | 1.75C-only lock, BOOT, overlay and training paths; boot banner prints `BOARD_NAME`. |
 | `serialcmd.cpp` | The 1.75C-only serial commands `LOCK?` and `TRAINTRACE` (the serial console moved here from `TamaPoke.ino`, #41). |
 | `gameui.cpp` | The 1.75C-only training capture in the strength-training sack: its start check, the capture frame and the hold-to-exit chip (the minigame screens moved here from `TamaPoke.ino`, #41). |

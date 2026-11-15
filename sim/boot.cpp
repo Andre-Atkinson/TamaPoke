@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <sstream>
 #include "simhw.h"
+#include "../i18n.h"
 #include "../board.h"
 
 static void onRestart() {
@@ -16,12 +17,7 @@ static void onRestart() {
 
 void simBootPrepare(const SimBootConfig &cfg) {
   mockNvsReset();
-  if (cfg.lang >= 0) {
-    Preferences p;
-    p.begin("tamapoke", false);
-    p.putUChar("lang", (uint8_t)cfg.lang);
-    p.end();
-  }
+  if (cfg.lang >= 0) setLang((Lang)cfg.lang);  // the firmware's own write: the code it stores (i18n.h)
   mockSetMillis(0);
   simClockSet(cfg.clock);
   simFsSetRoot(cfg.sprites.c_str());
