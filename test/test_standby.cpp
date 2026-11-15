@@ -93,6 +93,7 @@ TEST(Standby, the_power_policy_while_it_is_up) {
 
 TEST(Standby, it_steps_a_few_px_each_minute_against_burn_in) {
   std::set<std::pair<int, int>> spots;
+  std::set<int> xs, ys;  // it moves across and up and down, not along one line
   for (uint32_t m = 0; m < 2 * STANDBY_SHIFTS; m++) {
     int dx, dy;
     standbyShift(m, dx, dy);
@@ -101,6 +102,10 @@ TEST(Standby, it_steps_a_few_px_each_minute_against_burn_in) {
     standbyShift(m + 1, px, py);
     CHECK(px != dx || py != dy);  // it moves every minute
     spots.insert({ dx, dy });
+    xs.insert(dx);
+    ys.insert(dy);
   }
   CHECK_EQ((int)spots.size(), STANDBY_SHIFTS);
+  CHECK((int)xs.size() >= 5);
+  CHECK((int)ys.size() >= 5);
 }
