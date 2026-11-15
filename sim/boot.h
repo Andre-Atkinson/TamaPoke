@@ -6,7 +6,7 @@
 #include <string>
 
 struct SimBootConfig {
-  int lang = -1;               // Lang index written to the "lang" key; -1: leave it unset (the firmware's default)
+  int lang = -1;               // Lang index, saved with setLang(); -1: leave the "lang" key unset (English)
   uint32_t clock = 0;          // board clock at boot, local time as epoch seconds; 0 = no time
   std::string sprites;         // folder that stands in for LittleFS / the SD card
   FILE *serialOut = nullptr;   // where the firmware's Serial output goes; nullptr = dropped

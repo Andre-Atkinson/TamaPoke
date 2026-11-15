@@ -28,7 +28,6 @@ env:
     GFX Library for Arduino@1.6.9
     SensorLib@0.5.2
     XPowersLib@0.3.3
-    U8g2@2.36.19
 
 jobs:
   # The two boards compile in parallel, each from scratch: CI keeps no build

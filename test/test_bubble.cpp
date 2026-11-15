@@ -307,30 +307,11 @@ TEST(Bubble, a_wide_line_slides_over_the_pet_instead_of_off_the_screen) {
 }
 
 // ---------------------------------------------------------------- every line in every language
-static const char *LANG_ID[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT", "JA", "KO" };
+static const char *LANG_ID[LANG_COUNT] = { "EN", "PT" };
 
-static std::vector<uint32_t> cps(const char *s) {
-  std::vector<uint32_t> out;
-  for (const char *p = s; *p;) {
-    uint32_t c = 0;
-    int n = ownerUtf8(p, &c);
-    if (!n) { out.push_back(0xFFFD); p++; continue; }
-    out.push_back(c);
-    p += n;
-  }
-  return out;
-}
-
-// Width at size 2. Latin: the classic font, 12 px per byte (textW). CJK: unifont at x1,
-// 8 px per ASCII character and 16 per other one, plus the 1 px of printT()'s second pass;
-// an estimate the simulator shots confirm (sim/scripts/speech-bubbles.txt).
-static int widthIn(int lang, const char *s, int len) {
-  if (!LANG_IS_CJK(lang)) return len * 12;
-  std::string t(s, len);
-  int w = 0;
-  for (uint32_t c : cps(t.c_str())) w += c < 0x80 ? 8 : 16;
-  return w ? w + 1 : 0;
-}
+// Width at size 2: the classic font, 12 px per byte (textW); the Portuguese letters of
+// ptglyphs.h have the same 6 px cell.
+static int widthIn(int len) { return len * 12; }
 
 TEST(Bubble, every_line_fits_two_lines_in_every_language_with_the_longest_name) {
   // the longest name in the font's encoding: one byte per character, no space to wrap at
@@ -346,10 +327,8 @@ TEST(Bubble, every_line_fits_two_lines_in_every_language_with_the_longest_name) 
       CHECK_MSG(say[0], std::string("empty: ") + BUBBLE_KEYS[line] + " in " + LANG_ID[lang]);
       for (int badge = 0; badge < 2; badge++) {
         int br = bubbleSplit(say, (int)strlen(say), bubbleTextMax(badge),
-                             [lang](const char *s, int len) { return widthIn(lang, s, len); });
+                             [](const char *, int len) { return widthIn(len); });
         CHECK_MSG(br != -2, std::string("does not fit: ") + say + " in " + LANG_ID[lang] + (badge ? " (badge)" : ""));
-        // the CJK lines have no space to wrap at, so they must fit on one line
-        if (LANG_IS_CJK(lang)) CHECK_MSG(br == -1, std::string("CJK on two lines: ") + say);
       }
     }
   }
@@ -364,24 +343,9 @@ TEST(Bubble, the_need_lines_and_most_others_fit_on_one_line) {
     for (int line = 0; line < BUB_LINES; line++) {
       if (line == BUB_LOVE_NAME) continue;
       const char *s = T((StrId)(S_SAY_HUNGRY + line));
-      CHECK_MSG(widthIn(lang, s, (int)strlen(s)) <= bubbleTextMax(true), std::string("two lines: ") + s);
+      CHECK_MSG(widthIn((int)strlen(s)) <= bubbleTextMax(true), std::string("two lines: ") + s);
     }
   }
   gLang = LANG_DEFAULT;
 }
 
-TEST(Bubble, japanese_lines_are_kana_and_korean_lines_hangul) {
-  // the CJK fonts are subsets (uitext.cpp); tools/test_i18n_formats.py checks every Korean
-  // syllable is one korean2 has
-  for (int line = 0; line < BUB_LINES; line++) {
-    StrId id = (StrId)(S_SAY_HUNGRY + line);
-    gLang = LANG_JA;
-    for (uint32_t c : cps(T(id)))
-      CHECK_MSG((c >= 0x3041 && c <= 0x30FF) || c == 0x3001 || c == 0xFF01 || (c >= 0x20 && c < 0x7F),
-                std::string("not kana: ") + T(id));
-    gLang = LANG_KO;
-    for (uint32_t c : cps(T(id)))
-      CHECK_MSG((c >= 0xAC00 && c <= 0xD7A3) || (c >= 0x20 && c < 0x7F), std::string("not hangul: ") + T(id));
-  }
-  gLang = LANG_DEFAULT;
-}

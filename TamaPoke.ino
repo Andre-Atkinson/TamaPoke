@@ -228,7 +228,7 @@ void flushUI() {
   if (screenLock.blank(millis())) return;  // no QSPI frames after the lock hint
 #endif
   bool lockHint = screenIsLocked();
-  const char *hint = lockHint ? "Locked" : controlToast;
+  const char *hint = lockHint ? T(S_TOAST_LOCKED) : controlToast;
   if (lockHint || (controlToastVisible && (int32_t)(controlToastUntil - millis()) > 0)) {
     gfx->fillRoundRect(43, 272, 380, 56, 10, RGB565_BLACK);
     gfx->drawRoundRect(43, 272, 380, 56, 10, RGB565_WHITE);
@@ -262,7 +262,7 @@ void pollBootButton() {
   if (action == BootButton::SINGLE) {
     audioSetEnabled(!audioEnabled());  // existing NVS tamapoke/snd setting
     Serial.printf("BOOT single: sound %s (saved)\n", audioEnabled() ? "on" : "muted");
-    showControlToast(audioEnabled() ? "Sound on" : "Muted");
+    showControlToast(audioEnabled() ? T(S_TOAST_SOUND_ON) : T(S_TOAST_MUTED));
     if (audioEnabled()) sfxPlay(SFX_TAP);
   } else if (action == BootButton::DOUBLE) {
     bootDoublePress();
@@ -303,7 +303,7 @@ static void pwrToggleLock() {
     }
     touchNeedsRelease = true;
     gTouchIrq = true;  // one initial sample: swallow any finger held through unlock
-    showControlToast("Unlocked");
+    showControlToast(T(S_TOAST_UNLOCKED));
     Serial.println("PWR triple: Unlocked");
   }
 }
@@ -480,7 +480,6 @@ void setup() {
   if (touchLockMs == TOUCH_LOCK_NEVER) Serial.println("touch-lock off");
   else Serial.printf("touch-lock %lu s after screen off\n", (unsigned long)(touchLockMs / 1000));
   panel->setBrightness(180);
-  applyLangFont();  // fuente del idioma guardado (clasica salvo CJK)
 
   // INT activo-bajo: salta cuando hay datos. Gatea las lecturas I2C (ver loop)
   touchBringUp();
@@ -1768,10 +1767,8 @@ bool render() {
     } else {
       gfx->fillRoundRect(94, 168, 278, 152, 16, UI_WHITE);
       gfx->drawRoundRect(94, 168, 278, 152, 16, UI_INK);
-      // 48 y no 28: el buffer se dimensiono cuando toda cadena era de un byte
-      // por caracter. Con una fila UTF-8, "%s 놓아줄까요?" mas el nombre pasa
-      // de 28 y snprintf corta a mitad de una secuencia de 3 bytes, que la
-      // fuente ya no sabe dibujar.
+      // 48 bytes: the longest question plus the longest species name, with room to
+      // spare (test/test_tools.py checks every text buffer's size).
       char q[48];
       snprintf(q, sizeof(q), T(S_RELEASE_FMT), dexName(pet.speciesId));
       gfx->setTextColor(UI_INK);

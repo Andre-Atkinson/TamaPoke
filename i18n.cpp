@@ -4,49 +4,9 @@
 
 Lang gLang = LANG_DEFAULT;
 
-// Tabla de cadenas [idioma][id]. Sin acentos ni enes: la fuente bitmap del
-// firmware no los tiene (por eso el espanol ya iba "Esta", "bano", etc.).
+// String table [language][id], in StrId order (i18n.h). Accented letters are single
+// bytes in octal, never UTF-8 (see i18n.h).
 static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
-  // ---------------- ES ----------------
-  {
-    "Est\240 evolucionando!", "Nam nam!", "Le gusta!", "Tiene hambre!", "Necesita un ba\244o!",
-    "Est\240 agotado...", "Est\240 triste...", "Est\240 rellenito...", "Es SHINY!!", "Est\240 feliz",
-    "GRACIAS! Hasta siempre", "Se ha escapado...", "Adi\242s! Se despide...",
-    "HUEVO", "Huevo legendario!?", "Huevo raro!", "Toca el huevo...", "Se mueve!", "Est\240 a punto!",
-    "POKEDEX %u/151",
-    "%s%s Nv.%u",
-    "Soltar a %s?", "SI", "NO",
-    "%u GOLPES", "FUERZA +%u", "NUEVO RECORD!", "RECORD: %u", "APORREA RAPIDO!",
-    "PUNTOS: %u", "Qu\202 felicidad!", "+felicidad",
-    "AJUSTAR HORA", "HORA", "MIN", "desliza arriba: cancelar", "Idioma", "\250QU\220 HORA ES?",
-    "MEDALLA!", "GENIAL!", "RACHA %u DIAS!",
-    "RACHA %u  rec %u", "VIN", "BAYA ???", "BAYA ROJA", "BAYA AZUL", "BAYA VERDE",
-    "%s   EDAD %lud", "toca el nombre: renombrar",
-    "COMBATE", "FUE", "DEF", "VEL", "PES", "ENTRENAR FUERZA",
-    "MEDALLAS %d/%d", "toca: volver",
-    "NOMBRE:", "toca para volver",
-    "COM", "FEL", "ENE", "LIM",
-    "REC %u",
-    "PROGRESO", "Nv.%u", "%u min para Nv.%u", "EVOLUCION", "Forma final",
-    "Listo para evolucionar!", "Sube todo a 40 para evolucionar",
-    "Evoluciona en %u niv.", "Descuidos: %u",
-    "SON ON", "SON OFF",
-    "EVOLUCIONAR", "%s quiere decirte algo...", "%s se siente abandonado...",
-    "Evolucionar?", "Mantener forma", "Despedirse?", "Despedirse", "Quedaros juntos",
-    "Elige tu inicial",
-    "Sin sprites", "C\240rgalos en la SD",
-    "Mant\202n: salir",
-    "off",
-    "CUIDADO", "RITMO", "Normal", "Tranquilo", "A DORMIR", "Apagado",
-    "Elige un huevo!", "Toca otra vez para elegir", "Huevo com\243n", "HUEVOS", "Elegir", "Sorpresa",
-    "Toques", "Atrapa bayas", "Cuc\243-tras", "Canci\242n de bayas",
-    "Toca la bola!", "Desliza y atrapa!", "T\242came cuando salga!", "Mira y repite!",
-    "Escucha...", "Te toca!",
-    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
-    "\255Tengo hambre!", "\255Necesito un ba\244o!", "Tengo sue\244o...", "Me aburro...",
-    "\255Buenos d\241as!", "\255Mira las estrellas!", "\255Hola!", "\255Qu\202 feliz estoy!", "\255Acar\241ciame!",
-    "\255Te quiero, %s!", "\255Te quiero!",
-  },
   // ---------------- EN ----------------
   {
     "Evolving!", "Yum yum!", "It likes it!", "It's hungry!", "Needs a bath!",
@@ -58,7 +18,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Release %s?", "YES", "NO",
     "%u HITS", "STR +%u", "NEW RECORD!", "BEST: %u", "HIT FAST!",
     "SCORE: %u", "So much fun!", "+happiness",
-    "SET TIME", "HOUR", "MIN", "swipe up: cancel", "Lang", "WHAT TIME?",
+    "SET TIME", "HOUR", "MIN", "swipe up: cancel", "WHAT TIME?",
     "MEDAL!", "AWESOME!", "%u DAY STREAK!",
     "STREAK %u  best %u", "BOND", "BERRY ???", "RED BERRY", "BLUE BERRY", "GREEN BERRY",
     "%s   AGE %lud", "tap name: rename",
@@ -86,333 +46,85 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "I'm hungry!", "I need a bath!", "I'm tired...", "I'm bored...",
     "Good morning!", "Look at the stars!", "Hi there!", "I'm happy!", "Pat me!",
     "I love you, %s!", "I love you!",
+    // 1.75C toasts (#61)
+    "Sound on", "Muted", "Locked", "Unlocked",
   },
-  // ---------------- FR ----------------
+  // ---------------- PT (European Portuguese, #61) ----------------
+  // One form of address throughout: "tu" (toca, desliza, escolhe, ouve, mantem),
+  // with enclisis (faz-me, adoro-te) and "a" + infinitive (a evoluir). The masculine
+  // is the generic for the pet, agreeing with "o Pokemon". Accents: CP437 bytes where
+  // the font has the letter, Latin-1 bytes for the 12 it lacks (ptglyphs.h):
+  //   \240 a'  \205 a`  \203 a^  \343 a~  \207 c,  \202 e'  \210 e^  \241 i'
+  //   \242 o'  \223 o^  \365 o~  \243 u'  \200 C,  \220 E'
+  //   \301 A'  \300 A`  \302 A^  \303 A~  \312 E^  \315 I'  \323 O'  \324 O^  \325 O~  \332 U'
   {
-    "Il \202volue!", "Miam miam!", "Il aime \207a!", "Il a faim!", "Besoin d'un bain!",
-    "\220puis\202...", "Triste...", "Un peu rond...", "C'est SHINY!!", "Il est content",
-    "MERCI! Adieu", "Il s'est enfui...", "Au revoir!",
-    "OEUF", "Oeuf l\202gendaire!?", "Oeuf rare!", "Touche l'oeuf...", "Il bouge!", "Presque l\205!",
-    "POKEDEX %u/151",
-    "%s%s Niv.%u",
-    "Rel\203cher %s?", "OUI", "NON",
-    "%u COUPS", "FORCE +%u", "NOUVEAU RECORD!", "RECORD: %u", "FRAPPE VITE!",
-    "SCORE: %u", "Trop bien!", "+bonheur",
-    "R\220GLER L'HEURE", "HEURE", "MIN", "glisse haut: annuler", "Langue", "QUELLE HEURE?",
-    "M\220DAILLE!", "SUPER!", "S\220RIE %u JOURS!",
-    "S\220RIE %u  rec %u", "LIEN", "BAIE ???", "BAIE ROUGE", "BAIE BLEUE", "BAIE VERTE",
-    "%s   AGE %lud", "touche le nom: renommer",
-    "COMBAT", "ATQ", "DEF", "VIT", "PDS", "ENTRAINER FORCE",
-    "M\220DAILLES %d/%d", "touche: retour",
-    "NOM:", "touche pour revenir",
-    "NOUR", "JOIE", "ENE", "HYG",
-    "REC %u",
-    "PROGRES", "Niv.%u", "%u min pour Niv.%u", "\220VOLUTION", "Forme finale",
-    "Pr\210t \205 \202voluer!", "Tout \205 40 pour \202voluer",
-    "\220volue dans %u niv.", "N\202gligences: %u",
-    "SON ON", "SON OFF",
-    "\220VOLUER", "%s veut te parler...", "%s se sent abandonn\202...",
-    "\220voluer?", "Garder forme", "Dire adieu?", "Adieu", "Rester ensemble",
-    "Choisis ton starter",
-    "Pas de sprites", "Charge-les sur la SD",
-    "Tenir: sortir",
-    "off",
-    "SOINS", "RYTHME", "Normal", "D\202tendu", "COUCHER", "Aucun",
-    "Choisis un oeuf!", "Touche encore pour choisir", "Oeuf commun", "OEUFS", "Choisir", "Surprise",
-    "Jongles", "Attrape-baies", "Coucou", "Chanson des baies",
-    "Touche la balle!", "Glisse pour attraper!", "Touche-moi quand je sors!", "Regarde et r\202p\212te!",
-    "\220coute...", "A toi!",
-    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
-    "J'ai faim!", "J'ai besoin d'un bain!", "J'ai sommeil...", "Je m'ennuie...",
-    "Bonjour!", "Regarde les \202toiles!", "Coucou!", "Quel bonheur!", "Caresse-moi!",
-    "Je t'aime, %s!", "Je t'aime!",
-  },
-  // ---------------- DE ----------------
-  // El aleman si lleva dieresis: la fuente 5x7 del firmware es una tabla CP437
-  // completa (256 glifos), asi que basta con el byte suelto de cada caracter.
-  // Van en octal para no depender de la codificacion del fichero fuente:
-  //   \204 a   \224 o   \201 u   \216 A   \231 O   \232 U   \341 ss
-  // Un byte por caracter: strlen() sigue midiendo bien y el centrado no cambia.
-  {
-    "Entwickelt sich!", "Mampf mampf!", "Gef\204llt ihm!", "Hat Hunger!", "Braucht ein Bad!",
-    "Ersch\224pft...", "Traurig...", "Etwas rundlich...", "Es ist SHINY!!", "Es ist froh",
-    "DANKE! Leb wohl", "Es ist weg...", "Tsch\201ss! Winkt",
-    "EI", "Legend\204res Ei!?", "Seltenes Ei!", "Ber\201hre das Ei...", "Es bewegt sich!", "Fast so weit!",
-    "POKEDEX %u/151",
-    "%s%s Lv.%u",
-    "%s freilassen?", "JA", "NEIN",
-    "%u TREFFER", "KRAFT +%u", "NEUER REKORD!", "REKORD: %u", "SCHNELL HAUEN!",
-    "PUNKTE: %u", "Wie sch\224n!", "+Freude",
-    "ZEIT STELLEN", "STD", "MIN", "hoch wischen: Abbruch", "Sprache", "WIE SP\216T?",
-    "MEDAILLE!", "TOLL!", "%u TAGE SERIE!",
-    "SERIE %u  rek %u", "BND", "BEERE ???", "ROTE BEERE", "BLAUE BEERE", "GR\232NE BEERE",
-    "%s   ALTER %lud", "Name tippen: umbenennen",
-    "KAMPF", "ANG", "VER", "INI", "GEW", "KRAFT TRAINIEREN",
-    "MEDAILLEN %d/%d", "tippen: zur\201ck",
-    "NAME:", "tippen: zur\201ck",
-    "ESS", "FRO", "ENE", "HYG",
-    "REK %u",
-    "FORTSCHRITT", "Lv.%u", "%u min bis Lv.%u", "ENTWICKLUNG", "Endform",
-    "Bereit zur Entwicklung!", "Alles >=40 zur Entwicklung",
-    "Entwicklung in %u Lv.", "Patzer: %u",
-    "TON AN", "TON AUS",
-    "ENTWICKELN", "%s will dir etwas sagen...", "%s f\201hlt sich verlassen...",
-    "Entwickeln?", "Form behalten", "Abschied?", "Leb wohl", "Zusammen bleiben",
-    "W\204hle deinen Starter",
-    "Keine Sprites", "Auf die SD laden",
-    "Halten: Ende",
-    "aus",
-    "PFLEGE", "TEMPO", "Normal", "Entspannt", "SCHLAFZEIT", "Aus",
-    "W\204hle ein Ei!", "Nochmal tippen zum W\204hlen", "Normales Ei", "EIER", "W\204hlen", "\232berraschung",
-    "Ball hochhalten", "Beerenfang", "Kuckuck", "Beerenlied",
-    "Tipp den Ball!", "Wisch und fang!", "Tipp mich, wenn ich da bin!", "Schau zu, spiel nach!",
-    "H\224r zu...", "Du bist dran!",
-    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
-    "Ich hab Hunger!", "Ich brauch ein Bad!", "Ich bin m\201de...", "Mir ist langweilig...",
-    "Guten Morgen!", "Schau, die Sterne!", "Hallo!", "Ich bin gl\201cklich!", "Streichel mich!",
-    "Ich hab dich lieb, %s!", "Ich hab dich lieb!",
-  },
-  // ---------------- IT ----------------
-  {
-    "Si evolve!", "Gnam gnam!", "Gli piace!", "Ha fame!", "Vuole un bagno!",
-    "Esausto...", "Triste...", "Un po' cicciotto...", "E' SHINY!!", "E' felice",
-    "GRAZIE! Addio", "E' scappato...", "Ciao! Saluta",
-    "UOVO", "Uovo leggendario!?", "Uovo raro!", "Tocca l'uovo...", "Si muove!", "Ci siamo quasi!",
-    "POKEDEX %u/151",
-    "%s%s Lv.%u",
-    "Liberare %s?", "SI", "NO",
-    "%u COLPI", "FORZA +%u", "NUOVO RECORD!", "RECORD: %u", "COLPISCI VELOCE!",
-    "PUNTI: %u", "Che gioia!", "+felicit\205",
-    "IMPOSTA ORA", "ORA", "MIN", "scorri su: annulla", "Lingua", "CHE ORE SONO?",
-    "MEDAGLIA!", "GRANDE!", "SERIE %u GIORNI!",
-    "SERIE %u  rec %u", "LEG", "BACCA ???", "BACCA ROSSA", "BACCA BLU", "BACCA VERDE",
-    "%s   ETA %lud", "tocca il nome: rinomina",
-    "LOTTA", "ATT", "DIF", "VEL", "PES", "ALLENA FORZA",
-    "MEDAGLIE %d/%d", "tocca: indietro",
-    "NOME:", "tocca per tornare",
-    "CIB", "GIO", "ENE", "IGI",
-    "REC %u",
-    "PROGRESSI", "Lv.%u", "%u min per Lv.%u", "EVOLUZIONE", "Forma finale",
-    "Pronto a evolvere!", "Tutto a 40 per evolvere",
-    "Evolve tra %u liv.", "Disattenzioni: %u",
-    "AUD ON", "AUD OFF",
-    "EVOLVI", "%s vuole dirti qualcosa...", "%s si sente abbandonato...",
-    "Evolvere?", "Mantieni forma", "Salutare?", "Addio", "Restare insieme",
-    "Scegli l'iniziale",
-    "Senza sprite", "Caricali sulla SD",
-    "Tieni: esci",
-    "off",
-    "CURE", "RITMO", "Normale", "Rilassato", "NANNA", "Spento",
-    "Scegli un uovo!", "Tocca ancora per scegliere", "Uovo comune", "UOVA", "Scegli", "Sorpresa",
-    "Palleggi", "Acchiappa bacche", "Cuc\227", "Canzone delle bacche",
-    "Tocca la palla!", "Scorri e acchiappa!", "Toccami quando spunto!", "Guarda e ripeti!",
-    "Ascolta...", "Tocca a te!",
-    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
-    "Ho fame!", "Mi serve un bagno!", "Ho sonno...", "Mi annoio...",
-    "Buongiorno!", "Guarda le stelle!", "Ciao!", "Sono felice!", "Accarezzami!",
-    "Ti voglio bene, %s!", "Ti voglio bene!",
-  },
-  // ---------------- PT ----------------
-  {
-    "Evoluindo!", "Nham nham!", "Ele gosta!", "Est\240 com fome!", "Precisa de banho!",
+    "A evoluir!", "Nham nham!", "Gosta disto!", "Tem fome!", "Precisa de banho!",
     "Exausto...", "Triste...", "Um pouco gordinho...", "\220 SHINY!!", "Est\240 feliz",
-    "OBRIGADO! Adeus", "Fugiu...", "Tchau! Acena",
-    "OVO", "Ovo lend\240rio!?", "Ovo raro!", "Toque no ovo...", "Mexe-se!", "Quase l\240!",
+    "OBRIGADO! Adeus", "Fugiu...", "Adeus! A acenar...",
+    "OVO", "Ovo lend\240rio!?", "Ovo raro!", "Toca no ovo...", "Mexe-se!", "Quase l\240!",
     "POKEDEX %u/151",
-    "%s%s Niv.%u",
-    "Soltar %s?", "SIM", "NAO",
-    "%u GOLPES", "FOR\200A +%u", "NOVO RECORDE!", "RECORDE: %u", "BATA RAPIDO!",
+    "%s%s N\241v.%u",
+    "Libertar %s?", "SIM", "N\303O",
+    "%u GOLPES", "FOR\200A +%u", "NOVO RECORDE!", "RECORDE: %u", "BATE R\301PIDO!",
     "PONTOS: %u", "Que alegria!", "+alegria",
-    "AJUSTAR HORA", "HORA", "MIN", "deslize cima: cancelar", "Idioma", "QUE HORAS SAO?",
-    "MEDALHA!", "OTIMO!", "%u DIAS SEGUIDOS!",
+    "ACERTAR HORA", "HORA", "MIN", "para cima: cancelar", "QUE HORAS S\303O?",
+    "MEDALHA!", "\323TIMO!", "%u DIAS SEGUIDOS!",
     "SEQ %u  rec %u", "LA\200O", "BAGA ???", "BAGA VERMELHA", "BAGA AZUL", "BAGA VERDE",
-    "%s   IDADE %lud", "toque no nome: renomear",
+    "%s   IDADE %lud", "toca no nome: renomear",
     "COMBATE", "ATQ", "DEF", "VEL", "PES", "TREINAR FOR\200A",
-    "MEDALHAS %d/%d", "toque: voltar",
-    "NOME:", "toque para voltar",
+    "MEDALHAS %d/%d", "toca: voltar",
+    "NOME:", "toca para voltar",
     "COM", "ALE", "ENE", "HIG",
     "REC %u",
-    "PROGRESSO", "Niv.%u", "%u min para Niv.%u", "EVOLUCAO", "Forma final",
+    "PROGRESSO", "N\241v.%u", "%u min at\202 N\241v.%u", "EVOLU\200\303O", "Forma final",
     "Pronto a evoluir!", "Tudo a 40 para evoluir",
-    "Evolui em %u niv.", "Descuidos: %u",
+    "Evolui em %u n\241v.", "Descuidos: %u",
     "SOM ON", "SOM OFF",
-    "EVOLUIR", "%s quer dizer-te algo...", "%s sente-se abandonado...",
-    "Evoluir?", "Manter forma", "Despedir?", "Adeus", "Ficar juntos",
-    "Escolhe o inicial",
+    "EVOLUIR!", "%s quer dizer-te algo...", "%s sente-se abandonado...",
+    "Evoluir?", "Manter forma", "Dizer adeus?", "Adeus", "Ficar juntos",
+    "Escolhe o teu inicial",
     "Sem sprites", "Carrega-os no SD",
-    "Segure: sair",
+    "Mant\202m: sair",
     "off",
     "CUIDADOS", "RITMO", "Normal", "Calmo", "HORA DE DORMIR", "Desligado",
-    "Escolha um ovo!", "Toque de novo para escolher", "Ovo comum", "OVOS", "Escolher", "Surpresa",
-    "Embaixadinhas", "Ca\207a-bagas", "Cad\210? Achou!", "M\243sica das bagas",
-    "Toque na bola!", "Deslize e pegue!", "Toque quando eu aparecer!", "Olhe e repita!",
-    "Escute...", "Sua vez!",
+    "Escolhe um ovo!", "Toca de novo para escolher", "Ovo comum", "OVOS", "Escolher", "Surpresa",
+    "Toques de bola", "Apanha-bagas", "Cucu!", "M\243sica das bagas",
+    "Toca na bola!", "Desliza e apanha!", "Toca quando eu aparecer!", "Olha e repete!",
+    "Ouve...", "A tua vez!",
     // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
-    "Estou com fome!", "Preciso de um banho!", "Estou com sono...", "Que t\202dio...",
-    "Bom dia!", "Olha as estrelas!", "Ol\240!", "Estou feliz!", "Me faz carinho!",
-    "Eu te amo, %s!", "Eu te amo!",
-  },
-  // ---------------- JA ----------------
-  {
-    "しんかした！", "おいしい！", "うれしそう！", "おなかすいた！", "おふろにいれて！",
-    "つかれた...", "かなしい...", "ちょっとふとった...", "いろちがい！！", "ごきげん！",
-    "ありがとう！ またね", "にげちゃった...", "バイバイ！",
-
-    "たまご", "でんせつのたまご！？", "めずらしいたまご！", "たまごをタッチ...", "うごいた！", "もうすぐ！",
-
-    "ずかん %u/151",
-
-    "%s%s Lv.%u",
-
-    "%s とおわかれ？", "はい", "いいえ",
-
-    "わざ %u", "ちから +%u", "しんきろく！", "きろく: %u", "れんだ！",
-
-    "スコア: %u", "たのしい！", "+ごきげん",
-
-    "じかんせってい", "じ", "ふん", "うえスワイプ: もどる", "ことば", "いま なんじ？",
-
-    "メダル！", "すごい！", "%u にちれんぞく！",
-
-    "れんぞく %u  きろく %u", "なかよし", "きのみ ???", "あかいきのみ", "あおいきのみ", "みどりのきのみ",
-
-    "%s   %luにち", "なまえをタッチ: へんこう",
-
-    "バトル", "こうげき", "ぼうぎょ", "すばやさ", "たいじゅう", "ちからトレーニング",
-
-    "メダル %d/%d", "タッチ: もどる",
-
-    "なまえ:", "タッチでもどる",
-
-    "ごはん", "ごきげん", "げんき", "きれい",
-
-    "きろく %u",
-
-    "せいちょう", "Lv.%u", "あと%uふんで Lv.%u", "しんか", "さいしゅうけい",
-
-    "しんかできる！", "ぜんぶ40でしんか",
-
-    "%u Lv.でしんか", "おせわミス: %u",
-
-    "おと", "おと",
-
-    "しんか", "%sがなにかいいたそう...", "%sがさびしがっている...",
-
-    "しんかする？", "このまま", "おわかれする？", "さようなら", "いっしょにいる",
-
-    "さいしょのポケモンをえらぶ",
-
-    "スプライトなし", "SDにいれてください",
-    "長押しで終了",
-    "off",
-    "おせわ", "ペース", "ふつう", "ゆったり", "おやすみ", "なし",
-    "たまごを えらんでね", "もういちど タッチで けってい", "ふつうのたまご", "たまご", "えらぶ", "おまかせ",
-    "リフティング", "きのみキャッチ", "いないいないばあ", "きのみのうた",
-    "ボールをタッチ!", "スライドでキャッチ!", "でてきたらタッチ!", "みて まねしてね!",
-    "きいてね...", "きみのばん!",
-    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
-    "おなかすいた！", "おふろにはいりたい！", "ねむい...", "たいくつ...",
-    "おはよう！", "ほしがきれい！", "やあ！", "しあわせ！", "なでて！",
-    "%s、だいすき！", "だいすき！",
-  },
-  // ---------------- KO ----------------
-  // Los especificadores van en el MISMO ORDEN que en la fila inglesa aunque
-  // el coreano natural los colocaria de otra manera (p. ej. S_NEXT_LVL_FMT):
-  // T(id) se rellena con varargs en un orden fijo en cada llamada, asi que
-  // reordenar %u/%s aqui sin tocar el punto de llamada intercambiaria en
-  // silencio que valor cae en que hueco.
-  {
-    "진화 중!", "냠냠!", "마음에 들어해요!", "배고파요!", "목욕이 필요해요!",
-    "지쳤어요...", "슬퍼해요...", "조금 통통해요...", "이로치예요!!", "행복해요",
-    "고마워요! 안녕", "가출했어요...", "잘 가! 손을 흔들며...",
-    "알", "전설의 알!?", "희귀한 알!", "알을 톡톡...", "움직여요!", "거의 다 됐어요!",
-    "도감 %u/151",
-    "%s%s Lv.%u",
-    "%s 놓아줄까요?", "예", "아니오",
-    "%u회 명중", "힘 +%u", "신기록!", "최고: %u", "빠르게!",
-    "점수: %u", "정말 즐거워요!", "+행복",
-    "시간 설정", "시", "분", "위로 스와이프: 취소", "언어", "지금 몇 시?",
-    "메달!", "최고예요!", "%u일 연속!",
-    "연속 %u  최고 %u", "유대감", "열매 ???", "빨간 열매", "파란 열매", "초록 열매",
-    "%s   나이 %lud", "이름 탭: 이름변경",
-    "배틀", "공격", "방어", "속도", "무게", "힘 훈련",
-    "메달 %d/%d", "탭: 뒤로",
-    "이름:", "탭하면 뒤로",
-    "포만", "기분", "기력", "청결",
-    "최고 %u",
-    "진행도", "Lv.%u", "%u분 후 Lv.%u", "진화", "최종 형태",
-    "진화 준비 완료!", "진화하려면 전부 40 이상",
-    "%u레벨 이후에 진화", "실수: %u",
-    "소리 켬", "소리 끔",
-    "진화!", "%s가 할 말이 있대요...", "%s가 버려진 기분이래요...",
-    "진화할까요?", "형태 유지", "작별할까요?", "작별", "계속 함께",
-    "스타터를 선택하세요",
-    "스프라이트 없음", "SD 카드에 넣어주세요",
-    "길게 눌러 종료",
-    "off",
-    "돌봄", "속도", "보통", "여유", "취침", "끔",
-    "알을 고르세요", "한 번 더 누르면 선택", "보통 알", "알", "선택", "깜짝",
-    "리프팅", "열매 받기", "까꿍", "열매 노래",
-    "공을 터치!", "밀어서 받기!", "나오면 터치!", "보고 따라 해요!",
-    "들어 봐요...", "네 차례!",
-    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
-    "배고파요!", "목욕하고 싶어요!", "졸려요...", "심심해요...",
-    "좋은 아침!", "별 좀 봐요!", "안녕!", "행복해요!", "쓰다듬어 줘요!",
-    "%s, 사랑해요!", "사랑해요!",
+    "Tenho fome!", "Preciso de um banho!", "Estou com sono...", "Que t\202dio...",
+    "Bom dia!", "Olha as estrelas!", "Ol\240!", "Estou feliz!", "Faz-me festinhas!",
+    "Adoro-te, %s!", "Adoro-te!",
+    // 1.75C toasts (#61)
+    "Som ligado", "Sem som", "Bloqueado", "Desbloqueado",
   },
 };
 
-// Nombres de medalla en sus tres longitudes [idioma][medalla].
+// Medal names in two lengths [language][medal]: the banner and the description.
 static const char *const MED_NAME[LANG_COUNT][MED_COUNT] = {
-  { "Nv.10", "Nv.25", "Nv.50", "BAYA", "RACHA 7", "VINCULO", "FORMA TOPE", "EN FORMA" },
   { "Lv.10", "Lv.25", "Lv.50", "BERRY", "7 STREAK", "BOND", "TOP FORM", "IN SHAPE" },
-  { "Niv.10", "Niv.25", "Niv.50", "BAIE", "SERIE 7", "LIEN", "FORME MAX", "EN FORME" },
-  { "Lv.10", "Lv.25", "Lv.50", "BEERE", "7 SERIE", "BINDUNG", "ENDFORM", "FIT" },
-  { "Lv.10", "Lv.25", "Lv.50", "BACCA", "SERIE 7", "LEGAME", "FORMA MAX", "IN FORMA" },
-  { "Niv.10", "Niv.25", "Niv.50", "BAGA", "SEQ 7", "LACO", "FORMA MAX", "EM FORMA" },
-  { "Lv.10", "Lv.25", "Lv.50", "きのみ", "7にち", "なかよし", "さいしゅう", "げんき" },
-  { "Lv.10", "Lv.25", "Lv.50", "열매", "연속 7일", "유대", "최고 컨디션", "건강함" },
-};
-static const char *const MED_LBL[LANG_COUNT][MED_COUNT] = {
-  { "Nv10", "Nv25", "Nv50", "BAYA", "7DIAS", "VINC", "TOPE", "SANO" },
-  { "Lv10", "Lv25", "Lv50", "BERRY", "7DAYS", "BOND", "TOP", "FIT" },
-  { "Niv10", "Niv25", "Niv50", "BAIE", "7JRS", "LIEN", "MAX", "FORME" },
-  { "Lv10", "Lv25", "Lv50", "BEERE", "7TAGE", "BND", "END", "FIT" },
-  { "Lv10", "Lv25", "Lv50", "BACCA", "7GG", "LEG", "MAX", "FIT" },
-  { "Niv10", "Niv25", "Niv50", "BAGA", "7DIAS", "LACO", "MAX", "FIT" },
-  { "Lv10", "Lv25", "Lv50", "きのみ", "7にち", "なかよし", "しんか", "げんき" },
-  { "Lv10", "Lv25", "Lv50", "열매", "7일", "유대", "최고", "건강" },
+  { "N\241v.10", "N\241v.25", "N\241v.50", "BAGA", "SEQ 7", "LA\200O", "FORMA M\301X.", "EM FORMA" },
 };
 static const char *const MED_DSC[LANG_COUNT][MED_COUNT] = {
-  { "NIVEL 10", "NIVEL 25", "NIVEL 50", "BAYA HALLADA",
-    "RACHA 7 DIAS", "VINCULO MAX", "FORMA FINAL", "EN FORMA" },
   { "LEVEL 10", "LEVEL 25", "LEVEL 50", "BERRY FOUND",
     "7 DAY STREAK", "MAX BOND", "FINAL FORM", "IN SHAPE" },
-  { "NIVEAU 10", "NIVEAU 25", "NIVEAU 50", "BAIE TROUVEE",
-    "SERIE 7 JOURS", "LIEN MAX", "FORME FINALE", "EN FORME" },
-  { "LEVEL 10", "LEVEL 25", "LEVEL 50", "BEERE GEFUNDEN",
-    "7 TAGE SERIE", "MAX BINDUNG", "ENDFORM", "FIT" },
-  { "LIVELLO 10", "LIVELLO 25", "LIVELLO 50", "BACCA TROVATA",
-    "SERIE 7 GIORNI", "LEGAME MAX", "FORMA FINALE", "IN FORMA" },
-  { "NIVEL 10", "NIVEL 25", "NIVEL 50", "BAGA ACHADA",
-    "SEQ 7 DIAS", "LACO MAX", "FORMA FINAL", "EM FORMA" },
-  { "レベル 10", "レベル 25", "レベル 50", "きのみ はっけん",
-    "7にち れんぞく", "なかよし MAX", "さいしゅうしんか", "げんきいっぱい" },
-  { "레벨 10", "레벨 25", "레벨 50", "열매 발견",
-    "연속 7일", "유대감 최대", "최종 진화", "건강함" },
+  { "N\315VEL 10", "N\315VEL 25", "N\315VEL 50", "BAGA ACHADA",
+    "7 DIAS A FIO", "LA\200O M\301X.", "FORMA FINAL", "EM FORMA" },
 };
 
 const char *T(StrId id) { return STRINGS[gLang][id]; }
 const char *medalName(int i)  { return MED_NAME[gLang][i]; }
-const char *medalLabel(int i) { return MED_LBL[gLang][i]; }
 const char *medalDesc(int i)  { return MED_DSC[gLang][i]; }
 
+// The stored byte keeps the old enum's codes (langFromNvs/langToNvs, i18n.h). Read-only:
+// a board on a removed language shows English and keeps its byte until the player
+// picks a language.
 void loadLang() {
   Preferences p;
-  p.begin("tamapoke", true);  // solo lectura
-  uint8_t v = p.getUChar("lang", LANG_DEFAULT);
+  p.begin("tamapoke", true);  // read-only
+  uint8_t v = p.getUChar("lang", LANG_NVS_EN);
   p.end();
-  gLang = (v < LANG_COUNT) ? (Lang)v : LANG_DEFAULT;
+  gLang = langFromNvs(v);
 }
 
 void setLang(Lang l) {
@@ -420,6 +132,6 @@ void setLang(Lang l) {
   gLang = l;
   Preferences p;
   p.begin("tamapoke", false);
-  p.putUChar("lang", (uint8_t)l);
+  p.putUChar("lang", langToNvs(l));
   p.end();
 }

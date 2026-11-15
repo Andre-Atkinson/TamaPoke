@@ -222,7 +222,10 @@ with each best under the medal grid on the card's Medals page (y ≈ 325–365, 
 the circle; icons, so no new strings). The result screen shows that game's
 record, as today.
 
-### Strings (all 8 languages)
+### Strings (all 8 languages at the time)
+
+> Since #61 the UI has two languages, English and European Portuguese; the
+> kana, hangul and `unifont_t_korean2` notes below went with the other six.
 
 New, English drafts: game names *Keepy-uppy, Berry Catch, Peekaboo, Berry
 Song* (*Bubble Pop*), hints *Tap the ball!, Slide to catch!, Tap when I pop
@@ -276,11 +279,11 @@ loaded it draws the old `mon` sprite or the Pokéball icon, as keepy-uppy does.
   playback are ignored; a wrong pad costs a try and replays; 3 wrong ends it;
   the score is the longest song; ends at 12.
 - **Keepy-uppy:** a pinned run of today's physics gives the same numbers.
-- **Strings:** all 8 languages, kana/hangul only, buffer sizes
+- **Strings:** every language (8 then, EN and PT since #61), buffer sizes
   (`TestBuffersDeTexto` covers any new `%u`).
 
 Plus simulator screenshots of each game (title, mid-game, result) by day and
-night and in Japanese and Korean, once the simulator exists.
+night and in every language, once the simulator exists.
 
 ## Plan and sequencing
 

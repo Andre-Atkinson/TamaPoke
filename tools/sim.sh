@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # TamaPoke desktop simulator: builds sim/ (only what changed) and runs a scripted
 # session on the Mac, writing PNG screenshots. No board, no flashing, no installs:
-# it uses the Arduino libraries arduino-cli already has (GFX Library for Arduino, U8g2).
+# it uses the Arduino library arduino-cli already has (GFX Library for Arduino).
 #
-#   tools/sim.sh --lang ja --script care-page.txt --out shots/
+#   tools/sim.sh --lang pt --script care-page.txt --out shots/
 #   tools/sim.sh --board 175 --script my.txt     # the original 1.75 instead of the 1.75C
 #   tools/sim.sh --help                          # all simulator options
 #   tools/sim.sh --window [--board 175] [opts]   # an interactive window instead (needs SDL2)

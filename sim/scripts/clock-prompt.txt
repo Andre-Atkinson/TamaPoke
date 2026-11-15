@@ -1,6 +1,6 @@
 # Asking for the time after a power-off (#10). The clock has no time at boot, as on the
 # 1.75C after the AXP2101 cut power: setup() seeds it and the clock screen asks once.
-#   tools/sim.sh --lang ja --script clock-prompt --out shots/
+#   tools/sim.sh --lang pt --script clock-prompt --out shots/
 clock none
 
 # new game: the starter choice comes first, then the clock screen asks (the time in red)

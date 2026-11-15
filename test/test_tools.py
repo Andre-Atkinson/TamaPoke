@@ -63,10 +63,9 @@ class TestDexData(unittest.TestCase):
     def setUpClass(cls):
         from dex_data import DEX, TYPE_ACCENTS, CLASSIC, RARE, LEGENDARY, SLUGS
         from dex_stats import BASE_STATS
-        from dex_names import LOCAL_NAMES
         cls.DEX, cls.ACCENTS, cls.CLASSIC = DEX, TYPE_ACCENTS, CLASSIC
         cls.RARE, cls.LEGENDARY, cls.SLUGS = RARE, LEGENDARY, SLUGS
-        cls.STATS, cls.NAMES = BASE_STATS, LOCAL_NAMES
+        cls.STATS = BASE_STATS
         cls.byNum = {row[0]: row for row in DEX}
 
     def test_estan_las_151_especies_sin_huecos_ni_repetidos(self):
@@ -135,25 +134,6 @@ class TestDexData(unittest.TestCase):
             for v in (hp, atk, dfn, spe):
                 self.assertTrue(0 < v <= 255, f'stat fuera de rango en {self.byNum[num][2]}: {v}')
 
-    def test_los_nombres_traducidos_cuadran_con_su_fuente(self):
-        # Los latinos se pintan con la fuente CP437 (un byte por caracter, sin
-        # minusculas en los nombres); el japones y el coreano con una fuente
-        # U8g2 y van en UTF-8, asi que ni son ASCII ni tienen mayusculas que
-        # comprobar.
-        LATINOS, CJK = ('fr', 'de'), ('ja', 'ko')
-        for num, langs in self.NAMES.items():
-            self.assertIn(num, self.byNum, f'nombre traducido de una especie inexistente: {num}')
-            for lang, name in langs.items():
-                self.assertIn(lang, LATINOS + CJK, f'idioma inesperado: {lang}')
-                self.assertTrue(name, f'{num} {lang} vacio')
-                if lang in LATINOS:
-                    self.assertTrue(name.isascii(), f'{num} {lang} no es ASCII: {name}')
-                    self.assertEqual(name, name.upper(), f'{num} {lang} lleva minusculas: {name}')
-                    self.assertLessEqual(len(name), 12, f'{num} {lang} no cabe en pantalla: {name}')
-                else:
-                    # el limite util son CARACTERES, no bytes: en UTF-8 cada kana o silaba hangul ocupa 3
-                    self.assertLessEqual(len(name), 8, f'{num} {lang} no cabe en pantalla: {name}')
-
 
 class TestGeneratedFiles(unittest.TestCase):
     """dex.h esta generado: si no coincide con su generador, alguien lo edito a mano."""
@@ -208,30 +188,88 @@ class TestSketchSanity(unittest.TestCase):
 
 
 
+def pt_glyph_codes():
+    """The bytes ptglyphs.h draws (#61), in table order."""
+    with open(os.path.join(ROOT, 'ptglyphs.h'), encoding='utf-8') as fh:
+        text = fh.read()
+    table = re.search(r'PT_GLYPHS\[\]\s*=\s*\{(.*?)\n\};', text, re.S).group(1)
+    return [int(c, 16) for c in re.findall(r'\{0x([0-9A-Fa-f]{2}),\s*\{', table)]
+
+
+class TestPtGlyphs(unittest.TestCase):
+    """ptglyphs.h (#61): the extra glyphs are exactly the European Portuguese letters the
+    classic font (a CP437 table) lacks, each on its Latin-1 byte, so "\\303" in a string
+    is the letter a Latin-1 table says it is."""
+
+    def test_the_glyphs_are_the_portuguese_letters_cp437_lacks(self):
+        portuguese = 'áàâãçéêíóôõúÁÀÂÃÇÉÊÍÓÔÕÚ'
+
+        def in_cp437(ch):
+            try:
+                ch.encode('cp437')
+                return True
+            except UnicodeEncodeError:
+                return False
+
+        codes = pt_glyph_codes()
+        self.assertEqual(len(codes), len(set(codes)), 'a glyph is listed twice')
+        # ord() of these letters is both their code point and their Latin-1 byte
+        self.assertEqual(sorted(codes), sorted(ord(ch) for ch in portuguese if not in_cp437(ch)))
+
+
 class TestOwnerLetters(unittest.TestCase):
-    """owner.h's accented letters (#23) against Python's own CP437 codec and Unicode data.
+    """owner.h's accented letters (#23, #61) against Python's own CP437 codec and Unicode data.
 
-    The name's letters must be exactly the ones the classic 5x7 font (a CP437 table)
-    has: every byte 0x80-0xFF that is one ASCII letter plus one accent. Each entry's
-    CP437 byte must be that letter's glyph, and its plain letter (drawn by the CJK
-    fonts, which have no accents) the letter without its accent."""
+    The name's letters must be exactly the ones the UI font draws: every CP437 byte
+    0x80-0xFF that is one ASCII letter plus one accent, on that byte, and the 12
+    Portuguese letters of ptglyphs.h, on their Latin-1 byte (= their code point)."""
 
-    def test_the_table_is_the_cp437_accented_letters(self):
+    def test_the_table_is_the_fonts_accented_letters(self):
         import unicodedata
         with open(os.path.join(ROOT, 'owner.h'), encoding='utf-8') as fh:
             text = fh.read()
         table = re.search(r'OWNER_LETTERS\[\]\s*=\s*\{(.*?)\};', text, re.S).group(1)
-        rows = [(int(cp, 16), int(b, 16), plain) for cp, b, plain in
-                re.findall(r"\{0x([0-9A-Fa-f]+),\s*0x([0-9A-Fa-f]+),\s*'(.)'\}", table)]
+        rows = [(int(cp, 16), int(b, 16)) for cp, b in
+                re.findall(r"\{0x([0-9A-Fa-f]+),\s*0x([0-9A-Fa-f]+)\}", table)]
         self.assertTrue(rows)
         want = {}
         for b in range(0x80, 0x100):
             ch = bytes([b]).decode('cp437')
             d = unicodedata.normalize('NFD', ch)
             if unicodedata.category(ch).startswith('L') and len(d) == 2 and d[0].isascii() and d[0].isalpha():
-                want[ord(ch)] = (b, d[0])
-        self.assertEqual({cp: (b, plain) for cp, b, plain in rows}, want)
+                want[ord(ch)] = b
+        for code in pt_glyph_codes():
+            self.assertNotIn(code, want, 'a ptglyphs.h letter that CP437 already has')
+            want[code] = code
+        self.assertEqual(dict(rows), want)
         self.assertEqual(len(rows), len(want), 'a letter is listed twice')
+
+
+class TestToastsAreTranslated(unittest.TestCase):
+    """#61: the 1.75C toasts the player sees go through T(), so they follow the language.
+
+    showControlToast() takes the text to show; a string literal there is English on a
+    Portuguese board. The only literal allowed is the developer message of the training
+    capture (TRAINTRACE), which a player never triggers."""
+
+    DEVELOPER = {'Touch capture unavailable'}
+
+    def test_every_toast_is_a_translated_string(self):
+        calls = 0
+        for name, text in sketch_sources().items():
+            for n, line in enumerate(text.splitlines(), 1):
+                code = line.split('//')[0]
+                if 'showControlToast(' not in code or re.search(r'\bvoid\s+showControlToast\(', code):
+                    continue
+                calls += 1
+                for lit in re.findall(r'"((?:[^"\\]|\\.)*)"', code.split('showControlToast(', 1)[1]):
+                    with self.subTest(file=name, line=n):
+                        self.assertIn(lit, self.DEVELOPER, f'{name}:{n}: an untranslated toast "{lit}"')
+        self.assertGreaterEqual(calls, 3, 'the pattern no longer finds the showControlToast() calls')
+
+    def test_the_lock_hint_is_translated(self):
+        ino = sketch_sources()['TamaPoke.ino']
+        self.assertRegex(ino, r'const char \*hint = lockHint \? T\(S_TOAST_LOCKED\)')
 
 
 class TestBuffersDeTexto(unittest.TestCase):
@@ -267,7 +305,6 @@ class TestBuffersDeTexto(unittest.TestCase):
     def setUpClass(cls):
         import test_i18n_formats as fmt
         from dex_data import DEX
-        from dex_names import LOCAL_NAMES
 
         def leer(nombre):
             with open(os.path.join(ROOT, nombre), encoding='utf-8') as fh:
@@ -281,11 +318,9 @@ class TestBuffersDeTexto(unittest.TestCase):
         cls.sources = {name: text.splitlines() for name, text in sketch_sources().items()}
         cls.APODO = int(re.search(r'char\s+nick\[(\d+)\]', leer('pet.h')).group(1)) - 1
         cls.DUENO = int(re.search(r'#define\s+OWNER_NAME_MAX\s+(\d+)', leer('owner.h')).group(1))
+        # both languages use the English species names (#61)
         base = max(len(row[2].encode()) for row in DEX)
-        cls.NOMBRE = {}
-        for lang in cls.LANGS:
-            propios = [n[lang.lower()] for n in LOCAL_NAMES.values() if lang.lower() in n]
-            cls.NOMBRE[lang] = max([base] + [len(n.encode('utf-8')) for n in propios])
+        cls.NOMBRE = {lang: base for lang in cls.LANGS}
 
     @staticmethod
     def bytes_literal(literal):
@@ -744,7 +779,7 @@ for i in range(int(os.environ.get('FAKE_WARNINGS', '0'))):
     for _ in range(2 if i == 0 else 1):
         print(f'{args[-1]}/pet.cpp:{i + 1}:5: warning: fake warning {i} [-Wfake]', file=sys.stderr)
 if os.environ.get('FAKE_WARNINGS'):
-    print('/home/x/Arduino/libraries/U8g2/src/u8g2.c:1:1: warning: a library one [-Wfake]', file=sys.stderr)
+    print('/home/x/Arduino/libraries/GFX_Library_for_Arduino/src/Arduino_GFX.cpp:1:1: warning: a library one [-Wfake]', file=sys.stderr)
 if opt('--build-path'):
     os.makedirs(opt('--build-path'), exist_ok=True)
 time.sleep(float(os.environ.get('FAKE_SLEEP', '0')))
@@ -968,7 +1003,7 @@ class TestSketchWarnings(unittest.TestCase):
             lines.append(f'{self.ESC}[1m{lines[-1]}{self.ESC}[0m')   # the same, coloured
         lines += [
             '/home/x/.arduino15/packages/esp32/tools/cdc_host.h:162:58: warning: missing initializer',
-            '/home/x/Arduino/libraries/U8g2/src/u8g2.c:9:1: warning: unused [-Wunused]',
+            '/home/x/Arduino/libraries/GFX_Library_for_Arduino/src/Arduino_GFX.cpp:9:1: warning: unused [-Wunused]',
             f'{stage}/pet.cpp:3:1: error: expected ;',
             f'{stage}/pet.cpp:4:1: note: declared here',
             '/cache/repo-0123/gate/build-175/sketch/TamaPoke.ino.cpp:3:1: warning: generated',
@@ -1139,7 +1174,7 @@ class TestBuildCache(FakeArduinoCliCase):
             the objects and library-detection files, the libraries and the core."""
             for part in ('sketch/pet.cpp', 'sketch/pet.cpp.o', 'sketch/pet.cpp.d', 'sketch/pet.cpp.libsdetect.d',
                          'sketch/TamaPoke.ino.cpp', 'sketch/TamaPoke.ino.cpp.merged', 'sketch/TamaPoke.ino.cpp.o',
-                         'sketch/objs.a', 'libraries/U8g2/u8g2_fonts.c.o', 'core/core.a', *extra):
+                         'sketch/objs.a', 'libraries/GFX_Library_for_Arduino/Arduino_GFX.cpp.o', 'core/core.a', *extra):
                 os.makedirs(os.path.dirname(os.path.join(build, part)), exist_ok=True)
                 put(os.path.join(build, part))
 
@@ -1157,7 +1192,7 @@ class TestBuildCache(FakeArduinoCliCase):
                     self.assertFalse(os.path.exists(os.path.join(build, 'sketch', obj)), f'{obj} was kept')
                 self.assertTrue(os.path.exists(os.path.join(build, 'sketch', 'pet.cpp.libsdetect.d')),
                                 'library detection was not reused')
-                self.assertTrue(os.path.exists(os.path.join(build, 'libraries', 'U8g2', 'u8g2_fonts.c.o')))
+                self.assertTrue(os.path.exists(os.path.join(build, 'libraries', 'GFX_Library_for_Arduino', 'Arduino_GFX.cpp.o')))
                 self.assertTrue(os.path.exists(os.path.join(build, 'core', 'core.a')))
         # A copy of a file the sketch no longer has (deleted or renamed) would
         # still be compiled or included: arduino-cli's copy starts over.
@@ -1167,7 +1202,7 @@ class TestBuildCache(FakeArduinoCliCase):
         for build in builds:
             with self.subTest(build=build, stale='renamed.cpp'):
                 self.assertFalse(os.path.exists(os.path.join(build, 'sketch')), 'a stale copy was kept')
-                self.assertTrue(os.path.exists(os.path.join(build, 'libraries', 'U8g2', 'u8g2_fonts.c.o')))
+                self.assertTrue(os.path.exists(os.path.join(build, 'libraries', 'GFX_Library_for_Arduino', 'Arduino_GFX.cpp.o')))
 
     def test_clean_builds_from_empty_folders(self):
         build = self.build_path()
@@ -1788,32 +1823,6 @@ class TestSimGenSketch(unittest.TestCase):
                          "file's last is line %d %r" % (found + 1, lines[found], defs[-1] + 1, lines[defs[-1]]))
         out = self.gen.generate(os.path.join(ROOT, 'TamaPoke.ino'), lines)
         self.assertEqual(out.count('\n#line '), 2)
-
-
-class TestSimExtractFonts(unittest.TestCase):
-    """sim/extract_fonts.py: copia arrays de u8g2_fonts.c sin compilar el fichero entero."""
-
-    SRC = (b'#include "u8g2.h"\n'
-           b'const uint8_t u8g2_font_ab[1] U8G2_FONT_SECTION("u8g2_font_ab") = "z";\n'
-           b'const uint8_t u8g2_font_a[5] U8G2_FONT_SECTION("u8g2_font_a") = \n'
-           b'  "ab;c"\n'
-           b'  "\\42;\\0";\n'
-           b'const uint8_t u8g2_font_b[2] U8G2_FONT_SECTION("u8g2_font_b") = \n'
-           b'  "\\377\\1";\n')
-
-    def setUp(self):
-        self.mod = _load_sim_module('extract_fonts')
-
-    def test_saca_los_arrays_pedidos_enteros_y_sin_secciones(self):
-        out = self.mod.extract(self.SRC, ['u8g2_font_b', 'u8g2_font_a']).decode()
-        self.assertIn('const uint8_t u8g2_font_a[5] = \n  "ab;c"\n  "\\42;\\0";', out)  # ';' dentro de la cadena
-        self.assertIn('const uint8_t u8g2_font_b[2] = \n  "\\377\\1";', out)
-        self.assertNotIn('U8G2_FONT_SECTION', out)
-        self.assertNotIn('u8g2_font_ab', out)  # nombre parecido (y antes en el fichero): no se cuela
-
-    def test_un_nombre_que_no_existe_falla(self):
-        with self.assertRaises(SystemExit):
-            self.mod.extract(self.SRC, ['u8g2_font_missing'])
 
 
 class TestSimPng(unittest.TestCase):

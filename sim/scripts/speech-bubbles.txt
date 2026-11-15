@@ -4,7 +4,7 @@
 # lighting the screen, dimmed or off).
 # A manual check: run it in each language on both boards and look at the shots and the
 # "say ..." lines in the serial log; nothing compares them automatically.
-#   tools/sim.sh --board 175c --lang de --script speech-bubbles --out shots/de/
+#   tools/sim.sh --board 175c --lang pt --script speech-bubbles --out shots/pt/
 # "say LINE" shows a line now (simulator only, not logged); the bubble still obeys the real
 # rules, so a "say" on a screen that is not free shows nothing. The names are placeholders.
 # The steps mean the same on both boards: the defaults differ (the 1.75C turns the screen
@@ -30,6 +30,11 @@ serial OWNER Wwwwwwwwwwww
 say love-name
 wait 300ms
 shot 02-badge-longest-name
+# a Portuguese name: a~ and o~ come from ptglyphs.h (#61)
+serial OWNER João Simões
+say love-name
+wait 300ms
+shot 02b-badge-portuguese-name
 serial OWNER Ñandú Player
 serial OWNER?
 say love-name

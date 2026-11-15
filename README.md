@@ -6,7 +6,7 @@
 ![Firmware](https://img.shields.io/badge/firmware-v1.17-8A2BE2)
 [![CI](https://github.com/socquique/TamaPoke/actions/workflows/ci.yml/badge.svg)](https://github.com/socquique/TamaPoke/actions/workflows/ci.yml)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
-![Languages](https://img.shields.io/badge/languages-8-FFCB05)
+![Languages](https://img.shields.io/badge/languages-EN%20%7C%20PT-FFCB05)
 [![Stars](https://img.shields.io/github/stars/socquique/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/socquique/TamaPoke/stargazers)
 
 A gen-1-Pokémon-inspired tamagotchi for the
@@ -28,7 +28,7 @@ behind a decision dialog), bred-Pokédex with gallery, battle stats (genes +
 training), retention hooks (streak / bond / medals / name), biome + real-time
 backgrounds, four minigames, training bag, animated bath, RTC with offline
 progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
-**sound (ES8311)**, **8 UI languages (English default)**, **starter choice on
+**sound (ES8311)**, **English and European Portuguese UI (English default)**, **starter choice on
 first run**, and a one-click **web installer**.
 
 Pending: wild encounters / battle (designed, not implemented), 3D case, soak
@@ -126,8 +126,8 @@ While **awake**, per minute:
   it); with no name it says "I love you!". Names can use plain letters, digits,
   spaces and punctuation, up to 12 characters with at least one letter, plus the
   accented letters the font has
-  (é è ê ë á à â ä å í ì î ï ó ò ô ö ú ù û ü ñ Ñ ç Ç ÿ Ä Å É Ö Ü); in Japanese and Korean the
-  accents drop to the plain letter. A bubble is due 1–2 minutes after the last one and
+  (é è ê ë á à â ä å í ì î ï ó ò ô ö ú ù û ü ñ Ñ ç Ç ÿ Ä Å É Ö Ü, and the Portuguese
+  ã õ Á À Â Ã Ê Í Ó Ô Õ Ú, so "João" works). A bubble is due 1–2 minutes after the last one and
   waits for the creature's screen to be awake and free, then shows 3 s later, so waking
   the screen after a while gets a line within seconds. It never shows while the screen is
   dimmed or off, while the creature sleeps, on an egg, during an ending, a dialog, a
@@ -269,7 +269,6 @@ SPEED ← minigame, DEFENSE ← 12 h of unbroken good care). *(Battles: on the r
 | GFX Library for Arduino (`Arduino_GFX`) | moononournation | CO5300 over QSPI + framebuffer in PSRAM |
 | SensorLib | Lewis He | CST9217 touch + PCF85063 RTC |
 | XPowersLib | Lewis He | AXP2101 PMU (battery, brightness, PWR button) |
-| U8g2 | olikraus | CJK glyphs (`unifont_t_japanese3`, the only Japanese subset that also carries `！？。、「」`; `unifont_t_korean2` for Hangul, 2350 syllables against korean1's 478); only the font data is used, not its display driver |
 | ESP_I2S (bundled in the ESP32 core) | Espressif | I2S to the ES8311 codec |
 
 ## IDE setup / build
@@ -404,11 +403,9 @@ thumbnails (`SdThumbs`). `SdMon` (TPK1) remains as a dormant legacy fallback onl
 
 `tools/dex_data.py` is the **single source**: name, slug, type (accent colour +
 background biome), evolution line with gen-1 levels, rarities and starters.
-`tools/dex_stats.py` has the real base stats (from PokéAPI). `tools/gen_names.py`
-pulls the **official localized names** from PokéAPI into `tools/dex_names.py`
-(only French and German differ in gen 1; Spanish, Italian and Portuguese use the
-English ones). `gen_dex.py` emits `dex.h` (the `DEX_TBL[152]` table plus the
-per-language name tables and the `dexName()` accessor). The pet's identity is its
+`tools/dex_stats.py` has the real base stats (from PokéAPI). Both UI languages use
+the English species names, as the Portuguese games do. `gen_dex.py` emits `dex.h`
+(the `DEX_TBL[152]` table and the `dexName()` accessor). The pet's identity is its
 Pokédex number (persisted in NVS).
 
 - **Evolution** gen-1 style (levels 16/36/…; stones ≈30, trade ≈40; Eevee
@@ -451,14 +448,15 @@ The egg rolls rarity over the ~79 base forms (47 common / 27 rare / 5 legendary)
 a farewell and punished by a runaway. Legendaries only with 25+ registered.
 **Shiny** 1/48 (better with streak/bond/farewell).
 
-**Languages:** the UI ships in 8 languages — English (default), Spanish, French,
-German, Italian, Portuguese, Japanese and Korean — switchable from the settings
-screen (swipe down).
-**Pokémon names are localized too**: French, German, Japanese and Korean show
-the official names (Bulbizarre, Bisasam, フシギダネ, 이상해씨...). Spanish, Italian
-and Portuguese use the English ones, which is what those regions officially use
-for gen 1. Nidoran♀/♂ read ニドランF/M in Japanese and 니드런 암/수 in Korean: no
-U8g2 unifont subset carries ♀ or ♂, so each language picks its own substitute.
+**Languages:** the UI is in English (default) and European Portuguese, one tap
+apart on the settings screen (swipe down): the language pill shows `EN | PT` with
+the active one filled. The Portuguese uses *tu* throughout and has every letter
+it needs: the classic 5x7 font (CP437) lacks ã, õ and most accented capitals, so
+`ptglyphs.h` adds those 12 (ã õ Á À Â Ã Ê Í Ó Ô Õ Ú) as extra glyphs, one byte
+each, drawn by `printT()`. Pokémon names stay in English, as in the Portuguese
+games. Until #61 the firmware also shipped Spanish, French, German, Italian,
+Japanese and Korean; a board set to one of those shows English after the update
+(the stored choice is kept, see `i18n.h`).
 
 ## Backgrounds: biome + real time
 
@@ -471,22 +469,22 @@ beach, forest, volcano, mountain, snow). Sleeping forces night.
 - `TamaPoke.ino` — init, game loop, hardware bring-up, buttons and power, the care glue (bedtime, attention calls, clock prompt), touch and gestures, and `render()`, which picks the screen to draw
 - `app.h` — what `TamaPoke.ino` shares with the modules split out of it (#41)
 - `serialcmd.h` / `serialcmd.cpp` — the USB serial console (SD provisioning and debug commands)
-- `uitext.h` / `uitext.cpp` — text size, cursor and font in every language
+- `uitext.h` / `uitext.cpp` — text size, cursor and `printT()`, which draws the 12 extra Portuguese letters
+- `ptglyphs.h` — those 12 letters (ã õ and the accented capitals CP437 lacks) as 5x7 art, packed at compile time (#61)
 - `scene.h` / `scene.cpp` — the main screen: sky and biome, the pet's PMD animation and walk, bath, poops, header, bars, buttons, the endings and their buttons
 - `bubble.h` / `bubble.cpp` — the speech bubbles: which line, when, and where it goes on the round screen (#23)
-- `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the fonts can draw, and its NVS key
+- `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the font can draw, and its NVS key
 - `gameui.h` / `gameui.cpp` — the minigames' screens and the strength-training sack (their logic is in `minigames.h`)
 - `screens.h` / `screens.cpp` — the other screens: starter and egg choice, the pet card's pages, clock and settings, the nickname keyboard, the Pokédex gallery
 - `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
 - `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)
 - `rtcbat.h` / `rtcbat.cpp` — PCF85063 RTC + AXP2101 PMU (battery, brightness, PWR button)
 - `audio.h` / `audio.cpp` — ES8311 + I2S + Game-Boy-style tone synth (non-blocking task)
-- `i18n.h` / `i18n.cpp` — the 8-language string tables
+- `i18n.h` / `i18n.cpp` — the English and European Portuguese string tables, and the `lang` key
 - `dex.h` — GENERATED (`gen_dex.py`): the 151 table
 - `species.h` — GENERATED (`sprites.py`): fallback sprites, UI icons, colours
 - `pin_config.h` — the board's official pins
-- `tools/` — pipeline: `dex_data.py` (data), `dex_stats.py`, `dex_names.py` +
-  `gen_names.py` (localized names), `gen_dex.py`,
+- `tools/` — pipeline: `dex_data.py` (data), `dex_stats.py`, `gen_dex.py`,
   `sprites.py` (workshop), `pack_pmd.py` / `make_thumbs.py`
   (packers), `pack_bundle.py` (web bundle), `send_sd.py` (SD upload), `touch_log.py`
 - `tools/sdcard/mons/` — the generated .bin files (animated, shiny, PMD, thumbnails)
@@ -547,12 +545,12 @@ To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in
 `tools/sim.sh` runs the real firmware (`TamaPoke.ino` and its modules) on the
 Mac, against a simulated board, and saves PNG screenshots of the panel. Use it to see UI and care changes
 without flashing. It needs nothing beyond what the firmware build already uses:
-a C++ compiler, Python 3, and the GFX Library for Arduino and U8g2 libraries that
+a C++ compiler, Python 3, and the GFX Library for Arduino library that
 arduino-cli installed.
 
 ```bash
-tools/sim.sh --lang ja --script care-page.txt --out shots/
-tools/sim_shots.sh        # every main screen in all 8 languages -> shots/<lang>/
+tools/sim.sh --lang pt --script care-page.txt --out shots/
+tools/sim_shots.sh        # every main screen in both languages -> shots/<lang>/
 ```
 
 `sim/scripts/every-screen.txt` reaches what `screens.txt` does not (evolution,
@@ -585,7 +583,7 @@ simulator, the tests and the gate work as before, and `--window` says what is mi
 
 ```bash
 tools/sim.sh --window                    # the 1.75C, clock = this Mac's local time
-tools/sim.sh --window --board 175 --lang ja --clock "2026-11-13 22:30"
+tools/sim.sh --window --board 175 --lang pt --clock "2026-11-13 22:30"
 ```
 
 | Input | What it does |
@@ -623,7 +621,7 @@ has the right colours, bezel and dimming. That is the only automatic test of the
 window. The window has been tried by hand only when a PR says so.
 
 **What it models:** the real firmware code: game logic, every screen, the
-Arduino_GFX drawing code and fonts (CJK included), the frame pacing, the
+Arduino_GFX drawing code and font (the extra Portuguese letters included), the frame pacing, the
 firmware's dim and screen-off decisions, the touch lock, the PWR lock, the BOOT button, and the
 strength-training touch reports. It also models the sprites and thumbnails from
 `tools/sdcard/` (the 1.75C without the shiny sprites, as on the board), the NVS

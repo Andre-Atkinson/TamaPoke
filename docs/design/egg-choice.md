@@ -139,7 +139,10 @@ range-checks all of this, as the hard rules require.
 Day or night background as on the egg screen. Rarity is shown by the shell
 colour as well as the text, so it reads at a glance in any language.
 
-## Strings (all 8 languages)
+## Strings (all 8 languages at the time)
+
+> Since #61 the UI has two languages, English and European Portuguese; the
+> kana and `unifont_t_korean2` notes below went with the other six.
 
 New: `S_CHOOSE_EGG` (title), `S_EGG_TAP_AGAIN` (hint), `S_EGG_COMMON` (rarity
 of a Common egg), `S_EGGS` (Care button label), `S_EGG_CHOOSE` /

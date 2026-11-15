@@ -1,4 +1,4 @@
-# Every main screen, from a new game. tools/sim_shots.sh runs this in all 8
+# Every main screen, from a new game. tools/sim_shots.sh runs this in both
 # languages (the language comes from --lang). Coordinates are the firmware's own
 # hit boxes: onTap in TamaPoke.ino; keyboardTap, galleryTap and careTap in screens.cpp.
 

@@ -287,9 +287,8 @@ static void drawGameHud(uint16_t ink, uint16_t score) {
   setSize(4);
   setCur(centerX(buf, 4), 68);
   printT(buf);
-  // 24 y no 12: en japones "きろく %u" son 10 bytes antes de la cifra y el
-  // record se quedaba en su primer digito ("きろく 2" con 219). Las tallas de
-  // los buffers de texto las vigila TestBuffersDeTexto en test/test_tools.py.
+  // Las tallas de los buffers de texto las vigila TestBuffersDeTexto en
+  // test/test_tools.py.
   char rec[24];
   snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameBest(games.game()));
   setSize(2);
@@ -327,7 +326,6 @@ static void drawGameTitle(uint16_t ink) {
   uint8_t g = games.game();
   drawMap(GAME_ICON[g], 16, CX - 32, 112, 4, false);
   const char *name = T((StrId)(S_GAME_KEEPY + g));
-  setSize(4);  // textW() mide con el tamano puesto (fuentes CJK)
   uint8_t sz = textW(name, 4) <= 380 ? 4 : 3;
   setSize(sz);
   gfx->setTextColor(ink);
@@ -421,8 +419,7 @@ static void drawSong(uint16_t ink) {
   bool night = gameNight();
   const char *msg = s.playersTurn() ? T(S_SONG_TURN) : T(S_SONG_LISTEN);
   gfx->setTextColor(ink);
-  setSize(4);  // grande si cabe (la fuente CJK divide el tamano entre 2), si no a 3
-  uint8_t sz = textW(msg, 4) <= 300 ? 4 : 3;
+  uint8_t sz = textW(msg, 4) <= 300 ? 4 : 3;  // grande si cabe, si no a 3
   setSize(sz);
   setCur(centerX(msg, sz), 68);
   printT(msg);
