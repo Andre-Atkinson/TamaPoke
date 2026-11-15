@@ -477,9 +477,14 @@ static const size_t NICK_MAX = sizeof(Pet::nick) - 1;
 // drawHeader (scene.cpp) prints "<*><name> Lv.<level>" at size 3 and drops to size 2 when
 // that is wider than HEADER_MAX_W: the panel is about 293 px wide at y 52, and the round
 // edge clipped a longer line (VICTREEBEL at level 51 in Portuguese).
-TEST(i18n, el_encabezado_del_nombre_cabe_en_la_franja_redonda_de_la_pantalla_principal) {
+TEST(i18n, el_encabezado_pasa_a_tamano_2_al_pasar_de_16_letras) {
+  CHECK_EQ((int)headerSize(1), 3);
   CHECK_EQ((int)headerSize(16), 3);  // 16 letters: 288 px, the last that fits at size 3
   CHECK_EQ((int)headerSize(17), 2);
+  CHECK_EQ((int)headerSize(30), 2);
+}
+
+TEST(i18n, el_encabezado_del_nombre_cabe_en_la_franja_redonda_de_la_pantalla_principal) {
   std::vector<std::string> names;
   for (int d = 1; d <= DEX_COUNT; d++) names.push_back(DEX_TBL[d].name);
   names.push_back(std::string(NICK_MAX, 'W'));  // a full nickname
