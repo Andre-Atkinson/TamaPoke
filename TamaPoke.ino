@@ -423,7 +423,7 @@ void setup() {
   // y nadie lo vacia) -> con timeout 0 los mensajes se descartan
   Serial.setTxTimeoutMs(0);
   Serial.printf("TamaPoke fw v%s (%s)\n", FW_VERSION, BOARD_NAME);
-  loadLang();  // idioma guardado (ES por defecto)
+  loadLang();  // saved language; English when none or not EN/PT (i18n.h)
   ownerLoad();  // the player's name for the speech bubbles (owner.h), if the owner set one
   Wire.begin(IIC_SDA, IIC_SCL);
 #if BOARD_AMOLED_175C

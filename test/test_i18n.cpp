@@ -431,13 +431,14 @@ TEST(i18n, the_hold_to_exit_label_fits_its_button) {
   gLang = LANG_DEFAULT;
 }
 
-// The clock screen's cancel hint: size 2 at y=410, where the lowest row of ink (y=423)
-// has a 269 px chord; with the 12 px edge margin the settings pills keep
-// (settingslayout.h) that is 245 px, so 20 letters (#61, as #54 found for Spanish).
+// The clock screen's cancel hint: size 2 at y=410. Its lowest ink is a descender (the
+// 'p' of "para", y=425), where the round panel's chord is about 264 px; with the 12 px
+// edge margin the settings pills keep (settingslayout.h) that leaves 240 px, so 20
+// letters (#61, as #54 found for Spanish).
 TEST(i18n, the_clock_cancel_hint_fits_the_round_edge) {
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;
-    CHECK_MSG(strlen(T(S_CLOCK_CANCEL)) * 12 <= 245, std::string("too wide: ") + T(S_CLOCK_CANCEL));
+    CHECK_MSG(strlen(T(S_CLOCK_CANCEL)) * 12 <= 240, std::string("too wide: ") + T(S_CLOCK_CANCEL));
   }
   gLang = LANG_DEFAULT;
 }

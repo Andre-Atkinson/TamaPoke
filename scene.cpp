@@ -958,8 +958,8 @@ static int barLabelGap() {
     int w = textW(T(id), 2);
     if (w > ancho) ancho = w;
   }
-  // por debajo del umbral original se deja EXACTAMENTE 48, para no mover nada en
-  // los idiomas latinos; por encima se anade aire para que la etiqueta respire
+  // con las etiquetas de 4 letras se deja EXACTAMENTE 48; por encima se anade aire
+  // para que la etiqueta respire
   return ancho <= 48 ? 48 : ancho + 8;
 }
 

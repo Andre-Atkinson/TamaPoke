@@ -490,7 +490,6 @@ static void renderCardProfile() {
   // auto-encoge: a tamano 3 los nombres largos no caben en la franja estrecha de
   // arriba de la pantalla redonda, asi que se cortaban por el borde (11 caracteres
   // a tamano 3 son esos 198 px).
-  setSize(3);
   int hts = (textW(head, 3) <= 198) ? 3 : 2;
   setSize(hts);
   setCur(centerX(head, hts), hts == 3 ? 34 : 40);
@@ -839,9 +838,7 @@ void renderGallery() {
     snprintf(head, sizeof(head), "N.%03d %s%s", galleryDetail,
              pet.isShinyRegistered(galleryDetail) ? "*" : "", reg ? dexName(galleryDetail) : "???");
     gfx->setTextColor(reg ? d.accent : UI_INK);
-    // auto-encoge nombres largos (no caben a t3), midiendo en vez de contar
-    // bytes; 13 caracteres a tamano 3 son los 234 px de antes.
-    setSize(3);
+    // auto-encoge nombres largos (no caben a t3): 13 caracteres a tamano 3 son 234 px.
     int gts = (textW(head, 3) <= 234) ? 3 : 2;
     setSize(gts);
     setCur(centerX(head, gts), gts == 3 ? 56 : 60);
