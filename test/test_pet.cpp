@@ -933,14 +933,16 @@ TEST(ceremony, un_solo_cuidado_salva_del_abandono) {
 // The run-away button needs the four needs still at 0, not only the hour's count: tick()
 // resets the count on its next minute, so the button and its warning used to stay for up
 // to a minute after a care, or after a night's sleep had brought the energy back
-TEST(ceremony, a_care_or_a_nights_sleep_takes_the_run_away_button_away_at_once) {
+TEST(ceremony, a_care_takes_the_run_away_button_away_at_once) {
   Pet p;
   makePet(p, 4);
   p.dbgRunawayReady();
   CHECK(p.canRunawayNow());
   p.feedBerry(0);
   CHECK_MSG(!p.canRunawayNow(), "fed: the button goes at once, before the next minute");
+}
 
+TEST(ceremony, a_pet_woken_rested_shows_no_run_away_button) {
   Pet q;
   makePet(q, 4);
   q.dbgRunawayReady();
