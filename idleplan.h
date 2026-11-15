@@ -283,13 +283,13 @@ inline int idleHopDy(uint32_t elapsed) {
 // ---------------------------------------------------------------- the perks
 // A finished doze gives a little energy, a finished ball game a little joy, at most
 // IDLE_PERK_CAP of each in an hour, so they never replace care: awake, energy and joy each
-// drain 60 an hour (30 on the relaxed pace). Nothing lowers a stat. The planner runs only
-// on a lit, free main screen, so in practice only in the minute or so after a touch.
+// drain 60 an hour (30 on the relaxed pace). Nothing lowers a stat. A doze or ball game runs
+// only on a lit, free main screen, so in practice only in the minute or so after a touch.
 //
 // The cap lives in RAM: a reboot gives one fresh hour's allowance (+6 each at most), and
 // the save is untouched (no new NVS key). Self-care while charging (#24) needs 10 untouched
-// minutes, when the screen has long been off and the planner is not running: the two never
-// overlap, and self-care stops at half anyway.
+// minutes, when the screen has long been dimmed or off, so the planner is at most in its calm
+// repertoire (no perks): the two never overlap, and self-care stops at half anyway.
 #define IDLE_PERK 3
 #define IDLE_PERK_CAP 6
 #define IDLE_PERK_WINDOW_MS 3600000UL

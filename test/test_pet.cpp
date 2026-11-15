@@ -2569,10 +2569,12 @@ TEST(idleperk, is_not_the_players_care) {
   uint16_t streak = p.streak;
   uint32_t careDay = p.lastCareDay;
   uint8_t bond = p.bond;
+  mockNvsReset();  // an empty store: any write by idlePerk() would show up as keys
   p.idlePerk(3, 3);
   CHECK_EQ(p.streak, streak);
   CHECK_EQ(p.lastCareDay, careDay);
   CHECK_EQ(p.bond, bond);
   CHECK(!p.showHeart());  // a heart would wake the screen and read as a touch
   CHECK(!p.savePending());
+  CHECK_EQ(mockNvsKeyCount("tamapoke"), (size_t)0);  // no save of its own: the periodic one keeps it
 }

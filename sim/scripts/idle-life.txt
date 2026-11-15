@@ -7,7 +7,7 @@
 # "idle ACT" forces the next pick on a free, lit main screen (simulator only); each one comes
 # after a tap on empty sky (x 400: right of the pet zone) that keeps the screen lit and, like
 # any touch, stops what the pet was doing.
-# The dim gate (shots 14 to 14e) is a 1.75C check: its default screen-off is 60 s, so the
+# The dim gate (shots 00a-00b and 14-14c) is a 1.75C check: its default screen-off is 60 s, so the
 # screen dims 30 s after the last touch. The original 1.75 defaults to "never" (dims at 90 s),
 # so there those shots are still lit: 14-dimmed-calm shows a rest bubble, 14c is still
 # dozing and serial.log has one more "idle: doze done" line. Everything else is the same on
@@ -23,6 +23,19 @@ tap 233 200
 tap 233 200
 tap 233 200
 wait 6s
+
+# An emote showing when the screen dims goes at once (the screen dims 30 s after the tap).
+# Whether a stand comes with a heart is a 1-in-3 roll from the simulator's fixed random
+# sequence; this one does on the 1.75C, as long as nothing before it changes (so it comes
+# first). 00a shows the heart, 00b (dimmed, the heart's time not yet up) doesn't. On the 1.75
+# the sequence differs and the screen dims at 90 s, so there 00a may have no heart and 00b
+# isn't dimmed.
+tap 400 200
+wait 28800ms
+idle stand
+shot 00a-stand-emote-before-the-dim
+wait 800ms
+shot 00b-no-emote-once-dimmed
 
 tap 400 200
 idle doze
@@ -95,12 +108,15 @@ tap 400 200
 wait 200ms
 shot 12-doze-woken
 
-# the gates: a dialog over the pet (the food picker) stops the doze and hides the emote
+# the gates: a dialog over the pet (the food picker). The tap on the food button stops the doze
+# (any touch does); while the picker is open the planner stays calm, so the doze asked for here
+# waits until it closes (after 6 s): 13 shows the pet standing, no bubble
 tap 400 200
 idle doze
 wait 2s
 tap 140 390
-wait 500ms
+idle doze
+wait 2500ms
 shot 13-feed-menu-no-emote
 wait 7s
 
@@ -121,20 +137,6 @@ wait 4s
 shot 14c-the-dim-cut-the-doze
 wait 15s
 
-# an emote showing when the screen dims goes at once (dims 30 s after the tap, 1.75C). The two
-# looks only shift the simulator's fixed random sequence so that this stand comes with a
-# heart (a 1-in-3 roll) on the 1.75C; 14d shows it, 14e (dimmed, the heart's time not yet up)
-# doesn't. The 1.75's sequence differs, so there 14d may come without one.
-idle look
-wait 300ms
-idle look
-wait 300ms
-tap 400 200
-wait 28800ms
-idle stand
-shot 14d-stand-emote-before-the-dim
-wait 800ms
-shot 14e-no-emote-once-dimmed
 
 tap 400 200
 wait 500ms

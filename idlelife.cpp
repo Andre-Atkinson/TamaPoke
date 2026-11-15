@@ -257,11 +257,16 @@ static void drawEmote(uint8_t e, const IdleSpot &at, uint32_t now) {
   }
 }
 
+// the planner ran on this frame, with the full repertoire
+static bool ranFull(uint32_t now) { return lastFrame == (now ? now : 1) && lastFull; }
+
+bool idleEmoteDue(uint32_t now) { return ranFull(now) && emoteShowing(now) && emoteAllowed(); }
+
 void idleDrawOver(uint32_t now, int petX, int headTop) {
-  if (lastFrame != (now ? now : 1) || !lastFull) return;  // the planner didn't run this frame, or ran calm
+  if (!ranFull(now)) return;  // the planner didn't run this frame, or ran calm
   if (beh.activity == IDLE_BALL)
     drawMap(SPR_ICON_PLAY, 16, (int)ball.x - 16, PET_GROUND - 32, 2, false);  // the Play button's ball
-  if (emoteShowing(now) && emoteAllowed()) drawEmote(emote, idleEmoteAt(petX, headTop), now);
+  if (idleEmoteDue(now)) drawEmote(emote, idleEmoteAt(petX, headTop), now);
 }
 
 #ifdef HOST_SIM

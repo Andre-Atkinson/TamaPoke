@@ -19,8 +19,11 @@ float idleWalkSpeed();
 // What drawPetPMD() draws while the pet is not walking (beh.mode 0 or 2): the PMD action,
 // how far up a hop has it (dy, added), and the animation's start and looping.
 uint8_t idleFrameAct(uint32_t now, int &dy, uint32_t &t0, bool &loop);
+// An emote will be drawn this frame: the planner ran with full set, one is showing and
+// nothing else is by the pet's head. drawPetPMD() only works out headTop then.
+bool idleEmoteDue(uint32_t now);
 // After the pet: the ball and the emote, only on a frame the planner ran with full set.
-// headTop: the top of the pet's sprite on screen (for the emote).
+// headTop: the top of the pet's sprite on screen, used only when idleEmoteDue().
 void idleDrawOver(uint32_t now, int petX, int headTop);
 
 #ifdef HOST_SIM

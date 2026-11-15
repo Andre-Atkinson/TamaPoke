@@ -583,7 +583,7 @@ static uint8_t pmdScale(const PmdMon &m, const PmdAct &a, uint8_t maxS) {
 
 // How far above the ground the top of action actId of the main sprite is drawn, in px: its
 // first frame's highest opaque row (the idle emotes sit by the head, #22). Scanned on each
-// call: it reads at most the frame drawPmdActM() reads in full anyway.
+// call, so drawPetPMD() calls it only on a frame that draws an emote (idleEmoteDue()).
 static int pmdHeight(uint8_t actId, uint8_t maxS) {
   const PmdAct &a = pmd.acts[actId];
   if (!a.frames) return 0;
@@ -701,7 +701,8 @@ static void drawPetPMD() {
   drawHuffPuff((int)beh.x + petReact.away * 56, PET_GROUND - 120, now);
 
   if (heartShown(now)) drawMap(SPR_HEART, 32, (int)beh.x + 50, PET_GROUND - 190, 2, false);
-  idleDrawOver(now, (int)beh.x, PET_GROUND + dy - pmdHeight(act, 5));  // the ball and an emote (#22)
+  // the ball and an emote (#22); the head's height only when an emote is drawn
+  idleDrawOver(now, (int)beh.x, idleEmoteDue(now) ? PET_GROUND + dy - pmdHeight(act, 5) : 0);
 }
 
 // sprite animado desde la SD: zoom entero por pixel, frames a su ritmo
