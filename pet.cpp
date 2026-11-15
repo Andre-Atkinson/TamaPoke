@@ -61,6 +61,9 @@ void Pet::setClock(uint32_t nowEpoch) {
 
 void Pet::syncClock(uint32_t nowEpoch) {
   uint32_t seen = prefs.getUInt("seen", 0);
+  // With the clock on a real time, a saved time outside the clock's range is corrupt (the
+  // old TIME bug, #45): no offline time from it, as on a first boot.
+  if (clockEpochValid(nowEpoch) && !clockEpochValid(seen)) seen = 0;
   lastSeenEpoch = nowEpoch;
   if (nowEpoch == 0) return;
   uint32_t mins = (seen && nowEpoch > seen) ? (nowEpoch - seen) / 60 : 0;

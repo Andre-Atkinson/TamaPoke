@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <Preferences.h>
+#include "clockprompt.h"  // CLOCK_EPOCH_END
 #include "gamecore.h"  // GameId, records and normalised scores of the Play minigames
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
@@ -224,7 +225,12 @@ public:
   // ~1s ambos cores: asi no se ve ni corta el tactil)
   bool savePending() const { return pendingSave; }
   // ultima hora real persistida; sirve para resembrar un RTC que perdio la hora
-  uint32_t savedEpoch() { return prefs.getUInt("seen", 0); }
+  // 0 for a value past the clock's range (CLOCK_EPOCH_END): the clock refuses it, and a
+  // pet saved by the old TIME bug can hold one.
+  uint32_t savedEpoch() {
+    uint32_t seen = prefs.getUInt("seen", 0);
+    return seen >= CLOCK_EPOCH_END ? 0 : seen;
+  }
   void flushSave();
   void saveNow() { save(); }  // la consola SAVE: escribe ya, haya o no pendiente
 

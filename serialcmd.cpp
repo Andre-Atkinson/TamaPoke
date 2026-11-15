@@ -4,6 +4,7 @@
 #include "audio.h"
 #include "bedtime.h"
 #include "clockprompt.h"
+#include "clockset.h"
 #include "dex.h"
 #include "rtcbat.h"
 #include "screens.h"
@@ -43,12 +44,13 @@ void handleSerial() {
     Serial.println("DONE");
   } else if (line.startsWith("TIME ")) {
     uint32_t e = (uint32_t)line.substring(5).toInt();
-    rtcSetEpoch(e);
-    pet.setClock(e);
-    bedClockSet(e);
-    // the open screen shows the time just set (only if it took: a TIME the clock ignores
-    // must not overwrite what the player is editing)
-    if (clockOpen && clockSetTook(e, rtcEpoch())) loadClockFields(rtcEpoch());
+    // the pet's saved time and the bedtime clock follow only if the clock took it (clockset.h)
+    if (setWallClock(pet, e, bedClockSet)) {
+      if (clockOpen) loadClockFields(rtcEpoch());  // the open screen shows the time just set
+    } else {  // nothing changes, not even what the player is editing on the clock screen
+      Serial.printf("ERR clock not set: it did not take %lu; the pet's saved time is unchanged\n",
+                    (unsigned long)e);
+    }
     Serial.printf("rtc=%u\n", rtcEpoch());
     Serial.println("DONE");
   } else if (line.startsWith("RTCSET ")) {  // solo RTC (simular apagados en pruebas)
