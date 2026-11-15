@@ -1,4 +1,5 @@
 #include "script.h"
+#include "../bubble.h"
 #include <ctype.h>
 #include <stdlib.h>
 #include <sstream>
@@ -236,6 +237,12 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       if (a == std::string::npos) return fail("usage: serial LINE");
       c.op = OP_SERIAL;
       c.text = rest.substr(a, b - a + 1);
+    } else if (op == "say") {
+      c.a = -1;
+      for (int i = 0; n == 2 && i < BUB_LINES; i++)
+        if (w[1] == BUBBLE_KEYS[i]) c.a = i;
+      if (c.a < 0) return fail("usage: say hungry|bath|tired|bored|morning|stars|hi|happy|pat|love-name|love");
+      c.op = OP_SAY;
     } else if (op == "shot") {
       if (n != 2) return fail("usage: shot NAME");
       for (char ch : w[1])

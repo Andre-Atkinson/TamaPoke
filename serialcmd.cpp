@@ -5,6 +5,7 @@
 #include "bedtime.h"
 #include "clockprompt.h"
 #include "dex.h"
+#include "owner.h"
 #include "rtcbat.h"
 #include "screens.h"
 #include "sdmon.h"
@@ -79,6 +80,21 @@ void handleSerial() {
   } else if (line.startsWith("NICK ")) {
     pet.rename(line.substring(5).c_str());
     Serial.printf("nick=%s\n", pet.nick);
+    Serial.println("DONE");
+  } else if (line == "OWNER?") {  // read-only: the player's name in the speech bubbles (owner.h)
+    Serial.printf("owner=%s\n", ownerName());
+    Serial.println("DONE");
+  } else if (line == "OWNER" || line.startsWith("OWNER ")) {  // set the player's name; empty clears it
+    String name = line.length() > 6 ? line.substring(6) : String();
+    name.trim();
+    uint32_t bad = 0;
+    OwnerCheck c = ownerSet(name.c_str(), &bad);
+    if (c == OWNER_TOO_LONG) Serial.printf("owner not set: more than %d characters\n", OWNER_NAME_MAX);
+    else if (c == OWNER_BAD_CHAR) Serial.printf("owner not set: U+%04lX cannot be drawn\n", (unsigned long)bad);
+    else if (c == OWNER_BAD_UTF8) Serial.println("owner not set: not UTF-8 text");
+    else if (c == OWNER_NOT_SAVED) Serial.println("owner not set: the flash write failed");
+    else if (c != OWNER_OK) Serial.println("owner not set");
+    Serial.printf("owner=%s\n", ownerName());  // what is stored now
     Serial.println("DONE");
   } else if (line == "CAREDAY") {  // simula un dia nuevo cuidado (pruebas)
     pet.setClock(pet.lastSeenEpoch + 86400);

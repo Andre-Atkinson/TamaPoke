@@ -1,0 +1,131 @@
+# Speech bubbles (#23): every line, the player's name (accents, the longest, none), day and
+# night, beside the clock badge, the need line in place of the "!" bubble, and the cases
+# where no bubble may show (a menu open, asleep, dimmed or off).
+# A manual check: run it in each language on both boards and look at the shots and the
+# "say ..." lines in the serial log; nothing compares them automatically.
+#   tools/sim.sh --board 175c --lang de --script speech-bubbles --out shots/de/
+# "say LINE" shows a line now (simulator only, not logged); the bubble still obeys the real
+# rules, so a "say" on a screen that is not free shows nothing. The names are placeholders.
+# The steps mean the same on both boards: the defaults differ (the 1.75C turns the screen
+# off after 60 s and dims it at 30 s; the 1.75 never turns it off and dims it at 90 s), so
+# PWR is only pressed with the screen in a known state.
+clock none
+battery 80
+
+# new game with no time: pick Charmander, skip the clock screen (the badge stays), hatch;
+# RTCSET moves the clock without setting it (still asking)
+wait 1s
+tap 233 220
+wait 1s
+swipe up
+serial HATCH
+serial RTCSET 1767268800
+# the first bubble comes by itself, 3 s after the pet screen is free (no name yet)
+wait 5s
+shot 01-first-by-itself-badge
+
+# beside the clock badge: the longest name (no space to wrap at) and an accented one
+serial OWNER Wwwwwwwwwwww
+say love-name
+wait 300ms
+shot 02-badge-longest-name
+serial OWNER Ñandú Player
+serial OWNER?
+say love-name
+wait 300ms
+shot 03-badge-accented-name
+say bath
+wait 300ms
+shot 04-badge-bath
+
+# the clock set to 10:00: the badge goes; every daytime line
+serial TIME 1794564000
+wait 300ms
+say hungry
+wait 300ms
+shot 05-hungry
+say bath
+wait 300ms
+shot 06-bath
+say tired
+wait 300ms
+shot 07-tired
+say bored
+wait 300ms
+shot 08-bored
+say morning
+wait 300ms
+shot 09-morning
+say hi
+wait 300ms
+shot 10-hi
+say happy
+wait 300ms
+shot 11-happy
+say pat
+wait 300ms
+shot 12-pat
+say love-name
+wait 300ms
+shot 13-love-name
+serial OWNER Wwwwwwwwwwww
+say love-name
+wait 300ms
+shot 14-love-longest-name
+# a refused name keeps the old one; OWNER alone clears it
+serial OWNER Ábcdef
+serial OWNER Abcdefghijklm
+serial OWNER
+say love
+wait 300ms
+shot 15-love-no-name
+
+# a menu open (the food picker): no bubble; it closes by itself
+tap 140 390
+wait 300ms
+say hi
+wait 300ms
+shot 16-menu-no-bubble
+wait 6s
+
+# night: 22:00 (TIME moves the scene at once)
+serial TIME 1794607200
+wait 300ms
+say stars
+wait 300ms
+shot 17-night-stars
+say love
+wait 300ms
+shot 18-night-love
+say hungry
+wait 300ms
+shot 19-night-hungry
+
+# asleep (the light button): no bubble; the same button wakes it
+tap 265 397
+wait 2s
+say hi
+wait 300ms
+shot 20-asleep-no-bubble
+tap 265 397
+wait 2s
+
+# a need below 25 by itself. PWR turns the screen off (it is on: just touched), so the call
+# is dark; PWR turns it on again. The "!" bubble is there, and 3 s later the due bubble says
+# that need in its place, then the "!" comes back.
+serial TIME 1794564000
+press pwr
+wait 25m
+press pwr
+wait 1s
+shot 21-need-exclamation
+wait 3s
+shot 22-need-in-words
+wait 5s
+shot 23-exclamation-again
+
+# untouched for 95 s: dimmed on the 1.75, off on the 1.75C. No bubble, though one is due.
+wait 95s
+say hi
+wait 300ms
+shot 24-dimmed-or-off-no-bubble

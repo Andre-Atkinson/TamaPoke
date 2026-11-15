@@ -38,6 +38,7 @@
 #include "bedtime.h"
 #include "clockprompt.h"
 #include "attention.h"
+#include "bubble.h"
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "trainingcapture.h"
@@ -47,6 +48,7 @@ static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright unt
 #include "screens.h"
 #include "serialcmd.h"
 #include "uitext.h"
+#include "owner.h"
 #include <Preferences.h>
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
@@ -421,6 +423,7 @@ void setup() {
   Serial.setTxTimeoutMs(0);
   Serial.printf("TamaPoke fw v%s (%s)\n", FW_VERSION, BOARD_NAME);
   loadLang();  // idioma guardado (ES por defecto)
+  ownerLoad();  // the player's name for the speech bubbles (owner.h), if the owner set one
   Wire.begin(IIC_SDA, IIC_SCL);
 #if BOARD_AMOLED_175C
   // QMI8658 is on VCC3V3 and is not used by this firmware. CTRL7=0 disables its sensors; the
@@ -725,6 +728,28 @@ void attnLoop(uint32_t now) {
                 a.chirp ? (audioEnabled() ? " chirp" : " (muted)") : s.quiet ? " (quiet)" : " (locked)");
 }
 
+// ---------- speech bubbles (bubble.h, #23) ----------
+// The pet screen is what render() draws, with nothing on or around the pet: no other
+// screen, starter or egg choice, ceremony or egg; no care animation or dialog
+// (careBusy()); no heart or medal/streak banner; and no attention call lighting the
+// screen (attnShowUntil). Whether the pet is asleep and whether the screen is dimmed are
+// left to the caller. The speech bubbles use it, and anything else that draws beside the
+// pet can.
+bool mainScreenFree(uint32_t now) {
+  if (galleryOpen || gameOpen || sackOpen || kbOpen || clockOpen || cardOpen) return false;
+  if (pet.awaitingStarter() || pet.awaitingEgg() || pet.ceremony || pet.isEgg()) return false;
+  if (careBusy() || pet.showHeart() || pet.showMedal() || pet.showMilestone()) return false;
+  return !attnShowing(now);
+}
+
+// A bubble may show: the pet screen is free, the pet awake, and the screen on, unlocked and
+// not dimmed. Read once per pass, before render(); it never wakes or lights the screen and
+// does not touch lastInteract, so it cannot keep the screen awake.
+static bool bubbleFree(uint32_t now) {
+  if (pet.sleeping || screenOff || screenIsLocked() || !mainScreenFree(now)) return false;
+  return dimStageNow(powerCtx(now)) == DIM_AWAKE;
+}
+
 void loop() {
   uint32_t now = millis();
   // self-care while charging (#24): the cached USB reading, no extra I2C
@@ -775,6 +800,7 @@ void loop() {
   // screen, not an almost-off lit one) and before the panel decisions below, so a call's
   // window lights the panel in this same pass
   attnLoop(now);
+  bubbleLoop(now, bubbleFree(now));  // after attnLoop(): a call that lights the screen now ends a bubble
   int tlockEdge = autoTouch.update(screenOff, now);
   if (tlockEdge > 0) {
     Serial.println("touch lock");
@@ -1697,6 +1723,7 @@ bool render() {
     drawPoops();
     drawClockBadge();
     drawAttnBubble();
+    drawSpeechBubble();  // in the "!" bubble's place while it shows (#23)
     // panel inferior: base limpia para barras y botones sobre el paisaje
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     drawBars();

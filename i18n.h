@@ -72,6 +72,9 @@ enum StrId : uint8_t {
   S_GAME_KEEPY, S_GAME_CATCH, S_GAME_PEEK, S_GAME_SONG,
   S_HINT_KEEPY, S_HINT_CATCH, S_HINT_PEEK, S_HINT_SONG,
   S_SONG_LISTEN, S_SONG_TURN,
+  // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
+  S_SAY_HUNGRY, S_SAY_BATH, S_SAY_TIRED, S_SAY_BORED, S_SAY_MORNING, S_SAY_STARS,
+  S_SAY_HI, S_SAY_HAPPY, S_SAY_PAT, S_SAY_LOVE_FMT, S_SAY_LOVE,
   STR_COUNT
 };
 

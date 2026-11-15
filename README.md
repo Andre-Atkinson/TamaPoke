@@ -116,6 +116,24 @@ While **awake**, per minute:
   no slip-ups, a pet left on the charger can still earn the **IN SHAPE** medal at
   level 5 (no slip-ups, weight 0), and slip-ups don't delay its evolution. The "ready to evolve"
   chime sounds at most once per level for each form, because the needs keep coming back over 40.
+- 💬 **Speech bubbles:** now and then the creature says something in a bubble above
+  it, for about 4.5 s. A need comes first, the same one (below 25) as the "!" bubble and
+  the status line: "I'm hungry!", "I need a bath!", "I'm tired...", "I'm bored...". Otherwise
+  "Good morning!" (6:00–9:59) or "Look at the stars!" (20:00–5:59) when the clock is set, a
+  friendly line ("Hi there!", "I'm happy!", "Pat me!") or "I love you, <name>!". The name
+  is the player's, set once from a computer with the serial command `OWNER <name>`
+  (`python3 tools/board.py cmd OWNER Name`; `OWNER` alone clears it, `OWNER?` shows
+  it); with no name it says "I love you!". Names can use plain letters, digits,
+  spaces and punctuation, up to 12 characters, plus the accented letters the font has
+  (é è ê ë á à â ä å í ì î ï ó ò ô ö ú ù û ü ñ Ñ ç Ç ÿ Ä Å É Ö Ü); in Japanese and Korean the
+  accents drop to the plain letter. A bubble is due 1–2 minutes after the last one and
+  waits for the creature's screen to be awake and free, then shows 3 s later, so waking
+  the screen after a while gets a line within seconds. It never shows while the screen is
+  dimmed or off, while the creature sleeps, on an egg, during an ending, a dialog, a
+  minigame or another screen, while it eats, bathes or shows a heart or a banner, or while
+  an attention call lights the screen; it takes the "!" bubble's place while it shows. It
+  never wakes or lights the screen, and a tap on it reaches the creature as usual. Idea
+  from Mu-Muu/TamaPoke.
 - ❗ **Attention calls:** when FOOD, JOY, ENE or HYG first drops **below 25** (where
   its bar turns red), the creature calls once: one soft chirp (if sound is on) and a
   "!" speech bubble beside it with the icon of the button that helps (berry, ball,
@@ -431,6 +449,8 @@ beach, forest, volcano, mountain, snow). Sleeping forces night.
 - `serialcmd.h` / `serialcmd.cpp` — the USB serial console (SD provisioning and debug commands)
 - `uitext.h` / `uitext.cpp` — text size, cursor and font in every language
 - `scene.h` / `scene.cpp` — the main screen: sky and biome, the pet's PMD animation and walk, bath, poops, header, bars, buttons, the endings and their buttons
+- `bubble.h` / `bubble.cpp` — the speech bubbles: which line, when, and where it goes on the round screen (#23)
+- `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the fonts can draw, and its NVS key
 - `gameui.h` / `gameui.cpp` — the minigames' screens and the strength-training sack (their logic is in `minigames.h`)
 - `screens.h` / `screens.cpp` — the other screens: starter and egg choice, the pet card's pages, clock and settings, the nickname keyboard, the Pokédex gallery
 - `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
@@ -489,7 +509,8 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
 runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio test) ·
 `REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery) · `CAREDAY` ·
 `TIME <epoch>` / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
-`SAVE` (write pending pet changes now) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
+`SAVE` (write pending pet changes now) · `OWNER <name>` (the player's name in the
+speech bubbles; `OWNER` alone clears it) · `OWNER?` (read-only: `owner=<name>`) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
 inbed=<0|1> stale=<0|1> egg=<0|1> picking=<0|1>`, stale = bedtime paused until the clock
 is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on screen) · `LS` / `PUT` (SD files). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.
@@ -516,8 +537,8 @@ screen by screen.
 
 A script is one step per line (the full list is in `sim/script.h`):
 `tap X Y`, `hold X Y 3s`, `swipe left|right|up|down`, `press pwr 3`,
-`press boot`, `wait 2h`, `serial SPEC 25`, `battery 15`, `usb on`, and
-`shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
+`press boot`, `wait 2h`, `serial SPEC 25`, `battery 15`, `usb on`,
+`say hungry` (a speech bubble now, simulator only), and `shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
 doesn't answer) set the language, the time and the PMU before boot, and only
 there (`clock none`: no time, as after a power-off; see `sim/scripts/clock-prompt.txt`);
 `battery`, `usb` and `charging` placed before the first step that

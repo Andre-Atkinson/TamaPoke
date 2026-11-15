@@ -42,6 +42,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Toques", "Atrapa bayas", "Cuc\243-tras", "Canci\242n de bayas",
     "Toca la bola!", "Desliza y atrapa!", "T\242came cuando salga!", "Mira y repite!",
     "Escucha...", "Te toca!",
+    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
+    "\255Tengo hambre!", "\255Necesito un ba\244o!", "Tengo sue\244o...", "Me aburro...",
+    "\255Buenos d\241as!", "\255Mira las estrellas!", "\255Hola!", "\255Qu\202 feliz estoy!", "\255Acar\241ciame!",
+    "\255Te quiero, %s!", "\255Te quiero!",
   },
   // ---------------- EN ----------------
   {
@@ -78,6 +82,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Keepy-uppy", "Berry Catch", "Peekaboo", "Berry Song",
     "Tap the ball!", "Slide to catch!", "Tap when I pop up!", "Watch, then repeat!",
     "Listen...", "Your turn!",
+    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
+    "I'm hungry!", "I need a bath!", "I'm tired...", "I'm bored...",
+    "Good morning!", "Look at the stars!", "Hi there!", "I'm happy!", "Pat me!",
+    "I love you, %s!", "I love you!",
   },
   // ---------------- FR ----------------
   {
@@ -114,6 +122,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Jongles", "Attrape-baies", "Coucou", "Chanson des baies",
     "Touche la balle!", "Glisse pour attraper!", "Touche-moi quand je sors!", "Regarde et r\202p\212te!",
     "\220coute...", "A toi!",
+    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
+    "J'ai faim!", "J'ai besoin d'un bain!", "J'ai sommeil...", "Je m'ennuie...",
+    "Bonjour!", "Regarde les \202toiles!", "Coucou!", "Quel bonheur!", "Caresse-moi!",
+    "Je t'aime, %s!", "Je t'aime!",
   },
   // ---------------- DE ----------------
   // El aleman si lleva dieresis: la fuente 5x7 del firmware es una tabla CP437
@@ -155,6 +167,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Ball hochhalten", "Beerenfang", "Kuckuck", "Beerenlied",
     "Tipp den Ball!", "Wisch und fang!", "Tipp mich, wenn ich da bin!", "Schau zu, spiel nach!",
     "H\224r zu...", "Du bist dran!",
+    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
+    "Ich hab Hunger!", "Ich brauch ein Bad!", "Ich bin m\201de...", "Mir ist langweilig...",
+    "Guten Morgen!", "Schau, die Sterne!", "Hallo!", "Ich bin gl\201cklich!", "Streichel mich!",
+    "Ich hab dich lieb, %s!", "Ich hab dich lieb!",
   },
   // ---------------- IT ----------------
   {
@@ -191,6 +207,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Palleggi", "Acchiappa bacche", "Cuc\227", "Canzone delle bacche",
     "Tocca la palla!", "Scorri e acchiappa!", "Toccami quando spunto!", "Guarda e ripeti!",
     "Ascolta...", "Tocca a te!",
+    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
+    "Ho fame!", "Mi serve un bagno!", "Ho sonno...", "Mi annoio...",
+    "Buongiorno!", "Guarda le stelle!", "Ciao!", "Sono felice!", "Accarezzami!",
+    "Ti voglio bene, %s!", "Ti voglio bene!",
   },
   // ---------------- PT ----------------
   {
@@ -227,6 +247,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Embaixadinhas", "Ca\207a-bagas", "Cad\210? Achou!", "M\243sica das bagas",
     "Toque na bola!", "Deslize e pegue!", "Toque quando eu aparecer!", "Olhe e repita!",
     "Escute...", "Sua vez!",
+    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
+    "Estou com fome!", "Preciso de um banho!", "Estou com sono...", "Que t\202dio...",
+    "Bom dia!", "Olha as estrelas!", "Ol\240!", "Estou feliz!", "Me faz carinho!",
+    "Eu te amo, %s!", "Eu te amo!",
   },
   // ---------------- JA ----------------
   {
@@ -286,6 +310,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "リフティング", "きのみキャッチ", "いないいないばあ", "きのみのうた",
     "ボールをタッチ!", "スライドでキャッチ!", "でてきたらタッチ!", "みて まねしてね!",
     "きいてね...", "きみのばん!",
+    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
+    "おなかすいた！", "おふろにはいりたい！", "ねむい...", "たいくつ...",
+    "おはよう！", "ほしがきれい！", "やあ！", "しあわせ！", "なでて！",
+    "%s、だいすき！", "だいすき！",
   },
   // ---------------- KO ----------------
   // Los especificadores van en el MISMO ORDEN que en la fila inglesa aunque
@@ -327,6 +355,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "리프팅", "열매 받기", "까꿍", "열매 노래",
     "공을 터치!", "밀어서 받기!", "나오면 터치!", "보고 따라 해요!",
     "들어 봐요...", "네 차례!",
+    // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
+    "배고파요!", "목욕하고 싶어요!", "졸려요...", "심심해요...",
+    "좋은 아침!", "별 좀 봐요!", "안녕!", "행복해요!", "쓰다듬어 줘요!",
+    "%s, 사랑해요!", "사랑해요!",
   },
 };
 
