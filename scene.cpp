@@ -15,6 +15,7 @@
 #include "sdmon.h"
 #include "settingslayout.h"
 #include "species.h"
+#include "standby.h"
 #include "uitext.h"
 
 #define PET_WALK_MIN IDLE_WALK_MIN  // where the pet may walk to (idleplan.h, and after a finger)
@@ -396,6 +397,88 @@ void drawScene(uint32_t now, bool night) {
   if (drops) drawRain(now, drops, wx.kind == WX_STORM || wx.prev == WX_STORM, night);
   if (flakes) drawSnow(now, flakes, night);
   if (wxLightning(wx)) drawLightning(now);
+}
+
+// ---------- the standby clock (standby.h, #60) ----------
+
+#define STANDBY_INK C565(0xd8, 0xde, 0xe8)   // the digits
+#define STANDBY_DIM C565(0x80, 0x88, 0x9a)   // the date and the battery
+#define STANDBY_TIME_Y 128                   // the time: size 9, 72 px tall
+#define STANDBY_DATE_Y 222                   // the date: size 3
+#define STANDBY_WX_Y 300                     // the weather icon's centre
+#define STANDBY_BAT_Y 364                    // the battery
+
+// a cloud of three circles centred on (cx, cy), `s` px across its middle puff
+static void drawIconCloud(int cx, int cy, int s, uint16_t col) {
+  gfx->fillCircle(cx - s * 7 / 10, cy + s / 5, s * 2 / 3, col);
+  gfx->fillCircle(cx + s * 7 / 10, cy + s / 5, s * 2 / 3, col);
+  gfx->fillCircle(cx, cy - s / 5, s, col);
+  gfx->fillRect(cx - s * 7 / 10, cy + s / 5, s * 14 / 10, s * 2 / 3, col);
+}
+
+// today's weather as a small picture centred on (cx, cy), ~64 px across (no words: the
+// same in every language)
+static void drawWxIcon(uint8_t kind, int cx, int cy) {
+  const uint16_t sun = C565(0xf0, 0xc8, 0x5a), cloud = C565(0xb4, 0xbc, 0xca), dark = C565(0x6c, 0x74, 0x86),
+                 rain = C565(0x6a, 0x9c, 0xe0), bolt = C565(0xff, 0xe0, 0x60);
+  switch (kind) {
+    case WX_CLEAR:
+      gfx->fillCircle(cx, cy, 14, sun);
+      for (int i = 0; i < 8; i++) {  // rays every 45 degrees
+        static const int8_t D[8][2] = { { 0, -1 }, { 1, -1 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, { -1, 1 }, { -1, 0 }, { -1, -1 } };
+        int r0 = D[i][0] && D[i][1] ? 15 : 20, r1 = D[i][0] && D[i][1] ? 22 : 29;
+        for (int t = -1; t <= 1; t++)
+          gfx->drawLine(cx + D[i][0] * r0 + (D[i][1] ? t : 0), cy + D[i][1] * r0 + (D[i][0] ? t : 0),
+                        cx + D[i][0] * r1 + (D[i][1] ? t : 0), cy + D[i][1] * r1 + (D[i][0] ? t : 0), sun);
+      }
+      break;
+    case WX_CLOUDY:
+      gfx->fillCircle(cx + 12, cy - 10, 13, sun);  // the sun behind a cloud
+      drawIconCloud(cx - 4, cy + 4, 15, cloud);
+      break;
+    case WX_RAIN:
+    case WX_STORM:
+      drawIconCloud(cx, cy - 8, 15, kind == WX_STORM ? dark : cloud);
+      if (kind == WX_STORM) {
+        gfx->fillTriangle(cx + 2, cy + 6, cx - 9, cy + 22, cx + 1, cy + 22, bolt);
+        gfx->fillTriangle(cx - 1, cy + 18, cx + 9, cy + 18, cx - 4, cy + 34, bolt);
+      } else {
+        for (int i = -1; i <= 1; i++)
+          for (int t = 0; t < 2; t++) gfx->drawLine(cx + i * 12 + t, cy + 12, cx + i * 12 - 5 + t, cy + 26, rain);
+      }
+      break;
+    case WX_SNOW:
+      drawIconCloud(cx, cy - 8, 15, cloud);
+      for (int i = -1; i <= 1; i++) gfx->fillRect(cx + i * 12 - 2, cy + 16 + (i & 1) * 6, 5, 5, UI_WHITE);
+      break;
+    default:  // fog
+      for (int i = 0; i < 3; i++) gfx->fillRoundRect(cx - 26 + (i & 1) * 8, cy - 14 + i * 12, 44, 6, 3, cloud);
+      break;
+  }
+}
+
+void drawStandby(uint32_t epoch, uint8_t wxKind, int batPct, bool charging) {
+  gfx->fillScreen(0x0000);  // black: an AMOLED lights only the digits
+  int dx, dy;
+  standbyShift(epoch / 60, dx, dy);
+  char t[8];
+  snprintf(t, sizeof t, "%02u:%02u", (unsigned)((epoch / 3600) % 24), (unsigned)((epoch / 60) % 60));
+  gfx->setTextColor(STANDBY_INK);
+  setSize(9);
+  setCur(centerX(t, 9) + dx, STANDBY_TIME_Y + dy);
+  printT(t);
+  drawWxIcon(wxKind, CX + dx, STANDBY_WX_Y + dy);
+  if (batPct >= 0) {  // the glyph (a bolt while charging) and the percentage
+    char s[8];
+    batteryPctLabel(s, sizeof s, batPct, charging);
+    setSize(2);
+    int w = 32 + 8 + textW(s, 2), x = CX - w / 2 + dx, y = STANDBY_BAT_Y + dy;
+    drawBatteryGlyph(x, y, 32, 14, batPct, charging, batteryColor(batPct, charging, STANDBY_DIM), C565(0xff, 0xd9, 0x4a));
+    gfx->setTextColor(STANDBY_DIM);
+    setCur(x + 40, y - 1);
+    printT(s);
+  }
+  flushUI();
 }
 
 // battery colour: green while charging, else `ink` down to 40 %, then amber, then red

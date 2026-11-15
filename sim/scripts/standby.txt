@@ -1,0 +1,46 @@
+# The standby clock (#60, standby.h): plugged in and left alone, a dim clock with the date
+# and the weather takes the place of screen-off (the 1.75C turns its screen off at 60 s;
+# the original 1.75's default is Never, so its clock comes at 90 s). A touch brings the pet
+# back; unplugged or asleep, the screen's usual rules apply. Its "standby clock" lines are
+# in serial.log.
+
+usb on
+charging on
+battery 60
+clock 2026-11-13 10:00
+wait 1s
+tap 233 220
+wait 500ms
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+shot standby-0-pet
+
+# left alone: the clock (by 100 s on both boards)
+wait 100s
+shot standby-1-clock
+wait 3m
+shot standby-2-clock-moved
+
+# a touch (the first only wakes): the pet again
+tap 233 233
+wait 1s
+shot standby-3-pet-again
+
+# unplugged: no clock. The 1.75C's screen goes off at 60 s (its touch lock follows 10 s
+# later, so a touch at 62 s still wakes it); the 1.75 (Never) stays lit
+usb off
+charging off
+wait 62s
+shot standby-4-on-battery
+tap 233 233
+wait 1s
+
+# plugged in again but asleep: no clock either (the 1.75C's screen goes dark at 60 s, the
+# 1.75 dims)
+usb on
+charging on
+tap 264 404
+wait 100s
+shot standby-5-asleep

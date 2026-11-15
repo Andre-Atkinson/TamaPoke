@@ -504,6 +504,18 @@ the board from the clock alone: no network, and nothing new is saved (`weather.h
   the sky, clouds and fog stay but nothing falls, and nothing is drawn with the screen off.
 - **No clock yet** (after a power cut, until the time is set): fair weather at home, no season.
 
+## Standby clock (plugged in)
+
+Plugged in and left alone, the screen shows a dim clock instead of going dark: the time,
+the date and a picture of today's weather on black, with the battery charging under them
+(`standby.h`, #60). It comes when the screen would turn off (the screen-off setting), or
+at 90 s when that is *Never*, and steps a few pixels each minute so the AMOLED doesn't
+burn in. Any touch (the first only wakes) or BOOT brings the creature back, PWR turns the
+screen fully off, and an attention call shows the creature for its window, then the clock
+again. Self-care while charging carries on underneath. Nothing changes on battery, while
+the creature sleeps (the screen goes dark as before), or before the clock is set after a
+power cut.
+
 ## Layout
 
 - `TamaPoke.ino` — init, game loop, hardware bring-up, buttons and power, the care glue (bedtime, attention calls, clock prompt), touch and gestures, and `render()`, which picks the screen to draw
@@ -513,6 +525,7 @@ the board from the clock alone: no network, and nothing new is saved (`weather.h
 - `scene.h` / `scene.cpp` — the main screen: sky and biome, the pet's PMD animation and walk, bath, poops, header, bars, buttons, the endings and their buttons
 - `weather.h` — the place of each day, its made-up weather, the date and the season, from the clock (#60); `scene.cpp` draws them
 - `skylayout.h` — where the header, the sun, the moon and the stars sit on the round screen (#70)
+- `standby.h` — when the standby clock replaces screen-off on USB, and its burn-in steps (#60); `scene.cpp` draws it
 - `bubble.h` / `bubble.cpp` — the speech bubbles: which line, when, and where it goes on the round screen (#23)
 - `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the fonts can draw, and its NVS key
 - `gameui.h` / `gameui.cpp` — the minigames' screens and the strength-training sack (their logic is in `minigames.h`)
@@ -605,7 +618,8 @@ the dialogs, every minigame, the biomes, the endings, the BOOT and PWR presses).
 `weather.txt` shows every kind of weather by day, at dusk and at night, `seasons.txt` each
 season and the longest titles under the sun and the moon, and
 `travel.txt` checks that the place changes only while nobody is looking (read its
-`SCENE?` lines in `serial.log`).
+`SCENE?` lines in `serial.log`), and `standby.txt` the standby clock plugged in, on
+battery and asleep (its `standby clock` lines).
 Run with the other scripts in `sim/scripts/`, it lets two builds be compared
 screen by screen.
 

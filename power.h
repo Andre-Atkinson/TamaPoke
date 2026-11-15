@@ -38,7 +38,12 @@ struct PowerCtx {
   int batPct;         // 0-100, -1 si no hay bateria
   uint8_t userDim;    // nivel de brillo elegido en ajustes: 0 = alto (el de siempre), 1 = medio, 2 = bajo
   uint32_t offMs;     // 0 = el horario de siempre (atenua a 90 s, casi apagada a 5 min). Si no, apaga a este tiempo y atenua a la mitad
+  bool standby;       // the standby clock is up (standby.h, #60): it takes the place of screen-off
 };
+
+// The standby clock's brightness (before the settings' level scales it): dim, on a black
+// screen that only lights the digits, the date and the weather.
+#define STANDBY_BRIGHT 40
 
 // niveles de brillo de ajustes (#34): porcentaje que se aplica a todos los brillos de abajo
 #define BRIGHT_LEVELS 3
@@ -63,6 +68,7 @@ inline uint8_t dimStageFor(uint32_t idleMs) {
 
 // offMs == 0 keeps the historical schedule so the host tests stay valid.
 inline uint8_t dimStageNow(const PowerCtx &c) {
+  if (c.standby) return DIM_OFF;  // nobody is using it: no pet scene, no amplifier, 1 fps, 80 MHz
   uint32_t idle = c.idleMs;
   if (c.gameOpen && idle < POWER_GAME_AWAKE_MS) return DIM_AWAKE;
   if (!c.offMs) return dimStageFor(idle);
@@ -73,7 +79,7 @@ inline uint8_t dimStageNow(const PowerCtx &c) {
 
 // Apagado por inactividad. El minijuego queda fuera. El USB no lo desactiva.
 inline bool autoScreenOff(const PowerCtx &c) {
-  return c.offMs && !c.gameOpen && c.idleMs >= c.offMs;
+  return c.offMs && !c.gameOpen && !c.standby && c.idleMs >= c.offMs;
 }
 
 // bateria baja: se ahorra mas (solo si de verdad depende de la bateria)
@@ -88,6 +94,7 @@ inline uint8_t brightnessFor(const PowerCtx &c) {
   uint8_t t = c.sleeping ? 25 : (c.usb ? 180 : 145);
   if (stage == DIM_LOW) t = c.sleeping ? 10 : 60;
   else if (stage == DIM_OFF) t = 8;
+  if (c.standby) t = STANDBY_BRIGHT;  // its own level, after the stages (it reads as DIM_OFF)
   if (batteryCritical(c) && t > 60) t = 60;
   else if (batteryLow(c) && t > 100) t = 100;
   if (c.userDim) {  // el nivel elegido escala todo, sin bajar de 2 (0 seria pantalla apagada)

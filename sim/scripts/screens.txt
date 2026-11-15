@@ -124,6 +124,17 @@ shot 26-season-winter
 serial SCENE auto
 wait 1s
 
+# the standby clock (#60, standby.h): plugged in and left alone (the 1.75C at its 60 s
+# screen-off, the 1.75 at 90 s), then a touch brings the pet back
+usb on
+charging on
+wait 100s
+shot 27-standby-clock
+tap 233 233
+wait 1s
+usb off
+charging off
+
 # Care page, Eggs -> Choose; a runaway (serial RUN) then offers three eggs
 swipe up
 swipe left
@@ -134,10 +145,10 @@ tap 233 288
 swipe up
 serial RUN
 wait 12s
-shot 27-egg-choice
+shot 28-egg-choice
 tap 233 220
 wait 500ms
-shot 28-egg-look
+shot 29-egg-look
 tap 233 220
 wait 1s
-shot 29-egg-picked
+shot 30-egg-picked
