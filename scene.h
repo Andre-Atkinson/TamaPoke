@@ -53,7 +53,7 @@ uint8_t scenePlace();     // the place on screen (today's before the first frame
 WxNow sceneWeather();     // the weather at scenePlace() now (fair during a ceremony)
 bool sceneStarsOut();     // the night sky shows its stars (the speech bubbles' night line)
 // The sky, the place and the weather. The place changes only while nobody is looking
-// (sceneMayChange), so call this only for a frame of the main scene that is drawn.
+// (SceneLatch), so call this only for a frame of the main scene that is drawn.
 void drawScene(uint32_t now, bool night);
 uint16_t batteryColor(int pc, bool charging, uint16_t ink);
 void drawBatteryGlyph(int x, int y, int w, int h, int pc, bool charging, uint16_t col, uint16_t bolt);

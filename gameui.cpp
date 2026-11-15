@@ -240,7 +240,7 @@ static void drawGameScene() {
   int hor = 376;
   for (int y = 0; y < hor; y += 8)
     gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, hor));
-  if (night)
+  if (night && sceneStarsOut())  // not under cloud, rain, snow or fog (#60)
     for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
   uint8_t bio = scenePlace();  // where the pet is today (#60), not always its home
   uint16_t soil = BIOME_SOIL[bio < 6 ? bio : 0];

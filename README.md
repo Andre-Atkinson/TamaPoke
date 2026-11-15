@@ -471,14 +471,15 @@ the board from the clock alone: no network, and nothing new is saved (`weather.h
   4 days in 10, and in one of the other five places the rest of the time. The scene only
   changes while nobody is looking (the screen off, another screen open, or the
   nearly-off dim), so the creature is never seen jumping from one place to another. An
-  egg stays in the meadow, and the minigames' backgrounds follow the place.
+  egg stays in the meadow (a new egg after a farewell appears there at once), and the
+  minigames' backgrounds follow the place.
 - **Made-up weather.** Clear, cloudy, rain, storm (with a little lightning), snow and
   fog, with odds that suit each place: sun and showers at the beach, rain and mist in the
   forest, snow and fog in the snowfield and on the mountain, never snow at the volcano.
   The weather comes in 3-hour blocks that often carry on, so a spell lasts from 3 to 15
   hours, and a change fades in over 20 minutes. It is only scenery: it never touches the
-  needs. Clouds hide the stars and the moon, and on a covered night the creature doesn't
-  ask you to look at the stars.
+  needs. Clouds hide the stars (rain, storms, snow and fog hide the moon too), and on a
+  covered night the creature doesn't ask you to look at the stars.
 - **Power.** Falling rain, snow and lightning are drawn only at the full frame rate.
   While the screen is dimmed, while the creature sleeps untouched or on a low battery,
   the sky, clouds and fog stay but nothing falls, and nothing is drawn with the screen off.

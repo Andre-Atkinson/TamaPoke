@@ -10,6 +10,8 @@
 #      (place=forest); the 1.75C turned its screen off at 60 s and draws nothing
 #      (place=beach)
 #   7. a PWR press (the 1.75C's screen comes on, the 1.75's goes off): place=forest
+#   8. a farewell (BYE) while watched: its new egg is in the meadow at once (place=meadow,
+#      today=meadow), where hatching, in step 1, kept the old place until nobody looked
 # A tap on the sky at the left (outside the pet zone) keeps the screen awake.
 
 clock 2026-11-17 05:57
@@ -66,3 +68,11 @@ serial SCENE?
 press pwr
 wait 1s
 serial SCENE?
+
+# (a tap on the sky wakes the 1.75's screen and keeps the 1.75C's on)
+tap 60 200
+wait 1s
+serial BYE
+wait 14s
+serial SCENE?
+shot travel-5-farewell-egg

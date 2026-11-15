@@ -72,6 +72,25 @@ inline bool sceneMayChange(bool firstFrame, uint32_t sinceLastDrawMs, bool nearl
   return firstFrame || nearlyOff || sinceLastDrawMs >= SCENE_UNSEEN_MS;
 }
 
+// The place on screen, and the memory sceneMayChange needs (scene.cpp keeps one, calls
+// frame() once per frame of the main scene and draws the place it returns). A pet turning
+// into an egg (a farewell, a run-away, a release) is a moment the place may change too: the
+// pet vanishing is a full scene change, and the new egg stays in the meadow. An egg hatching
+// is not: the pet appears where the egg was and moves on when nobody is looking.
+struct SceneLatch {
+  uint8_t shown = SCENE_AUTO;  // the place on screen; SCENE_AUTO until the first frame
+  bool shownEgg = false;       // the last frame drew an egg
+  uint32_t last = 0;           // millis() of the last frame
+  uint8_t frame(uint32_t now, uint8_t today, bool isEgg, bool nearlyOff) {
+    bool first = shown >= PLACES;
+    bool toEgg = isEgg && !shownEgg;
+    if (sceneMayChange(first, now - last, nearlyOff) || toEgg) shown = today;
+    shownEgg = isEgg;
+    last = now;
+    return shown;
+  }
+};
+
 // ---------------------------------------------------------------- weather
 // The weather is decided per 3-hour block of the clock (00:00, 03:00, 06:00...). A block
 // carries on the one before 4 times in 10, up to 4 times in a row, so a spell lasts from
@@ -143,6 +162,15 @@ inline WxNow wxAt(uint8_t place, uint32_t epoch) {
     w.mix = (uint8_t)(in * WX_MIX_FULL / WX_FADE_S);
   }
   return w;
+}
+
+// The weather the scene shows: clear during a ceremony (the farewell and the run-away keep
+// their own look; the run-away draws its own rain), else the kind the SCENE serial command
+// forced, else the weather at `place` at `epoch`.
+inline WxNow sceneWx(bool ceremony, uint8_t forcedWx, uint8_t place, uint32_t epoch) {
+  if (ceremony) return wxFixed(WX_CLEAR);
+  if (forcedWx < WX_KINDS) return wxFixed(forcedWx);
+  return wxAt(place, epoch);
 }
 
 // ---------------------------------------------------------------- what it looks like

@@ -82,6 +82,20 @@ TEST(Weather, a_spell_carries_on_through_the_blocks_that_keep_it) {
     CHECK_RANGE(seen[k] * 100 / n, WX_ODDS[PLACE_MEADOW][k] - 3, WX_ODDS[PLACE_MEADOW][k] + 3);
 }
 
+// 40 blocks in 100 carry on the one before them, and a run of them is cut at WX_KEEP_MAX
+TEST(Weather, the_keep_rate_and_the_spell_cap_hold) {
+  const uint32_t first = SOME_DAY / WX_BLOCK_S;
+  const int n = 20000;
+  int kept = 0;
+  for (uint32_t b = first; b < first + n; b++) {
+    if (wxKeeps(b)) kept++;
+    int run = 0;  // the blocks that keep, going back, capped
+    for (uint32_t c = b; run < WX_KEEP_MAX && wxKeeps(c); c--) run++;
+    for (uint8_t p = 0; p < PLACES; p++) CHECK_EQ(wxKind(p, b), wxFresh(p, b - (uint32_t)run));
+  }
+  CHECK_RANGE(kept * 100 / n, WX_KEEP_PCT - 2, WX_KEEP_PCT + 2);
+}
+
 // ---------------------------------------------------------------- the clock
 TEST(Weather, without_a_trusted_clock_it_is_fair_weather_at_home) {
   CHECK_EQ(sceneEpoch(SOME_DAY, true), 0u);  // reseeded and not set since
@@ -196,6 +210,104 @@ TEST(Travel, the_scene_changes_only_while_nobody_is_looking) {
       if (dimStageNow(c) != DIM_OFF) CHECK(frameIntervalMs(c) < SCENE_UNSEEN_MS);
     }
   }
+}
+
+// The latch the scene keeps (SceneLatch): the place on screen, frame by frame.
+TEST(Travel, the_first_frame_takes_the_place_of_today) {
+  SceneLatch l;
+  CHECK_EQ(l.shown, (uint8_t)SCENE_AUTO);
+  CHECK_EQ(l.frame(5000, PLACE_VOLCANO, false, false), (uint8_t)PLACE_VOLCANO);
+  CHECK_EQ(l.shown, (uint8_t)PLACE_VOLCANO);
+}
+
+TEST(Travel, a_watched_scene_keeps_its_place_across_a_new_day) {
+  // frames 100, 150, 250, 500 and 1000 ms apart (full rate, calm, slow, the 1 s dim): a
+  // change of today's place is not shown
+  uint32_t now = 10000;
+  SceneLatch l;
+  l.frame(now, PLACE_VOLCANO, false, false);
+  for (uint32_t step : { 100UL, 150UL, 250UL, 500UL, 1000UL, 100UL }) {
+    now += step;
+    CHECK_EQ(l.frame(now, PLACE_BEACH, false, false), (uint8_t)PLACE_VOLCANO);
+  }
+  CHECK_EQ(l.last, now);  // every frame is remembered
+}
+
+TEST(Travel, a_gap_or_the_nearly_off_screen_takes_the_new_place) {
+  SceneLatch l;
+  l.frame(10000, PLACE_VOLCANO, false, false);
+  // the gap counts from the last frame, not the first: each frame here is just under
+  // SCENE_UNSEEN_MS after the one before it
+  uint32_t t = 10000;
+  for (int i = 0; i < 3; i++) {
+    t += SCENE_UNSEEN_MS - 1;
+    CHECK_EQ(l.frame(t, PLACE_BEACH, false, false), (uint8_t)PLACE_VOLCANO);
+  }
+  // the screen was off or another screen was open for SCENE_UNSEEN_MS
+  CHECK_EQ(l.frame(t + SCENE_UNSEEN_MS, PLACE_BEACH, false, false), (uint8_t)PLACE_BEACH);
+  // the nearly-off dim, frames 1 s apart
+  SceneLatch d;
+  d.frame(20000, PLACE_FOREST, false, false);
+  CHECK_EQ(d.frame(21000, PLACE_SNOW, false, false), (uint8_t)PLACE_FOREST);
+  CHECK_EQ(d.frame(22000, PLACE_SNOW, false, true), (uint8_t)PLACE_SNOW);
+}
+
+TEST(Travel, the_latch_survives_the_millis_counter_wrapping) {
+  SceneLatch l;
+  uint32_t t = 0xFFFFFFFFUL - 120;
+  l.frame(t, PLACE_VOLCANO, false, false);
+  for (int i = 0; i < 4; i++) {  // 100 ms frames across the wrap
+    t += 100;
+    CHECK_EQ(l.frame(t, PLACE_BEACH, false, false), (uint8_t)PLACE_VOLCANO);
+  }
+  CHECK(t < 1000);  // it did wrap
+  CHECK_EQ(l.frame(t + SCENE_UNSEEN_MS, PLACE_BEACH, false, false), (uint8_t)PLACE_BEACH);
+}
+
+// a pet turning into an egg (farewell, run-away, release) is watched, but the pet vanishes
+// anyway, so the egg goes to the meadow at once; hatching keeps the place until unseen
+TEST(Travel, an_ending_shows_its_egg_in_the_meadow_but_hatching_waits) {
+  SceneLatch l;
+  uint32_t now = 10000;
+  l.frame(now, PLACE_BEACH, false, false);
+  now += 100;
+  CHECK_EQ(l.frame(now, PLACE_BEACH, false, false), (uint8_t)PLACE_BEACH);
+  now += 100;  // the pet turns into an egg: its place is the meadow, watched or not
+  CHECK_EQ(l.frame(now, PLACE_MEADOW, true, false), (uint8_t)PLACE_MEADOW);
+  now += 100;  // the egg goes on in the meadow
+  CHECK_EQ(l.frame(now, PLACE_MEADOW, true, false), (uint8_t)PLACE_MEADOW);
+  now += 100;  // it hatches into a pet whose day is at the volcano: it stays in the meadow
+  CHECK_EQ(l.frame(now, PLACE_VOLCANO, false, false), (uint8_t)PLACE_MEADOW);
+  now += 100;
+  CHECK_EQ(l.frame(now, PLACE_VOLCANO, false, false), (uint8_t)PLACE_MEADOW);
+  now += SCENE_UNSEEN_MS;  // until nobody is looking
+  CHECK_EQ(l.frame(now, PLACE_VOLCANO, false, false), (uint8_t)PLACE_VOLCANO);
+}
+
+// the weather the scene shows: clear in a ceremony, the forced kind, else the clock's
+TEST(Weather, the_scene_shows_clear_in_a_ceremony_the_forced_kind_or_the_clocks) {
+  // find a time whose weather is not clear, to tell the three apart
+  uint32_t e = SOME_DAY;
+  uint8_t place = PLACE_MEADOW;
+  while (wxAt(place, e).kind == WX_CLEAR || wxAt(place, e).mix != WX_MIX_FULL) e += WX_BLOCK_S;
+  e += WX_FADE_S;  // clear of any fade
+  WxNow own = wxAt(place, e);
+  CHECK(own.kind != WX_CLEAR);
+  for (uint8_t forced : { (uint8_t)SCENE_AUTO, (uint8_t)WX_STORM, (uint8_t)WX_FOG }) {
+    WxNow c = sceneWx(true, forced, place, e);  // a ceremony wins over everything
+    CHECK_EQ(c.kind, (uint8_t)WX_CLEAR);
+    CHECK_EQ(c.prev, (uint8_t)WX_CLEAR);
+    CHECK_EQ(c.mix, (uint8_t)WX_MIX_FULL);
+  }
+  WxNow f = sceneWx(false, WX_SNOW, place, e);  // the SCENE command's kind wins over the clock
+  CHECK_EQ(f.kind, (uint8_t)WX_SNOW);
+  CHECK_EQ(f.prev, (uint8_t)WX_SNOW);
+  CHECK_EQ(f.mix, (uint8_t)WX_MIX_FULL);
+  WxNow a = sceneWx(false, SCENE_AUTO, place, e);
+  CHECK_EQ(a.kind, own.kind);
+  CHECK_EQ(a.prev, own.prev);
+  CHECK_EQ(a.mix, own.mix);
+  CHECK_EQ(sceneWx(false, WX_KINDS, place, e).kind, own.kind);  // out of range: the clock's
 }
 
 // ---------------------------------------------------------------- the sky

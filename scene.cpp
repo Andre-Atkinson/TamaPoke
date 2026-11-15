@@ -73,8 +73,7 @@ int sceneHour() {
 // ---------- travelling and weather (weather.h, #60) ----------
 
 uint8_t sceneForcePlace = SCENE_AUTO, sceneForceWx = SCENE_AUTO;  // the SCENE serial command
-static uint8_t shownPlace = SCENE_AUTO;  // the place on screen: it follows sceneToday() only unseen
-static uint32_t lastSceneDraw = 0;       // millis() of the last frame of the main scene
+static SceneLatch sceneLatch;  // the place on screen: it follows sceneToday() only unseen (weather.h)
 
 // the clock the scene follows: 0 while it is not trusted (never set, or reseeded)
 static uint32_t sceneClock() { return sceneEpoch(pet.lastSeenEpoch, bedEdge.stale()); }
@@ -90,24 +89,20 @@ uint8_t sceneToday() { return pet.isEgg() ? (uint8_t)PLACE_MEADOW : travelPlace(
 
 uint8_t scenePlace() {
   if (sceneForcePlace < PLACES) return sceneForcePlace;
-  return shownPlace < PLACES ? shownPlace : sceneToday();
+  return sceneLatch.shown < PLACES ? sceneLatch.shown : sceneToday();
 }
 
 // The farewell and the run-away keep their own look: a clear sky (the run-away draws its
 // own rain, drawCeremony()).
-WxNow sceneWeather() {
-  if (pet.ceremony) return wxFixed(WX_CLEAR);
-  if (sceneForceWx < WX_KINDS) return wxFixed(sceneForceWx);
-  return wxAt(scenePlace(), sceneClock());
-}
+WxNow sceneWeather() { return sceneWx(pet.ceremony, sceneForceWx, scenePlace(), sceneClock()); }
 
 bool sceneStarsOut() { return wxStarsOut(sceneWeather()); }
 
 // The place for this frame: a new day's place (or a new pet's home) is taken up only while
-// nobody is looking, so the pet is never seen jumping from one place to another.
+// nobody is looking, or when the pet turns into an egg (SceneLatch), so the pet is never
+// seen jumping from one place to another.
 static uint8_t scenePlaceForFrame(uint32_t now) {
-  if (sceneMayChange(shownPlace >= PLACES, now - lastSceneDraw, dimStage == DIM_OFF)) shownPlace = sceneToday();
-  lastSceneDraw = now;
+  sceneLatch.frame(now, sceneToday(), pet.isEgg(), dimStage == DIM_OFF);
   return scenePlace();
 }
 
