@@ -147,6 +147,48 @@ TEST(Attention, an_unknown_or_stale_clock_is_always_quiet) {
     for (int m = 0; m < 1440; m += 7) CHECK(attnQuiet(p, false, (uint16_t)m));
 }
 
+// attnQuietAt(): quiet hours from what the sketch holds (the epoch and the clock's stale
+// flag), for the attention calls and the sounds nobody asked for (#44, test_pet.cpp).
+// 2026-11-15 00:00 as the firmware keeps it: local wall time stored as if it were UTC.
+static const uint32_t DAY0 = 1794700800UL;
+static uint32_t at(uint32_t day, int h, int m) { return DAY0 + day * 86400UL + (uint32_t)(h * 3600 + m * 60); }
+
+TEST(Attention, quiet_at_follows_the_bedtime_window_across_midnight) {
+  // bedtime 23:00-08:00 (preset 3): the window starts one day and ends the next
+  CHECK(!attnQuietAt(3, at(0, 22, 59), false));
+  CHECK(attnQuietAt(3, at(0, 23, 0), false));
+  CHECK(attnQuietAt(3, at(0, 23, 59), false));
+  CHECK(attnQuietAt(3, at(1, 0, 0), false));
+  CHECK(attnQuietAt(3, at(1, 7, 59), false));
+  CHECK(!attnQuietAt(3, at(1, 8, 0), false));
+  CHECK(!attnQuietAt(3, at(1, 14, 0), false));
+  // 21:00-07:00 (preset 1): 21:30 is already quiet, unlike with bedtime off
+  CHECK(attnQuietAt(1, at(0, 21, 30), false));
+}
+
+TEST(Attention, quiet_at_with_bedtime_off_is_22_to_07) {
+  CHECK(!attnQuietAt(0, at(0, 21, 59), false));
+  CHECK(attnQuietAt(0, at(0, 22, 0), false));
+  CHECK(attnQuietAt(0, at(1, 0, 0), false));
+  CHECK(attnQuietAt(0, at(1, 6, 59), false));
+  CHECK(!attnQuietAt(0, at(1, 7, 0), false));
+  CHECK(!attnQuietAt(0, at(1, 13, 0), false));
+}
+
+// after a full power-off the clock is reseeded from the last saved time and marked stale
+// until someone sets it: quiet all day, whatever the bedtime
+TEST(Attention, quiet_at_a_stale_clock_is_quiet_all_day) {
+  for (uint8_t p = 0; p < BED_PRESETS; p++)
+    for (int h = 0; h < 24; h++) CHECK(attnQuietAt(p, at(3, h, 30), true));
+  CHECK_MSG(!attnQuietAt(1, at(3, 12, 0), false), "the same noon once the clock is set");
+}
+
+// a clock that was never set reads 0; minute 0 is inside every window, so the epoch check
+// is a second line rather than the only one
+TEST(Attention, quiet_at_a_clock_never_set_is_quiet) {
+  for (uint8_t p = 0; p < BED_PRESETS; p++) CHECK(attnQuietAt(p, 0, false));
+}
+
 // ---------------------------------------------------------------- what a call does
 static AttnScene scene(uint8_t screen, bool quiet = false) {
   AttnScene s = {};

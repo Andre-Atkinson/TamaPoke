@@ -4,6 +4,7 @@
 #include "../pet.h"
 #include "../dex.h"
 #include "../bedtime.h"
+#include "../audio.h"  // SFX_*, audioSetEnabled/audioSetSleeping (the shim's, muted)
 #include <string.h>
 
 // ---------------------------------------------------------------- helpers
@@ -927,6 +928,29 @@ TEST(ceremony, un_solo_cuidado_salva_del_abandono) {
   p.feedBerry(0);
   advance(p, 1);
   CHECK_MSG(!p.canRunawayNow(), "comer resetea el contador de abandono");
+}
+
+// The run-away button needs the four needs still at 0, not only the hour's count: tick()
+// resets the count on its next minute, so the button and its warning used to stay for up
+// to a minute after a care, or after a night's sleep had brought the energy back
+TEST(ceremony, a_care_takes_the_run_away_button_away_at_once) {
+  Pet p;
+  makePet(p, 4);
+  p.dbgRunawayReady();
+  CHECK(p.canRunawayNow());
+  p.feedBerry(0);
+  CHECK_MSG(!p.canRunawayNow(), "fed: the button goes at once, before the next minute");
+}
+
+TEST(ceremony, a_pet_woken_rested_shows_no_run_away_button) {
+  Pet q;
+  makePet(q, 4);
+  q.dbgRunawayReady();
+  CHECK(q.autoSleep());
+  advance(q, 9 * 60);  // the night: the energy comes back, the count stays
+  CHECK(q.energy > 0);
+  CHECK(q.autoWake());
+  CHECK_MSG(!q.canRunawayNow(), "woken rested: no run-away button and no warning at the morning wake");
 }
 
 TEST(ceremony, durante_la_ceremonia_no_se_puede_interactuar) {
@@ -2441,50 +2465,50 @@ TEST(selfcare, every_minute_in_relaxed_pace_too) {
 // ---------------------------------------------------------------- "ready to evolve" chime
 TEST(evochime, sounds_when_the_button_appears) {
   EvoChime c;
-  CHECK(!c.update(false, 4, 16));
-  CHECK(c.update(true, 4, 16));
-  CHECK_MSG(!c.update(true, 4, 16), "staying ready doesn't chime again");
+  CHECK(!c.update(false, 4, 16, false));
+  CHECK(c.update(true, 4, 16, false));
+  CHECK_MSG(!c.update(true, 4, 16, false), "staying ready doesn't chime again");
 }
 
 TEST(evochime, once_per_level) {
   EvoChime c;
-  CHECK(c.update(true, 4, 16));
-  CHECK(!c.update(false, 4, 16));
-  CHECK_MSG(!c.update(true, 4, 16), "back at the same level: no second chime");
+  CHECK(c.update(true, 4, 16, false));
+  CHECK(!c.update(false, 4, 16, false));
+  CHECK_MSG(!c.update(true, 4, 16, false), "back at the same level: no second chime");
 }
 
 TEST(evochime, again_at_a_new_level) {
   EvoChime c;
-  CHECK(c.update(true, 4, 16));
-  CHECK(!c.update(false, 4, 16));  // e.g. "keep this form" until the next level
-  CHECK(c.update(true, 4, 17));
+  CHECK(c.update(true, 4, 16, false));
+  CHECK(!c.update(false, 4, 16, false));  // e.g. "keep this form" until the next level
+  CHECK(c.update(true, 4, 17, false));
 }
 
 // the sketch keeps one EvoChime from boot: the next pet starts again at level 1, and
 // every new pet is an egg (species -1) first, which the loop sees on its way
 TEST(evochime, a_new_pet_chimes_at_the_same_level_again) {
   EvoChime c;
-  CHECK(c.update(true, 4, 16));
-  CHECK(!c.update(false, 4, 16));  // released with the button still showing
-  CHECK(!c.update(false, -1, 1));  // the egg
-  for (uint16_t lv = 1; lv < 16; lv++) CHECK(!c.update(false, 4, lv));  // the new pet grows
-  CHECK(c.update(true, 4, 16));
+  CHECK(c.update(true, 4, 16, false));
+  CHECK(!c.update(false, 4, 16, false));  // released with the button still showing
+  CHECK(!c.update(false, -1, 1, false));  // the egg
+  for (uint16_t lv = 1; lv < 16; lv++) CHECK(!c.update(false, 4, lv, false));  // the new pet grows
+  CHECK(c.update(true, 4, 16, false));
 }
 
 // evolve() while the button was showing and then losing it again: the new form is
 // ready at the level the old one chimed at, and that is a new button
 TEST(evochime, a_new_form_chimes_at_the_same_level) {
   EvoChime c;
-  CHECK(c.update(true, 4, 40));
-  CHECK(!c.update(false, 4, 40));  // a need dips under 40
-  CHECK(c.update(true, 5, 40));
+  CHECK(c.update(true, 4, 40, false));
+  CHECK(!c.update(false, 4, 40, false));  // a need dips under 40
+  CHECK(c.update(true, 5, 40, false));
 }
 
 TEST(evochime, needs_the_button_to_appear) {
   EvoChime c;
-  CHECK(c.update(true, 4, 16));
-  CHECK_MSG(!c.update(true, 4, 17), "still ready at the next level: no chime, as before");
-  CHECK_MSG(!c.update(true, 5, 17), "a new form that is ready at once: the button never appeared");
+  CHECK(c.update(true, 4, 16, false));
+  CHECK_MSG(!c.update(true, 4, 17, false), "still ready at the next level: no chime, as before");
+  CHECK_MSG(!c.update(true, 5, 17, false), "a new form that is ready at once: the button never appeared");
 }
 
 // The case that needed it: a pet at its evolution level left on the charger.
@@ -2501,11 +2525,252 @@ TEST(evochime, a_ready_pet_on_the_charger_chimes_once) {
     bool ready = p.wantEvolveButton();
     if (ready && !was) appearances++;
     was = ready;
-    if (c.update(ready, p.speciesId, p.level())) chimes++;
+    if (c.update(ready, p.speciesId, p.level(), false)) chimes++;
   }
   CHECK_EQ(p.level(), (uint16_t)16);
   CHECK_MSG(appearances >= 3, "self-care brings the button back several times an hour");
   CHECK_EQ(chimes, 1);
+}
+
+// ---------------------------------------------------------------- quiet hours (#44)
+// The evolve chime, the run-away warning, the hourly level-up and a medal that time earned
+// are sounds nobody asked for. In quiet hours (attnQuietAt, test_attention.cpp: the bedtime
+// window, or 22:00-07:00 with bedtime off, and a clock that is stale or never set) each one
+// that comes due is spent silently and does not sound later. The screen is unchanged.
+int mockLastSfx();  // test/shim/shim.cpp: the last sound that would have played
+uint32_t mockSfxCount();
+
+// a fresh EvoChime is also the sketch's after a reboot
+TEST(quietalerts, evolve_chime_due_in_quiet_hours_is_spent_silently) {
+  EvoChime c;
+  CHECK_MSG(!c.update(true, 4, 16, true), "the button appears in quiet hours: no chime");
+  CHECK(c.quieted);
+  CHECK(!c.update(true, 4, 16, true));  // still up, still quiet hours
+  CHECK_MSG(!c.quieted, "only the pass it came due on is a silent one (one serial line, not one a pass)");
+  CHECK_MSG(!c.update(true, 4, 16, false), "quiet hours end with the button still there: no chime then");
+  CHECK(!c.quieted);
+  CHECK(!c.update(false, 4, 16, false));  // a need dips under 40
+  CHECK_MSG(!c.update(true, 4, 16, false), "back at the same level: the silent one counted");
+  CHECK(!c.update(false, 4, 16, false));
+  CHECK_MSG(c.update(true, 4, 17, false), "the next level chimes as usual");
+  CHECK(!c.quieted);
+}
+
+// The pass where quiet hours end is also the one where the age reaches the next level,
+// with the button up all along: it did not appear, so no chime (needs_the_button_to_appear)
+TEST(quietalerts, evolve_chime_spent_in_quiet_hours_is_not_replayed_at_the_next_level) {
+  EvoChime c;
+  CHECK(!c.update(true, 4, 16, true));
+  CHECK_MSG(!c.update(true, 4, 17, false), "quiet hours end at level 17, the button still up: no chime");
+}
+
+TEST(quietalerts, run_away_warning_sounds_once_each_time_the_button_appears) {
+  RunawayWarn w;
+  CHECK(!w.update(false, false));
+  CHECK(w.update(true, false));
+  CHECK(!w.quieted);
+  CHECK_MSG(!w.update(true, false), "the button stays: no second warning");
+  CHECK(!w.update(false, false));  // a single care saves the pet
+  CHECK_MSG(w.update(true, false), "an hour of neglect again: a new warning");
+}
+
+TEST(quietalerts, run_away_warning_due_in_quiet_hours_is_spent_silently) {
+  RunawayWarn w;
+  CHECK_MSG(!w.update(true, true), "the button appears in quiet hours: no warning");
+  CHECK(w.quieted);
+  CHECK(!w.update(true, true));  // still up, still quiet hours
+  CHECK_MSG(!w.quieted, "only the pass it came due on is a silent one (one serial line, not one a pass)");
+  CHECK_MSG(!w.update(true, false), "quiet hours end with the button still there: no warning then");
+  CHECK(!w.quieted);
+  CHECK(!w.update(false, false));
+  CHECK_MSG(w.update(true, false), "a care, then an hour of neglect again: it warns as usual");
+}
+
+// an awake pet with the sound on; the shim's sfxPlay() counts what would have played
+static void awakeWithSound(Pet &p) {
+  makePet(p, 4);  // Charmander: not a final form, so no medal of its own
+  audioSetEnabled(true);
+  audioSetSleeping(false);
+  CHECK(!p.sleeping);
+}
+
+TEST(quietalerts, the_hourly_level_up_is_silent_in_quiet_hours) {
+  Pet p;
+  awakeWithSound(p);
+  p.ageMinutes = MINUTES_PER_LEVEL - 3;
+  p.quietHours = true;
+  uint32_t n = mockSfxCount();
+  advance(p, 3);
+  CHECK_EQ(p.level(), (uint16_t)2);
+  CHECK_EQ(mockSfxCount(), n);
+  p.quietHours = false;
+  advance(p, MINUTES_PER_LEVEL);
+  CHECK_EQ(p.level(), (uint16_t)3);
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_LEVEL);
+}
+
+// "fit" (no weight left at level 5 or more, no slip-ups) is earned by the minute tick
+// burning the weight off: time earns it, nobody asked for it
+static void justBeforeFit(Pet &p) {
+  awakeWithSound(p);
+  p.ageMinutes = 5 * MINUTES_PER_LEVEL + 1;  // level 6; the weight burns at 303
+  p.weight = 1;
+  p.careMistakes = 0;
+  setStats(p, 90, 90, 90, 90);
+}
+
+TEST(quietalerts, a_medal_time_earned_is_silent_in_quiet_hours_and_still_earned) {
+  Pet p;
+  justBeforeFit(p);
+  p.quietHours = true;
+  uint32_t n = mockSfxCount();
+  advance(p, 2);
+  CHECK(p.hasMedal(MED_FIT));
+  CHECK_MSG(p.showMedal(), "the medal banner shows as usual");
+  CHECK_EQ(mockSfxCount(), n);
+  // level 10 by age at night: the level-up and the medal, both silent
+  p.ageMinutes = 9 * MINUTES_PER_LEVEL - 1;
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_LV10));
+  CHECK_EQ(mockSfxCount(), n);
+
+  Pet q;
+  justBeforeFit(q);  // the same in the daytime: the medal sounds
+  n = mockSfxCount();
+  advance(q, 2);
+  CHECK(q.hasMedal(MED_FIT));
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+// The player feeds the favourite berry: the medal is theirs. With the care of the day
+// already counted (here: no clock), feedBerry() leaves it to the next tick to notice, and
+// it still sounds in quiet hours, as it does when a tap earns a medal straight away.
+TEST(quietalerts, a_medal_the_players_care_earned_still_sounds_in_quiet_hours) {
+  Pet p;
+  awakeWithSound(p);
+  p.quietHours = true;
+  uint8_t fav = 0;
+  while (!p.lovesBerry(fav)) fav++;
+  uint32_t n = mockSfxCount();
+  p.feedBerry(fav);
+  CHECK(p.berryKnown);
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_BERRY));
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+// Exercise burns weight too, so a "fit" the player earns by playing or training is the
+// player's medal: it sounds in quiet hours. Only a tick that notices time's own medal is
+// silent. With no clock the day's care is not counted and the tick would notice it a minute
+// later; with a clock and the day's first care, registerCare() gains it straight away.
+static void exerciseAtNight(Pet &p) {
+  awakeWithSound(p);
+  p.ageMinutes = 5 * MINUTES_PER_LEVEL + 1;  // level 6
+  p.weight = 2;
+  p.careMistakes = 0;
+  setStats(p, 90, 90, 90, 90);
+  p.quietHours = true;
+}
+
+TEST(quietalerts, a_fit_earned_by_training_sounds_in_quiet_hours_without_a_clock) {
+  Pet p;
+  exerciseAtNight(p);
+  uint32_t n = mockSfxCount();
+  p.trainStrength(30);  // burns 10: no weight left
+  CHECK_EQ(p.weight, (uint8_t)0);
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_FIT));
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+TEST(quietalerts, a_fit_earned_by_training_sounds_in_quiet_hours_on_the_days_first_care) {
+  Pet p;
+  exerciseAtNight(p);
+  p.lastSeenEpoch = 100u * 86400 + 23 * 3600;  // 23:00 of a known day
+  p.lastCareDay = 0;
+  uint32_t n = mockSfxCount();
+  p.trainStrength(30);
+  CHECK_EQ(p.weight, (uint8_t)0);
+  CHECK_EQ(p.lastCareDay, (uint32_t)100);  // the care counted
+  CHECK(p.hasMedal(MED_FIT));
+  advance(p, 1);
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+TEST(quietalerts, a_fit_earned_by_playing_a_game_sounds_in_quiet_hours) {
+  Pet p;
+  exerciseAtNight(p);
+  uint32_t n = mockSfxCount();
+  p.playGame(GAME_KEEPY, 5);  // pays 5 points: burns 10
+  CHECK_EQ(p.weight, (uint8_t)0);
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_FIT));
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+// An IN SHAPE that exercise completes is gained by the next tick, as before #44, not inside
+// playGame() or trainStrength(): the game's result screen would hide its banner (4 s).
+TEST(quietalerts, an_exercise_fit_is_gained_by_the_next_tick_not_inside_the_game) {
+  Pet p;
+  exerciseAtNight(p);
+  p.trainStrength(30);
+  CHECK_EQ(p.weight, (uint8_t)0);
+  CHECK_MSG(!p.hasMedal(MED_FIT), "not inside trainStrength()");
+  CHECK(!p.showMedal());
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_FIT));
+  CHECK_MSG(p.showMedal(), "the banner starts with the tick, on the creature's screen");
+
+  Pet q;
+  exerciseAtNight(q);
+  q.playGame(GAME_KEEPY, 5);
+  CHECK_EQ(q.weight, (uint8_t)0);
+  CHECK_MSG(!q.hasMedal(MED_FIT), "not inside playGame()");
+  advance(q, 1);
+  CHECK(q.hasMedal(MED_FIT));
+}
+
+// Only the one tick right after the exercise counts as the player's: an hour later, the age's
+// level 10 at night is silent again
+TEST(quietalerts, only_the_tick_right_after_exercise_counts_as_the_players) {
+  Pet p;
+  exerciseAtNight(p);
+  p.weight = 50;  // the exercise leaves some: no IN SHAPE
+  p.trainStrength(30);
+  advance(p, 1);
+  CHECK(!p.hasMedal(MED_FIT));
+  p.ageMinutes = 9 * MINUTES_PER_LEVEL - 1;
+  uint32_t n = mockSfxCount();
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_LV10));
+  CHECK_EQ(mockSfxCount(), n);
+}
+
+// One tick that gains a medal of time (level 10) and one of the player's care (the favourite
+// berry, noticed a minute after the feeding): the player's makes the sound, the level-up
+// stays silent.
+TEST(quietalerts, a_tick_gaining_a_time_medal_and_a_players_one_still_sounds) {
+  Pet p;
+  awakeWithSound(p);
+  p.quietHours = true;
+  uint8_t fav = 0;
+  while (!p.lovesBerry(fav)) fav++;
+  p.feedBerry(fav);
+  CHECK(p.berryKnown);
+  CHECK(!p.hasMedal(MED_BERRY));  // no clock: nothing noticed yet
+  p.ageMinutes = 9 * MINUTES_PER_LEVEL - 1;
+  uint32_t n = mockSfxCount();
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_LV10));
+  CHECK(p.hasMedal(MED_BERRY));
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
 }
 
 // ---------------------------------------------------------------- idle perks (#22)

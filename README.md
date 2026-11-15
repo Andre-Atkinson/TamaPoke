@@ -103,6 +103,15 @@ While **awake**, per minute:
   opens by itself to ask, or `board.py clock`); it then acts as if the device had just started, so at 22:30 the
   creature goes to sleep and at 14:00 nothing happens.
   Changing the setting never puts the pet to sleep or wakes it by itself.
+- 🔕 **Quiet hours for its own sounds:** the sounds the creature makes by itself, with
+  nobody touching it, keep out of quiet hours: the "ready to evolve" chime, the "about
+  to run away" warning, the hourly level-up and the medal that time earns (level 10,
+  25 or 50, and **IN SHAPE**). Quiet hours are the attention calls' (the bedtime window,
+  or 22:00–07:00 if bedtime is off, and any time the clock hasn't been set since a
+  power-off). A sound that comes due then is skipped, not saved for the morning; the
+  evolve or run-away button, the new level and the medal banner show as usual. Sounds
+  you start (a tap, a minigame, training, care that earns a medal, an **IN SHAPE** you
+  earn by exercise) play as before, and asleep it makes no sound at all.
 - 🔌 **Self-care while charging** (always on): plugged into USB and untouched for
   **10 minutes**, the pet looks after itself a little. Once a minute, the first
   need under **40**, in the order FOOD, HYG (which also clears the poops), ENE,
@@ -458,11 +467,30 @@ games. Until #61 the firmware also shipped Spanish, French, German, Italian,
 Japanese and Korean; a board set to one of those shows English after the update
 (the stored choice is kept, see `i18n.h`).
 
-## Backgrounds: biome + real time
+## Backgrounds: places, weather + real time
 
 The idle screen paints the sky from the **RTC's real time** (dawn / day / dusk /
-night with moon and stars) and the ground from the **type's biome** (meadow,
-beach, forest, volcano, mountain, snow). Sleeping forces night.
+night with moon and stars). Sleeping forces night. Everything below is worked out on
+the board from the clock alone: no network, and nothing new is saved (`weather.h`, #60).
+
+- **Travelling.** Each creature has a home place, its **type's biome** (meadow,
+  beach, forest, volcano, mountain, snow). Each day from 06:00 it is at home about
+  4 days in 10, and in one of the other five places the rest of the time. The scene only
+  changes while nobody is looking (the screen off, another screen open, or the
+  nearly-off dim), so the creature is never seen jumping from one place to another. An
+  egg stays in the meadow (a new egg after a farewell appears there at once), and the
+  minigames' backgrounds follow the place.
+- **Made-up weather.** Clear, cloudy, rain, storm (with a little lightning), snow and
+  fog, with odds that suit each place: sun and showers at the beach, rain and mist in the
+  forest, snow and fog in the snowfield and on the mountain, never snow at the volcano.
+  The weather comes in 3-hour blocks that often carry on, so a spell lasts from 3 to 15
+  hours, and a change fades in over 20 minutes. It is only scenery: it never touches the
+  needs. Clouds hide the stars (rain, storms, snow and fog hide the moon too), and on a
+  covered night the creature doesn't ask you to look at the stars.
+- **Power.** Falling rain, snow and lightning are drawn only at the full frame rate.
+  While the screen is dimmed, while the creature sleeps untouched or on a low battery,
+  the sky, clouds and fog stay but nothing falls, and nothing is drawn with the screen off.
+- **No clock yet** (after a power cut, until the time is set): fair weather at home.
 
 ## Layout
 
@@ -472,6 +500,7 @@ beach, forest, volcano, mountain, snow). Sleeping forces night.
 - `uitext.h` / `uitext.cpp` — text size, cursor and `printT()`, which draws the 12 extra Portuguese letters
 - `ptglyphs.h` — those 12 letters (ã õ and the accented capitals CP437 lacks) as 5x7 art, packed at compile time (#61)
 - `scene.h` / `scene.cpp` — the main screen: sky and biome, the pet's PMD animation and walk, bath, poops, header, bars, buttons, the endings and their buttons
+- `weather.h` — the place of each day and its made-up weather, from the clock (#60); `scene.cpp` draws them
 - `bubble.h` / `bubble.cpp` — the speech bubbles: which line, when, and where it goes on the round screen (#23)
 - `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the font can draw, and its NVS key
 - `gameui.h` / `gameui.cpp` — the minigames' screens and the strength-training sack (their logic is in `minigames.h`)
@@ -535,7 +564,11 @@ gets `ERR clock not set: ...` and changes nothing) / `RTCSET <epoch>` · `HEALTH
 `SAVE` (write pending pet changes now) · `OWNER <name>` (the player's name in the
 speech bubbles; `OWNER` alone clears it) · `OWNER?` (read-only: `owner=<name>`) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
 inbed=<0|1> stale=<0|1> egg=<0|1> picking=<0|1>`, stale = bedtime paused until the clock
-is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on screen) · `LS` / `PUT` (SD files). `tools/board.py`
+is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on screen) ·
+`SCENE <place|auto> [weather|auto]` (forces the place, `meadow beach forest volcano mountain
+snow`, and the weather, `clear cloudy rain storm snow fog`, in RAM only: `SCENE auto` or a
+restart gives them back to the clock) · `SCENE?` (read-only: `place today home wx prev mix
+clock particles`, `*` after a forced value) · `LS` / `PUT` (SD files). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
@@ -555,6 +588,9 @@ tools/sim_shots.sh        # every main screen in both languages -> shots/<lang>/
 
 `sim/scripts/every-screen.txt` reaches what `screens.txt` does not (evolution,
 the dialogs, every minigame, the biomes, the endings, the BOOT and PWR presses).
+`weather.txt` shows every kind of weather by day, at dusk and at night, and
+`travel.txt` checks that the place changes only while nobody is looking (read its
+`SCENE?` lines in `serial.log`).
 Run with the other scripts in `sim/scripts/`, it lets two builds be compared
 screen by screen.
 

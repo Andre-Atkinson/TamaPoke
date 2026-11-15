@@ -668,6 +668,12 @@ void bedApply() {
 //  - A lit screen (dimmed, or almost off): it brightens for the window.
 // PWR off, a touch, BOOT or anything else that calls wakeUI() ends the window.
 
+// Quiet hours (attnQuietAt, attention.h): the bedtime window, or 22:00-07:00 with bedtime
+// off, and always while the clock is unknown. The attention calls, the evolve and run-away
+// alerts and Pet's hourly level-up and time-earned medal (#44) all ask here. The loop
+// refreshes lastSeenEpoch from the clock every 30 s: no I2C read here.
+static bool quietNow() { return attnQuietAt(pet.bedPreset, pet.lastSeenEpoch, bedEdge.stale()); }
+
 static bool attnShowing(uint32_t now) {
   return attnShowUntil && (int32_t)(attnShowUntil - now) > 0;
 }
@@ -698,9 +704,7 @@ void attnLoop(uint32_t now) {
   s.playing = gameOpen || sackOpen;
   s.browsing = kbOpen || clockOpen || galleryOpen || cardOpen;
   s.screen = attnScreen(screenIsLocked(), screenOff, screenOffByPwr, dimStageNow(powerCtx(now)) == DIM_OFF);
-  // the loop refreshes lastSeenEpoch from the clock every 30 s: no I2C read here
-  uint32_t e = pet.lastSeenEpoch;
-  s.quiet = attnQuiet(pet.bedPreset, e && !bedEdge.stale(), bedMinuteOfDay(e));
+  s.quiet = quietNow();
   AttnAction a = attnDecide(s);
   if (a.wait) return;  // asked again next pass; dropped if the need recovers or the pet goes away
 
@@ -729,6 +733,14 @@ void attnLoop(uint32_t now) {
                 a.chirp ? (audioEnabled() ? " chirp" : " (muted)") : s.quiet ? " (quiet)" : " (locked)");
 }
 
+// The evolve and run-away alerts (#44) on the serial port, like the attention calls'
+// lines: "alert evolve: sound" (or "(muted)" with the sound off), "alert run-away: silent
+// (quiet)". Pet::tick() prints its own quiet ones ("alert level 17: silent (quiet)").
+static void alertLog(const char *what, bool sounded, bool quieted) {
+  if (sounded) Serial.printf("alert %s: %s\n", what, audioEnabled() ? "sound" : "(muted)");
+  else if (quieted) Serial.printf("alert %s: silent (quiet)\n", what);
+}
+
 // ---------- speech bubbles (bubble.h, #23) ----------
 // A bubble may show: petSceneFree() (the pet awake on the lit, undimmed main screen with
 // nothing over it), and no heart, no medal or streak banner, and no attention call lighting
@@ -744,6 +756,10 @@ void loop() {
   uint32_t now = millis();
   // self-care while charging (#24): the cached USB reading, no extra I2C
   pet.setCharger(pmuReady, usbPresent(), idleSince(now, lastInteract));
+  // quiet hours for the sounds nobody asked for (#44): the hourly level-up and a medal that
+  // time earned (Pet::tick), and the evolve and run-away alerts below
+  bool quiet = quietNow();
+  pet.quietHours = quiet;
   pet.update(now);
 
   // el amplificador sigue al estado de sueno (la llamada sale sola si no cambia).
@@ -754,14 +770,17 @@ void loop() {
   // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
   // (incluye el caso de cumplir al despertar). canEvolveNow es false durmiendo.
   // At most once per level for each form (EvoChime, pet.h): self-care on the
-  // charger keeps bringing the button back.
+  // charger keeps bringing the button back. In quiet hours it is spent silently (#44).
   static EvoChime evoChime;
-  if (evoChime.update(pet.wantEvolveButton(), pet.speciesId, pet.level())) sfxPlay(SFX_MEDAL);
-  // aviso sombrio cuando el bicho esta a punto de escaparse por abandono
-  static bool wasRunReady = false;
-  bool runReady = pet.canRunawayNow();
-  if (runReady && !wasRunReady) sfxPlay(SFX_DENY);
-  wasRunReady = runReady;
+  bool evoSound = evoChime.update(pet.wantEvolveButton(), pet.speciesId, pet.level(), quiet);
+  if (evoSound) sfxPlay(SFX_MEDAL);
+  alertLog("evolve", evoSound, evoChime.quieted);
+  // aviso sombrio cuando el bicho esta a punto de escaparse por abandono (RunawayWarn,
+  // pet.h): once each time the button appears, silently in quiet hours (#44)
+  static RunawayWarn runWarn;
+  bool runSound = runWarn.update(pet.canRunawayNow(), quiet);
+  if (runSound) sfxPlay(SFX_DENY);
+  alertLog("run-away", runSound, runWarn.quieted);
 
 #if BOARD_AMOLED_175C
   pollPwrButton();  // lock input before handling touch/BOOT in this pass
@@ -1673,8 +1692,9 @@ bool render() {
   int h = sceneHour();
   gNight = pet.sleeping || h < 6 || h >= 20;
   // drawScene cubre los 466x466 completos: sin fillScreen(NEGRO) previo para
-  // que un flush DMA solapado nunca capture negro a medias (anti-parpadeo)
-  drawScene(pet.isEgg() ? 0 : DEX_TBL[pet.speciesId].biome, millis(), gNight);
+  // que un flush DMA solapado nunca capture negro a medias (anti-parpadeo). The place the
+  // pet is at today and the weather come from the clock (weather.h, #60).
+  drawScene(millis(), gNight);
 
   if (pet.ceremony) {
     const DexEntry &d = DEX_TBL[pet.speciesId];

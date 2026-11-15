@@ -1,0 +1,63 @@
+# Quiet hours for the creature's own sounds (#44): the evolve chime, the run-away warning,
+# the hourly level-up and a medal that time earned are spent silently in quiet hours (a
+# stale clock, or 22:00-07:00 with bedtime off) and do not sound later; in the daytime they
+# sound as before.
+# A manual check: run it on both boards and read the "alert ..." and "call ..." lines in
+# the serial log; nothing compares them automatically. The simulator plays no audio.
+#   tools/sim.sh --board 175c --script quiet-alerts --serial-log alerts.log --out shots/
+# Expected, in order:
+#   A. stale clock at noon:   alert evolve: silent (quiet)
+#   B. 23:00, bedtime off:     alert medal: silent (quiet), call ...: silent (quiet),
+#                              alert level 11: silent (quiet), alert run-away: silent (quiet)
+#   C. next day, 10:00:        no run-away line while its button stays (spent at night), then
+#                              alert evolve: sound, and after a new neglect alert run-away: sound
+# The steps mean the same on both boards; the shots only show the buttons (the 1.75C turns
+# the screen off after 60 s, so PWR is pressed only where its state is known on the 1.75C).
+clock none
+battery 80
+
+# new game with no time: pick Charmander, skip the clock screen (the badge stays), hatch
+wait 1s
+tap 233 220
+wait 1s
+swipe up
+serial HATCH
+wait 2s
+
+# A. the clock moved to 12:00 without being set (RTCSET, as after a power-off): it is
+# stale, so quiet. Level 16 (Charmander's evolution level, the needs are fine): the
+# evolve button appears silently
+serial RTCSET 1794571200
+serial LVL 15
+wait 3s
+shot a-stale-clock-evolve-button-silent
+
+# B. the clock set to 23:00 with bedtime off: quiet hours. Level 10 by age earns the
+# medal silently on the next tick; an hour later level 11 comes silently, and the needs'
+# attention calls are silent too. Then the pet is neglected: the run-away button, silently
+serial TIME 1794610800
+serial LVL 9
+wait 2m
+serial HEALTH
+wait 60m
+serial HEALTH
+serial ABANDON
+wait 3s
+press pwr
+wait 1s
+shot b-night-run-away-button-silent
+
+# C. the next day at 10:00: the run-away button is still there and its warning is not
+# replayed. On USB, self-care saves the pet and brings the needs back over 40: at level 21
+# the evolve button comes back and chimes. Off USB, neglect again: the warning sounds
+serial TIME 1794650400
+wait 2m
+serial HEALTH
+usb on
+serial LVL 20
+wait 30m
+serial HEALTH
+usb off
+serial ABANDON
+wait 3s
+serial HEALTH

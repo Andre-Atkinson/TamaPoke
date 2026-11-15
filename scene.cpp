@@ -57,49 +57,192 @@ uint16_t lerp565(uint16_t a, uint16_t b, int i, int n) {
                     (((ag + (bg - ag) * i / n) << 5)) | (ab + (bb - ab) * i / n));
 }
 
+// the integer square root of v >= 0 (the fog banks' outline)
+static int isqrt(int v) {
+  int r = 0;
+  while ((r + 1) * (r + 1) <= v) r++;
+  return r;
+}
+
 // hora del dia 0-23 (de la hora real cacheada cada 30s; 13 si no hay reloj)
 int sceneHour() {
   uint32_t e = pet.lastSeenEpoch;
   return e ? (int)((e / 3600) % 24) : 13;
 }
 
-static void drawClouds(uint32_t now, uint16_t col) {
-  for (int k = 0; k < 2; k++) {
-    int cx = (int)((now / 50 + k * 250) % 560) - 40;
-    int cy = 70 + k * 34;
-    gfx->fillCircle(cx, cy, 16, col);
-    gfx->fillCircle(cx + 18, cy + 3, 13, col);
-    gfx->fillCircle(cx - 15, cy + 4, 12, col);
+// ---------- travelling and weather (weather.h, #60) ----------
+
+uint8_t sceneForcePlace = SCENE_AUTO, sceneForceWx = SCENE_AUTO;  // the SCENE serial command
+static SceneLatch sceneLatch;  // the place on screen: it follows sceneToday() only unseen (weather.h)
+
+// the clock the scene follows: 0 while it is not trusted (never set, or reseeded)
+static uint32_t sceneClock() { return sceneEpoch(pet.lastSeenEpoch, bedEdge.stale()); }
+
+uint8_t sceneHome() {
+  if (pet.isEgg() || pet.speciesId > DEX_COUNT) return PLACE_MEADOW;
+  uint8_t b = DEX_TBL[pet.speciesId].biome;
+  return b < PLACES ? b : (uint8_t)PLACE_MEADOW;
+}
+
+// an egg stays in the meadow, where it has always been drawn
+uint8_t sceneToday() { return pet.isEgg() ? (uint8_t)PLACE_MEADOW : travelPlace(sceneHome(), sceneClock()); }
+
+uint8_t scenePlace() {
+  if (sceneForcePlace < PLACES) return sceneForcePlace;
+  return sceneLatch.shown < PLACES ? sceneLatch.shown : sceneToday();
+}
+
+// The farewell and the run-away keep their own look: a clear sky (the run-away draws its
+// own rain, drawCeremony()).
+WxNow sceneWeather() { return sceneWx(pet.ceremony, sceneForceWx, scenePlace(), sceneClock()); }
+
+bool sceneStarsOut() { return wxStarsOut(sceneWeather()); }
+
+// The place for this frame: a new day's place (or a new pet's home) is taken up only while
+// nobody is looking, or when the pet turns into an egg (SceneLatch), so the pet is never
+// seen jumping from one place to another.
+static uint8_t scenePlaceForFrame(uint32_t now) {
+  sceneLatch.frame(now, sceneToday(), pet.isEgg(), dimStage == DIM_OFF);
+  return scenePlace();
+}
+
+// The weather's colours: the sky greys toward the overcast colour (wxGrey) and veils toward
+// the fog colour (wxFog); the clouds darken with it.
+#define WX_OVERCAST_DAY C565(0x9c, 0xa6, 0xb4)
+#define WX_OVERCAST_NIGHT C565(0x22, 0x27, 0x34)
+#define WX_FOG_DAY C565(0xd8, 0xde, 0xe4)
+#define WX_FOG_NIGHT C565(0x3c, 0x43, 0x52)
+
+// Up to six clouds drifting right across the sky, spread along it; the first two are the
+// ones a clear day has always had. `s` is their size in sixteenths (16 = the clear day's).
+#define SCENE_CLOUDS_MAX 6
+static void drawClouds(uint32_t now, int n, int s, uint16_t col) {
+  static const int16_t AT[SCENE_CLOUDS_MAX][2] = { { 0, 70 }, { 250, 104 }, { 125, 40 }, { 375, 58 }, { 190, 132 }, { 470, 88 } };
+  for (int k = 0; k < n && k < SCENE_CLOUDS_MAX; k++) {
+    int cx = (int)((now / 50 + AT[k][0]) % 560) - 40;
+    int cy = AT[k][1];
+    gfx->fillCircle(cx, cy, 16 * s / 16, col);
+    gfx->fillCircle(cx + 18 * s / 16, cy + 3 * s / 16, 13 * s / 16, col);
+    gfx->fillCircle(cx - 15 * s / 16, cy + 4 * s / 16, 12 * s / 16, col);
   }
 }
 
-void drawScene(uint8_t biome, uint32_t now, bool night) {
+// Rain: n drops falling at a slant (a storm's steeper and longer), down to the bottom panel.
+// Each drop moves along its own slant, so at 10 fps they read as streaks of rain.
+static void drawRain(uint32_t now, int n, bool storm, bool night) {
+  uint16_t col = night ? C565(0x7c, 0x92, 0xbc) : C565(0x48, 0x66, 0x9c);
+  int len = storm ? 16 : 12, slant = storm ? 6 : 3;
+  uint32_t fall = storm ? now * 2 / 3 : now / 2;  // px: 670 or 500 a second
+  for (int i = 0; i < n; i++) {
+    int y = (int)((fall + i * 91) % 330) - 18;
+    int x = 486 - (int)((fall * slant / len + i * 47 + i / 3 * 13) % 520);
+    gfx->drawLine(x, y, x - slant, y + len, col);  // 2 px wide: a 1 px line is a hair on the panel
+    gfx->drawLine(x + 1, y, x + 1 - slant, y + len, col);
+  }
+}
+
+// Snow: n flakes drifting down to the bottom panel (as the snowfield always had, over the
+// ground too).
+static void drawSnow(uint32_t now, int n, bool night) {
+  uint16_t col = night ? C565(0xc4, 0xcc, 0xda) : UI_WHITE;
+  for (int f = 0; f < n; f++) {
+    int fx = (int)((f * 53 + now / 40) % 466);
+    int fy = (int)((f * 90 + now / 18) % 312);
+    int sz = f % 3 == 0 ? 5 : 4;
+    gfx->fillRect(fx, fy, sz, sz, col);
+  }
+}
+
+// A storm's lightning: a pale zigzag bolt for 150 ms every 8 s, somewhere in the sky. Only
+// the bolt is lit; the screen never flashes.
+static void drawLightning(uint32_t now) {
+  const uint32_t every = 8000, lit = 150;
+  if (now % every >= lit) return;
+  uint32_t r = sceneHash(now / every);
+  int x = 70 + (int)(r % 320), y = 24;
+  uint16_t col = C565(0xff, 0xf4, 0xc0);
+  for (int seg = 0; seg < 5; seg++) {
+    int nx = x + (int)((r >> (seg * 3)) % 25) - 12, ny = y + 30;
+    for (int d = -1; d <= 1; d++) gfx->drawLine(x + d, y, nx + d, ny, col);
+    x = nx;
+    y = ny;
+  }
+}
+
+// Fog: pale banks drifting slowly across the horizon, over the far scenery and behind the
+// pet. Each bank is a long ellipse drawn on every other row, so the scene shows through it
+// as through mist. `fog` 0-16 thickens them as the fog comes in.
+static void drawFog(uint32_t now, uint8_t fog, uint16_t col) {
+  static const int16_t BANKS[4][3] = {  // start x, centre y, half width
+    { 0, HORIZON - 58, 170 }, { 300, HORIZON - 26, 210 }, { 120, HORIZON + 8, 190 }, { 470, HORIZON + 36, 160 } };
+  int hh = 18 * fog / WX_MIX_FULL;  // half height
+  if (hh < 2) return;
+  for (int k = 0; k < 4; k++) {
+    int hw = BANKS[k][2], cx = (int)((now / 120 + BANKS[k][0]) % 900) - 220, cy = BANKS[k][1];
+    for (int dy = -hh + ((cy + hh) & 1); dy <= hh; dy += 2) {  // the same rows in every bank
+      int half = hw * isqrt(hh * hh - dy * dy) / hh;
+      gfx->fillRect(cx - half, cy + dy, 2 * half, 1, col);
+    }
+  }
+}
+
+void drawScene(uint32_t now, bool night) {
+  uint8_t biome = scenePlaceForFrame(now);
+  WxNow wx = sceneWeather();
+  uint8_t grey = wxGrey(wx), fog = wxFog(wx);
+  bool live = wxParticlesLive(frameIntervalMs(powerCtx(now)));
   int h = sceneHour();
   uint16_t top, bot;
   if (night)            { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
   else if (h < 8)       { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }  // amanecer
   else if (h < 18)      { top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }  // dia
   else                  { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }  // atardecer
+  uint16_t fogCol = night ? WX_FOG_NIGHT : WX_FOG_DAY;
+  if (grey) {
+    uint16_t g = night ? WX_OVERCAST_NIGHT : WX_OVERCAST_DAY;
+    top = lerp565(top, g, grey, 16);
+    bot = lerp565(bot, g, grey, 16);
+  }
+  if (fog) {  // the fog is thickest low down
+    top = lerp565(top, fogCol, fog / 2, 16);
+    bot = lerp565(bot, fogCol, fog * 3 / 4, 16);
+  }
 
   // cielo en bandas
   for (int y = 0; y < HORIZON; y += 8)
     gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, HORIZON));
 
-  // sol o luna
+  // sol o luna (sin estrellas ni astros bajo un cielo cubierto)
+  bool sunOut = wxSunOut(wx);
   if (night) {
-    gfx->fillCircle(360, 78, 24, C565(0xe8, 0xee, 0xf5));
-    gfx->fillCircle(370, 72, 22, lerp565(top, bot, 78, HORIZON));  // creciente
-    for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
+    if (sunOut) {
+      gfx->fillCircle(360, 78, 24, C565(0xe8, 0xee, 0xf5));
+      gfx->fillCircle(370, 72, 22, lerp565(top, bot, 78, HORIZON));  // creciente
+    }
+    if (wxStarsOut(wx))
+      for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
   } else if (h < 18) {
-    gfx->fillCircle(360, 84, 26, h < 8 ? C565(0xff, 0xd9, 0x8a) : C565(0xff, 0xe7, 0x9f));
-    drawClouds(now, C565(0xff, 0xff, 0xff));
-  } else {
+    if (sunOut) gfx->fillCircle(360, 84, 26, h < 8 ? C565(0xff, 0xd9, 0x8a) : C565(0xff, 0xe7, 0x9f));
+  } else if (sunOut) {
     gfx->fillCircle(233, HORIZON - 6, 34, C565(0xff, 0xf1, 0xc8));  // sol poniente
+  }
+  // nubes: las dos de siempre de dia con buen tiempo; mas, mayores y mas oscuras con el
+  // tiempo que trae nubes, tambien al atardecer y de noche
+  uint8_t clouds = wxClouds(wx, (!night && h < 18) ? 2 : 0);
+  if (clouds) {
+    uint16_t light = night ? C565(0x44, 0x4c, 0x66) : h >= 18 ? C565(0xf2, 0xc8, 0xb0) : UI_WHITE;
+    uint16_t dark = night ? C565(0x2a, 0x30, 0x40) : C565(0x74, 0x7c, 0x8c);
+    drawClouds(now, clouds, 16 + grey * 3 / 4, lerp565(light, dark, grey, 16));
   }
 
   // mar de la playa: una franja de agua sobre la arena
   uint16_t soil = BIOME_SOIL[biome < 6 ? biome : 0];
   if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
+  uint8_t wet = wxWet(wx);
+  if (wet) soil = lerp565(soil, C565(0x20, 0x28, 0x30), wet / 4, 16);  // ground darkened by the rain
+  if (fog) soil = lerp565(soil, fogCol, fog / 3, 16);
+  uint8_t snowy = wxAmount(wx, WX_BIT(WX_SNOW));
+  if (snowy) soil = lerp565(soil, night ? C565(0x9c, 0xa6, 0xb8) : C565(0xf2, 0xf6, 0xfa), snowy * 5 / 16, 16);  // dusted
   if (biome == 1) {
     uint16_t sea = night ? C565(0x1c, 0x34, 0x52) : C565(0x4f, 0x96, 0xc4);
     gfx->fillRect(0, HORIZON - 26, 466, 26, sea);
@@ -132,17 +275,25 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
   } else if (biome == 4) {  // montana: cumbres al fondo
     gfx->fillTriangle(140, HORIZON - 50, 60, HORIZON, 220, HORIZON, dk);
     gfx->fillTriangle(330, HORIZON - 38, 250, HORIZON, 410, HORIZON, dk);
-  } else if (biome == 5 && !night) {  // nieve: copos cayendo
-    for (int f = 0; f < 10; f++) {
-      int fx = (f * 53 + now / 40) % 466;
-      int fy = (f * 90 + now / 18) % HORIZON;
-      gfx->fillRect(fx, fy, 3, 3, UI_WHITE);
-    }
   } else if (biome == 0) {  // pradera: matas de hierba
     for (int gx : { 80, 175, 300, 395 })
       for (int b = -1; b <= 1; b++)
         gfx->fillRect(gx + b * 5, HORIZON + 6, 2, 8 + (b == 0 ? 4 : 0), dk);
   }
+  // (the snowfield's falling flakes are its snowy weather now, #60)
+
+  // el tiempo por delante del paisaje y por detras del bicho
+  if (fog) drawFog(now, fog, fogCol);
+  if (wet >= WX_MIX_FULL / 2) {  // charcos
+    uint16_t pud = lerp565(soil, night ? C565(0x3a, 0x4c, 0x6c) : C565(0x9c, 0xb8, 0xd4), 10, 16);
+    gfx->fillEllipse(58, 286, 30, 5, pud);
+    gfx->fillEllipse(410, 296, 24, 4, pud);
+  }
+  if (!live) return;  // dimmed or slow frames: no falling rain or snow (they would step)
+  uint8_t drops = wxDrops(wx), flakes = wxFlakes(wx);
+  if (drops) drawRain(now, drops, wx.kind == WX_STORM || wx.prev == WX_STORM, night);
+  if (flakes) drawSnow(now, flakes, night);
+  if (wxLightning(wx)) drawLightning(now);
 }
 
 // battery colour: green while charging, else `ink` down to 40 %, then amber, then red
