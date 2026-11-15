@@ -82,6 +82,32 @@ TEST(Bubble, morning_and_night_lines_follow_the_hour) {
   }
 }
 
+// "Look at the stars" only when the stars are drawn: not under cloud, rain, snow or fog
+// (#60, sceneStarsOut()). The morning line doesn't depend on the weather.
+TEST(Bubble, no_stars_line_when_the_weather_hides_the_stars) {
+  for (uint8_t h : { 20, 23, 0, 5 }) {
+    bool sawStars = false, sawFriendly = false;
+    for (uint32_t r = 0; r < 3000; r++) {
+      BubbleIn in = calm(true, h);
+      in.starsOut = false;
+      uint8_t l = bubblePick(in, r);
+      CHECK_MSG(l != BUB_STARS, "stars line under a covered sky at " + std::to_string(h) + ":00");
+      sawFriendly |= l >= BUB_HI && l <= BUB_PAT;
+      in.starsOut = true;
+      sawStars |= bubblePick(in, r) == BUB_STARS;
+    }
+    CHECK(sawStars);
+    CHECK(sawFriendly);
+  }
+  bool sawMorning = false;
+  for (uint32_t r = 0; r < 1000; r++) {
+    BubbleIn in = calm(true, 7);
+    in.starsOut = false;
+    sawMorning |= bubblePick(in, r) == BUB_MORNING;
+  }
+  CHECK(sawMorning);
+}
+
 TEST(Bubble, the_mix_is_about_30_50_20_and_80_20_without_a_time_line) {
   int n[BUB_LINES] = {};
   for (uint32_t r = 0; r < 30000; r++) n[bubblePick(calm(true, 7, true), r)]++;

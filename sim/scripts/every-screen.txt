@@ -116,22 +116,30 @@ shot 27-card-shiny-nick
 swipe up
 wait 500ms
 
-# the other biomes (meadow, forest, volcano, mountain, snow), then night
+# the other biomes (meadow, forest, volcano, mountain, snow), then night. A watched scene
+# keeps its place through a SPEC (#60, SceneLatch), so SCENE puts each place on screen; the
+# SPEC keeps a species that lives there.
 serial SPEC 16
+serial SCENE meadow clear
 wait 1s
 shot 28-biome-meadow
 serial SPEC 1
+serial SCENE forest clear
 wait 1s
 shot 29-biome-forest
 serial SPEC 4
+serial SCENE volcano clear
 wait 1s
 shot 30-biome-volcano
 serial SPEC 27
+serial SCENE mountain clear
 wait 1s
 shot 31-biome-mountain
 serial SPEC 144
+serial SCENE snow clear
 wait 1s
 shot 32-biome-snow
+serial SCENE auto
 serial TIME 1794607200
 wait 1s
 shot 33-night
