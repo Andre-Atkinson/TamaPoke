@@ -94,7 +94,7 @@ inline const uint8_t WX_ODDS[PLACES][WX_KINDS] = {
 
 // a new spell for `block` at `place`, from the odds
 inline uint8_t wxFresh(uint8_t place, uint32_t block) {
-  const uint8_t *odds = WX_ODDS[place < PLACES ? place : PLACE_MEADOW];
+  const uint8_t *odds = WX_ODDS[place < PLACES ? place : (uint8_t)PLACE_MEADOW];
   uint32_t r = sceneHash(block ^ WX_PICK_SALT) % 100;
   for (uint8_t k = 0; k < WX_KINDS; k++) {
     if (r < odds[k]) return k;
@@ -123,7 +123,7 @@ struct WxNow {
 
 inline WxNow wxFixed(uint8_t kind) {
   WxNow w;
-  w.kind = w.prev = kind < WX_KINDS ? kind : WX_CLEAR;
+  w.kind = w.prev = kind < WX_KINDS ? kind : (uint8_t)WX_CLEAR;
   return w;
 }
 
@@ -155,7 +155,7 @@ inline uint8_t wxAmount(const WxNow &w, uint8_t kinds) {
 // how overcast the sky is, 0 (clear) to 16, blended across a change
 inline uint8_t wxGrey(const WxNow &w) {
   static const uint8_t GREY[WX_KINDS] = { 0, 6, 9, 12, 9, 5 };
-  uint8_t k = w.kind < WX_KINDS ? w.kind : WX_CLEAR, p = w.prev < WX_KINDS ? w.prev : WX_CLEAR;
+  uint8_t k = w.kind < WX_KINDS ? w.kind : (uint8_t)WX_CLEAR, p = w.prev < WX_KINDS ? w.prev : (uint8_t)WX_CLEAR;
   return (uint8_t)((GREY[k] * w.mix + GREY[p] * (WX_MIX_FULL - w.mix)) / WX_MIX_FULL);
 }
 inline uint8_t wxFog(const WxNow &w) { return wxAmount(w, WX_BIT(WX_FOG)); }
@@ -164,7 +164,7 @@ inline uint8_t wxWet(const WxNow &w) { return wxAmount(w, WX_BIT(WX_RAIN) | WX_B
 // The stars only show under a sky this clear, and so does the night line "look at the
 // stars" of the speech bubbles (#23, bubble.h), so the two never disagree.
 #define WX_STARS_GREY 3
-inline bool wxStarsOut(const WxNow &w) { return wxGrey(w) < WX_STARS_GREY && wxFog(w) < 8; }
+inline bool wxStarsOut(const WxNow &w) { return wxGrey(w) < WX_STARS_GREY; }
 // the sun and the moon: still out through light cloud, hidden by rain, storm, snow and fog
 #define WX_SUN_GREY 7
 inline bool wxSunOut(const WxNow &w) { return wxGrey(w) < WX_SUN_GREY && wxFog(w) < 8; }
@@ -173,7 +173,7 @@ inline bool wxSunOut(const WxNow &w) { return wxGrey(w) < WX_SUN_GREY && wxFog(w
 // at dusk or at night, as before #60), the others bring their own.
 inline uint8_t wxClouds(const WxNow &w, uint8_t clearClouds) {
   static const uint8_t CLOUDS[WX_KINDS] = { 0, 6, 6, 6, 5, 0 };
-  uint8_t k = w.kind < WX_KINDS ? w.kind : WX_CLEAR, p = w.prev < WX_KINDS ? w.prev : WX_CLEAR;
+  uint8_t k = w.kind < WX_KINDS ? w.kind : (uint8_t)WX_CLEAR, p = w.prev < WX_KINDS ? w.prev : (uint8_t)WX_CLEAR;
   int a = k == WX_CLEAR ? clearClouds : CLOUDS[k];
   int b = p == WX_CLEAR ? clearClouds : CLOUDS[p];
   return (uint8_t)((a * w.mix + b * (WX_MIX_FULL - w.mix) + WX_MIX_FULL / 2) / WX_MIX_FULL);

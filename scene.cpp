@@ -82,11 +82,11 @@ static uint32_t sceneClock() { return sceneEpoch(pet.lastSeenEpoch, bedEdge.stal
 uint8_t sceneHome() {
   if (pet.isEgg() || pet.speciesId > DEX_COUNT) return PLACE_MEADOW;
   uint8_t b = DEX_TBL[pet.speciesId].biome;
-  return b < PLACES ? b : PLACE_MEADOW;
+  return b < PLACES ? b : (uint8_t)PLACE_MEADOW;
 }
 
 // an egg stays in the meadow, where it has always been drawn
-uint8_t sceneToday() { return pet.isEgg() ? PLACE_MEADOW : travelPlace(sceneHome(), sceneClock()); }
+uint8_t sceneToday() { return pet.isEgg() ? (uint8_t)PLACE_MEADOW : travelPlace(sceneHome(), sceneClock()); }
 
 uint8_t scenePlace() {
   if (sceneForcePlace < PLACES) return sceneForcePlace;
