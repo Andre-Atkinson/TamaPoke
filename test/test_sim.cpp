@@ -8,6 +8,7 @@
 #include "../sim/simhw.h"
 #include "../rtcbat.h"
 #include "../i18n.h"
+#include "../bubble.h"
 #include <stdio.h>
 #include <sys/stat.h>
 #include <set>
@@ -175,7 +176,8 @@ TEST(SimScript, sin_pasos_de_preparacion_o_sin_pasos_que_corran) {
 // (si no, main() lo ignoraria en silencio), y battery/usb/charging no la cierran
 TEST(SimScript, todos_los_pasos_que_corren_cierran_la_preparacion) {
   const char *const RUN[] = { "tap 1 1", "hold 1 1 1s", "swipe left", "swipe 1 1 200 1 200ms",
-                              "press pwr", "press boot", "wait 1s", "advance 1s", "serial X", "shot a" };
+                              "press pwr", "press boot", "wait 1s", "advance 1s", "serial X", "shot a",
+                              "say hi" };
   for (const char *step : RUN) {
     std::string s = std::string(step) + "\nlang ja\n";
     CHECK_EQ(simParseScript(s, "r.txt").error, std::string("r.txt:2: lang must come before the first step that runs the firmware"));
@@ -248,6 +250,23 @@ TEST(SimRunner, cero_no_corre_ninguna_pasada) {
 }
 
 // pmu ok|none (#24): the firmware asks the AXP2101 once, in setup(), so it is boot-only
+// "say LINE" (#23): a speech bubble by its serial-log name, in BubbleLine order
+TEST(SimScript, say_takes_a_speech_bubble_line_by_name) {
+  SimScript s = simParseScript("say hungry\nsay love-name\nsay love\n");
+  CHECK(s.error.empty());
+  CHECK_EQ(s.cmds.size(), (size_t)3);
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_SAY);
+  CHECK_EQ(s.cmds[0].a, (int32_t)BUB_HUNGRY);
+  CHECK_EQ(s.cmds[1].a, (int32_t)BUB_LOVE_NAME);
+  CHECK_EQ(s.cmds[2].a, (int32_t)BUB_LOVE);
+  for (int i = 0; i < BUB_LINES; i++) {
+    SimScript one = simParseScript(std::string("say ") + BUBBLE_KEYS[i] + "\n");
+    CHECK_MSG(one.error.empty() && one.cmds[0].a == i, std::string("say ") + BUBBLE_KEYS[i]);
+  }
+  for (const char *bad : { "say\n", "say nope\n", "say hungry bath\n", "say HUNGRY\n" })
+    CHECK_MSG(!simParseScript(bad).error.empty(), std::string("accepted: ") + bad);
+}
+
 TEST(SimScript, pmu_is_a_boot_step) {
   SimScript s = simParseScript("pmu none\nusb on\nwait 1s\n");
   CHECK_EQ(s.error, std::string(""));

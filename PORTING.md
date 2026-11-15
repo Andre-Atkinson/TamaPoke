@@ -122,6 +122,8 @@ tools/pet_save.sh restore --file backups/pet-....nvs.bin   # --force if its .sha
 python3 tools/board.py clock              # set the board clock to this computer's local time
 python3 tools/board.py status             # HEALTH + STATS
 python3 tools/board.py save               # write pending pet changes to flash now
+python3 tools/board.py cmd OWNER Name     # the player's name in the speech bubbles (OWNER alone clears it)
+python3 tools/board.py cmd 'OWNER?'       # show the stored name
 ```
 
 - **The pet's save** is the whole NVS partition (20 KB at `0x9000`): the pet,
@@ -155,6 +157,14 @@ python3 tools/board.py save               # write pending pet changes to flash n
 - **A full flash** (`tools/flash_175c.sh` with no mode flag) rewrites the
   bootloader, partition table and sprites, so it needs an explicit `--port`;
   `--app-only`, `--fw-only` and `--fs-only` still auto-detect it.
+- **The player's name** (`OWNER <name>`, #23) is NVS key `owner` in the same
+  namespace, so app-only updates and `pet_save.sh` backups and restores keep it,
+  and `WIPE` erases it. Several words can follow `OWNER` unquoted (they are sent
+  with single spaces); quote the name to keep two spaces. `board.py` sends accents
+  precomposed (NFC), the form the firmware checks. The reply is `owner=<name>`, after
+  an `owner not set: ...` line when the name is refused (over 12 characters, a
+  character the fonts cannot draw, or no letter in it, as in `OWNER ?` or `OWNER 123`;
+  the stored name is then unchanged).
 - `board.py` uses only the Python standard library (no venv needed) and
   needs the serial port to itself: close any serial monitor first.
 

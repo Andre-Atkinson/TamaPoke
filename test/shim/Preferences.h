@@ -42,4 +42,6 @@ private:
 
 // helpers de test: borra toda la "NVS" simulada
 void mockNvsReset();
+// while on, every write and remove fails as a full or broken NVS would (returns 0 / false)
+void mockNvsFailWrites(bool fail);
 size_t mockNvsKeyCount(const char *ns);

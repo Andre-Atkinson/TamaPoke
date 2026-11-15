@@ -38,6 +38,7 @@
 #include "bedtime.h"
 #include "clockprompt.h"
 #include "attention.h"
+#include "bubble.h"
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "trainingcapture.h"
@@ -47,6 +48,7 @@ static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright unt
 #include "screens.h"
 #include "serialcmd.h"
 #include "uitext.h"
+#include "owner.h"
 #include <Preferences.h>
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
@@ -421,6 +423,7 @@ void setup() {
   Serial.setTxTimeoutMs(0);
   Serial.printf("TamaPoke fw v%s (%s)\n", FW_VERSION, BOARD_NAME);
   loadLang();  // idioma guardado (ES por defecto)
+  ownerLoad();  // the player's name for the speech bubbles (owner.h), if the owner set one
   Wire.begin(IIC_SDA, IIC_SCL);
 #if BOARD_AMOLED_175C
   // QMI8658 is on VCC3V3 and is not used by this firmware. CTRL7=0 disables its sensors; the
@@ -725,6 +728,17 @@ void attnLoop(uint32_t now) {
                 a.chirp ? (audioEnabled() ? " chirp" : " (muted)") : s.quiet ? " (quiet)" : " (locked)");
 }
 
+// ---------- speech bubbles (bubble.h, #23) ----------
+// A bubble may show: petSceneFree() (the pet awake on the lit, undimmed main screen with
+// nothing over it), and no heart, no medal or streak banner, and no attention call lighting
+// the screen (during attnShowUntil powerCtx() reads "just touched", so dimStage is
+// DIM_AWAKE then). Read once per pass, after updateBrightness() (so dimStage is this
+// pass's) and before render(); it never wakes or lights the screen and does not touch
+// lastInteract, so it cannot keep the screen awake.
+static bool bubbleFree(uint32_t now) {
+  return petSceneFree() && !pet.showHeart() && !pet.showMedal() && !pet.showMilestone() && !attnShowing(now);
+}
+
 void loop() {
   uint32_t now = millis();
   // self-care while charging (#24): the cached USB reading, no extra I2C
@@ -806,6 +820,10 @@ void loop() {
   syncPanelPower(wantSleep, wakeBri);
   now = millis();  // the CO5300 sequence waits 120 ms per command
   if (!panelAsleep) updateBrightness(now);
+  // After attnLoop() (a call that lights the screen now ends a bubble) and after
+  // updateBrightness() (dimStage is this pass's, so a screen that has just dimmed is not
+  // free in the pass that lowers the panel), before render().
+  bubbleLoop(now, bubbleFree(now));
 
   // bateria al limite seguro (sin USB): se guarda la partida y se apaga el PMU antes de que la
   // celda baje mas; el RTC conserva la hora
@@ -1129,6 +1147,17 @@ static PetGestureGate petGestureGate() {
   // dialog it learns later turns the gestures off too
   g.dialog = careBusy();
   return g;
+}
+
+// The pet awake on the lit main screen with nothing over it: the gesture gate, with "dark"
+// meaning the screen is off, pocket-locked or not fully awake (dimStage, a cache that
+// updateBrightness() sets once per pass: a caller reads this pass's value only after it
+// has run, as the speech bubbles do). Shared by what draws beside the pet (the speech
+// bubbles, #23; the idle emotes, #22), each adding its own conditions.
+bool petSceneFree() {
+  PetGestureGate g = petGestureGate();
+  g.dark = screenOff || screenIsLocked() || dimStage != DIM_AWAKE;
+  return petGesturesLive(g);
 }
 
 // A touch onTap() would give to the pet: in the pet zone and not on the evolve, runaway or
@@ -1697,6 +1726,7 @@ bool render() {
     drawPoops();
     drawClockBadge();
     drawAttnBubble();
+    drawSpeechBubble();  // in the "!" bubble's place while it shows (#23)
     // panel inferior: base limpia para barras y botones sobre el paisaje
     gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
     drawBars();

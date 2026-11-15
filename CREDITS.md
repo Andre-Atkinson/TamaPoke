@@ -44,5 +44,6 @@ Huge thanks to that whole community for an enormous amount of work.
 |---|---|
 | Self-care while charging (#24) | `Pet::autoCare()` in [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here, offline |
 | Touch gestures on the pet (#21) | the stroke, drag and tap tracking in `touch.ino` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`touchgesture.h`), offline |
+| Speech bubbles (#23) | `pickBubble`, `bubbleTick` and `drawBubble` in `scene.ino` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`bubble.h`), offline and without the chess lines |
 
 TamaPoke's own code (firmware and tools) is original work.

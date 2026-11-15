@@ -93,6 +93,7 @@ void bedSample(uint32_t epoch);  // the bedtime edge sees the time
 int flashIdxForDex(int16_t dex);   // the flash sprite of a dex number, -1 = none
 PowerCtx powerCtx(uint32_t now);
 bool screenIsLocked();
+bool petSceneFree();  // the pet awake on the lit main screen with nothing over it (TamaPoke.ino)
 #if BOARD_AMOLED_175C
 void showControlToast(const char *text, uint32_t duration = 1200);
 #endif
