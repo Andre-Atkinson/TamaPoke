@@ -1,6 +1,7 @@
 # Speech bubbles (#23): every line, the player's name (accents, the longest, none), day and
 # night, beside the clock badge, the need line in place of the "!" bubble, and the cases
-# where no bubble may show (a menu open, asleep, dimmed or off).
+# where no bubble may show (a menu open, asleep, an attention call lighting the screen,
+# dimmed or off).
 # A manual check: run it in each language on both boards and look at the shots and the
 # "say ..." lines in the serial log; nothing compares them automatically.
 #   tools/sim.sh --board 175c --lang de --script speech-bubbles --out shots/de/
@@ -124,8 +125,17 @@ shot 22-need-in-words
 wait 5s
 shot 23-exclamation-again
 
-# untouched for 95 s: dimmed on the 1.75, off on the 1.75C. No bubble, though one is due.
-wait 95s
+# an attention call lights the screen for 15 s (joy, 81-86 s after the last shot: the 1.75
+# brightens its dimmed screen, the 1.75C peeks with the screen still off). No bubble in it,
+# even one a "say" starts. The HEALTH line stamps the time to compare with "call joy".
+wait 88s
+serial HEALTH
 say hi
 wait 300ms
-shot 24-dimmed-or-off-no-bubble
+shot 24-call-window-no-bubble
+
+# the window over, untouched for about 2 min: dimmed on the 1.75, off on the 1.75C. No bubble.
+wait 25s
+say hi
+wait 300ms
+shot 25-dimmed-or-off-no-bubble
