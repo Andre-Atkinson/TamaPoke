@@ -1,7 +1,7 @@
 #pragma once
 #include <math.h>
 #include <stdint.h>
-#include "attention.h"  // ATTN_BUBBLE_Y: the play area's top, under the status line
+#include "attention.h"  // ATTN_BUBBLE_Y_MIN: the play area's top, under the status line
 #include "pet.h"        // PET_CHUBBY_WEIGHT
 #include "sdmon.h"      // PMD_* (the sprite's actions)
 
@@ -387,7 +387,7 @@ inline void idleBallKick(IdleBall &b, float petX, uint32_t roll) {
 #define IDLE_EMOTE_R 16
 #define IDLE_EMOTE_DX 24  // from the pet's centre to the bubble's, sideways
 #define IDLE_EMOTE_UP 26  // from the top of its head up to the bubble's centre
-#define IDLE_EMOTE_YMIN (ATTN_BUBBLE_Y + IDLE_EMOTE_R)
+#define IDLE_EMOTE_YMIN (ATTN_BUBBLE_Y_MIN + IDLE_EMOTE_R)
 #define IDLE_EMOTE_YMAX 250  // its lowest point stays well above the bars' panel (y 312)
 
 struct IdleSpot {

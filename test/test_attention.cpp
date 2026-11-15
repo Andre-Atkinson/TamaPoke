@@ -341,35 +341,57 @@ TEST(Attention, the_pocket_lock_wins_over_every_other_state) {
 
 // ---------------------------------------------------------------- where the bubble goes
 // Inside the round panel (radius 233 around 233,233) with a margin, below the status
-// line, and above the evolve / farewell / run-away buttons (the evolve button's top reaches y 167 at the biggest pulse:
-// EVO_BTN_Y 172 - 5).
+// line, and, while the evolve / farewell / run-away button is over the pet, above it (the
+// evolve button's top reaches y 167 at the biggest pulse: EVO_BTN_Y 172 - 5).
 static bool insideRound(int x, int y, int margin) {
   long dx = x - 233, dy = y - 233, r = 233 - margin;
   return dx * dx + dy * dy <= r * r;
 }
 
 TEST(Attention, bubble_stays_on_the_round_screen_and_clear_of_the_text_and_buttons) {
-  for (int petX = 0; petX <= 466; petX++) {
-    AttnBubble b = attnBubbleAt(petX);
-    CHECK(insideRound(b.x, b.y, 8));
-    CHECK(insideRound(b.x + b.w, b.y, 8));
-    CHECK(insideRound(b.x, b.y + b.h + ATTN_BUBBLE_TAIL, 8));
-    CHECK(insideRound(b.x + b.w, b.y + b.h + ATTN_BUBBLE_TAIL, 8));
-    CHECK(b.y >= 108);
-    CHECK(b.y + b.h + ATTN_BUBBLE_TAIL < 167);
-  }
+  for (int button = 0; button < 2; button++)
+    for (int headTop = 40; headTop <= 340; headTop += 4)
+      for (int petX = 0; petX <= 466; petX++) {
+        AttnBubble b = attnBubbleAt(petX, headTop, button);
+        int tipY = b.y + b.h + ATTN_BUBBLE_TAIL;
+        CHECK(insideRound(b.x, b.y, 8));
+        CHECK(insideRound(b.x + b.w, b.y, 8));
+        CHECK(insideRound(b.x, tipY, 8));
+        CHECK(insideRound(b.x + b.w, tipY, 8));
+        CHECK(b.y >= 108);
+        CHECK(!button || tipY < 167);
+        CHECK(tipY <= 262);  // over the lowest head (y 266), well above the bars (y 312)
+      }
+}
+
+// #73: the "!" used to sit at y 112 whatever the pet. Now its tail ends 4 px over the head.
+TEST(Attention, bubble_tail_points_down_at_the_head_and_follows_it) {
+  AttnBubble b = attnBubbleAt(300, 215, false);  // Charmander
+  CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 211);
+  b = attnBubbleAt(300, 209, false);  // a 6 px hop lifts it too
+  CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 205);
+  b = attnBubbleAt(300, 304, false);  // no head found: not down at the bars
+  CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 262);
+  b = attnBubbleAt(300, 120, false);  // a head up in the header: the box stops under the status line
+  CHECK_EQ(b.y, ATTN_BUBBLE_Y_MIN);
+}
+
+TEST(Attention, bubble_stays_above_a_button_over_the_pet) {
+  AttnBubble b = attnBubbleAt(300, 215, true);
+  CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 166);  // where it always was: y 112, under the status line
+  CHECK_EQ(b.y, ATTN_BUBBLE_Y_MIN);
 }
 
 TEST(Attention, bubble_sits_on_the_roomier_side_of_the_pet) {
-  AttnBubble b = attnBubbleAt(150);
+  AttnBubble b = attnBubbleAt(150, 215, false);
   CHECK(b.right);
   CHECK_EQ(b.x, (int16_t)(150 + ATTN_BUBBLE_GAP));
-  b = attnBubbleAt(233);
+  b = attnBubbleAt(233, 215, false);
   CHECK(b.right);
-  b = attnBubbleAt(234);
+  b = attnBubbleAt(234, 215, false);
   CHECK(!b.right);
   CHECK_EQ(b.x + b.w, 234 - ATTN_BUBBLE_GAP);
-  b = attnBubbleAt(325);
+  b = attnBubbleAt(325, 215, false);
   CHECK(!b.right);
   CHECK_EQ(b.x + b.w, 325 - ATTN_BUBBLE_GAP);
 }

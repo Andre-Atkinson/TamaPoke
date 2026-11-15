@@ -287,48 +287,86 @@ static bool boxInside(const BubbleBox &b, double margin) {
   return insidePanel(b.tipX, b.tipY, margin);
 }
 
+// Heads to try (#73): over the header (a hop of the tallest), the tallest (169), Charmander
+// (215), the lowest (a lying Snorlax, 266), and nothing found (the ground line, 304).
+static const int HEADS[] = { 60, 120, 169, 215, 266, 304, 330 };
+
 TEST(Bubble, the_box_stays_inside_the_round_panel_clear_of_header_and_buttons) {
-  for (int badge = 0; badge < 2; badge++)
-    for (int lines = 1; lines <= 2; lines++)
-      for (int textW = 4; textW <= bubbleTextMax(badge); textW += 4)
-        for (int petX = 150; petX <= 325; petX += 5) {
-          BubbleBox b = bubbleBoxAt(petX, textW, lines, badge);
-          std::string at = "pet " + std::to_string(petX) + " text " + std::to_string(textW) + " lines " +
-                           std::to_string(lines) + (badge ? " badge" : "");
-          CHECK_MSG(boxInside(b, 6), "outside the panel: " + at);
-          CHECK_MSG(b.y >= 108, "over the status line: " + at);
-          CHECK_MSG(b.tipY < 167, "into the evolve button: " + at);  // EVO_BTN_Y 172 - 5 at its biggest pulse
-          CHECK_MSG(b.w == (textW + 2 * BUBBLE_PAD_X > BUBBLE_W_MIN ? textW + 2 * BUBBLE_PAD_X : BUBBLE_W_MIN),
-                    "text clipped: " + at);
-          CHECK_MSG(!badge || b.x >= 76 + 24 + 6, "over the clock badge: " + at);
-          // the tail leaves the straight part of the bottom edge and its tip is under the box
-          CHECK_MSG(b.tailX0 >= b.x + BUBBLE_RADIUS && b.tailX1 <= b.x + b.w - BUBBLE_RADIUS, "tail on a corner: " + at);
-          CHECK_MSG(b.tailX1 - b.tailX0 == 14, "tail width: " + at);
-          CHECK_MSG(b.tipX >= b.x && b.tipX <= b.x + b.w, "tail tip beside the box: " + at);
-          CHECK_MSG(b.tipY == b.y + b.h + BUBBLE_TAIL, "tail length: " + at);
-        }
+  for (int button = 0; button < 2; button++)
+    for (int headTop : HEADS)
+      for (int badge = 0; badge < 2; badge++)
+        for (int lines = 1; lines <= 2; lines++)
+          for (int textW = 4; textW <= bubbleTextMax(badge); textW += 4)
+            for (int petX = 150; petX <= 325; petX += 5) {
+              BubbleBox b = bubbleBoxAt(petX, headTop, textW, lines, badge, button);
+              bool ok = boxInside(b, 6) && b.y >= 108 && (!button || b.tipY < 167) && b.tipY <= 262 &&
+                        b.w == (textW + 2 * BUBBLE_PAD_X > BUBBLE_W_MIN ? textW + 2 * BUBBLE_PAD_X : BUBBLE_W_MIN) &&
+                        (!badge || b.x >= 76 + 24 + 6) && b.tailX0 >= b.x + BUBBLE_RADIUS &&
+                        b.tailX1 <= b.x + b.w - BUBBLE_RADIUS && b.tailX1 - b.tailX0 == 14 && b.tipX >= b.x &&
+                        b.tipX <= b.x + b.w && b.tipY == b.y + b.h + BUBBLE_TAIL;
+              if (ok) continue;  // the messages are built only for a failure: this loop is long
+              std::string at = "pet " + std::to_string(petX) + " head " + std::to_string(headTop) + " text " +
+                               std::to_string(textW) + " lines " + std::to_string(lines) + (badge ? " badge" : "") +
+                               (button ? " button" : "");
+              CHECK_MSG(boxInside(b, 6), "outside the panel: " + at);
+              CHECK_MSG(b.y >= 108, "over the status line: " + at);
+              CHECK_MSG(!button || b.tipY < 167, "into the evolve button: " + at);  // EVO_BTN_Y 172 - 5 at its biggest pulse
+              CHECK_MSG(b.tipY <= 262, "below the lowest head, near the bars: " + at);
+              CHECK_MSG(b.w == (textW + 2 * BUBBLE_PAD_X > BUBBLE_W_MIN ? textW + 2 * BUBBLE_PAD_X : BUBBLE_W_MIN),
+                        "text clipped: " + at);
+              CHECK_MSG(!badge || b.x >= 76 + 24 + 6, "over the clock badge: " + at);
+              // the tail leaves the straight part of the bottom edge and its tip is under the box
+              CHECK_MSG(b.tailX0 >= b.x + BUBBLE_RADIUS && b.tailX1 <= b.x + b.w - BUBBLE_RADIUS,
+                        "tail on a corner: " + at);
+              CHECK_MSG(b.tailX1 - b.tailX0 == 14, "tail width: " + at);
+              CHECK_MSG(b.tipX >= b.x && b.tipX <= b.x + b.w, "tail tip beside the box: " + at);
+              CHECK_MSG(b.tipY == b.y + b.h + BUBBLE_TAIL, "tail length: " + at);
+            }
+}
+
+// #73: the bubble used to sit at y 110 whatever the pet, its tail ending some 70 px over
+// Charmander's head. Now the tip is 4 px over the head, as the emotes are by it.
+TEST(Bubble, the_tail_points_down_at_the_head_and_follows_it) {
+  BubbleBox b = bubbleBoxAt(200, 215, 84, 1, false, false);  // Charmander, "Pat me!"
+  CHECK_EQ(b.tipY, 211);
+  CHECK_EQ(b.y, 211 - BUBBLE_TAIL - 28);
+  CHECK_EQ(bubbleBoxAt(200, 209, 84, 1, false, false).tipY, 205);  // a 6 px hop lifts it too
+  CHECK_EQ(bubbleBoxAt(200, 215, 160, 2, false, false).tipY, 211);  // two lines: the box grows upward
+  CHECK_EQ(bubbleBoxAt(200, 169, 84, 1, false, false).tipY, 165);  // the tallest pet
+  CHECK_EQ(bubbleBoxAt(200, 266, 84, 1, false, false).tipY, 262);  // the lowest
+  CHECK_EQ(bubbleBoxAt(200, 304, 84, 1, false, false).tipY, 262);  // no head found: not down at the bars
+  // a head up in the header: the box stops under the status line, its tail over the head
+  b = bubbleBoxAt(200, 120, 84, 1, false, false);
+  CHECK_EQ(b.y, BUBBLE_Y_MIN);
+  CHECK_EQ(b.tipY, BUBBLE_Y_MIN + 28 + BUBBLE_TAIL);
+}
+
+TEST(Bubble, with_a_button_over_the_pet_it_stays_above_the_button) {
+  CHECK_EQ(bubbleBoxAt(200, 215, 84, 1, false, true).tipY, 166);  // not under the button
+  CHECK_EQ(bubbleBoxAt(200, 215, 160, 2, false, true).tipY, 166);  // two lines too (the box top at y 111)
+  CHECK_EQ(bubbleBoxAt(200, 150, 84, 1, false, true).tipY, 146);  // a head already above it: as without
 }
 
 TEST(Bubble, a_short_line_sits_beside_the_head_on_the_side_with_more_room) {
-  BubbleBox b = bubbleBoxAt(200, 84, 1, false);  // "Pat me!"
+  BubbleBox b = bubbleBoxAt(200, 215, 84, 1, false, false);  // "Pat me!"
   CHECK_EQ(b.x, 200 + BUBBLE_GAP);
   CHECK(b.tipX < b.x + 20);  // the tail points back toward the pet
-  b = bubbleBoxAt(300, 84, 1, false);
+  b = bubbleBoxAt(300, 215, 84, 1, false, false);
   CHECK_EQ(b.x + b.w, 300 - BUBBLE_GAP);
   CHECK(b.tipX > b.x + b.w - 20);
   // the walk range limits where it goes, as for the "!" bubble
-  CHECK_EQ(bubbleBoxAt(0, 84, 1, false).x, bubbleBoxAt(150, 84, 1, false).x);
-  CHECK_EQ(bubbleBoxAt(466, 84, 1, false).x, bubbleBoxAt(325, 84, 1, false).x);
+  CHECK_EQ(bubbleBoxAt(0, 215, 84, 1, false, false).x, bubbleBoxAt(150, 215, 84, 1, false, false).x);
+  CHECK_EQ(bubbleBoxAt(466, 215, 84, 1, false, false).x, bubbleBoxAt(325, 215, 84, 1, false, false).x);
 }
 
 TEST(Bubble, a_wide_line_slides_over_the_pet_instead_of_off_the_screen) {
-  BubbleBox b = bubbleBoxAt(300, bubbleTextMax(false), 1, false);
+  BubbleBox b = bubbleBoxAt(300, 215, bubbleTextMax(false), 1, false, false);
   CHECK_EQ(b.x, BUBBLE_X_MIN);
   CHECK_EQ(b.x + b.w, BUBBLE_X_MAX);
-  b = bubbleBoxAt(150, 300, 1, false);
+  b = bubbleBoxAt(150, 215, 300, 1, false, false);
   CHECK_EQ(b.x + b.w, BUBBLE_X_MAX);
   CHECK_RANGE(b.tipX, 150, 170);
-  b = bubbleBoxAt(300, 200, 2, true);
+  b = bubbleBoxAt(300, 215, 200, 2, true, false);
   CHECK_EQ(b.x, BUBBLE_X_MIN_BADGE);
 }
 

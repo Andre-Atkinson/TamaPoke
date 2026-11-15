@@ -171,12 +171,31 @@ inline AttnAction attnDecide(const AttnScene &s) {
   return a;
 }
 
-// Where the bubble goes: beside the pet's head, on the side with more room, clear of the
-// status line above (ends near y 106) and of the evolve/farewell/run-away buttons below
-// (the evolve button's top reaches y 167 at the biggest pulse: EVO_BTN_Y 172 - 5). The tail points down at the pet.
+// How low a bubble's tail reaches (#73), for the "!" bubble below and the speech bubble
+// (bubble.h): just over the top of the pet's head as drawn this frame (headTop: scene.cpp's
+// petHeadTop(), the same top the emotes sit by, idleEmoteAt), so a bubble rises and falls
+// with a hop as they do. Never lower than over the lowest head (a lying Snorlax, top at
+// y 266). While the evolve, farewell or run-away button is drawn over the pet (`button`:
+// from y 172, and 167 at the evolve button's biggest pulse, EVO_BTN_Y 172 - 5) the tail
+// stays above it, as both bubbles did before #73. Each bubble also keeps its box under the
+// status line (its own Y_MIN), which can leave the tail over a tall pet's head.
+#define BUBBLE_TIP_GAP 4       // from the tail's tip down to the top of the head
+#define BUBBLE_TIP_LOW 262     // the lowest tip: over the lowest head, well above the bars (y 312)
+#define BUBBLE_TIP_BUTTON 166  // the lowest tip with a button over the pet
+
+inline int bubbleTipY(int headTop, bool button) {
+  int y = headTop - BUBBLE_TIP_GAP;
+  if (y > BUBBLE_TIP_LOW) y = BUBBLE_TIP_LOW;
+  if (button && y > BUBBLE_TIP_BUTTON) y = BUBBLE_TIP_BUTTON;
+  return y;
+}
+
+// Where the "!" bubble goes: beside the pet's head, on the side with more room, its tail
+// pointing down at the head (bubbleTipY), its top no higher than ATTN_BUBBLE_Y_MIN, under
+// the status line (ends near y 106).
 #define ATTN_BUBBLE_W 72
 #define ATTN_BUBBLE_H 44
-#define ATTN_BUBBLE_Y 112
+#define ATTN_BUBBLE_Y_MIN 112
 #define ATTN_BUBBLE_TAIL 10  // how far the tail reaches below the bubble
 #define ATTN_BUBBLE_GAP 36   // from the pet's centre to the near edge of the bubble
 
@@ -185,14 +204,16 @@ struct AttnBubble {
   bool right;  // the bubble is right of the pet (tail at its bottom-left)
 };
 
-inline AttnBubble attnBubbleAt(int petX) {
+inline AttnBubble attnBubbleAt(int petX, int headTop, bool button) {
   if (petX < 150) petX = 150;  // the walk range (IDLE_WALK_MIN..MAX in idleplan.h)
   if (petX > 325) petX = 325;
   AttnBubble b;
   b.right = petX <= 233;  // the screen's centre column
   b.w = ATTN_BUBBLE_W;
   b.h = ATTN_BUBBLE_H;
-  b.y = ATTN_BUBBLE_Y;
+  int y = bubbleTipY(headTop, button) - ATTN_BUBBLE_TAIL - ATTN_BUBBLE_H;
+  if (y < ATTN_BUBBLE_Y_MIN) y = ATTN_BUBBLE_Y_MIN;
+  b.y = (int16_t)y;
   b.x = (int16_t)(b.right ? petX + ATTN_BUBBLE_GAP : petX - ATTN_BUBBLE_GAP - ATTN_BUBBLE_W);
   return b;
 }

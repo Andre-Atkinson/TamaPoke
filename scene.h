@@ -77,6 +77,12 @@ uint32_t pmdActTotalMs(const PmdAct &a);  // one run of an action's animation, m
 void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS);
 void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS);
 void drawPoops();
+// The top of the pet's head as drawPet() drew it this frame, hop included (#73): the emotes
+// (#22) and both bubbles point at it. Call it after drawPet(). 0 when no pet was drawn.
+int petHeadTop();
+// The evolve, run-away or farewell button is drawn over the pet (render()): the bubbles stay
+// above it (bubbleTipY in attention.h).
+bool petButtonShown();
 void drawAttnBubble();
 void drawBars();
 void drawButtons();
