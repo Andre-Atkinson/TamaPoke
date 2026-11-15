@@ -8,8 +8,7 @@
 #include "species.h"
 
 static IdlePerks perks;          // the hourly cap of the doze and ball perks (RAM: idleplan.h)
-static IdleBall ball;
-static bool ballOn = false;      // the ball of an IDLE_BALL game is on the ground
+static IdleBall ball;            // on the ground while beh.activity is IDLE_BALL
 static uint32_t ballLast = 0;    // when it last rolled
 static uint8_t emote = EMO_NONE;
 static uint32_t emoteUntil = 0;
@@ -46,7 +45,6 @@ static void startPick(const IdlePick &p, uint32_t now) {
   beh.t0 = now;
   beh.mode = 0;
   beh.until = now + p.ms;
-  ballOn = false;
   emote = EMO_NONE;
   switch (p.act) {
     case IDLE_WALK:
@@ -63,7 +61,6 @@ static void startPick(const IdlePick &p, uint32_t now) {
       float bx = beh.x + (random(2) ? 60.0f : -60.0f);  // dropped beside it, either side
       ball.x = constrain(bx, (float)IDLE_BALL_MIN, (float)IDLE_BALL_MAX);
       ball.vx = 0;
-      ballOn = true;
       ballLast = now;
       beh.mode = 1;
       beh.targetX = idleBallSpot(ball.x, beh.x);
@@ -80,9 +77,10 @@ static void idleNext(uint32_t now, bool full) {
   startPick(idlePick(idleInputs(full), (uint32_t)random(0x7FFFFFFF)), now);
 }
 
-// The activity ran its course on a free, lit screen: a doze rests a little, a ball game
-// cheers a little, within the hour's cap. Not the player's care: Pet::idlePerk() gives no
-// streak, bond or heart.
+// The activity ran its course: a doze rests a little, a ball game cheers a little, within the
+// hour's cap. Both only ever run on a free, lit screen (idleUpdate() swaps them for a calm
+// activity on any other frame, and any touch stops them), so one that comes due ran its
+// whole length there. Not the player's care: Pet::idlePerk() gives no streak, bond or heart.
 static void idleFinish(uint32_t now) {
   uint8_t kind = beh.activity == IDLE_DOZE ? IDLE_PERK_ENERGY
                : beh.activity == IDLE_BALL ? IDLE_PERK_JOY
@@ -113,7 +111,6 @@ static void ballTick(uint32_t now) {
 
 void idleInterrupt(uint32_t now) {
   emote = EMO_NONE;
-  ballOn = false;
   beh.activity = IDLE_STAND;
   if (beh.fast) return;  // walking after a finger (#21): it gets there, then picks again
   beh.mode = 0;
@@ -124,19 +121,17 @@ void idleInterrupt(uint32_t now) {
 
 void idleReset() {
   emote = EMO_NONE;
-  ballOn = false;
   lastFrame = 0;
   lastFull = false;
   beh.activity = IDLE_STAND;
 }
 
 void idleUpdate(uint32_t now, bool full) {
-  // no planner frame for a while: the main screen was away (another screen, the screen off,
-  // asleep, sad, eating), so whatever it was doing is over
-  if (lastFrame && now - lastFrame > IDLE_GAP_MS) idleInterrupt(now);
   lastFrame = now ? now : 1;
   // dimmed, or a dialog over the pet: back to the calm repertoire at once, and what was cut
-  // short gives nothing
+  // short gives nothing. (Coming back to a free, lit screen always takes a touch, PWR or
+  // BOOT, and wakeUI() has already stopped the activity: another screen, sleep or a meal
+  // is left by hand, and a sad pet, the only one a call reaches, is cheered up by hand.)
   if (!full && !idleCalmAct(beh.activity)) idleNext(now, false);
   lastFull = full;
 #ifdef HOST_SIM
@@ -147,16 +142,16 @@ void idleUpdate(uint32_t now, bool full) {
     return;
   }
 #endif
-  if (beh.activity == IDLE_BALL && ballOn) ballTick(now);
+  if (beh.activity == IDLE_BALL) ballTick(now);
   if (idleDue(now, beh.until)) {
-    if (full) idleFinish(now);
+    idleFinish(now);
     idleNext(now, full);
   }
 }
 
 void idleArrived(uint32_t now) {
-  if (beh.activity == IDLE_BALL && ballOn) return;  // beside the ball: it waits for a kick
-  if (beh.activity == IDLE_SEEK && lastFull) {      // at the food button: wishes for food
+  if (beh.activity == IDLE_BALL) return;  // beside the ball: it waits for a kick
+  if (beh.activity == IDLE_SEEK) {        // at the food button: wishes for food
     beh.mode = 0;
     beh.t0 = now;
     beh.until = now + IDLE_WISH_MS;
@@ -263,7 +258,7 @@ static void drawEmote(uint8_t e, const IdleSpot &at, uint32_t now) {
 
 void idleDrawOver(uint32_t now, int petX, int headTop) {
   if (lastFrame != (now ? now : 1) || !lastFull) return;  // the planner didn't run this frame, or ran calm
-  if (ballOn && beh.activity == IDLE_BALL)
+  if (beh.activity == IDLE_BALL)
     drawMap(SPR_ICON_PLAY, 16, (int)ball.x - 16, PET_GROUND - 32, 2, false);  // the Play button's ball
   if (emoteShowing(now) && emoteAllowed()) drawEmote(emote, idleEmoteAt(petX, headTop), now);
 }

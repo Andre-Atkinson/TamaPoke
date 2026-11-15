@@ -16,8 +16,10 @@
 //     activity, the emotes over its head, and the small perks of a doze or a ball game;
 //   - calm: the screen is dimmed, or a dialog is over the pet. What the pet always did
 //     (stroll, a Pose/Nod/Breath where the species has one, or stand), no emotes, no perks.
-// Any touch, PWR or BOOT (wakeUI), a call (#9) or another screen stops the activity
-// (idleInterrupt): the pet stands and looks up for IDLE_ATTEND_MS, then picks again.
+// Any touch, PWR or BOOT (wakeUI) stops the activity (idleInterrupt): the pet stands and
+// looks up for IDLE_ATTEND_MS, then picks again. Another screen, a dialog, a meal or sleep
+// are opened and left by hand, and a call (#9) only reaches a sad pet, which never runs the
+// planner, so all of them pass through a touch too.
 //
 // Idea from Mu-Muu/TamaPoke's behNext()/behEnd() and Pet::selfRest()/selfPlay() (MIT),
 // re-implemented here offline, without the weather. Personalities (#25) can add weights.
@@ -79,7 +81,6 @@ enum IdleEmote : uint8_t {
 #define IDLE_LOOK_MS 2600
 #define IDLE_WISH_MS 2500     // at the food button, wishing
 #define IDLE_EMOTE_MS 1600
-#define IDLE_GAP_MS 2500      // no planner frame for this long: the main screen was away
 
 struct IdleIn {
   uint8_t fullness = 80, joy = 80, energy = 80;  // the needs, 0-100

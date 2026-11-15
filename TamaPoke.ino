@@ -703,7 +703,6 @@ void attnLoop(uint32_t now) {
   if (a.wait) return;  // asked again next pass; dropped if the need recovers or the pet goes away
 
   attnArm.done();
-  idleInterrupt(now);  // whatever the pet was doing by itself stops (#22)
   if (a.closeViews) attnCloseViews();
   if (a.peek || a.brighten) {
     attnShowUntil = now + ATTN_PEEK_MS;

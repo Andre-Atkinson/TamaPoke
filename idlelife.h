@@ -4,8 +4,8 @@
 #pragma once
 #include <stdint.h>
 
-// Back to standing and looking up, for IDLE_ATTEND_MS: a touch, PWR or BOOT (wakeUI), or a
-// call (#9). A walk after a dragging finger (#21) still gets there first.
+// Back to standing and looking up, for IDLE_ATTEND_MS: a touch, PWR or BOOT (wakeUI). A walk
+// after a dragging finger (#21) still gets there first.
 void idleInterrupt(uint32_t now);
 // Forget everything (a new sprite: ensureMon): the next frame picks at once.
 void idleReset();

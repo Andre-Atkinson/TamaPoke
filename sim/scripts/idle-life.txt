@@ -107,6 +107,21 @@ shot 14-dimmed-calm
 tap 400 200
 wait 500ms
 
+# the heart of a pat sits where the bubble goes: no bubble while it shows (the hop still plays)
+tap 233 230
+idle hop
+wait 300ms
+shot 15-heart-no-emote
+wait 2s
+
+# the evolve button sits over the pet: no bubble while it shows
+serial LVL 16
+wait 1s
+tap 400 200
+idle rest
+wait 500ms
+shot 16-evolve-button-no-emote
+
 # the tallest pets (Dugtrio, Venusaur) keep the emote under the status line; the smallest
 # (Snorlax lies low) keep it by the head
 serial SPEC 51
@@ -114,23 +129,23 @@ wait 1s
 tap 400 200
 idle rest
 wait 1s
-shot 15-tall-rest
+shot 17-tall-rest
 serial SPEC 3
 wait 1s
 tap 400 200
 idle doze
 wait 2s
-shot 16-tall-doze
+shot 18-tall-doze
 serial SPEC 143
 wait 1s
 tap 400 200
 idle doze
 wait 2s
-shot 17-small-doze
+shot 19-small-doze
 tap 400 200
 idle hop
 wait 300ms
-shot 18-small-hop
+shot 20-small-hop
 
 # a species with no Pose, Nod or Breath (the common case): "gesture" is ignored, it stands
 serial SPEC 6
@@ -138,7 +153,7 @@ wait 1s
 tap 400 200
 idle gesture
 wait 500ms
-shot 19-no-gesture-stands
+shot 21-no-gesture-stands
 idle ball
 wait 2s
-shot 20-charizard-ball
+shot 22-charizard-ball
