@@ -233,6 +233,8 @@ TEST(Bubble, long_text_splits_at_the_space_that_balances_the_lines) {
   int br = split(s, 368);
   CHECK_EQ(br, 18);  // "Ich hab dich lieb," / "Abcdefghijkl!"
   CHECK_EQ(split("aaaa bbbb cccc dddd", 120), 9);  // 9 + 9 over 4 + 14
+  // every space fits here: the middle one, not the first or the last
+  CHECK_EQ(split("aa bb cc dd ee ff", 180), 8);
   CHECK_EQ(split("aaaa bbbb cccc dddd", 96), -2);  // no space gives two lines of 8
 }
 
