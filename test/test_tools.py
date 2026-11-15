@@ -217,6 +217,79 @@ class TestPtGlyphs(unittest.TestCase):
         self.assertEqual(sorted(codes), sorted(ord(ch) for ch in portuguese if not in_cp437(ch)))
 
 
+def strip_c_comments(text):
+    """text with // and /* */ comments blanked (newlines kept), string literals left alone."""
+    return re.sub(r'//[^\n]*|/\*.*?\*/|("(?:[^"\\\n]|\\.)*")',
+                  lambda m: m.group(1) or re.sub(r'[^\n]', ' ', m.group(0)), text, flags=re.S)
+
+
+def call_args(text, open_paren):
+    """the top-level arguments of the call whose '(' is at text[open_paren]; commas inside
+    nested parentheses (C565(...), RGB macros) and string literals are not counted."""
+    depth, args, cur, i = 0, [], '', open_paren
+    while i < len(text):
+        ch = text[i]
+        if ch == '"':
+            j = i + 1
+            while text[j] != '"':
+                j += 2 if text[j] == '\\' else 1
+            cur += text[i:j + 1]
+            i = j + 1
+            continue
+        if ch in '([{':
+            depth += 1
+            if depth > 1:
+                cur += ch
+        elif ch in ')]}':
+            depth -= 1
+            if depth == 0:
+                args.append(cur.strip())
+                return args
+            cur += ch
+        elif ch == ',' and depth == 1:
+            args.append(cur.strip())
+            cur = ''
+        else:
+            cur += ch
+        i += 1
+    raise ValueError('unbalanced parentheses')
+
+
+class TestTextColorHasNoBackground(unittest.TestCase):
+    """uitext.cpp draws the 12 Portuguese letters through Arduino_GFX's GFXfont path, which
+    with a background colour fills a box starting baseline * size above the cursor: behind
+    those letters only, and misplaced. So every setTextColor() takes one argument."""
+
+    def test_every_setTextColor_call_has_one_argument(self):
+        calls = 0
+        for name, text in sketch_sources().items():
+            code = strip_c_comments(text)
+            for m in re.finditer(r'\bsetTextColor\s*\(', code):
+                line = code.count('\n', 0, m.start()) + 1
+                args = call_args(code, m.end() - 1)
+                calls += 1
+                with self.subTest(file=name, line=line):
+                    self.assertEqual(len(args), 1,
+                                     f'{name}:{line}: setTextColor({", ".join(args)}) sets a background')
+        self.assertGreaterEqual(calls, 20, 'the pattern no longer finds the setTextColor() calls')
+
+    def test_the_argument_counter_handles_nested_commas(self):
+        self.assertEqual(call_args('f(C565(1, 2, 3))', 1), ['C565(1, 2, 3)'])
+        self.assertEqual(call_args('f(a, b)', 1), ['a', 'b'])
+        self.assertEqual(call_args('f(g(a), "x,y")', 1), ['g(a)', '"x,y"'])
+
+
+class TestFarewellButtonWidth(unittest.TestCase):
+    """test_i18n.cpp cannot include app.h, so it carries its own FAR_BTN_W (TEST_FAR_BTN_W)."""
+
+    def test_the_test_copy_of_FAR_BTN_W_matches_app_h(self):
+        with open(os.path.join(ROOT, 'app.h'), encoding='utf-8') as fh:
+            app = int(re.search(r'#define FAR_BTN_W (\d+)', fh.read()).group(1))
+        with open(os.path.join(ROOT, 'test', 'test_i18n.cpp'), encoding='utf-8') as fh:
+            mirror = int(re.search(r'#define TEST_FAR_BTN_W (\d+)', fh.read()).group(1))
+        self.assertEqual(mirror, app, 'update TEST_FAR_BTN_W in test/test_i18n.cpp')
+
+
 class TestOwnerLetters(unittest.TestCase):
     """owner.h's accented letters (#23, #61) against Python's own CP437 codec and Unicode data.
 

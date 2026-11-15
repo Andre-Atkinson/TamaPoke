@@ -3,7 +3,10 @@
 #include "shim/Arduino.h"
 #include "shim/Preferences.h"
 #include "../i18n.h"
-#include "../pet.h"  // MED_COUNT
+#include "../pet.h"  // MED_COUNT, Pet::nick
+#include "../dex.h"
+#include "../uitext.h"  // headerSize()
+#include <algorithm>
 #include "../ptglyphs.h"
 #include <ctype.h>
 #include <string.h>
@@ -460,4 +463,59 @@ TEST(i18n, the_clock_prompt_title_fits) {
     CHECK_MSG(strlen(t) <= 14, std::string("too wide: ") + t);
   }
   gLang = LANG_DEFAULT;
+}
+
+// ---------- the longest text on the main screen's name header and the two farewell buttons ----------
+static size_t longestDexName() {
+  size_t n = 0;
+  for (int d = 1; d <= DEX_COUNT; d++) n = std::max(n, strlen(DEX_TBL[d].name));
+  return n;
+}
+// the longest nickname the pet takes (pet.h: char nick[12])
+static const size_t NICK_MAX = sizeof(Pet::nick) - 1;
+
+// drawHeader (scene.cpp) prints "<*><name> Lv.<level>" at size 3 and drops to size 2 when
+// that is wider than HEADER_MAX_W: the panel is about 293 px wide at y 52, and the round
+// edge clipped a longer line (VICTREEBEL at level 51 in Portuguese).
+TEST(i18n, el_encabezado_del_nombre_cabe_en_la_franja_redonda_de_la_pantalla_principal) {
+  CHECK_EQ((int)headerSize(16), 3);  // 16 letters: 288 px, the last that fits at size 3
+  CHECK_EQ((int)headerSize(17), 2);
+  std::vector<std::string> names;
+  for (int d = 1; d <= DEX_COUNT; d++) names.push_back(DEX_TBL[d].name);
+  names.push_back(std::string(NICK_MAX, 'W'));  // a full nickname
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    for (const std::string &nm : names)
+      for (const char *star : { "", "*" })
+        for (unsigned lv : { 1u, 10u, 100u, 999u }) {
+          char head[48];
+          int len = snprintf(head, sizeof head, T(S_NAME_FMT), star, nm.c_str(), lv);
+          unsigned w = (unsigned)len * 6 * headerSize((unsigned)len);
+          CHECK_MSG(w <= HEADER_MAX_W, std::string("header too wide in ") + LANG_NAME[lang] + ": " + head);
+        }
+  }
+  gLang = LANG_DEFAULT;
+}
+
+// the sad and the happy farewell buttons (scene.cpp): the text is centred at size 2 (12 px a
+// letter) in a FAR_BTN_W button, with at least 6 px clear at each end. FAR_BTN_W is app.h's,
+// which a host test cannot include: test_tools.py checks this copy against it.
+#define TEST_FAR_BTN_W 408
+TEST(i18n, los_botones_de_despedida_y_escapada_dejan_margen_con_el_nombre_mas_largo) {
+  size_t nameLen = std::max(longestDexName(), NICK_MAX);
+  std::string name(nameLen, 'W');
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    for (StrId id : { S_FAREWELL_BTN, S_RUNAWAY_BTN }) {
+      char buf[80];
+      int len = snprintf(buf, sizeof buf, T(id), name.c_str());
+      CHECK_MSG(len * 12 <= TEST_FAR_BTN_W - 12, std::string("no margin in ") + LANG_NAME[lang] + ": " + buf);
+    }
+  }
+  gLang = LANG_DEFAULT;
+}
+
+// ptGlyphIndex() reads the 12 codes from their own table, apart from the art
+TEST(PtGlyphs, the_code_table_matches_the_art_rows) {
+  for (int g = 0; g < PTG_COUNT; g++) CHECK_EQ((int)PT_GLYPH_CODES.c[g], (int)PT_GLYPHS[g].code);
 }

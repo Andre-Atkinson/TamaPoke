@@ -26,8 +26,11 @@ int centerX(const char *s, uint8_t size) { return CX - textW(s, size) / 2; }
 //  - width and xAdvance 6 match the classic font's 6 px cell, so the cursor advance
 //    and the wrap test (cursor_x + 6 * size - 1 past the right edge) are the same;
 //  - yAdvance 8 is the classic line height, used only if a line wraps.
-// The GFXfont path ignores a background colour (it would fill a box from the
-// baseline), but no text in the UI sets one: every setTextColor() has one argument.
+// With a background colour (a two-argument setTextColor()) the GFXfont path of
+// Arduino_GFX::drawChar() fills a box that starts baseline * size above the cursor, and
+// the baseline here is PTG_ROWS, so it would be misplaced behind these 12 letters only.
+// No text in the UI sets a background: test_tools.py checks that every setTextColor()
+// has one argument.
 // The glyphs sit at PTG_FIRST + index in this font. PTG_FIRST keeps them clear of
 // '\n' and '\r', which write() handles before drawing.
 #define PTG_FIRST 0x80
@@ -42,8 +45,23 @@ static constexpr PtGfxGlyphs ptGfxGlyphs() {
   return out;
 }
 static constexpr PtGfxGlyphs PT_GFX_GLYPHS = ptGfxGlyphs();
+static constexpr uint8_t PT_Y_ADVANCE = PTG_ROWS;
+static constexpr bool ptMetricsAre(uint16_t w, uint8_t xAdv, int8_t xOff, int8_t yOff) {
+  for (int i = 0; i < PTG_COUNT; i++) {
+    const GFXglyph &g = PT_GFX_GLYPHS.g[i];
+    if (g.width != w || g.xAdvance != xAdv || g.xOffset != xOff || g.yOffset != yOff) return false;
+  }
+  return true;
+}
+// The metrics above must stay the classic font's cell, or these 12 letters would sit
+// or advance differently from the rest of a line. Checked when the sketch is built.
+static_assert(ptMetricsAre(6, 6, 0, 0),
+              "PT glyph metrics: width and xAdvance must be 6 (the classic font's 6 px cell, so the cursor advance and the wrap test match), xOffset and yOffset 0 (column 0 and row 0 go at the cursor, as in the classic font)");
+static_assert(PT_Y_ADVANCE == 8, "PT font yAdvance must be 8, the classic font's line height (used when a line wraps)");
+static_assert(PTG_FIRST > '\r', "PTG_FIRST must stay above '\\n' and '\\r', which write() handles before drawing");
+static_assert(PTG_FIRST + PTG_COUNT - 1 <= 0xFF, "PTG_FIRST + PTG_COUNT - 1 must fit the one byte write() takes");
 static const GFXfont PT_FONT = {(uint8_t *)PT_GLYPH_BITS.b, (GFXglyph *)PT_GFX_GLYPHS.g, PTG_FIRST,
-                                PTG_FIRST + PTG_COUNT - 1, PTG_ROWS};
+                                PTG_FIRST + PTG_COUNT - 1, PT_Y_ADVANCE};
 
 static void writeByte(uint8_t c) {
   int i = ptGlyphIndex(c);

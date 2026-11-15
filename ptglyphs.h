@@ -49,11 +49,23 @@ inline constexpr PtGlyph PT_GLYPHS[] = {
 };
 constexpr int PTG_COUNT = (int)(sizeof(PT_GLYPHS) / sizeof(PT_GLYPHS[0]));
 
+// The 12 codes alone. ptGlyphIndex() reads this, not PT_GLYPHS, so the art stays a compile-time
+// input (PT_GLYPH_BITS) and nothing but these 12 bytes and the packed bits reaches the image.
+struct PtGlyphCodes {
+  uint8_t c[PTG_COUNT];
+};
+constexpr PtGlyphCodes ptGlyphCodes() {
+  PtGlyphCodes out{};
+  for (int i = 0; i < PTG_COUNT; i++) out.c[i] = PT_GLYPHS[i].code;
+  return out;
+}
+inline constexpr PtGlyphCodes PT_GLYPH_CODES = ptGlyphCodes();
+
 // The glyph's index in PT_GLYPHS for byte c, or -1: every other byte is drawn from the
 // classic font.
 constexpr int ptGlyphIndex(uint8_t c) {
   for (int i = 0; i < PTG_COUNT; i++)
-    if (PT_GLYPHS[i].code == c) return i;
+    if (PT_GLYPH_CODES.c[i] == c) return i;
   return -1;
 }
 

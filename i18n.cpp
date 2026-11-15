@@ -80,7 +80,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Pronto a evoluir!", "Tudo a 40 para evoluir",
     "Evolui em %u n\241v.", "Descuidos: %u",
     "SOM ON", "SOM OFF",
-    "EVOLUIR!", "%s quer dizer-te algo...", "%s sente-se abandonado...",
+    "EVOLUIR!", "%s quer dizer-te algo...", "%s sente-se sozinho...",
     "Evoluir?", "Manter forma", "Dizer adeus?", "Adeus", "Ficar juntos",
     "Escolhe o teu inicial",
     "Sem sprites", "Carrega-os no SD",

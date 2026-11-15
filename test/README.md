@@ -33,7 +33,7 @@ python3 test/test_tools.py    # solo las herramientas de tools/
 | `test_idleplan.cpp` | the pet's own life (`idleplan.h`, #22): the planner never picks what the sprite can't show, the needs, hour and weight weightings, calm vs full repertoire, deterministic seeded picks, the perks' hourly cap, the ball and where the emote goes |
 | `test_tools.py` | los scripts de `tools/` compilan, los datos de la Pokedex son coherentes y `dex.h` sigue coincidiendo con lo que genera `tools/gen_dex.py` |
 | `test_sim.cpp` | simulador de escritorio (`sim/`): lectura de guiones (pasos, duraciones, hora, idiomas, errores con linea), avance del reloj falso (vuelta de `millis()`, tramos de mas de 25 dias, corte por apagado) y el escritor de PNG (CRC-32, Adler-32, zlib) |
-| `test_tools.py` (sim) | `sim/gen_sketch.py` (prototipos del `.ino` como arduino-cli, con sus `#if`), `sim/extract_fonts.py`, y la imagen que escribe `test_sim.cpp` leida con el zlib de Python |
+| `test_tools.py` (sim) | `sim/gen_sketch.py` (prototipos del `.ino` como arduino-cli, con sus `#if`), y la imagen que escribe `test_sim.cpp` leida con el zlib de Python |
 
 ## Como esta montado
 

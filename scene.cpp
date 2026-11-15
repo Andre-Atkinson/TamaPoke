@@ -403,8 +403,9 @@ static void drawBattery() {
 void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
   drawBattery();
   gfx->setTextColor(nameColor);
-  setSize(3);
-  setCur(centerX(name, 3), 52);
+  uint8_t hs = headerSize((unsigned)strlen(name));  // size 3, or 2 for a name too wide for the round edge
+  setSize(hs);
+  setCur(centerX(name, hs), hs == 3 ? HEADER_Y3 : HEADER_Y2);
   printT(name);
   gfx->setTextColor(inkColor());
   setSize(2);
