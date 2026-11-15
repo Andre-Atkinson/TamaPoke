@@ -84,6 +84,7 @@ extern ClockPrompt clockPrompt;
 extern TouchGesture touchG;     // the gesture in progress
 extern uint8_t dimStage;        // 0 awake, 1 dimmed, 2 nearly off
 extern bool screenOff;
+extern bool standby;            // the standby clock is up (standby.h, #60)
 extern bool holdFired;          // this touch already fired its long press
 extern bool swallowGesture;     // the touch that wakes the screen does nothing else
 extern bool wasPressed;         // a finger was on the glass at the last poll

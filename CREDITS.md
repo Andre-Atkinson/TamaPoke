@@ -45,6 +45,8 @@ Huge thanks to that whole community for an enormous amount of work.
 | A life of its own: idle activities, emotes and their small perks (#22) | `behNext()`/`behEnd()` in `pet_anim.ino` and `Pet::selfRest()`/`Pet::selfPlay()` in `pet.cpp` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`idleplan.h`, `idlelife.cpp`), offline and without the weather |
 | Touch gestures on the pet (#21) | the stroke, drag and tap tracking in `touch.ino` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`touchgesture.h`), offline |
 | Weather drawn over the scene, and travelling between places (#60) | the weather kinds and their drawing in `weather.h` and `drawWeather()` in `scene.ino` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`weather.h`, `scene.cpp`): made-up weather from the clock instead of real weather over Wi-Fi, and our own six drawn places instead of its region pictures |
+| Standby clock (#60) | the standby clock and `drawWxIcon()` in `scene.ino` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`standby.h`, `scene.cpp`): plugged in, in place of screen-off, with made-up weather |
+| Seasons over the scene (#60) | `drawSeason()` in `scene.ino` and `seasonOf()` in `holiday.cpp` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`weather.h`, `scene.cpp`), for the southern hemisphere |
 | Speech bubbles (#23) | `pickBubble`, `bubbleTick` and `drawBubble` in `scene.ino` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`bubble.h`), offline and without the chess lines |
 
 TamaPoke's own code (firmware and tools) is original work.

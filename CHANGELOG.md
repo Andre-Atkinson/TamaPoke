@@ -10,6 +10,27 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Standby clock.** Plugged in and left alone, the screen shows a dim clock with the
+  date and a picture of the weather now on black, and the battery charging, instead of
+  going dark: when the screen would turn off, or at 90 s with screen-off set to *Never*.
+  A dark screen lights up with it by itself when the creature wakes on the charger in the
+  morning or when you plug in a board whose screen timed out; only PWR keeps it dark. At
+  night its picture shows a moon. It steps a few pixels each minute so the screen doesn't
+  burn in. A touch or BOOT brings the creature back, PWR turns the screen off, and an
+  attention call still shows the creature. Whatever was open is put away when it comes up
+  (as an attention call does), so a touch finds the creature and bedtime isn't held up; a
+  half-typed name or a time not yet confirmed is dropped. Nothing changes on battery,
+  while the creature sleeps, or before the clock is set after a power cut. Idea from
+  Mu-Muu/TamaPoke, re-implemented offline.
+
+- **Seasons.** Spring flowers and falling blossom, summer butterflies by day and
+  fireflies at night, autumn's russet ground and falling leaves, and winter's snow cover
+  and snowcaps, at the meadow, the forest and the mountain. The seasons also shift the
+  weather: sunnier summers with more storms, misty autumns, showery springs, and snow at
+  the meadow and in the forest only in winter. Fixed to the southern hemisphere (summer
+  December to February). No season before the clock is set after a power cut. Serial
+  `SCENE` takes a season too. Idea from Mu-Muu/TamaPoke, re-implemented offline.
+
 - **Travelling and made-up weather.** The creature no longer spends its whole life
   in one scene. Each day from 06:00 it is at home (its type's place) about 4 days in
   10, and at the meadow, beach, forest, volcano, mountain or snowfield the rest of the
@@ -211,6 +232,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   within about 7 px.
 
 ### Fixed
+
+- **The sun and the moon no longer sit on the name** (#70). They moved right of the sky,
+  below the name and the status line, and the stars moved out from behind the status
+  line too.
 
 - **The creature's own sounds keep out of quiet hours** (#44). The "ready to
   evolve" chime, the "about to run away" warning, the hourly level-up and the

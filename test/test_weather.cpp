@@ -10,30 +10,44 @@ static const uint32_t SOME_DAY = 1793232000UL;  // 2026-10-29 00:00, local time 
 
 // ---------------------------------------------------------------- the odds
 TEST(Weather, each_place_has_odds_that_add_up_and_snow_only_where_it_belongs) {
-  for (int p = 0; p < PLACES; p++) {
-    int sum = 0;
-    for (int k = 0; k < WX_KINDS; k++) sum += WX_ODDS[p][k];
-    CHECK_EQ(sum, 100);
+  for (int p = 0; p < PLACES; p++)
+    for (int se = 0; se < SEASONS; se++) {
+      int sum = 0;
+      for (int k = 0; k < WX_KINDS; k++) sum += WX_ODDS[p][se][k];
+      CHECK_MSG(sum == 100, "place " + std::to_string(p) + " season " + std::to_string(se));
+    }
+  for (int se = 0; se < SEASONS; se++) {
+    // the volcano never has snow or fog, the beach never snow
+    CHECK_EQ((int)WX_ODDS[PLACE_VOLCANO][se][WX_SNOW], 0);
+    CHECK_EQ((int)WX_ODDS[PLACE_VOLCANO][se][WX_FOG], 0);
+    CHECK_EQ((int)WX_ODDS[PLACE_BEACH][se][WX_SNOW], 0);
+    // the meadow and the forest only snow in winter
+    for (int p : { PLACE_MEADOW, PLACE_FOREST })
+      CHECK_EQ(WX_ODDS[p][se][WX_SNOW] > 0, se == SEASON_WINTER);
   }
-  // the volcano: never snow or fog; snow only on the mountain and the snowfield
-  CHECK_EQ((int)WX_ODDS[PLACE_VOLCANO][WX_SNOW], 0);
-  CHECK_EQ((int)WX_ODDS[PLACE_VOLCANO][WX_FOG], 0);
-  for (int p : { PLACE_MEADOW, PLACE_BEACH, PLACE_FOREST, PLACE_VOLCANO }) CHECK_EQ((int)WX_ODDS[p][WX_SNOW], 0);
-  CHECK(WX_ODDS[PLACE_MOUNTAIN][WX_SNOW] > 0);
-  CHECK(WX_ODDS[PLACE_SNOW][WX_SNOW] > WX_ODDS[PLACE_SNOW][WX_CLEAR]);  // the snowfield snows most
-  CHECK(WX_ODDS[PLACE_FOREST][WX_RAIN] >= WX_ODDS[PLACE_FOREST][WX_CLEAR]);
+  for (int p = 0; p < PLACES; p++)
+    for (int se = 0; se < SEASONS; se++) {
+      CHECK(WX_ODDS[p][SEASON_SUMMER][WX_CLEAR] >= WX_ODDS[p][se][WX_CLEAR]);  // summer is the sunniest
+      CHECK(WX_ODDS[p][SEASON_WINTER][WX_SNOW] >= WX_ODDS[p][se][WX_SNOW]);    // winter the snowiest
+    }
+  CHECK(WX_ODDS[PLACE_MOUNTAIN][SEASON_NONE][WX_SNOW] > 0);
+  CHECK(WX_ODDS[PLACE_SNOW][SEASON_NONE][WX_SNOW] > WX_ODDS[PLACE_SNOW][SEASON_NONE][WX_CLEAR]);  // snowfield
+  CHECK(WX_ODDS[PLACE_FOREST][SEASON_NONE][WX_RAIN] >= WX_ODDS[PLACE_FOREST][SEASON_NONE][WX_CLEAR]);
 }
 
 // each roll of 0-99 gives a kind, as many rolls for each kind as its odds
 TEST(Weather, each_roll_maps_to_a_kind_by_the_odds_exactly) {
-  for (int p = 0; p < PLACES; p++) {
-    int rolls[WX_KINDS] = {};
-    for (uint32_t r = 0; r < 100; r++) rolls[wxFromRoll((uint8_t)p, r)]++;
-    for (int k = 0; k < WX_KINDS; k++) CHECK_EQ(rolls[k], (int)WX_ODDS[p][k]);
-    CHECK_EQ(wxFromRoll((uint8_t)p, 0), (uint8_t)WX_CLEAR);  // the rolls run clear, cloudy... in order
-  }
-  CHECK_EQ(wxFromRoll(PLACE_MEADOW, 100), (uint8_t)WX_CLEAR);  // out of range: fair
-  CHECK_EQ(wxFromRoll(PLACES, 0), wxFromRoll(PLACE_MEADOW, 0));
+  for (int p = 0; p < PLACES; p++)
+    for (int se = 0; se < SEASONS; se++) {
+      int rolls[WX_KINDS] = {};
+      for (uint32_t r = 0; r < 100; r++) rolls[wxFromRoll((uint8_t)p, (uint8_t)se, r)]++;
+      for (int k = 0; k < WX_KINDS; k++) CHECK_EQ(rolls[k], (int)WX_ODDS[p][se][k]);
+      CHECK_EQ(wxFromRoll((uint8_t)p, (uint8_t)se, 0), (uint8_t)WX_CLEAR);  // the rolls run clear, cloudy...
+    }
+  CHECK_EQ(wxFromRoll(PLACE_MEADOW, SEASON_NONE, 100), (uint8_t)WX_CLEAR);  // out of range: fair
+  CHECK_EQ(wxFromRoll(PLACES, SEASON_NONE, 0), wxFromRoll(PLACE_MEADOW, SEASON_NONE, 0));
+  for (uint32_t r = 0; r < 100; r++)  // a season out of range is the year-round row
+    CHECK_EQ(wxFromRoll(PLACE_MOUNTAIN, SEASONS, r), wxFromRoll(PLACE_MOUNTAIN, SEASON_NONE, r));
 }
 
 // a new spell follows the place's odds (20,000 blocks: each kind within 2 points)
@@ -42,16 +56,17 @@ TEST(Weather, a_new_spell_follows_the_odds_of_its_place) {
   for (int p = 0; p < PLACES; p++) {
     int seen[WX_KINDS] = {};
     for (int b = 0; b < N; b++) {
-      uint8_t k = wxFresh((uint8_t)p, 600000u + (uint32_t)b);
+      uint8_t k = wxFresh((uint8_t)p, 600000u + (uint32_t)b, SEASON_NONE);
       CHECK(k < WX_KINDS);
       if (k < WX_KINDS) seen[k]++;
     }
     for (int k = 0; k < WX_KINDS; k++) {
       int pct10 = seen[k] * 1000 / N;  // tenths of a percent
-      CHECK_MSG(pct10 >= WX_ODDS[p][k] * 10 - 20 && pct10 <= WX_ODDS[p][k] * 10 + 20,
+      int odds = WX_ODDS[p][SEASON_NONE][k];
+      CHECK_MSG(pct10 >= odds * 10 - 20 && pct10 <= odds * 10 + 20,
                 "place " + std::to_string(p) + " kind " + std::to_string(k) + ": " + std::to_string(pct10) +
-                    " per mille, odds " + std::to_string(WX_ODDS[p][k]) + "%");
-      if (WX_ODDS[p][k] == 0) CHECK_EQ(seen[k], 0);
+                    " per mille, odds " + std::to_string(odds) + "%");
+      if (odds == 0) CHECK_EQ(seen[k], 0);
     }
   }
 }
@@ -63,9 +78,9 @@ TEST(Weather, a_spell_carries_on_through_the_blocks_that_keep_it) {
   int kept = 0, same = 0, n = 0;
   int seen[WX_KINDS] = {};
   for (uint32_t b = first; b < first + 20000; b++, n++) {
-    uint8_t k = wxKind(PLACE_MEADOW, b);
+    uint8_t k = wxKind(PLACE_MEADOW, b, SEASON_NONE);
     seen[k]++;
-    if (wxKind(PLACE_MEADOW, b - 1) == k) same++;
+    if (wxKind(PLACE_MEADOW, b - 1, SEASON_NONE) == k) same++;
     if (!wxKeeps(b)) continue;
     // a block that keeps, at the head of a run shorter than the cap, has the same weather
     // as the block before it
@@ -73,13 +88,13 @@ TEST(Weather, a_spell_carries_on_through_the_blocks_that_keep_it) {
     for (uint32_t c = b; run < WX_KEEP_MAX + 1 && wxKeeps(c); c--) run++;
     if (run <= WX_KEEP_MAX - 1) {
       kept++;
-      CHECK_EQ(k, wxKind(PLACE_MEADOW, b - 1));
+      CHECK_EQ(k, wxKind(PLACE_MEADOW, b - 1, SEASON_NONE));
     }
   }
   CHECK(kept > 4000);
   CHECK_RANGE(same * 100 / n, 50, 75);  // 40% kept, plus fresh picks that match by chance
   for (int k = 0; k < WX_KINDS; k++)
-    CHECK_RANGE(seen[k] * 100 / n, WX_ODDS[PLACE_MEADOW][k] - 3, WX_ODDS[PLACE_MEADOW][k] + 3);
+    CHECK_RANGE(seen[k] * 100 / n, WX_ODDS[PLACE_MEADOW][SEASON_NONE][k] - 3, WX_ODDS[PLACE_MEADOW][SEASON_NONE][k] + 3);
 }
 
 // 40 blocks in 100 carry on the one before them, and a run of them is cut at WX_KEEP_MAX
@@ -94,6 +109,117 @@ TEST(Weather, the_keep_rate_and_the_spell_cap_hold) {
     for (uint8_t p = 0; p < PLACES; p++) CHECK_EQ(wxKind(p, b), wxFresh(p, b - (uint32_t)run));
   }
   CHECK_RANGE(kept * 100 / n, WX_KEEP_PCT - 2, WX_KEEP_PCT + 2);
+}
+
+// ---------------------------------------------------------------- the date and the seasons
+TEST(Season, the_date_of_an_epoch) {
+  struct { uint32_t e; int y, m, d, wd; } cases[] = {
+    { 0, 1970, 1, 1, 4 },                         // a Thursday
+    { 1709164800UL, 2024, 2, 29, 4 },             // a leap day
+    { 1709164800UL + DAY, 2024, 3, 1, 5 },
+    { 1767225600UL - 1, 2025, 12, 31, 3 },        // the last second of a year
+    { 1767225600UL, 2026, 1, 1, 4 },
+    { 1794528000UL + 13 * 3600, 2026, 11, 13, 5 },  // a Friday afternoon
+    { 1794700800UL, 2026, 11, 15, 0 },            // a Sunday
+    { 4102358400UL, 2099, 12, 31, 4 },            // the clock's last valid year
+  };
+  for (auto &c : cases) {
+    CivilDate d = civilDate(c.e);
+    CHECK_MSG(d.year == c.y && d.month == c.m && d.day == c.d && d.weekday == c.wd,
+              std::to_string(c.e) + " -> " + std::to_string(d.year) + "-" + std::to_string(d.month) + "-" +
+                  std::to_string(d.day) + " wd " + std::to_string(d.weekday));
+  }
+  // every day from 2025 to 2099 follows the one before
+  CivilDate prev = civilDate(1735689600UL);  // 2025-01-01
+  for (uint32_t e = 1735689600UL + DAY; e <= 4102358400UL; e += DAY) {
+    CivilDate d = civilDate(e);
+    bool nextDay = d.year == prev.year && d.month == prev.month && d.day == prev.day + 1;
+    bool nextMonth = d.year == prev.year && d.month == prev.month + 1 && d.day == 1;
+    bool nextYear = d.year == prev.year + 1 && d.month == 1 && d.day == 1 && prev.month == 12 && prev.day == 31;
+    CHECK(nextDay || nextMonth || nextYear);
+    CHECK_EQ((int)d.weekday, (prev.weekday + 1) % 7);
+    if (!(nextDay || nextMonth || nextYear)) break;
+    prev = d;
+  }
+}
+
+// southern hemisphere: summer Dec-Feb, autumn Mar-May, winter Jun-Aug, spring Sep-Nov
+TEST(Season, southern_seasons_month_by_month) {
+  const uint8_t want[13] = { SEASON_NONE,   SEASON_SUMMER, SEASON_SUMMER, SEASON_AUTUMN, SEASON_AUTUMN,
+                             SEASON_AUTUMN, SEASON_WINTER, SEASON_WINTER, SEASON_WINTER, SEASON_SPRING,
+                             SEASON_SPRING, SEASON_SPRING, SEASON_SUMMER };
+  for (int m = 0; m <= 12; m++) CHECK_EQ(seasonOfMonth((uint8_t)m), want[m]);
+  CHECK_EQ(seasonOfMonth(13), (uint8_t)SEASON_NONE);
+  const uint32_t jun1 = 1780272000UL;  // 2026-06-01 00:00
+  CHECK_EQ(seasonAt(jun1 - 1), (uint8_t)SEASON_AUTUMN);  // 31 May, 23:59:59
+  CHECK_EQ(seasonAt(jun1), (uint8_t)SEASON_WINTER);
+  CHECK_EQ(seasonAt(1794528000UL), (uint8_t)SEASON_SPRING);  // 13 November
+  CHECK_EQ(seasonAt(1767225600UL), (uint8_t)SEASON_SUMMER);  // 1 January
+  CHECK_EQ(seasonAt(0), (uint8_t)SEASON_NONE);               // no trusted clock
+}
+
+// each block picks its weather with its own season's odds, so the meadow snows in winter
+// and never in summer
+TEST(Season, the_weather_follows_the_season_of_its_block) {
+  const uint32_t jan1 = 1798761600UL, jun1 = 1780272000UL;  // 2027-01-01, 2026-06-01
+  int summerSnow = 0, winterSnow = 0;
+  for (uint32_t b = jan1 / WX_BLOCK_S; b < jan1 / WX_BLOCK_S + 8 * 59; b++) {  // January-February
+    CHECK_EQ(wxFresh(PLACE_MEADOW, b), wxFresh(PLACE_MEADOW, b, SEASON_SUMMER));
+    summerSnow += wxKind(PLACE_MEADOW, b) == WX_SNOW;
+  }
+  for (uint32_t b = jun1 / WX_BLOCK_S; b < jun1 / WX_BLOCK_S + 8 * 92; b++) {  // June-August
+    CHECK_EQ(wxFresh(PLACE_MEADOW, b), wxFresh(PLACE_MEADOW, b, SEASON_WINTER));
+    winterSnow += wxKind(PLACE_MEADOW, b) == WX_SNOW;
+  }
+  CHECK_EQ(summerSnow, 0);
+  CHECK(winterSnow > 20);
+  // the last block of May is autumn's, the first of June winter's
+  CHECK_EQ(wxSeasonOf(jun1 / WX_BLOCK_S - 1, SCENE_AUTO), (uint8_t)SEASON_AUTUMN);
+  CHECK_EQ(wxSeasonOf(jun1 / WX_BLOCK_S, SCENE_AUTO), (uint8_t)SEASON_WINTER);
+  CHECK_EQ(wxSeasonOf(jun1 / WX_BLOCK_S, SEASON_SUMMER), (uint8_t)SEASON_SUMMER);  // forced
+}
+
+TEST(Season, the_scene_shows_no_season_in_a_ceremony_else_the_forced_or_the_clocks) {
+  const uint32_t jun1 = 1780272000UL;
+  CHECK_EQ(sceneSeasonOf(true, SEASON_SPRING, jun1), (uint8_t)SEASON_NONE);
+  CHECK_EQ(sceneSeasonOf(false, SEASON_SPRING, jun1), (uint8_t)SEASON_SPRING);
+  CHECK_EQ(sceneSeasonOf(false, SCENE_AUTO, jun1), (uint8_t)SEASON_WINTER);
+  CHECK_EQ(sceneSeasonOf(false, SCENE_AUTO, 0), (uint8_t)SEASON_NONE);
+  // a forced season sets the odds of the clock's weather too (SCENE meadow auto winter)
+  bool sawSnow = false;
+  for (uint32_t e = 1767225600UL; e < 1767225600UL + 60 * DAY; e += WX_BLOCK_S)  // January
+    sawSnow |= sceneWx(false, SCENE_AUTO, PLACE_MEADOW, e, SEASON_WINTER).kind == WX_SNOW;
+  CHECK(sawSnow);
+}
+
+// The meadow, the forest and the mountain show the season; the beach, the volcano and the
+// snowfield look the same all year.
+TEST(Season, the_green_places_show_it_on_the_ground) {
+  for (int p = 0; p < PLACES; p++) {
+    bool green = p == PLACE_MEADOW || p == PLACE_FOREST || p == PLACE_MOUNTAIN;
+    CHECK_EQ(seasonShows((uint8_t)p), green);
+    CHECK_EQ(seasonGround(SEASON_SPRING, (uint8_t)p), (uint8_t)(green ? GROUND_FLOWERS : GROUND_PLAIN));
+    CHECK_EQ(seasonGround(SEASON_AUTUMN, (uint8_t)p), (uint8_t)(green ? GROUND_AUTUMN : GROUND_PLAIN));
+    CHECK_EQ(seasonGround(SEASON_WINTER, (uint8_t)p), (uint8_t)(green ? GROUND_SNOW : GROUND_PLAIN));
+    CHECK_EQ(seasonGround(SEASON_SUMMER, (uint8_t)p), (uint8_t)GROUND_PLAIN);
+    CHECK_EQ(seasonGround(SEASON_NONE, (uint8_t)p), (uint8_t)GROUND_PLAIN);  // no clock, or a ceremony
+  }
+  CHECK(!seasonShows(PLACES));
+}
+
+// What flies or falls with the season, only under a sky light enough for the sun or the moon.
+TEST(Season, what_flies_or_falls_with_it) {
+  WxNow clear = wxFixed(WX_CLEAR), cloudy = wxFixed(WX_CLOUDY);
+  CHECK_EQ(seasonFx(SEASON_SPRING, PLACE_MEADOW, false, clear), (uint8_t)SEASON_FX_PETALS);
+  CHECK_EQ(seasonFx(SEASON_SUMMER, PLACE_FOREST, false, cloudy), (uint8_t)SEASON_FX_BUTTERFLIES);
+  CHECK_EQ(seasonFx(SEASON_SUMMER, PLACE_FOREST, true, clear), (uint8_t)SEASON_FX_FIREFLIES);
+  CHECK_EQ(seasonFx(SEASON_AUTUMN, PLACE_MOUNTAIN, true, clear), (uint8_t)SEASON_FX_LEAVES);
+  CHECK_EQ(seasonFx(SEASON_WINTER, PLACE_MEADOW, false, clear), (uint8_t)SEASON_FX_NONE);  // its snow is the weather's
+  CHECK_EQ(seasonFx(SEASON_NONE, PLACE_MEADOW, false, clear), (uint8_t)SEASON_FX_NONE);
+  CHECK_EQ(seasonFx(SEASON_SPRING, PLACE_BEACH, false, clear), (uint8_t)SEASON_FX_NONE);
+  for (uint8_t k : { WX_RAIN, WX_STORM, WX_SNOW, WX_FOG })  // the weather brings only its own
+    for (uint8_t se = SEASON_SPRING; se <= SEASON_AUTUMN; se++)
+      CHECK_EQ(seasonFx(se, PLACE_MEADOW, false, wxFixed(k)), (uint8_t)SEASON_FX_NONE);
 }
 
 // ---------------------------------------------------------------- the clock
@@ -394,32 +520,44 @@ TEST(Weather, rain_and_snow_fall_only_at_the_full_frame_rate) {
 }
 
 // ---------------------------------------------------------------- SCENE (serial)
-TEST(SceneCmd, takes_a_place_and_a_weather_or_auto) {
-  uint8_t p = 0, k = 0;
-  CHECK(sceneCmdParse(" beach rain", p, k));
+TEST(SceneCmd, takes_a_place_and_a_weather_and_a_season_or_auto) {
+  uint8_t p = 0, k = 0, se = 0;
+  CHECK(sceneCmdParse(" beach rain", p, k, se));
   CHECK_EQ(p, (uint8_t)PLACE_BEACH);
   CHECK_EQ(k, (uint8_t)WX_RAIN);
-  CHECK(sceneCmdParse("SNOW  Snow ", p, k));  // the place and the weather can share a word
+  CHECK_EQ(se, (uint8_t)SCENE_AUTO);
+  CHECK(sceneCmdParse("SNOW  Snow ", p, k, se));  // the place and the weather can share a word
   CHECK_EQ(p, (uint8_t)PLACE_SNOW);
   CHECK_EQ(k, (uint8_t)WX_SNOW);
-  CHECK(sceneCmdParse("volcano", p, k));  // the weather follows the clock there
+  CHECK(sceneCmdParse("volcano", p, k, se));  // the weather and the season follow the clock there
   CHECK_EQ(p, (uint8_t)PLACE_VOLCANO);
   CHECK_EQ(k, (uint8_t)SCENE_AUTO);
-  CHECK(sceneCmdParse("auto fog", p, k));
+  CHECK_EQ(se, (uint8_t)SCENE_AUTO);
+  CHECK(sceneCmdParse("auto fog", p, k, se));
   CHECK_EQ(p, (uint8_t)SCENE_AUTO);
   CHECK_EQ(k, (uint8_t)WX_FOG);
-  CHECK(sceneCmdParse(" AUTO", p, k));
+  CHECK(sceneCmdParse(" AUTO", p, k, se));
   CHECK_EQ(p, (uint8_t)SCENE_AUTO);
   CHECK_EQ(k, (uint8_t)SCENE_AUTO);
-  for (int i = 0; i < PLACES; i++) CHECK(sceneCmdParse(PLACE_KEYS[i], p, k) && p == i);
+  CHECK(sceneCmdParse("meadow clear Winter", p, k, se));
+  CHECK_EQ(se, (uint8_t)SEASON_WINTER);
+  CHECK(sceneCmdParse("beach rain auto", p, k, se));
+  CHECK_EQ(se, (uint8_t)SCENE_AUTO);
+  CHECK(sceneCmdParse("forest auto none", p, k, se));  // no seasonal touches
+  CHECK_EQ(k, (uint8_t)SCENE_AUTO);
+  CHECK_EQ(se, (uint8_t)SEASON_NONE);
+  for (int i = 0; i < PLACES; i++) CHECK(sceneCmdParse(PLACE_KEYS[i], p, k, se) && p == i);
+  for (int i = 0; i < SEASONS; i++) CHECK(sceneCmdParse((std::string("meadow auto ") + SEASON_KEYS[i]).c_str(), p, k, se) && se == i);
 }
 
 TEST(SceneCmd, refuses_anything_else_and_changes_nothing) {
   for (const char *bad : { "", "   ", "beach rain storm", "lava", "beach hail", "beachrain", "beac", "beaches",
-                           "rain", "beach rain auto", "beach rain storm fog", "a b c d e" }) {
-    uint8_t p = 7, k = 9;
-    CHECK_MSG(!sceneCmdParse(bad, p, k), std::string("'") + bad + "'");
+                           "rain", "beach winter", "beach rain winter fog", "a b c d e", "meadow clear autumnn",
+                           "meadow clear spring summer" }) {
+    uint8_t p = 7, k = 9, se = 11;
+    CHECK_MSG(!sceneCmdParse(bad, p, k, se), std::string("'") + bad + "'");
     CHECK_EQ(p, (uint8_t)7);
     CHECK_EQ(k, (uint8_t)9);
+    CHECK_EQ(se, (uint8_t)11);
   }
 }

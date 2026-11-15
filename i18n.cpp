@@ -48,6 +48,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "I love you, %s!", "I love you!",
     // 1.75C toasts (#61)
     "Sound on", "Muted", "Locked", "Unlocked",
+    // the standby clock's date (#60)
+    "%s %u %s",
   },
   // ---------------- PT (European Portuguese, #61) ----------------
   // One form of address throughout: "tu" (toca, desliza, escolhe, ouve, mantem),
@@ -97,6 +99,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Adoro-te, %s!", "Adoro-te!",
     // 1.75C toasts (#61)
     "Som ligado", "Sem som", "Bloqueado", "Desbloqueado",
+    // the standby clock's date (#60)
+    "%s, %u %s",
   },
 };
 
@@ -112,7 +116,27 @@ static const char *const MED_DSC[LANG_COUNT][MED_COUNT] = {
     "7 DIAS A FIO", "LA\200O M\301X.", "FORMA FINAL", "EM FORMA" },
 };
 
+// The standby clock's date (#60), short [language][...]: English as in "Sat 15 Nov",
+// European Portuguese in lower case, as it writes them ("s\240b, 15 nov").
+static const char *const WEEKDAY[LANG_COUNT][7] = {
+  { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" },
+  { "dom", "seg", "ter", "qua", "qui", "sex", "s\240b" },
+};
+static const char *const MONTH[LANG_COUNT][12] = {
+  { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" },
+  { "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez" },
+};
+
 const char *T(StrId id) { return STRINGS[gLang][id]; }
+
+void formatDate(char *buf, size_t n, uint8_t weekday, uint8_t day, uint8_t month) {
+  if (!n) return;
+  if (weekday > 6 || month < 1 || month > 12 || day < 1 || day > 31) {
+    snprintf(buf, n, "?");
+    return;
+  }
+  snprintf(buf, n, T(S_DATE_FMT), WEEKDAY[gLang][weekday], (unsigned)day, MONTH[gLang][month - 1]);
+}
 const char *medalName(int i)  { return MED_NAME[gLang][i]; }
 const char *medalDesc(int i)  { return MED_DSC[gLang][i]; }
 

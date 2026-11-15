@@ -1,0 +1,37 @@
+# The standby clock's weather picture is the weather now at today's place (#60, standby.h),
+# not at the place last drawn: the scene's place only moves when a frame of the pet is drawn,
+# which the clock never does. On 2 Nov the place changes from the meadow to the mountain at
+# 06:00 and the weather from rain to a storm; the clock left on across 06:00 shows the storm
+# (cloud and lightning), where the latched place would still give the meadow's rain. The
+# touch then draws the pet at the mountain: the same storm (read it in the SCENE? lines of
+# serial.log: standby=1 before the touch, wx=storm after it). Then, at night, the picture's
+# moon where the sun would be (a forced clear sky, then cloud; #74).
+
+usb on
+charging on
+battery 60
+clock 2026-11-02 05:48
+wait 1s
+tap 233 220
+wait 500ms
+tap 233 200
+tap 233 200
+tap 233 200
+wait 100s
+shot place-0-clock-before-06
+serial SCENE?
+wait 15m
+shot place-1-clock-after-06
+serial SCENE?
+tap 233 233
+wait 2s
+shot place-2-pet-after-touch
+serial SCENE?
+
+serial TIME 1794006000
+serial SCENE meadow clear
+wait 100s
+shot place-3-night-clear-moon
+serial SCENE meadow cloudy
+wait 2s
+shot place-4-night-cloudy-moon

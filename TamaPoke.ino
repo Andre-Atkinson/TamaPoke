@@ -46,6 +46,7 @@ static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright unt
 #include "gameui.h"
 #include "idlelife.h"
 #include "scene.h"
+#include "standby.h"
 #include "screens.h"
 #include "serialcmd.h"
 #include "uitext.h"
@@ -110,6 +111,7 @@ AttnArm attnArm;
 uint32_t attnShowUntil = 0;   // a call lights (or brightens) the screen until this millis() (0 = none)
 bool screenOffByPwr = false;  // the screen went dark with a PWR press, not the timeout: calls leave it dark
 ClockPrompt clockPrompt;      // asks for the time after a reseed (clockprompt.h, #10)
+bool standby = false;         // the standby clock is up (standby.h, #60): plugged in and left alone
 // The stale flag of bedEdge, kept through soft resets: RTC memory survives a crash,
 // watchdog or ESP.restart like the 1.75C soft clock does, and power loss clears both.
 RTC_NOINIT_ATTR ClockStaleMark clockStaleMark;
@@ -795,6 +797,31 @@ void loop() {
   pollPwrButton();  // original board: same PEK short press as before
 #endif
 
+  // The standby clock (standby.h, #60): plugged in and left alone, a dim clock takes the place
+  // of screen-off. It ends as soon as it is no longer allowed (unplugged, asleep, the screen
+  // turned off with PWR or locked, the clock not trusted...), and the screen's usual rules
+  // apply again in this same pass; a touch or BOOT ends it in wakeUI(). Not counted as a
+  // touch, so self-care while charging (#24) carries on.
+  StandbyIn sby = standbyIn(now);
+  if (standby && !standbyAllowed(sby)) {
+    standby = false;
+    Serial.println("standby clock: off");
+  } else if (!standby && standbyStarts(sby)) {
+    standby = true;
+    // A screen that timed out lights up with the clock (the pet woke on the charger, or the
+    // board was plugged in after its screen went dark on battery): the panel wakes below in
+    // this same pass, and the auto touch lock lets go (it follows screenOff).
+    screenOff = false;
+    // A touch brings the pet back (standby.h), so the views left open go now, the way an
+    // attention call puts them away when it lights a timed-out screen: settings (each choice
+    // is saved already), the card, the gallery, and the keyboard and the clock screen, which
+    // drop a half-typed name or a time not yet confirmed. Bedtime waits while settings, the
+    // keyboard or the clock screen is open and lit (bedBusy), and the gallery grid draws only
+    // when dirty, so a touch would show a frozen frame of the clock.
+    attnCloseViews();
+    Serial.printf("standby clock: idle %lu ms\n", (unsigned long)sby.idleMs);
+  }
+
   // Apagado por inactividad en cualquier pantalla, tambien el reloj y la galeria
   // (son estaticas: fps 0 no significa que el temporizador este parado). El USB
   // no lo desactiva: solo impide el light sleep.
@@ -983,13 +1010,51 @@ PowerCtx powerCtx(uint32_t now) {
   c.batPct = batPercent();
   c.userDim = userDim;
   c.offMs = powerOffMs;
+  // A call (attnLoop) while the clock shows: the window reads as "just touched" and shows the
+  // pet at full brightness, so the clock is off for its length (here and in standbyShown()).
+  // `standby` itself stays set, because a call is not a touch (wakeUI() clears it): the
+  // window ends, the idle time is still past the delay, and the clock is back at once.
+  c.standby = standby && !show;
   return c;
 }
+
+// What the standby clock needs (standby.h). Self-care's reading of USB (#24): without a
+// PMU, usbPresent() reports true, so it counts only with pmuReady.
+static StandbyIn standbyIn(uint32_t now) {
+  StandbyIn s;
+  s.usb = pmuReady && usbPresent();
+  s.clockKnown = pet.lastSeenEpoch && !bedEdge.stale();
+  s.petAwake = !pet.sleeping && !pet.ceremony && !pet.evolving() && !pet.awaitingStarter() && !pet.awaitingEgg();
+  s.pwrOff = screenOff && screenOffByPwr;  // a timed-out screen may light up with the clock
+  s.locked = screenIsLocked();
+  s.gameOpen = gameOpen || sackOpen;
+  s.idleMs = idleSince(now, lastInteract);
+  s.offMs = powerOffMs;
+  return s;
+}
+
+// The standby clock's time: the clock read, or the last reading (lastSeenEpoch) when the
+// 1.75's PCF85063 read fails (rtcEpoch() returns 0), never 1 Jan 1970.
+static uint32_t standbyEpoch() {
+  uint32_t e = rtcEpoch();
+  return e ? e : pet.lastSeenEpoch;
+}
+
+// The night scene: the pet asleep, or the night hours (the standby clock's weather picture
+// shows a moon then too).
+static bool sceneNight() {
+  int h = sceneHour();
+  return pet.sleeping || h < 6 || h >= 20;
+}
+
+// the standby clock is on screen: up, and no call's window showing the pet (see powerCtx())
+static bool standbyShown(uint32_t now) { return standby && !attnShowing(now); }
 
 // el usuario ha interactuado: vuelve el ritmo normal de dibujo (sin esperar al proximo
 // frame de un ritmo lento) y el amplificador se enciende antes de que suene nada
 void wakeUI() {
   if (screenIsLocked()) return;
+  standby = false;  // a touch, BOOT or PWR on: the pet again (standby.h)
   uint32_t now = millis();
   uint32_t iv = frameIntervalMs(powerCtx(now));
   bool slow = !iv || iv > 100;  // pantalla apagada o ritmo lento: se dibuja ya, sin esperar al frame
@@ -1584,6 +1649,7 @@ void onTap(int16_t x, int16_t y) {
 // Pantallas que solo cambian con un toque (o con un dato que cambia muy de vez en cuando):
 // mientras su "clave" no cambie no se repintan ni se vuelcan por QSPI.
 static bool staticScreen() {
+  if (standbyShown(millis())) return true;  // redrawn when its minute, weather or battery changes
   if (pet.awaitingStarter() || pet.awaitingEgg()) return true;
   if (galleryOpen || gameOpen || sackOpen) return false;  // la galeria gestiona su propio repintado
   if (kbOpen || clockOpen) return true;
@@ -1592,6 +1658,18 @@ static bool staticScreen() {
 static uint32_t mixKey(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
 static uint32_t screenKey() {
   uint32_t h = 2166136261u;
+  if (standbyShown(millis())) {
+    // the clock's minute (standbyEpoch(): the 1.75C's software clock, or one PCF85063 read a
+    // second on the 1.75), the weather, the battery and the language of its date
+    h = mixKey(h, 0x5B);
+    h = mixKey(h, standbyEpoch() / 60);
+    h = mixKey(h, sceneWeatherNow().kind);
+    h = mixKey(h, sceneNight());  // the picture's sun or moon
+    h = mixKey(h, (uint32_t)batPercent());
+    h = mixKey(h, batCharging());
+    h = mixKey(h, gLang);
+    return h;
+  }
   h = mixKey(h, pet.awaitingStarter() ? 1 : pet.awaitingEgg() ? 100 : kbOpen ? 2 : clockOpen ? 3 : 4 + cardPage);
   h = mixKey(h, sdEpoch);
   if (pet.awaitingStarter()) {
@@ -1656,6 +1734,10 @@ bool render() {
   } else {
     screenKeyValid = false;
   }
+  if (standbyShown(millis())) {  // the standby clock (standby.h, #60) in place of screen-off
+    drawStandby(standbyEpoch(), sceneWeatherNow().kind, sceneNight(), batPercent(), batCharging());
+    return true;
+  }
   if (pet.awaitingStarter()) {  // primera partida: elegir inicial (prioridad total)
     renderStarterSelect();
     return true;
@@ -1689,8 +1771,7 @@ bool render() {
     renderCard();
     return true;
   }
-  int h = sceneHour();
-  gNight = pet.sleeping || h < 6 || h >= 20;
+  gNight = sceneNight();
   // drawScene cubre los 466x466 completos: sin fillScreen(NEGRO) previo para
   // que un flush DMA solapado nunca capture negro a medias (anti-parpadeo). The place the
   // pet is at today and the weather come from the clock (weather.h, #60).
@@ -1762,7 +1843,7 @@ bool render() {
   if (pet.sleeping) {
     gfx->setTextColor(UI_INK_NIGHT);
     setSize(3);
-    setCur(320, 130);
+    setCur(SLEEP_ZZ_X, SLEEP_ZZ_Y);  // clear of the moon (skylayout.h)
     printT("Zz");
   }
 

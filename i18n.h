@@ -88,12 +88,17 @@ enum StrId : uint8_t {
   S_SAY_HI, S_SAY_HAPPY, S_SAY_PAT, S_SAY_LOVE_FMT, S_SAY_LOVE,
   // 1.75C toasts (#61): the BOOT button's sound toggle and the screen lock
   S_TOAST_SOUND_ON, S_TOAST_MUTED, S_TOAST_LOCKED, S_TOAST_UNLOCKED,
+  // the standby clock's date (#60): weekday, day, month ("Sat 15 Nov"; see formatDate())
+  S_DATE_FMT,
   STR_COUNT
 };
 
 const char *T(StrId id);       // texto en el idioma activo
 const char *medalName(int i);  // banner de medalla (MED_COUNT)
 const char *medalDesc(int i);  // descripcion larga de medalla
+// The date as the standby clock shows it (#60), short: "Sat 15 Nov", "s\240b, 15 nov".
+// `weekday` 0 (Sunday) to 6, `month` 1 to 12 (CivilDate, weather.h); out of range: "?".
+void formatDate(char *buf, size_t n, uint8_t weekday, uint8_t day, uint8_t month);
 
 void loadLang();             // reads the language from NVS (call in setup); never writes
 void setLang(Lang l);        // switches and saves the language (an invalid one is ignored)
