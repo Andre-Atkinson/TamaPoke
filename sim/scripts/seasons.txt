@@ -87,8 +87,9 @@ shot sky-6-asleep
 tap 264 404
 wait 1s
 
-# level 100: the longest title of all
+# level 100: the longest title of all (the tap keeps the screen awake above the farewell
+# button that an old pet gets, y 176-234)
 serial LVL 99
-tap 60 200
+tap 40 160
 wait 1s
 shot sky-7-day-longest
