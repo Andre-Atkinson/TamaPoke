@@ -24,6 +24,18 @@ TEST(Weather, each_place_has_odds_that_add_up_and_snow_only_where_it_belongs) {
   CHECK(WX_ODDS[PLACE_FOREST][WX_RAIN] >= WX_ODDS[PLACE_FOREST][WX_CLEAR]);
 }
 
+// each roll of 0-99 gives a kind, as many rolls for each kind as its odds
+TEST(Weather, each_roll_maps_to_a_kind_by_the_odds_exactly) {
+  for (int p = 0; p < PLACES; p++) {
+    int rolls[WX_KINDS] = {};
+    for (uint32_t r = 0; r < 100; r++) rolls[wxFromRoll((uint8_t)p, r)]++;
+    for (int k = 0; k < WX_KINDS; k++) CHECK_EQ(rolls[k], (int)WX_ODDS[p][k]);
+    CHECK_EQ(wxFromRoll((uint8_t)p, 0), (uint8_t)WX_CLEAR);  // the rolls run clear, cloudy... in order
+  }
+  CHECK_EQ(wxFromRoll(PLACE_MEADOW, 100), (uint8_t)WX_CLEAR);  // out of range: fair
+  CHECK_EQ(wxFromRoll(PLACES, 0), wxFromRoll(PLACE_MEADOW, 0));
+}
+
 // a new spell follows the place's odds (20,000 blocks: each kind within 2 points)
 TEST(Weather, a_new_spell_follows_the_odds_of_its_place) {
   const int N = 20000;
@@ -81,7 +93,12 @@ TEST(Weather, without_a_trusted_clock_it_is_fair_weather_at_home) {
     CHECK_EQ(w.prev, (uint8_t)WX_CLEAR);
     CHECK_EQ(w.mix, (uint8_t)WX_MIX_FULL);
     CHECK_EQ(travelPlace((uint8_t)p, 0), (uint8_t)p);
+    CHECK_EQ(travelPlace((uint8_t)p, TRAVEL_DAY_START_S - 1), (uint8_t)p);
   }
+  // The guards do this, not the hash: what the clock's own picks would give for epoch 0
+  // is neither home nor fair (the salts are chosen so; if they change, keep it this way).
+  CHECK(sceneHash(travelDay(0) ^ TRAVEL_SALT) % 100 >= TRAVEL_HOME_PCT);
+  for (int p = 0; p < PLACES; p++) CHECK(wxKind((uint8_t)p, 0) != WX_CLEAR);
 }
 
 TEST(Weather, the_same_hour_gives_the_same_weather_after_a_reboot) {

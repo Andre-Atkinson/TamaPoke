@@ -36,8 +36,10 @@ inline uint32_t sceneHash(uint32_t x) {
   x ^= x >> 16;
   return x;
 }
-#define TRAVEL_SALT 0x3c6ef372U
-#define WX_PICK_SALT 0xa54ff53aU
+// (TRAVEL_SALT and WX_PICK_SALT are such that, without a clock, the hash alone would NOT give
+// fair weather at home: test_weather.cpp checks it, so the clock guards are really tested.)
+#define TRAVEL_SALT 0x3c6ef375U
+#define WX_PICK_SALT 0xa54ff53cU
 #define WX_KEEP_SALT 0x510e527fU
 
 // ---------------------------------------------------------------- travelling
@@ -92,16 +94,18 @@ inline const uint8_t WX_ODDS[PLACES][WX_KINDS] = {
   { 30, 15, 0, 0, 40, 15 },   // snowfield: snow and fog
 };
 
-// a new spell for `block` at `place`, from the odds
-inline uint8_t wxFresh(uint8_t place, uint32_t block) {
+// the weather a roll of 0-99 gives at `place`: each kind takes as many rolls as its odds
+inline uint8_t wxFromRoll(uint8_t place, uint32_t roll) {
   const uint8_t *odds = WX_ODDS[place < PLACES ? place : (uint8_t)PLACE_MEADOW];
-  uint32_t r = sceneHash(block ^ WX_PICK_SALT) % 100;
   for (uint8_t k = 0; k < WX_KINDS; k++) {
-    if (r < odds[k]) return k;
-    r -= odds[k];
+    if (roll < odds[k]) return k;
+    roll -= odds[k];
   }
-  return WX_CLEAR;  // not reached: each row adds up to 100
+  return WX_CLEAR;  // a roll over 99
 }
+
+// a new spell for `block` at `place`, from the odds
+inline uint8_t wxFresh(uint8_t place, uint32_t block) { return wxFromRoll(place, sceneHash(block ^ WX_PICK_SALT) % 100); }
 
 // does `block` carry on the weather of the block before it?
 inline bool wxKeeps(uint32_t block) { return sceneHash(block ^ WX_KEEP_SALT) % 100 < WX_KEEP_PCT; }

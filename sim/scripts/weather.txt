@@ -87,3 +87,9 @@ serial SCENE auto
 wait 1s
 serial SCENE?
 shot wx-19-night-auto
+
+# a ceremony keeps its own look: the farewell is clear even with a storm forced
+serial SCENE meadow storm
+serial BYE
+wait 2s
+shot wx-20-farewell-clear

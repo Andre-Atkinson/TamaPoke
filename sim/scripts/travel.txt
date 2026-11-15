@@ -1,5 +1,5 @@
 # Travelling (#60, weather.h): the place on screen changes only while nobody is looking.
-# Charmander (home: the volcano) on 2026-11-14, when the travel day turning over at 06:00
+# Charmander (home: the volcano) on 2026-11-17, when the travel day turning over at 06:00
 # takes it from the volcano to the beach. Read the SCENE? lines in serial.log:
 #   1. after hatching in the meadow, it stays there while watched (place=meadow today=volcano)
 #   2. a PWR off and on: place=volcano
@@ -12,7 +12,7 @@
 #   7. a PWR press (the 1.75C's screen comes on, the 1.75's goes off): place=forest
 # A tap on the sky at the left (outside the pet zone) keeps the screen awake.
 
-clock 2026-11-14 05:57
+clock 2026-11-17 05:57
 wait 1s
 tap 233 220
 wait 500ms
