@@ -275,11 +275,9 @@ class TestToastsAreTranslated(unittest.TestCase):
 class TestBuffersDeTexto(unittest.TestCase):
     """Cada snprintf(buf, sizeof(buf), T(S_x), ...) cabe en su buffer en TODOS los idiomas.
 
-    Los buffers se dimensionaron cuando toda cadena era de un byte por
-    caracter. En UTF-8 un kana o una silaba hangul ocupan 3, y snprintf corta
-    en silencio: a veces se pierden cifras ("きろく 2" por "きろく 219") y a
-    veces corta a mitad de un caracter, que la fuente ya no sabe dibujar. No lo
-    avisa ni el compilador ni la pantalla, asi que se comprueba aqui con el
+    snprintf corta en silencio: se pierden cifras o el final de un nombre, y no
+    lo avisa ni el compilador ni la pantalla (con el japones y el coreano, en
+    UTF-8, llego a pasar: "きろく 2" por "きろく 219"). Se comprueba aqui con el
     peor caso de cada argumento segun su tipo:
 
       %u / %d  -> 5 cifras (todos los argumentos son de 16 bits o menos)
