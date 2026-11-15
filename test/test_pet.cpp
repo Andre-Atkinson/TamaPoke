@@ -2658,6 +2658,79 @@ TEST(quietalerts, a_medal_the_players_care_earned_still_sounds_in_quiet_hours) {
   CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
 }
 
+// Exercise burns weight too, so a "fit" the player earns by playing or training is the
+// player's medal: it sounds in quiet hours. Only a tick that notices time's own medal is
+// silent. With no clock the day's care is not counted and the tick would notice it a minute
+// later; with a clock and the day's first care, registerCare() gains it straight away.
+static void exerciseAtNight(Pet &p) {
+  awakeWithSound(p);
+  p.ageMinutes = 5 * MINUTES_PER_LEVEL + 1;  // level 6
+  p.weight = 2;
+  p.careMistakes = 0;
+  setStats(p, 90, 90, 90, 90);
+  p.quietHours = true;
+}
+
+TEST(quietalerts, a_fit_earned_by_training_sounds_in_quiet_hours_without_a_clock) {
+  Pet p;
+  exerciseAtNight(p);
+  uint32_t n = mockSfxCount();
+  p.trainStrength(30);  // burns 10: no weight left
+  CHECK_EQ(p.weight, (uint8_t)0);
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_FIT));
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+TEST(quietalerts, a_fit_earned_by_training_sounds_in_quiet_hours_on_the_days_first_care) {
+  Pet p;
+  exerciseAtNight(p);
+  p.lastSeenEpoch = 100u * 86400 + 23 * 3600;  // 23:00 of a known day
+  p.lastCareDay = 0;
+  uint32_t n = mockSfxCount();
+  p.trainStrength(30);
+  CHECK_EQ(p.weight, (uint8_t)0);
+  CHECK_EQ(p.lastCareDay, (uint32_t)100);  // the care counted
+  CHECK(p.hasMedal(MED_FIT));
+  advance(p, 1);
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+TEST(quietalerts, a_fit_earned_by_playing_a_game_sounds_in_quiet_hours) {
+  Pet p;
+  exerciseAtNight(p);
+  uint32_t n = mockSfxCount();
+  p.playGame(GAME_KEEPY, 5);  // pays 5 points: burns 10
+  CHECK_EQ(p.weight, (uint8_t)0);
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_FIT));
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+// One tick that gains a medal of time (level 10) and one of the player's care (the favourite
+// berry, noticed a minute after the feeding): the player's makes the sound, the level-up
+// stays silent.
+TEST(quietalerts, a_tick_gaining_a_time_medal_and_a_players_one_still_sounds) {
+  Pet p;
+  awakeWithSound(p);
+  p.quietHours = true;
+  uint8_t fav = 0;
+  while (!p.lovesBerry(fav)) fav++;
+  p.feedBerry(fav);
+  CHECK(p.berryKnown);
+  CHECK(!p.hasMedal(MED_BERRY));  // no clock: nothing noticed yet
+  p.ageMinutes = 9 * MINUTES_PER_LEVEL - 1;
+  uint32_t n = mockSfxCount();
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_LV10));
+  CHECK(p.hasMedal(MED_BERRY));
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
 // ---------------------------------------------------------------- idle perks (#22)
 // A finished doze or ball game: a little energy or joy (capped per hour by idleplan.h's
 // IdlePerks). Never lowers a stat, and is not the player's care.

@@ -61,11 +61,14 @@ enum : uint16_t {
   MED_FINAL = 1 << 6, MED_FIT = 1 << 7,
 };
 #define MED_COUNT 8
-// The medals time earns by itself, noticed by the minute tick: the age levels, and "fit"
-// (the weight burns off by the minute, at level 5 or more). Their sound keeps out of quiet
-// hours (Pet::quietHours, #44). The others need the player's care (the favourite berry, the
-// streak, the bond, evolving or hatching into a final form), so the player is there and
-// they sound as before, also when the tick is what notices them a minute later.
+// The medals time can earn by itself: the age levels, and "fit" (the weight burns off by
+// the minute, at level 5 or more; exercise burns it too). Their sound keeps out of quiet
+// hours (Pet::quietHours, #44) only when BOTH hold: the minute tick is what gains them
+// (checkMedals(true)) and every medal gained in that call is one of these. A medal the
+// player's action gains (checkMedals(false): care, a minigame, training, evolving) sounds
+// as before, a FIT that exercise earns included. The others need the player's care (the
+// favourite berry, the streak, the bond, a final form), so the player is there and they
+// sound as before, also when the tick is what notices them a minute later.
 #define MED_BY_TIME (MED_LV10 | MED_LV25 | MED_LV50 | MED_FIT)
 
 class Pet {
@@ -273,7 +276,7 @@ private:
   void registerCare();   // primer cuidado del dia: racha + vinculo
   void playReward(uint8_t n);  // recompensa de un minijuego, n = 0..GAME_SCORE_CAP
   void addBond(uint8_t amt);
-  void checkMedals();
+  void checkMedals(bool byTick);  // byTick: from the minute tick, not a player's action
   bool allNeedsEmpty() const { return fullness == 0 && joy == 0 && energy == 0 && hygiene == 0; }
   void tick();
   void drainBody();  // parte del goteo de necesidades (comida, energia, caca, higiene)

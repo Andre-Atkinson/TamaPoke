@@ -110,8 +110,8 @@ While **awake**, per minute:
   or 22:00–07:00 if bedtime is off, and any time the clock hasn't been set since a
   power-off). A sound that comes due then is skipped, not saved for the morning; the
   evolve or run-away button, the new level and the medal banner show as usual. Sounds
-  you start (a tap, a minigame, care that earns a medal) play as before, and asleep it
-  makes no sound at all.
+  you start (a tap, a minigame, training, care that earns a medal, an **IN SHAPE** you
+  earn by exercise) play as before, and asleep it makes no sound at all.
 - 🔌 **Self-care while charging** (always on): plugged into USB and untouched for
   **10 minutes**, the pet looks after itself a little. Once a minute, the first
   need under **40**, in the order FOOD, HYG (which also clears the poops), ENE,

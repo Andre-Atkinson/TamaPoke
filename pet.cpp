@@ -142,7 +142,7 @@ void Pet::tick() {
       joy = dropTo(joy, 1, 35);
     }
     if (ageMinutes % 3 == 0) hygiene = dropTo(hygiene, 1, 45);
-    checkMedals();  // aun puede cruzar un nivel por edad mientras duerme
+    checkMedals(true);  // aun puede cruzar un nivel por edad mientras duerme
     if (++ticksSinceSave >= 5) pendingSave = true;
     return;
   }
@@ -194,7 +194,7 @@ void Pet::tick() {
                            // podia ganar en todo un dia y el vinculo se atascaba
   }
 
-  checkMedals();  // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick
+  checkMedals(true);  // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick
 
   // abandono total: con TODO a cero durante una hora queda lista para escaparse;
   // NO se va sola, la dispara el usuario con el boton (final triste, lo presencia)
@@ -439,7 +439,7 @@ void Pet::registerCare() {
     lastMilestone = ms;
     milestoneUntil = millis() + 4500;
   }
-  checkMedals();
+  checkMedals(false);  // de una accion del jugador, no del tick
   save();
 }
 
@@ -449,7 +449,8 @@ void Pet::addBond(uint8_t amt) {
   bondToday += amt;
 }
 
-void Pet::checkMedals() {
+// byTick: the minute tick is the caller, not an action of the player (see MED_BY_TIME).
+void Pet::checkMedals(bool byTick) {
   if (isEgg()) return;
   uint16_t before = medals;
   if (level() >= 10) medals |= MED_LV10;
@@ -465,9 +466,10 @@ void Pet::checkMedals() {
     for (uint16_t m = gained; m; m &= (m - 1)) totalMedals++;
     newMedal = gained;
     medalUntil = millis() + 4000;
-    // a medal only time earned is silent in quiet hours (#44); the banner shows anyway
+    // a medal that only time earned, noticed by the tick, is silent in quiet hours (#44);
+    // the banner shows anyway. One the player's action gains (exercise burns weight too) sounds.
     bool byTimeOnly = !(gained & ~MED_BY_TIME);
-    if (!sleeping && quietHours && byTimeOnly) Serial.println("alert medal: silent (quiet)");
+    if (!sleeping && byTick && quietHours && byTimeOnly) Serial.println("alert medal: silent (quiet)");
     else if (!sleeping) sfxPlay(SFX_MEDAL);
     save();
   }
@@ -561,7 +563,7 @@ void Pet::hatch() {
   newMedal = 0;
   nick[0] = 0;
   registerSpecies(speciesId);  // criado = registrado en la pokedex
-  checkMedals();     // por si nace ya en forma final (legendario)
+  checkMedals(false);  // por si nace ya en forma final (legendario)
   sfxPlay(SFX_HATCH);
   save();
 }
@@ -662,6 +664,7 @@ void Pet::playReward(uint8_t n) {
   if (n >= 5) heartUntil = millis() + HEART_MS;
   addBond(2);
   registerCare();
+  checkMedals(false);  // el ejercicio quema peso: un IN SHAPE ganado asi suena siempre (#44)
   save();
 }
 
@@ -684,6 +687,7 @@ uint8_t Pet::trainStrength(uint16_t hits) {
   if (hits > strHi) strHi = hits;   // record de golpes
   addBond(2);
   registerCare();
+  checkMedals(false);  // idem: el peso quemado puede dar IN SHAPE (#44)
   save();
   return gain;
 }
