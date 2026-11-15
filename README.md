@@ -489,10 +489,20 @@ the board from the clock alone: no network, and nothing new is saved (`weather.h
   hours, and a change fades in over 20 minutes. It is only scenery: it never touches the
   needs. Clouds hide the stars (rain, storms, snow and fog hide the moon too), and on a
   covered night the creature doesn't ask you to look at the stars.
-- **Power.** Falling rain, snow and lightning are drawn only at the full frame rate.
+- **Seasons** (fixed to the southern hemisphere: summer December to February, winter June
+  to August). They shift the weather's odds (sunnier summers with more storms, misty
+  autumns, showery springs; snow at the meadow and in the forest only in winter, never at
+  the beach or the volcano), and the meadow, the forest and the mountain show them: spring
+  flowers and falling blossom, summer butterflies by day and fireflies at night, autumn's
+  russet ground and falling leaves, winter's snow cover and snowcaps. The beach, the
+  volcano and the snowfield look the same all year.
+- **The sky's layout.** The sun and the moon sit right of the sky, below the name and the
+  status line, so neither text ever runs over them; a name too wide for the round screen
+  at the large size (a shiny nickname at level 100) is drawn a size smaller.
+- **Power.** Falling rain, snow, lightning, blossom, leaves, butterflies and fireflies are drawn only at the full frame rate.
   While the screen is dimmed, while the creature sleeps untouched or on a low battery,
   the sky, clouds and fog stay but nothing falls, and nothing is drawn with the screen off.
-- **No clock yet** (after a power cut, until the time is set): fair weather at home.
+- **No clock yet** (after a power cut, until the time is set): fair weather at home, no season.
 
 ## Layout
 
@@ -501,7 +511,8 @@ the board from the clock alone: no network, and nothing new is saved (`weather.h
 - `serialcmd.h` / `serialcmd.cpp` — the USB serial console (SD provisioning and debug commands)
 - `uitext.h` / `uitext.cpp` — text size, cursor and font in every language
 - `scene.h` / `scene.cpp` — the main screen: sky and biome, the pet's PMD animation and walk, bath, poops, header, bars, buttons, the endings and their buttons
-- `weather.h` — the place of each day and its made-up weather, from the clock (#60); `scene.cpp` draws them
+- `weather.h` — the place of each day, its made-up weather, the date and the season, from the clock (#60); `scene.cpp` draws them
+- `skylayout.h` — where the header, the sun, the moon and the stars sit on the round screen (#70)
 - `bubble.h` / `bubble.cpp` — the speech bubbles: which line, when, and where it goes on the round screen (#23)
 - `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the fonts can draw, and its NVS key
 - `gameui.h` / `gameui.cpp` — the minigames' screens and the strength-training sack (their logic is in `minigames.h`)
@@ -567,10 +578,11 @@ gets `ERR clock not set: ...` and changes nothing) / `RTCSET <epoch>` · `HEALTH
 speech bubbles; `OWNER` alone clears it) · `OWNER?` (read-only: `owner=<name>`) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
 inbed=<0|1> stale=<0|1> egg=<0|1> picking=<0|1>`, stale = bedtime paused until the clock
 is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on screen) ·
-`SCENE <place|auto> [weather|auto]` (forces the place, `meadow beach forest volcano mountain
-snow`, and the weather, `clear cloudy rain storm snow fog`, in RAM only: `SCENE auto` or a
-restart gives them back to the clock) · `SCENE?` (read-only: `place today home wx prev mix
-clock particles`, `*` after a forced value) · `LS` / `PUT` (SD files). `tools/board.py`
+`SCENE <place|auto> [weather|auto] [season|auto]` (forces the place, `meadow beach forest
+volcano mountain snow`, the weather, `clear cloudy rain storm snow fog`, and the season,
+`spring summer autumn winter none`, in RAM only: `SCENE auto` or a restart gives them back
+to the clock) · `SCENE?` (read-only: `place today home wx prev mix season clock particles`,
+`*` after a forced value) · `LS` / `PUT` (SD files). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
@@ -590,7 +602,8 @@ tools/sim_shots.sh        # every main screen in all 8 languages -> shots/<lang>
 
 `sim/scripts/every-screen.txt` reaches what `screens.txt` does not (evolution,
 the dialogs, every minigame, the biomes, the endings, the BOOT and PWR presses).
-`weather.txt` shows every kind of weather by day, at dusk and at night, and
+`weather.txt` shows every kind of weather by day, at dusk and at night, `seasons.txt` each
+season and the longest titles under the sun and the moon, and
 `travel.txt` checks that the place changes only while nobody is looking (read its
 `SCENE?` lines in `serial.log`).
 Run with the other scripts in `sim/scripts/`, it lets two builds be compared

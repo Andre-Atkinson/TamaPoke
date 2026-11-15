@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "sdmon.h"    // PmdMon, PmdAct, PMD_*
 #include "species.h"  // Species
+#include "skylayout.h"  // STARS, the sun and the moon, the header (#70)
 #include "weather.h"  // WxNow, ScenePlace (#60)
 
 // comportamiento del bicho en pantalla
@@ -21,8 +22,6 @@ struct PetBeh {
 
 #define PET_GROUND 304  // linea de suelo de la mascota
 
-// estrellas del modo noche
-inline const uint16_t STARS[][2] = { {120,140},{330,120},{370,210},{95,230},{280,90},{160,95} };
 
 #define C565(r, g, b) ((uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3)))
 
@@ -44,13 +43,14 @@ uint16_t inkColor();  // the UI ink for day or night
 uint16_t lerp565(uint16_t a, uint16_t b, int i, int n);
 int sceneHour();      // 0-23 from the last clock reading, 13 without one
 
-// Travelling and weather (weather.h, #60). The place and the weather come from the clock;
-// the SCENE serial command can force either (SCENE_AUTO: follow the clock).
-extern uint8_t sceneForcePlace, sceneForceWx;
+// Travelling, weather and seasons (weather.h, #60). The place, the weather and the season
+// come from the clock; the SCENE serial command can force each (SCENE_AUTO: the clock's).
+extern uint8_t sceneForcePlace, sceneForceWx, sceneForceSeason;
 uint8_t sceneHome();      // the pet's home place: its biome (the meadow for an egg)
 uint8_t sceneToday();     // where the clock puts it today (home while the clock is unknown)
 uint8_t scenePlace();     // the place on screen (today's before the first frame)
 WxNow sceneWeather();     // the weather at scenePlace() now (fair during a ceremony)
+uint8_t sceneSeason();    // the season the scene shows (none during a ceremony or without a clock)
 bool sceneStarsOut();     // the night sky shows its stars (the speech bubbles' night line)
 // The sky, the place and the weather. The place changes only while nobody is looking
 // (SceneLatch), so call this only for a frame of the main scene that is drawn.

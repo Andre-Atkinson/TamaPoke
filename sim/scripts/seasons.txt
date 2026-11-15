@@ -1,0 +1,94 @@
+# Seasons (#60, weather.h; fixed to the southern hemisphere) and the sky's layout (#70,
+# skylayout.h): the sun and the moon below the header, and titles too long for size 3 drawn
+# at size 2. SCENE forces the place, the weather and the season (RAM only). A tap on the sky
+# at the left (outside the pet zone) keeps the 1.75C's screen from timing out.
+#
+# Kangaskhan (it doesn't evolve, so no button covers the scene), then the titles:
+#   "MARSHMALLOW Lv.1"     16 characters, the widest drawn at size 3
+#   "*MARSHMALLOW Lv.1"    17, shiny: size 2
+#   "*MARSHMALLOW Lv.100"  19, the longest a title gets (an 11-letter nickname): size 2
+
+clock 2026-11-13 10:00
+wait 1s
+tap 233 220
+wait 500ms
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial SPEC 115
+wait 1s
+
+# each season at the meadow by day; winter on the forest and the mountain; autumn's forest;
+# no petals in the rain; the beach looks the same all year; summer's fireflies at night
+serial SCENE meadow clear spring
+wait 1s
+shot season-01-spring
+serial SCENE meadow clear summer
+wait 1s
+shot season-02-summer
+serial SCENE meadow clear autumn
+tap 60 200
+wait 1s
+shot season-03-autumn
+serial SCENE meadow clear winter
+wait 1s
+shot season-04-winter
+serial SCENE forest clear winter
+wait 1s
+shot season-05-forest-winter
+serial SCENE mountain cloudy winter
+tap 60 200
+wait 1s
+shot season-06-mountain-winter
+serial SCENE forest cloudy autumn
+wait 1s
+shot season-07-forest-autumn
+serial SCENE meadow rain spring
+wait 1s
+shot season-08-spring-rain-no-petals
+serial SCENE beach clear summer
+tap 60 200
+wait 1s
+shot season-09-beach-summer-plain
+serial TIME 1794607200
+serial SCENE meadow clear summer
+wait 1s
+shot season-10-summer-night-fireflies
+
+# the sky with the widest size-3 title: dawn, day, dusk, night (#70)
+serial SCENE meadow clear none
+serial NICK MARSHMALLOW
+serial TIME 1794553200
+tap 60 200
+wait 1s
+shot sky-1-dawn
+serial TIME 1794564000
+wait 1s
+shot sky-2-day
+serial TIME 1794596400
+wait 1s
+shot sky-3-dusk
+serial TIME 1794607200
+tap 60 200
+wait 1s
+shot sky-4-night
+
+# shiny: size 2, at night and asleep (the light button by day; sleeping draws the night)
+serial SHINY
+wait 1s
+shot sky-5-night-shiny
+serial TIME 1794564000
+tap 60 200
+wait 1s
+tap 264 404
+wait 1s
+shot sky-6-asleep
+tap 264 404
+wait 1s
+
+# level 100: the longest title of all
+serial LVL 99
+tap 60 200
+wait 1s
+shot sky-7-day-longest

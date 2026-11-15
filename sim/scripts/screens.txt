@@ -107,6 +107,20 @@ shot 21-weather-snow
 serial SCENE forest fog
 wait 1s
 shot 22-weather-fog
+
+# the seasons (#60; fixed to the southern hemisphere) at the meadow
+serial SCENE meadow clear spring
+wait 1s
+shot 23-season-spring
+serial SCENE meadow clear summer
+wait 1s
+shot 24-season-summer
+serial SCENE meadow clear autumn
+wait 1s
+shot 25-season-autumn
+serial SCENE meadow clear winter
+wait 1s
+shot 26-season-winter
 serial SCENE auto
 wait 1s
 
@@ -120,10 +134,10 @@ tap 233 288
 swipe up
 serial RUN
 wait 12s
-shot 23-egg-choice
+shot 27-egg-choice
 tap 233 220
 wait 500ms
-shot 24-egg-look
+shot 28-egg-look
 tap 233 220
 wait 1s
-shot 25-egg-picked
+shot 29-egg-picked

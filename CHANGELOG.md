@@ -10,6 +10,14 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Seasons.** Spring flowers and falling blossom, summer butterflies by day and
+  fireflies at night, autumn's russet ground and falling leaves, and winter's snow cover
+  and snowcaps, at the meadow, the forest and the mountain. The seasons also shift the
+  weather: sunnier summers with more storms, misty autumns, showery springs, and snow at
+  the meadow and in the forest only in winter. Fixed to the southern hemisphere (summer
+  December to February). No season before the clock is set after a power cut. Serial
+  `SCENE` takes a season too. Idea from Mu-Muu/TamaPoke, re-implemented offline.
+
 - **Travelling and made-up weather.** The creature no longer spends its whole life
   in one scene. Each day from 06:00 it is at home (its type's place) about 4 days in
   10, and at the meadow, beach, forest, volcano, mountain or snowfield the rest of the
@@ -195,6 +203,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   within about 7 px.
 
 ### Fixed
+
+- **The sun and the moon no longer sit on the name** (#70). They moved right of the sky,
+  below the name and the status line, and the stars moved out from behind the status
+  line too. A name too wide for the round screen at the large size (a shiny nickname at
+  level 100, or a 10-letter species at level 100) is drawn a size smaller instead of
+  losing its ends to the round edge.
 
 - **The creature's own sounds keep out of quiet hours** (#44). The "ready to
   evolve" chime, the "about to run away" warning, the hourly level-up and the

@@ -72,7 +72,7 @@ int sceneHour() {
 
 // ---------- travelling and weather (weather.h, #60) ----------
 
-uint8_t sceneForcePlace = SCENE_AUTO, sceneForceWx = SCENE_AUTO;  // the SCENE serial command
+uint8_t sceneForcePlace = SCENE_AUTO, sceneForceWx = SCENE_AUTO, sceneForceSeason = SCENE_AUTO;  // SCENE
 static SceneLatch sceneLatch;  // the place on screen: it follows sceneToday() only unseen (weather.h)
 
 // the clock the scene follows: 0 while it is not trusted (never set, or reseeded)
@@ -94,7 +94,9 @@ uint8_t scenePlace() {
 
 // The farewell and the run-away keep their own look: a clear sky (the run-away draws its
 // own rain, drawCeremony()).
-WxNow sceneWeather() { return sceneWx(pet.ceremony, sceneForceWx, scenePlace(), sceneClock()); }
+WxNow sceneWeather() { return sceneWx(pet.ceremony, sceneForceWx, scenePlace(), sceneClock(), sceneForceSeason); }
+
+uint8_t sceneSeason() { return sceneSeasonOf(pet.ceremony, sceneForceSeason, sceneClock()); }
 
 bool sceneStarsOut() { return wxStarsOut(sceneWeather()); }
 
@@ -186,6 +188,98 @@ static void drawFog(uint32_t now, uint8_t fog, uint16_t col) {
   }
 }
 
+// ---------- the seasons (weather.h, #60) ----------
+
+// a triangle wave from -a to a and back, `period` ms long, at phase `ph` ms
+static int sway(uint32_t now, uint32_t period, uint32_t ph, int a) {
+  int t = (int)((now + ph) % period), half = (int)(period / 2);
+  int v = t < half ? t : (int)period - t;  // 0..half..0
+  return v * 4 * a / (int)period - a;
+}
+
+// spots on the ground (y 238-300, between the horizon and the bottom panel) for the spring
+// flowers and the fallen autumn leaves
+static const int16_t GROUND_SPOTS[10][2] = { { 40, 252 }, { 98, 276 }, { 150, 244 }, { 205, 292 }, { 262, 254 },
+                                             { 318, 282 }, { 372, 246 }, { 424, 270 }, { 70, 298 }, { 396, 300 } };
+
+// what lies on the ground with the season: spring flowers, autumn's fallen leaves, winter's
+// snowcaps on the forest's trees and the mountain's peaks (the snow cover and autumn's russet
+// are in the soil colour, drawScene())
+static void drawSeasonGround(uint8_t ground, uint8_t biome, bool night, uint16_t snowCol) {
+  if (ground == GROUND_FLOWERS || ground == GROUND_AUTUMN) {
+    static const uint16_t FLOWERS[3] = { C565(0xf4, 0x9c, 0xc8), C565(0xff, 0xff, 0xff), C565(0xc8, 0xa8, 0xf0) };
+    static const uint16_t LEAVES[3] = { C565(0xe8, 0x84, 0x2c), C565(0xc8, 0x40, 0x2c), C565(0xe8, 0xb8, 0x38) };
+    uint16_t dusk = C565(0x16, 0x1c, 0x30);
+    for (int i = 0; i < 10; i++) {
+      int x = GROUND_SPOTS[i][0], y = GROUND_SPOTS[i][1];
+      if (ground == GROUND_FLOWERS) {  // four petals round a yellow heart
+        uint16_t c = FLOWERS[i % 3], mid = C565(0xff, 0xd8, 0x40);
+        if (night) { c = lerp565(c, dusk, 9, 16); mid = lerp565(mid, dusk, 9, 16); }
+        gfx->fillRect(x - 2, y - 4, 4, 2, c);
+        gfx->fillRect(x - 2, y + 2, 4, 2, c);
+        gfx->fillRect(x - 4, y - 2, 2, 4, c);
+        gfx->fillRect(x + 2, y - 2, 2, 4, c);
+        gfx->fillRect(x - 2, y - 2, 4, 4, mid);
+      } else {  // a fallen leaf
+        uint16_t c = night ? lerp565(LEAVES[i % 3], dusk, 9, 16) : LEAVES[i % 3];
+        gfx->fillRect(x - 3, y - 1, 6, 3, c);
+        gfx->fillRect(x - 1, y - 2, 2, 5, c);
+      }
+    }
+  } else if (ground == GROUND_SNOW) {
+    if (biome == PLACE_FOREST)  // snow on the tree tops
+      for (int tx : { 60, 150, 360, 416 }) gfx->fillTriangle(tx, HORIZON - 60, tx - 5, HORIZON - 48, tx + 5, HORIZON - 48, snowCol);
+    else if (biome == PLACE_MOUNTAIN) {  // snowcaps on the peaks
+      gfx->fillTriangle(140, HORIZON - 50, 118, HORIZON - 36, 162, HORIZON - 36, snowCol);
+      gfx->fillTriangle(330, HORIZON - 38, 309, HORIZON - 28, 351, HORIZON - 28, snowCol);
+    }
+  }
+}
+
+// What flies or falls with the season (seasonFx), only at the full frame rate.
+static void drawSeasonFx(uint32_t now, uint8_t fx, bool night) {
+  if (fx == SEASON_FX_PETALS || fx == SEASON_FX_LEAVES) {
+    bool petals = fx == SEASON_FX_PETALS;
+    static const uint16_t LEAVES[4] = { C565(0xe8, 0x84, 0x2c), C565(0xc8, 0x40, 0x2c), C565(0xa0, 0x64, 0x30),
+                                        C565(0xe8, 0xb8, 0x38) };
+    int n = petals ? 12 : 10;
+    for (int i = 0; i < n; i++) {
+      uint32_t fall = now / (petals ? 26 : 22);
+      int y = (int)((fall + i * 53) % 330) - 14;
+      int x = (int)((i * 71 + now / 60) % 500) - 17 + sway(now, petals ? 2600 : 1800, i * 377, petals ? 12 : 18);
+      uint16_t c = petals ? C565(0xf6, 0xb4, 0xd4) : LEAVES[i % 4];
+      if (night) c = lerp565(c, C565(0x16, 0x1c, 0x30), 8, 16);
+      bool turned = ((now + i * 211) / 300) % 2;  // a leaf tumbles, a petal flutters
+      if (petals) gfx->fillRect(x, y, turned ? 3 : 4, turned ? 3 : 2, c);
+      else gfx->fillRect(x, y, turned ? 3 : 5, turned ? 5 : 3, c);
+    }
+  } else if (fx == SEASON_FX_BUTTERFLIES) {
+    static const uint16_t WINGS[3] = { UI_WHITE, C565(0xff, 0xd8, 0x40), C565(0xf4, 0x98, 0x3c) };
+    for (int i = 0; i < 3; i++) {
+      int x = 120 + i * 110 + sway(now, 9000 + i * 1300, i * 2500, 70);
+      int y = 168 + i * 18 + sway(now, 5200 + i * 900, i * 1700, 26);
+      bool open = ((now + i * 70) / 140) % 2;  // the wings beat
+      uint16_t c = WINGS[i];
+      if (open) {
+        gfx->fillTriangle(x, y, x - 7, y - 6, x - 6, y + 4, c);
+        gfx->fillTriangle(x, y, x + 7, y - 6, x + 6, y + 4, c);
+      } else {
+        gfx->fillTriangle(x, y, x - 2, y - 7, x - 1, y + 3, c);
+        gfx->fillTriangle(x, y, x + 2, y - 7, x + 1, y + 3, c);
+      }
+      gfx->fillRect(x - 1, y - 3, 2, 6, C565(0x30, 0x28, 0x24));  // the body
+    }
+  } else if (fx == SEASON_FX_FIREFLIES) {
+    for (int i = 0; i < 9; i++) {
+      if ((now + i * 397) % 2400 >= 1000) continue;  // each glows for 1 s in 2.4
+      int x = 40 + (int)((i * 47 + now / 120) % 390) + sway(now, 3000, i * 500, 8);
+      int y = 160 + (i * 37) % 130 + sway(now, 2200, i * 300, 10);
+      gfx->fillRect(x - 2, y - 2, 5, 5, C565(0x58, 0x6c, 0x2c));  // the glow
+      gfx->fillRect(x - 1, y - 1, 3, 3, C565(0xec, 0xff, 0x88));
+    }
+  }
+}
+
 void drawScene(uint32_t now, bool night) {
   uint8_t biome = scenePlaceForFrame(now);
   WxNow wx = sceneWeather();
@@ -212,17 +306,19 @@ void drawScene(uint32_t now, bool night) {
   for (int y = 0; y < HORIZON; y += 8)
     gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, HORIZON));
 
-  // sol o luna (sin estrellas ni astros bajo un cielo cubierto)
+  // sol o luna (sin estrellas ni astros bajo un cielo cubierto), below the header (#70)
   bool sunOut = wxSunOut(wx);
   if (night) {
     if (sunOut) {
-      gfx->fillCircle(360, 78, 24, C565(0xe8, 0xee, 0xf5));
-      gfx->fillCircle(370, 72, 22, lerp565(top, bot, 78, HORIZON));  // creciente
+      gfx->fillCircle(SKY_MOON_X, SKY_MOON_Y, SKY_MOON_R, C565(0xe8, 0xee, 0xf5));
+      // creciente: the sky's own colour at that height bites the moon
+      gfx->fillCircle(SKY_MOON_X + 10, SKY_MOON_Y - 6, SKY_MOON_R - 2, lerp565(top, bot, SKY_MOON_Y - 6, HORIZON));
     }
     if (wxStarsOut(wx))
-      for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
+      for (auto &st : STARS) gfx->fillRect(st[0], st[1], SKY_STAR_SIZE, SKY_STAR_SIZE, UI_WHITE);
   } else if (h < 18) {
-    if (sunOut) gfx->fillCircle(360, 84, 26, h < 8 ? C565(0xff, 0xd9, 0x8a) : C565(0xff, 0xe7, 0x9f));
+    if (sunOut)
+      gfx->fillCircle(SKY_SUN_X, SKY_SUN_Y, SKY_SUN_R, h < 8 ? C565(0xff, 0xd9, 0x8a) : C565(0xff, 0xe7, 0x9f));
   } else if (sunOut) {
     gfx->fillCircle(233, HORIZON - 6, 34, C565(0xff, 0xf1, 0xc8));  // sol poniente
   }
@@ -242,7 +338,11 @@ void drawScene(uint32_t now, bool night) {
   if (wet) soil = lerp565(soil, C565(0x20, 0x28, 0x30), wet / 4, 16);  // ground darkened by the rain
   if (fog) soil = lerp565(soil, fogCol, fog / 3, 16);
   uint8_t snowy = wxAmount(wx, WX_BIT(WX_SNOW));
-  if (snowy) soil = lerp565(soil, night ? C565(0x9c, 0xa6, 0xb8) : C565(0xf2, 0xf6, 0xfa), snowy * 5 / 16, 16);  // dusted
+  uint16_t snowCol = night ? C565(0x9c, 0xa6, 0xb8) : C565(0xf2, 0xf6, 0xfa);
+  if (snowy) soil = lerp565(soil, snowCol, snowy * 5 / 16, 16);  // dusted
+  uint8_t season = sceneSeason(), ground = seasonGround(season, biome);
+  if (ground == GROUND_AUTUMN) soil = lerp565(soil, night ? C565(0x4a, 0x34, 0x24) : C565(0xc4, 0x8c, 0x40), 6, 16);
+  else if (ground == GROUND_SNOW) soil = lerp565(soil, snowCol, 12, 16);  // winter: snow lies on the ground
   if (biome == 1) {
     uint16_t sea = night ? C565(0x1c, 0x34, 0x52) : C565(0x4f, 0x96, 0xc4);
     gfx->fillRect(0, HORIZON - 26, 466, 26, sea);
@@ -256,7 +356,7 @@ void drawScene(uint32_t now, bool night) {
 
   // suelo
   gfx->fillRect(0, HORIZON, 466, 466 - HORIZON, soil);
-  uint16_t hill = lerp565(soil, night ? C565(0x0c, 0x12, 0x24) : C565(0xff, 0xff, 0xff), 3, 16);
+  uint16_t hill = lerp565(soil, night ? C565(0x0c, 0x12, 0x24) : C565(0xff, 0xff, 0xff), ground == GROUND_SNOW ? 8 : 3, 16);
   gfx->fillRoundRect(-60, HORIZON - 14, 586, 60, 30, hill);
 
   // detalles del bioma
@@ -281,6 +381,7 @@ void drawScene(uint32_t now, bool night) {
         gfx->fillRect(gx + b * 5, HORIZON + 6, 2, 8 + (b == 0 ? 4 : 0), dk);
   }
   // (the snowfield's falling flakes are its snowy weather now, #60)
+  drawSeasonGround(ground, biome, night, snowCol);
 
   // el tiempo por delante del paisaje y por detras del bicho
   if (fog) drawFog(now, fog, fogCol);
@@ -290,6 +391,7 @@ void drawScene(uint32_t now, bool night) {
     gfx->fillEllipse(410, 296, 24, 4, pud);
   }
   if (!live) return;  // dimmed or slow frames: no falling rain or snow (they would step)
+  drawSeasonFx(now, seasonFx(season, biome, night, wx), night);
   uint8_t drops = wxDrops(wx), flakes = wxFlakes(wx);
   if (drops) drawRain(now, drops, wx.kind == WX_STORM || wx.prev == WX_STORM, night);
   if (flakes) drawSnow(now, flakes, night);
@@ -404,12 +506,14 @@ static void drawBattery() {
 void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
   drawBattery();
   gfx->setTextColor(nameColor);
-  setSize(3);
-  setCur(centerX(name, 3), 52);
+  setSize(3);  // textW() measures at the size set (the CJK fonts' bounds)
+  uint8_t ts = headerTitleSize(textW(name, 3));  // a title too wide for the round edge: smaller (skylayout.h)
+  setSize(ts);
+  setCur(centerX(name, ts), headerTitleY(ts));
   printT(name);
   gfx->setTextColor(inkColor());
   setSize(2);
-  setCur(centerX(msg, 2), 90);
+  setCur(centerX(msg, 2), HEADER_STATUS_Y);
   printT(msg);
 }
 

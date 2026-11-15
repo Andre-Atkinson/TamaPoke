@@ -1763,7 +1763,7 @@ bool render() {
   if (pet.sleeping) {
     gfx->setTextColor(UI_INK_NIGHT);
     setSize(3);
-    setCur(320, 130);
+    setCur(SLEEP_ZZ_X, SLEEP_ZZ_Y);  // clear of the moon (skylayout.h)
     printT("Zz");
   }
 

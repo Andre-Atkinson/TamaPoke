@@ -15,14 +15,15 @@
 
 // ---------- consola serie (provision de SD + depuracion) ----------
 
-// SCENE and SCENE? (#60): the place on screen, today's, the home place and the weather,
-// with "*" after a value the SCENE command forced.
+// SCENE and SCENE? (#60): the place on screen, today's, the home place, the weather and the
+// season, with "*" after a value the SCENE command forced.
 static void printScene() {
   WxNow w = sceneWeather();
-  Serial.printf("scene place=%s%s today=%s home=%s wx=%s%s prev=%s mix=%u clock=%d particles=%d\n",
+  Serial.printf("scene place=%s%s today=%s home=%s wx=%s%s prev=%s mix=%u season=%s%s clock=%d particles=%d\n",
                 PLACE_KEYS[scenePlace()], sceneForcePlace < PLACES ? "*" : "", PLACE_KEYS[sceneToday()],
                 PLACE_KEYS[sceneHome()], WX_KEYS[w.kind], sceneForceWx < WX_KINDS ? "*" : "", WX_KEYS[w.prev],
-                w.mix, pet.lastSeenEpoch && !bedEdge.stale() ? 1 : 0,
+                w.mix, SEASON_KEYS[sceneSeason()], sceneForceSeason < SEASONS ? "*" : "",
+                pet.lastSeenEpoch && !bedEdge.stale() ? 1 : 0,
                 wxParticlesLive(frameIntervalMs(powerCtx(millis()))) ? 1 : 0);
 }
 
@@ -133,13 +134,14 @@ void handleSerial() {
     printScene();
     Serial.println("DONE");
   } else if (line == "SCENE" || line.startsWith("SCENE ")) {  // forces them, in RAM only
-    uint8_t place, wx;
-    if (sceneCmdParse(line.c_str() + 5, place, wx)) {
+    uint8_t place, wx, season;
+    if (sceneCmdParse(line.c_str() + 5, place, wx, season)) {
       sceneForcePlace = place;
       sceneForceWx = wx;
+      sceneForceSeason = season;
     } else {
       Serial.println("ERR usage: SCENE <meadow|beach|forest|volcano|mountain|snow|auto> "
-                     "[clear|cloudy|rain|storm|snow|fog|auto]");
+                     "[clear|cloudy|rain|storm|snow|fog|auto] [spring|summer|autumn|winter|none|auto]");
     }
     printScene();
     Serial.println("DONE");

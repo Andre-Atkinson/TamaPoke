@@ -91,6 +91,44 @@ struct SceneLatch {
   }
 };
 
+// ---------------------------------------------------------------- the date and the season
+// The calendar date of a local epoch (the RTC keeps local time), for the seasons and the
+// standby clock. Howard Hinnant's civil_from_days (public domain), for days since 1970.
+struct CivilDate {
+  int16_t year;
+  uint8_t month;    // 1-12
+  uint8_t day;      // 1-31
+  uint8_t weekday;  // 0 Sunday ... 6 Saturday
+};
+inline CivilDate civilDate(uint32_t epoch) {
+  int32_t z = (int32_t)(epoch / 86400UL);
+  CivilDate c;
+  c.weekday = (uint8_t)((z + 4) % 7);  // 1970-01-01 was a Thursday
+  z += 719468;
+  int32_t era = z / 146097;  // z >= 0: the epoch is unsigned
+  uint32_t doe = (uint32_t)(z - era * 146097);
+  uint32_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  uint32_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  uint32_t mp = (5 * doy + 2) / 153;
+  c.day = (uint8_t)(doy - (153 * mp + 2) / 5 + 1);
+  c.month = (uint8_t)(mp < 10 ? mp + 3 : mp - 9);
+  c.year = (int16_t)((int32_t)yoe + era * 400 + (c.month <= 2 ? 1 : 0));
+  return c;
+}
+
+// The seasons, fixed to the southern hemisphere (the owner's decision on #60, no setting):
+// summer December to February, autumn March to May, winter June to August, spring
+// September to November. SEASON_NONE while the clock is not trusted (epoch 0).
+enum Season : uint8_t { SEASON_NONE, SEASON_SPRING, SEASON_SUMMER, SEASON_AUTUMN, SEASON_WINTER, SEASONS };
+inline const char *const SEASON_KEYS[SEASONS] = { "none", "spring", "summer", "autumn", "winter" };
+inline uint8_t seasonOfMonth(uint8_t month) {
+  static const uint8_t S[13] = { SEASON_NONE,   SEASON_SUMMER, SEASON_SUMMER, SEASON_AUTUMN, SEASON_AUTUMN,
+                                 SEASON_AUTUMN, SEASON_WINTER, SEASON_WINTER, SEASON_WINTER, SEASON_SPRING,
+                                 SEASON_SPRING, SEASON_SPRING, SEASON_SUMMER };
+  return month <= 12 ? S[month] : (uint8_t)SEASON_NONE;
+}
+inline uint8_t seasonAt(uint32_t epoch) { return epoch ? seasonOfMonth(civilDate(epoch).month) : (uint8_t)SEASON_NONE; }
+
 // ---------------------------------------------------------------- weather
 // The weather is decided per 3-hour block of the clock (00:00, 03:00, 06:00...). A block
 // carries on the one before 4 times in 10, up to 4 times in a row, so a spell lasts from
@@ -101,21 +139,49 @@ struct SceneLatch {
 #define WX_FADE_S (20 * 60UL)
 #define WX_MIX_FULL 16
 
-// The odds of each kind of weather at each place, in percent (each row adds up to 100).
-// No snow outside the mountain and the snowfield, and none at all at the volcano.
-inline const uint8_t WX_ODDS[PLACES][WX_KINDS] = {
+// The odds of each kind of weather at each place in each season, in percent (each row adds
+// up to 100; SEASON_NONE is the year-round row). Summer is sunnier with more storms, autumn
+// misty, spring showery. Snow outside the mountain and the snowfield only in winter, and
+// never at the beach or the volcano; the volcano never has fog either.
+inline const uint8_t WX_ODDS[PLACES][SEASONS][WX_KINDS] = {
   // clear cloudy rain storm snow fog
-  { 45, 30, 20, 5, 0, 0 },    // meadow: sun, clouds and rain
-  { 55, 20, 20, 5, 0, 0 },    // beach: sun and showers
-  { 30, 20, 30, 5, 0, 15 },   // forest: rain and mist
-  { 60, 25, 10, 5, 0, 0 },    // volcano: mostly clear
-  { 35, 20, 5, 5, 20, 15 },   // mountain: fog and snow
-  { 30, 15, 0, 0, 40, 15 },   // snowfield: snow and fog
+  { { 45, 30, 20, 5, 0, 0 },     // meadow, all year: sun, clouds and rain
+    { 40, 30, 25, 5, 0, 0 },     //   spring
+    { 60, 20, 10, 10, 0, 0 },    //   summer
+    { 35, 30, 25, 0, 0, 10 },    //   autumn
+    { 30, 30, 15, 0, 15, 10 } }, //   winter
+  { { 55, 20, 20, 5, 0, 0 },     // beach: sun and showers
+    { 50, 20, 25, 5, 0, 0 },
+    { 70, 10, 10, 10, 0, 0 },
+    { 45, 25, 25, 0, 0, 5 },
+    { 40, 30, 25, 0, 0, 5 } },
+  { { 30, 20, 30, 5, 0, 15 },    // forest: rain and mist
+    { 30, 20, 35, 5, 0, 10 },
+    { 45, 20, 20, 10, 0, 5 },
+    { 25, 20, 30, 0, 0, 25 },
+    { 20, 25, 20, 0, 15, 20 } },
+  { { 60, 25, 10, 5, 0, 0 },     // volcano: mostly clear
+    { 55, 25, 15, 5, 0, 0 },
+    { 70, 15, 5, 10, 0, 0 },
+    { 55, 30, 15, 0, 0, 0 },
+    { 55, 30, 15, 0, 0, 0 } },
+  { { 35, 20, 5, 5, 20, 15 },    // mountain: fog and snow
+    { 35, 25, 10, 5, 10, 15 },
+    { 50, 20, 10, 10, 0, 10 },
+    { 30, 25, 10, 0, 15, 20 },
+    { 20, 20, 0, 0, 45, 15 } },
+  { { 30, 15, 0, 0, 40, 15 },    // snowfield: snow and fog
+    { 35, 20, 0, 0, 30, 15 },
+    { 50, 20, 5, 0, 10, 15 },
+    { 30, 20, 0, 0, 35, 15 },
+    { 15, 15, 0, 0, 55, 15 } },
 };
 
-// the weather a roll of 0-99 gives at `place`: each kind takes as many rolls as its odds
-inline uint8_t wxFromRoll(uint8_t place, uint32_t roll) {
-  const uint8_t *odds = WX_ODDS[place < PLACES ? place : (uint8_t)PLACE_MEADOW];
+// the weather a roll of 0-99 gives at `place` in `season`: each kind takes as many rolls as
+// its odds
+inline uint8_t wxFromRoll(uint8_t place, uint8_t season, uint32_t roll) {
+  const uint8_t *odds =
+      WX_ODDS[place < PLACES ? place : (uint8_t)PLACE_MEADOW][season < SEASONS ? season : (uint8_t)SEASON_NONE];
   for (uint8_t k = 0; k < WX_KINDS; k++) {
     if (roll < odds[k]) return k;
     roll -= odds[k];
@@ -123,17 +189,25 @@ inline uint8_t wxFromRoll(uint8_t place, uint32_t roll) {
   return WX_CLEAR;  // a roll over 99
 }
 
-// a new spell for `block` at `place`, from the odds
-inline uint8_t wxFresh(uint8_t place, uint32_t block) { return wxFromRoll(place, sceneHash(block ^ WX_PICK_SALT) % 100); }
+// The season a block's weather is picked for: `season` when one is forced (the SCENE serial
+// command), else the block's own, from the clock.
+inline uint8_t wxSeasonOf(uint32_t block, uint8_t season) {
+  return season < SEASONS ? season : seasonAt((uint32_t)(block * WX_BLOCK_S));
+}
+
+// a new spell for `block` at `place`, from the odds of its season (SCENE_AUTO: the block's own)
+inline uint8_t wxFresh(uint8_t place, uint32_t block, uint8_t season = SCENE_AUTO) {
+  return wxFromRoll(place, wxSeasonOf(block, season), sceneHash(block ^ WX_PICK_SALT) % 100);
+}
 
 // does `block` carry on the weather of the block before it?
 inline bool wxKeeps(uint32_t block) { return sceneHash(block ^ WX_KEEP_SALT) % 100 < WX_KEEP_PCT; }
 
 // the weather of `block` at `place`: back through the blocks that carry on (at most
-// WX_KEEP_MAX), then a new spell where that run starts
-inline uint8_t wxKind(uint8_t place, uint32_t block) {
+// WX_KEEP_MAX), then a new spell where that run starts, with the odds of that block's season
+inline uint8_t wxKind(uint8_t place, uint32_t block, uint8_t season = SCENE_AUTO) {
   for (uint8_t i = 0; i < WX_KEEP_MAX && wxKeeps(block); i++) block--;
-  return wxFresh(place, block);
+  return wxFresh(place, block, season);
 }
 
 // The weather on screen: `kind`, fading in over `prev` (mix 0-16; at 16 the change is
@@ -150,13 +224,14 @@ inline WxNow wxFixed(uint8_t kind) {
   return w;
 }
 
-// The weather at `place` at `epoch` (0: no trusted clock, fair weather).
-inline WxNow wxAt(uint8_t place, uint32_t epoch) {
+// The weather at `place` at `epoch` (0: no trusted clock, fair weather), with the odds of
+// `season` if one is forced (SCENE_AUTO: the clock's).
+inline WxNow wxAt(uint8_t place, uint32_t epoch, uint8_t season = SCENE_AUTO) {
   if (!epoch) return wxFixed(WX_CLEAR);
   uint32_t block = epoch / WX_BLOCK_S;
   uint32_t in = epoch % WX_BLOCK_S;
-  WxNow w = wxFixed(wxKind(place, block));
-  uint8_t before = wxKind(place, block - 1);
+  WxNow w = wxFixed(wxKind(place, block, season));
+  uint8_t before = wxKind(place, block - 1, season);
   if (before != w.kind && in < WX_FADE_S) {
     w.prev = before;
     w.mix = (uint8_t)(in * WX_MIX_FULL / WX_FADE_S);
@@ -166,11 +241,21 @@ inline WxNow wxAt(uint8_t place, uint32_t epoch) {
 
 // The weather the scene shows: clear during a ceremony (the farewell and the run-away keep
 // their own look; the run-away draws its own rain), else the kind the SCENE serial command
-// forced, else the weather at `place` at `epoch`.
-inline WxNow sceneWx(bool ceremony, uint8_t forcedWx, uint8_t place, uint32_t epoch) {
+// forced, else the weather at `place` at `epoch` (in the forced season, if one is).
+inline WxNow sceneWx(bool ceremony, uint8_t forcedWx, uint8_t place, uint32_t epoch,
+                     uint8_t forcedSeason = SCENE_AUTO) {
   if (ceremony) return wxFixed(WX_CLEAR);
   if (forcedWx < WX_KINDS) return wxFixed(forcedWx);
-  return wxAt(place, epoch);
+  return wxAt(place, epoch, forcedSeason);
+}
+
+// The season the scene shows (its touches: blossom, butterflies and fireflies, leaves, snow
+// on the ground): none during a ceremony, which keeps its own look; else the forced one;
+// else the clock's (none without a trusted clock).
+inline uint8_t sceneSeasonOf(bool ceremony, uint8_t forcedSeason, uint32_t epoch) {
+  if (ceremony) return SEASON_NONE;
+  if (forcedSeason < SEASONS) return forcedSeason;
+  return seasonAt(epoch);
 }
 
 // ---------------------------------------------------------------- what it looks like
@@ -231,10 +316,43 @@ inline bool wxLightning(const WxNow &w) { return w.kind == WX_STORM && w.mix == 
 #define WX_PARTICLE_MAX_MS 150
 inline bool wxParticlesLive(uint32_t frameMs) { return frameMs && frameMs <= WX_PARTICLE_MAX_MS; }
 
+// ---------------------------------------------------------------- seasonal touches
+// The three green places (the meadow, the forest and the mountain) show the season: spring
+// flowers on the ground and blossom falling, summer butterflies by day and fireflies at
+// night, autumn's russet ground and falling leaves, winter's snow cover and snowcaps. The
+// beach, the volcano and the snowfield look the same all year.
+inline bool seasonShows(uint8_t place) {
+  return place == PLACE_MEADOW || place == PLACE_FOREST || place == PLACE_MOUNTAIN;
+}
+
+enum SeasonGround : uint8_t { GROUND_PLAIN, GROUND_FLOWERS, GROUND_AUTUMN, GROUND_SNOW };
+inline uint8_t seasonGround(uint8_t season, uint8_t place) {
+  if (!seasonShows(place)) return GROUND_PLAIN;
+  return season == SEASON_SPRING ? (uint8_t)GROUND_FLOWERS
+         : season == SEASON_AUTUMN ? (uint8_t)GROUND_AUTUMN
+         : season == SEASON_WINTER ? (uint8_t)GROUND_SNOW
+                                   : (uint8_t)GROUND_PLAIN;
+}
+
+// What flies or falls with the season, under a sky light enough for the sun or the moon
+// (wxSunOut): rain, storms, snow and fog bring only their own. Drawn, like the rain, only at
+// the full frame rate (wxParticlesLive).
+enum SeasonFx : uint8_t { SEASON_FX_NONE, SEASON_FX_PETALS, SEASON_FX_BUTTERFLIES, SEASON_FX_FIREFLIES, SEASON_FX_LEAVES };
+inline uint8_t seasonFx(uint8_t season, uint8_t place, bool night, const WxNow &w) {
+  if (!seasonShows(place) || !wxSunOut(w)) return SEASON_FX_NONE;
+  switch (season) {
+    case SEASON_SPRING: return SEASON_FX_PETALS;
+    case SEASON_SUMMER: return night ? (uint8_t)SEASON_FX_FIREFLIES : (uint8_t)SEASON_FX_BUTTERFLIES;
+    case SEASON_AUTUMN: return SEASON_FX_LEAVES;
+    default: return SEASON_FX_NONE;
+  }
+}
+
 // ---------------------------------------------------------------- SCENE (serial)
-// The arguments of the SCENE serial command: "<place|auto> [<weather>|auto]", lower or
-// upper case, single spaces or more. Sets `place` and `wx` (a key's index, or SCENE_AUTO)
-// and returns true; returns false, changing neither, on anything else.
+// The arguments of the SCENE serial command: "<place|auto> [<weather>|auto] [<season>|auto]",
+// lower or upper case, single spaces or more ("none" is a season too: no seasonal touches).
+// Sets `place`, `wx` and `season` (a key's index, or SCENE_AUTO for a word left out) and
+// returns true; returns false, changing none of them, on anything else.
 inline bool sceneWordIs(const char *s, int n, const char *key) {
   int i = 0;
   for (; i < n && key[i]; i++) {
@@ -250,23 +368,25 @@ inline int sceneWordFind(const char *s, int n, const char *const *keys, int coun
     if (sceneWordIs(s, n, keys[k])) return k;
   return -1;
 }
-inline bool sceneCmdParse(const char *args, uint8_t &place, uint8_t &wx) {
-  const char *w[3];
-  int len[3], n = 0;
+inline bool sceneCmdParse(const char *args, uint8_t &place, uint8_t &wx, uint8_t &season) {
+  const char *w[4];
+  int len[4], n = 0;
   for (const char *p = args; *p;) {
     while (*p == ' ') p++;
     if (!*p) break;
-    if (n == 3) return false;
+    if (n == 4) return false;  // a fifth word: refused before it is stored
     w[n] = p;
     while (*p && *p != ' ') p++;
     len[n] = (int)(p - w[n]);
     n++;
   }
-  if (n < 1 || n > 2) return false;
+  if (n < 1 || n > 3) return false;
   int pl = sceneWordFind(w[0], len[0], PLACE_KEYS, PLACES);
-  int k = n == 2 ? sceneWordFind(w[1], len[1], WX_KEYS, WX_KINDS) : SCENE_AUTO;
-  if (pl < 0 || k < 0) return false;
+  int k = n >= 2 ? sceneWordFind(w[1], len[1], WX_KEYS, WX_KINDS) : SCENE_AUTO;
+  int se = n == 3 ? sceneWordFind(w[2], len[2], SEASON_KEYS, SEASONS) : SCENE_AUTO;
+  if (pl < 0 || k < 0 || se < 0) return false;
   place = (uint8_t)pl;
   wx = (uint8_t)k;
+  season = (uint8_t)se;
   return true;
 }
