@@ -1,8 +1,8 @@
 #include "script.h"
-#include "../clockprompt.h"  // clockEpochValid
 #include <ctype.h>
 #include <stdlib.h>
 #include <sstream>
+#include "../clockprompt.h"  // clockEpochValid
 
 static const char *const LANG_CODES[] = { "es", "en", "fr", "de", "it", "pt", "ja", "ko" };
 static const int LANG_N = (int)(sizeof LANG_CODES / sizeof LANG_CODES[0]);
