@@ -118,7 +118,8 @@ wait 15s
 
 # an emote showing when the screen dims goes at once (dims 30 s after the tap). The two
 # looks only shift the simulator's fixed random sequence so that this stand comes with a
-# heart (a 1-in-3 roll); 14d shows it, 14e (dimmed, the heart's time not yet up) doesn't.
+# heart (a 1-in-3 roll) on the 1.75C; 14d shows it, 14e (dimmed, the heart's time not yet up)
+# doesn't. The 1.75's sequence differs, so there 14d may come without one.
 idle look
 wait 300ms
 idle look
