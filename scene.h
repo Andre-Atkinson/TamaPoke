@@ -10,12 +10,15 @@
 // comportamiento del bicho en pantalla
 struct PetBeh {
   uint8_t mode = 0;     // 0 idle, 1 paseo, 2 gesto one-shot
+  uint8_t activity = 0; // what the idle planner has it doing (IdleAct, idleplan.h; #22)
   uint8_t act = PMD_IDLE;
   uint32_t t0 = 0;      // inicio de la animacion en curso
   uint32_t until = 0;   // fin del estado actual
   float x = 233, targetX = 233;
   bool fast = false;    // walking after a dragging finger (#21) until it gets there
 };
+
+#define PET_GROUND 304  // linea de suelo de la mascota
 
 // estrellas del modo noche
 inline const uint16_t STARS[][2] = { {120,140},{330,120},{370,210},{95,230},{280,90},{160,95} };
@@ -32,7 +35,7 @@ inline const uint16_t BIOME_SOIL[6] = {
   C565(0xe6, 0xee, 0xf5),  // 5 nieve
 };
 
-extern PetBeh beh;          // the pet's walk and one-shot actions (behNext())
+extern PetBeh beh;          // the pet's walk and one-shot actions (the idle planner, idlelife.h)
 extern bool gNight;         // the night scene: render() sets it from the hour or sleep
 extern uint32_t bathUntil;  // the bath runs until this millis()
 
@@ -54,6 +57,7 @@ void drawRunawayButton();
 void drawPet();
 void startBath();
 void drawBath();
+uint32_t pmdActTotalMs(const PmdAct &a);  // one run of an action's animation, ms
 void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS);
 void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS);
 void drawPoops();

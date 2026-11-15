@@ -16,6 +16,7 @@
 #include "script.h"
 #include "simhw.h"
 #include "../board.h"
+#include "../idlelife.h"
 #include "../bubble.h"
 
 void setup();
@@ -230,6 +231,10 @@ int main(int argc, char **argv) {
         run(50);
         break;
       }
+      case OP_IDLE:
+        idleForceNext((uint8_t)c.a);
+        run(SETTLE_MS);
+        break;
       case OP_SAY:
         bubbleSayNow((uint8_t)c.a);
         run(50);

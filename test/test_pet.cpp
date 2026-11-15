@@ -2507,3 +2507,74 @@ TEST(evochime, a_ready_pet_on_the_charger_chimes_once) {
   CHECK_MSG(appearances >= 3, "self-care brings the button back several times an hour");
   CHECK_EQ(chimes, 1);
 }
+
+// ---------------------------------------------------------------- idle perks (#22)
+// A finished doze or ball game: a little energy or joy (capped per hour by idleplan.h's
+// IdlePerks). Never lowers a stat, and is not the player's care.
+
+TEST(idleperk, adds_a_little_energy_or_joy_up_to_100) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 60, 50, 40, 70);
+  p.idlePerk(3, 0);
+  CHECK_EQ(p.energy, (uint8_t)43);
+  CHECK_EQ(p.joy, (uint8_t)50);
+  p.idlePerk(0, 3);
+  CHECK_EQ(p.joy, (uint8_t)53);
+  CHECK_EQ(p.energy, (uint8_t)43);
+  CHECK_EQ(p.fullness, (uint8_t)60);  // nothing else moves
+  CHECK_EQ(p.hygiene, (uint8_t)70);
+  setStats(p, 60, 99, 98, 70);
+  p.idlePerk(3, 3);
+  CHECK_EQ(p.energy, (uint8_t)100);  // capped, never wraps
+  CHECK_EQ(p.joy, (uint8_t)100);
+  p.idlePerk(255, 255);
+  CHECK_EQ(p.energy, (uint8_t)100);
+  CHECK_EQ(p.joy, (uint8_t)100);
+}
+
+TEST(idleperk, nothing_asleep_as_an_egg_or_in_a_ceremony) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 60, 50, 40, 70);
+  p.sleeping = true;
+  p.idlePerk(3, 3);
+  CHECK_EQ(p.energy, (uint8_t)40);
+  CHECK_EQ(p.joy, (uint8_t)50);
+  p.sleeping = false;
+  p.startFarewell();
+  p.idlePerk(3, 3);
+  CHECK_EQ(p.energy, (uint8_t)40);
+  CHECK_EQ(p.joy, (uint8_t)50);
+  Pet e;
+  mockNvsReset();
+  mockSetMillis(0);
+  e.begin();  // a first game: choosing a starter, then an egg
+  uint8_t en = e.energy, jo = e.joy;
+  e.idlePerk(3, 3);
+  CHECK_EQ(e.energy, en);
+  CHECK_EQ(e.joy, jo);
+  e.chooseStarter(4);
+  e.idlePerk(3, 3);
+  CHECK(e.isEgg());
+  CHECK_EQ(e.energy, en);
+  CHECK_EQ(e.joy, jo);
+}
+
+TEST(idleperk, is_not_the_players_care) {
+  Pet p;
+  makePet(p, 4);
+  p.lastSeenEpoch = 1794564000UL;  // a known day, so care would count
+  setStats(p, 60, 50, 40, 70);
+  uint16_t streak = p.streak;
+  uint32_t careDay = p.lastCareDay;
+  uint8_t bond = p.bond;
+  mockNvsReset();  // an empty store: any write by idlePerk() would show up as keys
+  p.idlePerk(3, 3);
+  CHECK_EQ(p.streak, streak);
+  CHECK_EQ(p.lastCareDay, careDay);
+  CHECK_EQ(p.bond, bond);
+  CHECK(!p.showHeart());  // a heart would wake the screen and read as a touch
+  CHECK(!p.savePending());
+  CHECK_EQ(mockNvsKeyCount("tamapoke"), (size_t)0);  // no save of its own: the periodic one keeps it
+}

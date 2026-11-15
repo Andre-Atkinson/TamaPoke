@@ -262,6 +262,12 @@ void Pet::selfCare() {
   Serial.printf("self-care: %s %u->%u\n", what, (unsigned)before, (unsigned)SELFCARE_LEVEL);
 }
 
+void Pet::idlePerk(uint8_t energyUp, uint8_t joyUp) {
+  if (ceremony != CER_NONE || isEgg() || sleeping) return;  // a starter or egg choice is an egg too
+  energy = clamp100(energy + energyUp);
+  joy = clamp100(joy + joyUp);
+}
+
 // vuelca el guardado periodico pendiente (lo llama el loop en un momento sin
 // animacion para que el paron de la escritura a flash no se vea)
 void Pet::flushSave() {

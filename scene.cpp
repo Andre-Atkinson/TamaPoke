@@ -7,6 +7,8 @@
 #include "clockprompt.h"
 #include "dex.h"
 #include "i18n.h"
+#include "idlelife.h"
+#include "idleplan.h"
 #include "power.h"
 #include "rtcbat.h"
 #include "scene.h"
@@ -15,14 +17,12 @@
 #include "species.h"
 #include "uitext.h"
 
-#define PET_GROUND 304  // linea de suelo de la mascota
-#define PET_WALK_MIN 150  // where the pet may walk to (behNext, and after a finger)
-#define PET_WALK_MAX 325
+#define PET_WALK_MIN IDLE_WALK_MIN  // where the pet may walk to (idleplan.h, and after a finger)
+#define PET_WALK_MAX IDLE_WALK_MAX
 #define PET_FOLLOW_PX_S 120.0f  // walking after a finger (a stroll is 30 px/s)
 
 // Used only in this file, and called above their definitions (in TamaPoke.ino the
 // prototypes arduino-cli generates covered that).
-static uint32_t pmdActTotalMs(const PmdAct &a);
 static void drawPetPMD();
 static void drawPetSD();
 static void overlayEye(const Species &sp, int x, int y, int s, int col);
@@ -552,7 +552,7 @@ void drawBath() {
 
 // ---------- mascota PMD: comportamiento ----------
 
-static uint32_t pmdActTotalMs(const PmdAct &a) {
+uint32_t pmdActTotalMs(const PmdAct &a) {
   uint32_t t = 0;
   for (uint8_t i = 0; i < a.frames; i++) t += a.ms[i];
   return t ? t : 100;
@@ -572,16 +572,40 @@ static uint8_t pmdFrameAt(const PmdAct &a, uint32_t t, bool loop) {
   return i;
 }
 
-// dibuja una accion anclada por la base (centro-x, suelo) y devuelve su escala
-// dibuja una accion de un PmdMon concreto (m); drawPmdAct usa el global pmd
-void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS) {
-  const PmdAct &a = m.acts[actId];
-  if (!a.frames) return;
+// the scale drawPmdActM() draws action a of m at
+static uint8_t pmdScale(const PmdMon &m, const PmdAct &a, uint8_t maxS) {
   uint8_t sBase = m.acts[PMD_IDLE].h ? 170 / m.acts[PMD_IDLE].h : 5;
   if (sBase < 2) sBase = 2;
   if (sBase > maxS) sBase = maxS;
   uint8_t s = sBase;
   while (s > 2 && a.h * s > 250) s--;  // acciones con frame grande (ataque)
+  return s;
+}
+
+// How far above the ground the top of action actId of the main sprite is drawn, in px: its
+// first frame's highest opaque row (the idle emotes sit by the head, #22). Scanned on each
+// call, so drawPetPMD() calls it only on a frame that draws an emote (idleEmoteDue()).
+static int pmdHeight(uint8_t actId, uint8_t maxS) {
+  const PmdAct &a = pmd.acts[actId];
+  if (!a.frames) return 0;
+  int top = 0;
+  while (top < a.h) {
+    const uint8_t *row = a.data + top * a.w;
+    bool any = false;
+    for (int c = 0; c < a.w && !any; c++) any = row[c] != 0xFF;
+    if (any) break;
+    top++;
+  }
+  int base = a.base ? a.base : a.h;
+  return base > top ? (base - top) * pmdScale(pmd, a, maxS) : 0;
+}
+
+// dibuja una accion anclada por la base (centro-x, suelo) y devuelve su escala
+// dibuja una accion de un PmdMon concreto (m); drawPmdAct usa el global pmd
+void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS) {
+  const PmdAct &a = m.acts[actId];
+  if (!a.frames) return;
+  uint8_t s = pmdScale(m, a, maxS);
   uint8_t fi = pmdFrameAt(a, t, loop);
   const uint8_t *fr = a.data + (uint32_t)fi * a.w * a.h;
   // anclar por los pies (a.base), no por el alto del lienzo: asi las acciones
@@ -595,36 +619,6 @@ void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool
 }
 void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS) {
   drawPmdActM(pmd, actId, cx, groundY, t, loop, sil, maxS);
-}
-
-// elige el siguiente capricho del bicho cuando esta contento
-static void behNext() {
-  uint32_t now = millis();
-  beh.t0 = now;
-  int r = random(100);
-  if (r < 35 && (pmd.has(PMD_WALKL) || pmd.has(PMD_WALKR))) {
-    beh.mode = 1;  // paseo
-    beh.targetX = PET_WALK_MIN + random(PET_WALK_MAX - PET_WALK_MIN + 1);
-    beh.until = now + 15000;
-  } else if (r < 60) {
-    // gesto aleatorio entre los disponibles
-    // (Hop fuera: salta demasiado alto; Sit fuera: mira hacia atras)
-    static const uint8_t flair[] = { PMD_POSE, PMD_NOD, PMD_BREATH };
-    uint8_t pick[3], n = 0;
-    for (uint8_t f : flair)
-      if (pmd.has(f)) pick[n++] = f;
-    if (n) {
-      beh.mode = 2;
-      beh.act = pick[random(n)];
-      beh.until = now + pmdActTotalMs(pmd.acts[beh.act]);
-      return;
-    }
-    beh.mode = 0;
-    beh.until = now + 2000 + random(3000);
-  } else {
-    beh.mode = 0;  // mirar al frente
-    beh.until = now + 2000 + random(3000);
-  }
 }
 
 static void drawPetPMD() {
@@ -662,14 +656,17 @@ static void drawPetPMD() {
   } else if (m == MOOD_SAD && pmd.has(PMD_HURT) && !follow && !beh.fast) {
     act = PMD_HURT;
   } else {
-    // contento: el planificador decide (idle / paseo / gesto)
+    // contento: el planificador de su vida propia decide (#22, idlelife.cpp); con un dedo que
+    // arrastra (#21) camina tras el dedo
     if (follow) {
       beh.mode = 1;
       beh.fast = true;
       beh.targetX = constrain((float)touchG.dragX, (float)PET_WALK_MIN, (float)PET_WALK_MAX);
       beh.until = now + 15000;
+    } else {
+      // a sad pet only gets here after a finger dragged it (beh.fast): the calm repertoire
+      idleUpdate(now, petSceneFree() && m == MOOD_HAPPY);
     }
-    if (now > beh.until) behNext();
     if (beh.mode != 1) {
       walkLast = 0;  // al volver a caminar no se cuenta el tiempo parado
       beh.fast = false;
@@ -681,7 +678,7 @@ static void drawPetPMD() {
         walkLast = 0;
         if (!follow) {  // a finger still down keeps it waiting there
           beh.fast = false;
-          behNext();
+          idleArrived(now);
         }
       } else {
         // 30 px/s de diseno (3 px por frame a 10 fps), midiendo el tiempo real: con menos frames
@@ -690,14 +687,13 @@ static void drawPetPMD() {
         uint32_t cap = frameIntervalMs(powerCtx(now)) + 100;  // un hueco mayor (otra pantalla de por medio) no es un paso largo
         if (dt > cap) dt = cap;
         walkLast = now;
-        float step = (beh.fast ? PET_FOLLOW_PX_S : 30.0f) * dt / 1000.0f;
+        float step = (beh.fast ? PET_FOLLOW_PX_S : idleWalkSpeed()) * dt / 1000.0f;
         if (step > fabsf(d)) step = fabsf(d);  // un frame lento no sobrepasa el destino
         beh.x += d > 0 ? step : -step;
         act = (d > 0) ? PMD_WALKR : PMD_WALKL;
       }
     } else {
-      act = (beh.mode == 2) ? beh.act : PMD_IDLE;
-      loop = false;
+      act = idleFrameAct(now, dy, t0, loop);  // standing, a doze, a hop, a gesture...
     }
     if (!pmd.has(act)) act = PMD_IDLE;
   }
@@ -706,6 +702,8 @@ static void drawPetPMD() {
   drawHuffPuff((int)beh.x + petReact.away * 56, PET_GROUND - 120, now);
 
   if (heartShown(now)) drawMap(SPR_HEART, 32, (int)beh.x + 50, PET_GROUND - 190, 2, false);
+  // the ball and an emote (#22); the head's height only when an emote is drawn
+  idleDrawOver(now, (int)beh.x, idleEmoteDue(now) ? PET_GROUND + dy - pmdHeight(act, 5) : 0);
 }
 
 // sprite animado desde la SD: zoom entero por pixel, frames a su ritmo
@@ -867,7 +865,7 @@ const char *statusMsg() {
     case ATTN_JOY: return T(S_SAD);
     default: break;
   }
-  if (pet.weight > 60) return T(S_CHUBBY);
+  if (pet.weight > PET_CHUBBY_WEIGHT) return T(S_CHUBBY);
   if (pet.shiny && pet.ageMinutes < 15) return T(S_IS_SHINY);
   return T(S_HAPPY);
 }

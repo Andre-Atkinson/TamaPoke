@@ -44,6 +44,7 @@ static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright unt
 #include "trainingcapture.h"
 #include "app.h"
 #include "gameui.h"
+#include "idlelife.h"
 #include "scene.h"
 #include "screens.h"
 #include "serialcmd.h"
@@ -555,6 +556,7 @@ void ensureMon() {
   beh.mode = 0;
   beh.until = 0;
   beh.fast = false;
+  idleReset();  // the idle planner starts over with the new sprite (#22)
   petReact.kind = REACT_NONE;
   if (pet.speciesId >= 1 && pet.speciesId <= DEX_COUNT) {
     pmd.load(pet.speciesId, pet.shiny);          // principal: PMD
@@ -975,6 +977,7 @@ void wakeUI() {
   bool slow = !iv || iv > 100;  // pantalla apagada o ritmo lento: se dibuja ya, sin esperar al frame
   lastInteract = now;
   attnShowUntil = 0;  // a real touch ends a call's window (idle is 0 anyway)
+  idleInterrupt(now);  // the pet stops what it was doing by itself and looks up (#22)
   // el frame forzado respeta los 85 ms entre redibujados (si no, solapa el DMA del anterior)
   if (slow) lastRender = (now - lastRender >= 85) ? 0 : lastRender - 15;
   audioSetIdle(false);

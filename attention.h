@@ -177,7 +177,7 @@ struct AttnBubble {
 };
 
 inline AttnBubble attnBubbleAt(int petX) {
-  if (petX < 150) petX = 150;  // the walk range (behNext: 150..325)
+  if (petX < 150) petX = 150;  // the walk range (IDLE_WALK_MIN..MAX in idleplan.h)
   if (petX > 325) petX = 325;
   AttnBubble b;
   b.right = petX <= 233;  // the screen's centre column

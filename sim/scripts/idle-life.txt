@@ -1,0 +1,212 @@
+# A life of its own (#22): every idle activity and emote on the main screen, then the gates.
+# A manual check: run it and look at the shots; nothing compares them automatically.
+#   tools/sim.sh --board 175c --script sim/scripts/idle-life.txt --out shots/day
+#   tools/sim.sh --board 175c --clock "2026-11-13 21:30" --script sim/scripts/idle-life.txt --out shots/night
+# (and --board 175 for the original board). With bedtime off the pet stays up at night, in
+# the night scene.
+# "idle ACT" forces the next pick on a free, lit main screen (simulator only); each one comes
+# after a tap on empty sky (x 400: right of the pet zone) that keeps the screen lit and, like
+# any touch, stops what the pet was doing.
+# The dim gate (shots 00a-00b and 14-14c) is a 1.75C check: its default screen-off is 60 s, so the
+# screen dims 30 s after the last touch. The original 1.75 defaults to "never" (dims at 90 s),
+# so there those shots are still lit: 14-dimmed-calm shows a rest bubble, 14c is still
+# dozing and serial.log has one more "idle: doze done" line. Everything else is the same on
+# both boards.
+# What to look at: the emote bubble by the pet's head, under the status line, inside the round
+# panel; the ball on the ground above the bars; nothing over the header, bars or buttons.
+battery 80
+
+# new game: pick Charmander (it has Pose, Nod and Breath), hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# An emote showing when the screen dims goes at once (the screen dims 30 s after the tap).
+# Whether a stand comes with a heart is a 1-in-3 roll from the simulator's fixed random
+# sequence; this one does on the 1.75C, as long as nothing before it changes (so it comes
+# first). 00a shows the heart, 00b (dimmed, the heart's time not yet up) doesn't. On the 1.75
+# the sequence differs and the screen dims at 90 s, so there 00a may have no heart and 00b
+# isn't dimmed.
+tap 400 200
+wait 28800ms
+idle stand
+shot 00a-stand-emote-before-the-dim
+wait 800ms
+shot 00b-no-emote-once-dimmed
+
+tap 400 200
+idle doze
+wait 3s
+shot 01-doze
+
+tap 400 200
+idle rest
+wait 1s
+shot 02-rest
+
+tap 400 200
+idle hop
+wait 300ms
+shot 03-hop
+
+tap 400 200
+idle ball
+wait 1500ms
+shot 04-ball-kick
+wait 2500ms
+shot 05-ball-chase
+
+tap 400 200
+idle look
+wait 600ms
+shot 06-look-one-way
+wait 1600ms
+shot 07-look-the-other
+
+tap 400 200
+idle seek
+wait 2s
+shot 08a-seek-walking
+wait 3s
+shot 08b-seek-at-the-food
+
+tap 400 200
+idle gesture
+wait 400ms
+shot 09-gesture
+
+tap 400 200
+idle stand
+wait 500ms
+shot 10-stand
+
+tap 400 200
+idle walk
+wait 2s
+shot 11-walk
+
+# finished naps: +3 energy each, then the hourly cap (serial.log: "idle: doze done, energy +3",
+# "+3", then "+0 (hourly cap)"). No touch for the whole nap; the screen dims 30 s after the tap.
+tap 400 200
+idle doze
+wait 16s
+tap 400 200
+idle doze
+wait 16s
+tap 400 200
+idle doze
+wait 16s
+
+# a touch wakes a doze at once, and a nap cut short gives nothing (no "idle:" line)
+tap 400 200
+idle doze
+wait 2s
+tap 400 200
+wait 200ms
+shot 12-doze-woken
+
+# the gates: a dialog over the pet (the food picker). The tap on the food button stops the doze
+# (any touch does); while the picker is open the planner stays calm, so the doze asked for here
+# waits until it closes (after 6 s): 13 shows the pet standing, no bubble
+tap 400 200
+idle doze
+wait 2s
+tap 140 390
+idle doze
+wait 2500ms
+shot 13-feed-menu-no-emote
+wait 7s
+
+# dimmed: the calm repertoire, no emote, no ball ("idle doze" waits for a lit screen)
+tap 400 200
+idle ball
+wait 33s
+shot 14-dimmed-calm
+
+# dimming cuts a doze short: it strolls or stands instead, and the cut nap gives nothing
+# (no "idle:" line). The screen dims 30 s after the tap (1.75C).
+tap 400 200
+wait 25s
+idle doze
+wait 2s
+shot 14b-dozing-before-the-dim
+wait 4s
+shot 14c-the-dim-cut-the-doze
+wait 15s
+
+
+tap 400 200
+wait 500ms
+
+# the heart of a pat sits where the bubble goes: no bubble while it shows (the hop still plays)
+tap 233 230
+idle hop
+wait 300ms
+shot 15-heart-no-emote
+wait 2s
+
+# a speech bubble (#23) goes first: while one shows, no emote (the rest's "..." is hidden;
+# the bubble draws in the same band beside the head). The "say" step is the simulator's.
+tap 400 200
+idle rest
+wait 500ms
+say hi
+wait 300ms
+shot 15b-speech-bubble-no-emote
+wait 5s
+shot 15c-bubble-gone
+
+# the evolve button sits over the pet: no bubble while it shows. Rhyhorn is tall enough for
+# the bubble to show above the button.
+serial SPEC 111
+wait 1s
+serial LVL 42
+wait 1s
+tap 400 200
+idle rest
+wait 500ms
+shot 16-evolve-button-no-emote
+serial SPEC 4
+wait 1s
+serial LVL 1
+wait 1s
+
+# the tallest pets (Dugtrio, Venusaur) keep the emote under the status line (a speech
+# bubble that comes up by itself (#23) takes its place instead, as in 17); the smallest
+# (Snorlax lies low) keep it by the head
+serial SPEC 51
+wait 1s
+tap 400 200
+idle rest
+wait 1s
+shot 17-tall-rest
+serial SPEC 3
+wait 1s
+tap 400 200
+idle doze
+wait 2s
+shot 18-tall-doze
+serial SPEC 143
+wait 1s
+tap 400 200
+idle doze
+wait 2s
+shot 19-small-doze
+tap 400 200
+idle hop
+wait 300ms
+shot 20-small-hop
+
+# a species with no Pose, Nod or Breath (the common case): "gesture" is ignored, it stands
+serial SPEC 6
+wait 1s
+tap 400 200
+idle gesture
+wait 500ms
+shot 21-no-gesture-stands
+idle ball
+wait 2s
+shot 22-charizard-ball
