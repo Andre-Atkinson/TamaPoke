@@ -32,6 +32,14 @@ inline bool standbyAllowed(const StandbyIn &s) {
 }
 inline bool standbyStarts(const StandbyIn &s) { return standbyAllowed(s) && s.idleMs >= standbyAfterMs(s.offMs); }
 
+// Where its lines sit (drawStandby(), scene.cpp), before the burn-in step: the time at size
+// 9 (72 px tall), the date at size 3, today's weather as a picture, the battery.
+#define STANDBY_TIME_Y 128
+#define STANDBY_DATE_Y 222
+#define STANDBY_WX_Y 300
+#define STANDBY_BAT_Y 364
+#define STANDBY_DATE_MAX 24  // bytes for formatDate() (i18n.h): "s\240b, 15 nov" is 11
+
 // Against AMOLED burn-in the clock steps to a new spot each minute, at most 4 px from the
 // centre, through 8 spots.
 #define STANDBY_SHIFTS 8

@@ -1,8 +1,12 @@
 // The standby clock (standby.h, power.h, #60): when it comes up, what keeps it, what it does
 // to the power policy, and its burn-in steps. Pure logic.
 #include "framework.h"
+#include "../i18n.h"
 #include "../power.h"
+#include "../skylayout.h"  // roundChordW()
 #include "../standby.h"
+#include "../weather.h"    // civilDate()
+#include <string>
 #include <set>
 #include <utility>
 
@@ -108,4 +112,65 @@ TEST(Standby, it_steps_a_few_px_each_minute_against_burn_in) {
   CHECK_EQ((int)spots.size(), STANDBY_SHIFTS);
   CHECK((int)xs.size() >= 5);
   CHECK((int)ys.size() >= 5);
+}
+
+// The date in both languages: "Sat 15 Nov", "s\240b, 15 nov" (European Portuguese, in lower
+// case, \240 is CP437's a-acute: one byte a letter, never UTF-8).
+TEST(Standby, the_date_in_english_and_portuguese) {
+  char b[STANDBY_DATE_MAX];
+  Lang was = gLang;
+  gLang = LANG_EN;
+  formatDate(b, sizeof b, 6, 15, 11);
+  CHECK_STREQ(b, "Sat 15 Nov");
+  formatDate(b, sizeof b, 0, 1, 1);
+  CHECK_STREQ(b, "Sun 1 Jan");
+  gLang = LANG_PT;
+  formatDate(b, sizeof b, 6, 15, 11);
+  CHECK_STREQ(b, "s\240b, 15 nov");
+  formatDate(b, sizeof b, 3, 30, 9);
+  CHECK_STREQ(b, "qua, 30 set");
+  for (uint8_t bad : { 0, 13 }) {  // a month out of range
+    formatDate(b, sizeof b, 1, 1, bad);
+    CHECK_STREQ(b, "?");
+  }
+  formatDate(b, sizeof b, 7, 1, 1);  // a weekday out of range
+  CHECK_STREQ(b, "?");
+  formatDate(b, sizeof b, 1, 0, 1);  // a day out of range
+  CHECK_STREQ(b, "?");
+  formatDate(b, 0, 1, 1, 1);  // no room: nothing written
+  gLang = was;
+}
+
+// Every date of two years, in both languages, and every time fit the round screen at their
+// rows, wherever the burn-in step puts them.
+TEST(Standby, every_date_and_time_fits_the_round_screen) {
+  auto fits = [](int w, int y, int h) {
+    for (int dy = -STANDBY_SHIFT_MAX; dy <= STANDBY_SHIFT_MAX; dy++)
+      for (int row : { y + dy, y + dy + h - 1 })
+        if (w + 2 * STANDBY_SHIFT_MAX + 4 > roundChordW(row)) return false;
+    return true;
+  };
+  CHECK(fits(5 * 6 * 9, STANDBY_TIME_Y, 8 * 9));  // "23:59" at size 9: every time is 5 characters
+  Lang was = gLang;
+  size_t longest = 0;
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    for (uint32_t e = 1767225600UL; e < 1767225600UL + 731 * 86400UL; e += 86400UL) {  // 2026-2027
+      CivilDate d = civilDate(e);
+      char b[STANDBY_DATE_MAX];
+      formatDate(b, sizeof b, d.weekday, d.day, d.month);
+      size_t n = strlen(b);
+      longest = n > longest ? n : longest;
+      CHECK_MSG(n > 5 && fits((int)n * 6 * 3, STANDBY_DATE_Y, 8 * 3), std::string("'") + b + "'");
+      for (const char *c = b; *c; c++)  // one byte a letter: ASCII, or CP437's a-acute
+        CHECK((uint8_t)*c < 0x80 || (uint8_t)*c == 0240);
+    }
+  }
+  CHECK_EQ((int)longest, 11);  // "qua, 30 set"
+  gLang = was;
+  // the lines don't run into each other: time, date, weather, battery, top to bottom
+  CHECK(STANDBY_TIME_Y + 8 * 9 + 2 * STANDBY_SHIFT_MAX < STANDBY_DATE_Y);
+  CHECK(STANDBY_DATE_Y + 8 * 3 < STANDBY_WX_Y - 32);
+  CHECK(STANDBY_WX_Y + 34 < STANDBY_BAT_Y);
+  CHECK(fits(32 + 8 + 5 * 12, STANDBY_BAT_Y, 16));  // the glyph and "100%+"
 }

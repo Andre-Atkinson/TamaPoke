@@ -402,11 +402,8 @@ void drawScene(uint32_t now, bool night) {
 // ---------- the standby clock (standby.h, #60) ----------
 
 #define STANDBY_INK C565(0xd8, 0xde, 0xe8)   // the digits
-#define STANDBY_DIM C565(0x80, 0x88, 0x9a)   // the date and the battery
-#define STANDBY_TIME_Y 128                   // the time: size 9, 72 px tall
-#define STANDBY_DATE_Y 222                   // the date: size 3
-#define STANDBY_WX_Y 300                     // the weather icon's centre
-#define STANDBY_BAT_Y 364                    // the battery
+#define STANDBY_DATE C565(0xb4, 0xbc, 0xcc)  // the date
+#define STANDBY_DIM C565(0x80, 0x88, 0x9a)   // the battery
 
 // a cloud of three circles centred on (cx, cy), `s` px across its middle puff
 static void drawIconCloud(int cx, int cy, int s, uint16_t col) {
@@ -467,6 +464,13 @@ void drawStandby(uint32_t epoch, uint8_t wxKind, int batPct, bool charging) {
   setSize(9);
   setCur(centerX(t, 9) + dx, STANDBY_TIME_Y + dy);
   printT(t);
+  CivilDate d = civilDate(epoch);
+  char date[STANDBY_DATE_MAX];
+  formatDate(date, sizeof date, d.weekday, d.day, d.month);
+  gfx->setTextColor(STANDBY_DATE);
+  setSize(3);
+  setCur(centerX(date, 3) + dx, STANDBY_DATE_Y + dy);
+  printT(date);
   drawWxIcon(wxKind, CX + dx, STANDBY_WX_Y + dy);
   if (batPct >= 0) {  // the glyph (a bolt while charging) and the percentage
     char s[8];
