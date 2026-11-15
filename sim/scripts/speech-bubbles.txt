@@ -1,7 +1,7 @@
 # Speech bubbles (#23): every line, the player's name (accents, the longest, none), day and
 # night, beside the clock badge, the need line in place of the "!" bubble, and the cases
-# where no bubble may show (a menu open, asleep, an attention call lighting the screen,
-# dimmed or off).
+# where no bubble may show (a heart or banner, a menu open, asleep, an attention call
+# lighting the screen, dimmed or off).
 # A manual check: run it in each language on both boards and look at the shots and the
 # "say ..." lines in the serial log; nothing compares them automatically.
 #   tools/sim.sh --board 175c --lang de --script speech-bubbles --out shots/de/
@@ -81,6 +81,22 @@ say love
 wait 300ms
 shot 15-love-no-name
 
+# a heart and the streak banner: no bubble while either shows. CAREDAY caresses the pet
+# (a heart for 1.5 s) as a new cared day; the third in a row brings the 3-day banner (4.5 s)
+serial CAREDAY
+say hi
+wait 300ms
+shot 15b-heart-no-bubble
+wait 2s
+serial CAREDAY
+wait 2s
+serial CAREDAY
+wait 2s
+say hi
+wait 300ms
+shot 15c-banner-no-bubble
+wait 3s
+
 # a menu open (the food picker): no bubble; it closes by itself
 tap 140 390
 wait 300ms
@@ -125,10 +141,11 @@ shot 22-need-in-words
 wait 5s
 shot 23-exclamation-again
 
-# an attention call lights the screen for 15 s (joy, 81-86 s after the last shot: the 1.75
-# brightens its dimmed screen, the 1.75C peeks with the screen still off). No bubble in it,
-# even one a "say" starts. The HEALTH line stamps the time to compare with "call joy".
-wait 88s
+# an attention call lights the screen for 15 s (food, 128-136 s after the last shot: the
+# 1.75 brightens its dimmed screen, the 1.75C peeks with the screen still off). No bubble in
+# it, even one a "say" starts. The HEALTH line stamps the time to compare with "call food"
+# (the shot must be less than 15 s after it; a change earlier in this script can move it).
+wait 138s
 serial HEALTH
 say hi
 wait 300ms
