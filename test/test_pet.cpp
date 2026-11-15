@@ -2531,6 +2531,14 @@ TEST(quietalerts, evolve_chime_due_in_quiet_hours_is_spent_silently) {
   CHECK(!c.quieted);
 }
 
+// The pass where quiet hours end is also the one where the age reaches the next level,
+// with the button up all along: it did not appear, so no chime (needs_the_button_to_appear)
+TEST(quietalerts, evolve_chime_spent_in_quiet_hours_is_not_replayed_at_the_next_level) {
+  EvoChime c;
+  CHECK(!c.update(true, 4, 16, true));
+  CHECK_MSG(!c.update(true, 4, 17, false), "quiet hours end at level 17, the button still up: no chime");
+}
+
 TEST(quietalerts, run_away_warning_sounds_once_each_time_the_button_appears) {
   RunawayWarn w;
   CHECK(!w.update(false, false));
