@@ -147,7 +147,13 @@ def run(args):
         if args.what == 'clock':
             before = parse_rtc(con.command('TIME'))
             target = local_wallclock_epoch()
-            after = parse_rtc(con.command(f'TIME {target}'))
+            reply = con.command(f'TIME {target}')
+            # A clock that did not take the value says why (an ERR line) and still answers
+            # rtc= with what it reads; the pet's saved time is then left alone.
+            refused = next((t for t in reply if t.startswith('ERR')), None)
+            if refused:
+                sys.exit(f'clock not set; the board said: {refused}')
+            after = parse_rtc(reply)
             if after is None or abs(after - target) > 2:
                 sys.exit(f'clock not set: board answered rtc={after}, wanted {target}')
             drift = '' if before is None else f' (was {before - target:+d} s)'
