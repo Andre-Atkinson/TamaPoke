@@ -22,6 +22,9 @@
 #define SELFCARE_IDLE_MS (10UL * 60 * 1000)
 #define SELFCARE_BELOW 40
 #define SELFCARE_LEVEL 50
+// Over this weight the status line says "chubby" (statusMsg) and the idle planner (#22) has
+// the pet rest more and play less. Weight is 0-100.
+#define PET_CHUBBY_WEIGHT 60
 
 // ritmo de cuidado (ajuste "Care", NVS "pace"): normal o relajado (las necesidades
 // bajan a la mitad de velocidad mientras esta despierto)

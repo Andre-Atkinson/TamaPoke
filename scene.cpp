@@ -663,7 +663,8 @@ static void drawPetPMD() {
       beh.targetX = constrain((float)touchG.dragX, (float)PET_WALK_MIN, (float)PET_WALK_MAX);
       beh.until = now + 15000;
     } else {
-      idleUpdate(now, petSceneFree());
+      // a sad pet only gets here after a finger dragged it (beh.fast): the calm repertoire
+      idleUpdate(now, petSceneFree() && m == MOOD_HAPPY);
     }
     if (beh.mode != 1) {
       walkLast = 0;  // al volver a caminar no se cuenta el tiempo parado
@@ -862,7 +863,7 @@ const char *statusMsg() {
     case ATTN_JOY: return T(S_SAD);
     default: break;
   }
-  if (pet.weight > 60) return T(S_CHUBBY);
+  if (pet.weight > PET_CHUBBY_WEIGHT) return T(S_CHUBBY);
   if (pet.shiny && pet.ageMinutes < 15) return T(S_IS_SHINY);
   return T(S_HAPPY);
 }

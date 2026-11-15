@@ -33,7 +33,7 @@ static IdleIn idleInputs(bool full) {
   in.weight = pet.weight;
   // the hour only from a trusted clock, as the quiet hours read it (attnLoop): no clock, or
   // one reseeded after a power-off and not set yet, is no hour at all
-  in.hour = (pet.lastSeenEpoch && !bedEdge.stale()) ? (int8_t)sceneHour() : (int8_t)-1;
+  in.hour = idleHour(pet.lastSeenEpoch, bedEdge.stale());
   for (uint8_t a = 0; a < PMD_NACTS; a++)
     if (pmd.has(a)) in.acts |= (uint16_t)(1u << a);
   in.calm = !full;
@@ -131,7 +131,8 @@ void idleUpdate(uint32_t now, bool full) {
   // dimmed, or a dialog over the pet: back to the calm repertoire at once, and what was cut
   // short gives nothing. (Coming back to a free, lit screen always takes a touch, PWR or
   // BOOT, and wakeUI() has already stopped the activity: another screen, sleep or a meal
-  // is left by hand, and a sad pet, the only one a call reaches, is cheered up by hand.)
+  // is left by hand, and a sad pet, the only one a call reaches, is cheered up by hand. A sad
+  // pet shows HURT and gets here only after a dragging finger let go of it, with full false.)
   if (!full && !idleCalmAct(beh.activity)) idleNext(now, false);
   lastFull = full;
 #ifdef HOST_SIM

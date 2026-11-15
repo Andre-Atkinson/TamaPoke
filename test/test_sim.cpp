@@ -239,7 +239,6 @@ TEST(SimRunner, cero_no_corre_ninguna_pasada) {
   CHECK_EQ(millis(), (uint32_t)10);
 }
 
-// pmu ok|none (#24): the firmware asks the AXP2101 once, in setup(), so it is boot-only
 // "idle ACT" (#22): the next idle activity, by its name in IDLE_ACT_NAMES
 TEST(SimScript, idle_names_an_activity) {
   SimScript s = simParseScript("idle stand\nidle doze\nidle seek\n");
@@ -258,6 +257,7 @@ TEST(SimScript, idle_names_an_activity) {
   CHECK(!simParseScript("idle doze hop\n").error.empty());
 }
 
+// pmu ok|none (#24): the firmware asks the AXP2101 once, in setup(), so it is boot-only
 TEST(SimScript, pmu_is_a_boot_step) {
   SimScript s = simParseScript("pmu none\nusb on\nwait 1s\n");
   CHECK_EQ(s.error, std::string(""));

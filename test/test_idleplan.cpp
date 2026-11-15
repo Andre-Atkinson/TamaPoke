@@ -172,9 +172,24 @@ TEST(IdlePlan, the_night_is_dozier_and_an_unknown_hour_counts_as_day) {
   for (int a = 0; a < IDLE_ACTS; a++) CHECK_EQ(unknown.v[a], day.v[a]);
 }
 
+// idleInputs() (idlelife.cpp) reads the hour through idleHour(): no hour without a trusted clock
+TEST(IdlePlan, the_hour_comes_only_from_a_trusted_clock) {
+  const uint32_t at1030 = 1794652200u;  // 2026-11-14 10:30 UTC
+  CHECK_EQ((int)idleHour(at1030, false), 10);
+  CHECK_EQ((int)idleHour(at1030 + 13 * 3600u, false), 23);
+  CHECK_EQ((int)idleHour(at1030 + 14 * 3600u, false), 0);  // wraps at midnight
+  CHECK_EQ((int)idleHour(at1030, true), -1);   // stale: reseeded after a power-off, not set yet
+  CHECK_EQ((int)idleHour(0, false), -1);       // never read
+  CHECK_EQ((int)idleHour(0, true), -1);
+  // a night-time clock only counts as night while trusted
+  CHECK(idleNight(idleHour(at1030 + 12 * 3600u, false)));
+  CHECK(!idleNight(idleHour(at1030 + 12 * 3600u, true)));
+}
+
 TEST(IdlePlan, a_chubby_pet_rests_more_and_plays_less) {
-  W slim = weights(needs(80, 90, 80, 60));
-  W chubby = weights(needs(80, 90, 80, 61));
+  // the same limit as the "chubby" status line (statusMsg in scene.cpp)
+  W slim = weights(needs(80, 90, 80, PET_CHUBBY_WEIGHT));
+  W chubby = weights(needs(80, 90, 80, PET_CHUBBY_WEIGHT + 1));
   CHECK(chubby.v[IDLE_REST] > slim.v[IDLE_REST]);
   CHECK(chubby.v[IDLE_HOP] < slim.v[IDLE_HOP]);
   CHECK(chubby.v[IDLE_BALL] < slim.v[IDLE_BALL]);
@@ -403,4 +418,6 @@ TEST(IdleEmote, it_stays_in_the_play_area_beside_the_head) {
   CHECK_EQ(small.y, (int16_t)(266 - IDLE_EMOTE_UP));
   CHECK_EQ(idleEmoteAt(300, 100).y, (int16_t)IDLE_EMOTE_YMIN);  // a hop can't lift it into the header
   CHECK_EQ(idleEmoteAt(300, 100).x, (int16_t)(300 - IDLE_EMOTE_DX));
+  // pmdHeight() finds nothing (0): the head "top" is the ground line, and the bubble still stops
+  CHECK_EQ(idleEmoteAt(233, 304).y, (int16_t)IDLE_EMOTE_YMAX);  // above the bars
 }

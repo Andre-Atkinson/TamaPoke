@@ -19,9 +19,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   food icon. A doze is a short daytime nap that any touch ends at once, with the
   day scene and every button as they are. A finished doze gives +3 ENE and a
   finished ball game +3 JOY, at most +6 of each an hour; nothing lowers a stat and
-  it is not your care (no streak, bond or medal). Any touch, PWR, BOOT, a call or
-  another screen interrupts it. Once the screen dims the creature strolls,
-  gestures or stands as before, with no bubbles, ball or perks. Nothing new is
+  it is not your care (no streak, bond or medal). Any touch, PWR or BOOT interrupts
+  it (another screen takes a touch to open); a call only comes once a need is under
+  25, when the creature is sad and shows that instead. Once the screen dims the
+  creature strolls, gestures or stands as before, with no bubbles, ball or perks. Nothing new is
   saved. Idea from Mu-Muu/TamaPoke, re-implemented offline.
 
 - **Touch gestures on the creature.** Besides a tap (a pat, at once as before):

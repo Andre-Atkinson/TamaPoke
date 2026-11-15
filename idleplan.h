@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdint.h>
 #include "attention.h"  // ATTN_BUBBLE_Y: the play area's top, under the status line
+#include "pet.h"        // PET_CHUBBY_WEIGHT
 #include "sdmon.h"      // PMD_* (the sprite's actions)
 
 // A life of its own (#22): what the pet does on the main screen while nobody touches it.
@@ -18,8 +19,9 @@
 //     (stroll, a Pose/Nod/Breath where the species has one, or stand), no emotes, no perks.
 // Any touch, PWR or BOOT (wakeUI) stops the activity (idleInterrupt): the pet stands and
 // looks up for IDLE_ATTEND_MS, then picks again. Another screen, a dialog, a meal or sleep
-// are opened and left by hand, and a call (#9) only reaches a sad pet, which never runs the
-// planner, so all of them pass through a touch too.
+// are opened and left by hand, and a call (#9) only reaches a sad pet, which shows HURT and
+// runs the planner only after a dragging finger let go of it (scene.cpp), and then in the calm
+// repertoire only, so all of them pass through a touch too.
 //
 // Idea from Mu-Muu/TamaPoke's behNext()/behEnd() and Pet::selfRest()/selfPlay() (MIT),
 // re-implemented here offline, without the weather. Personalities (#25) can add weights.
@@ -61,12 +63,12 @@ enum IdleEmote : uint8_t {
   EMO_COUNT
 };
 
-// thresholds (needs are 0-100; under ATTN_LOW the pet is sad and the planner doesn't run)
+// thresholds (needs are 0-100; under ATTN_LOW the pet is sad and gets only the calm repertoire)
 #define IDLE_TIRED 50    // energy under this: dozes and rests more, plays less
 #define IDLE_WEARY 35    // ...and under this, much more
 #define IDLE_HAPPY 70    // joy over this, with energy left: hops and plays more
 #define IDLE_HUNGRY 40   // fullness under this: goes to the food button
-#define IDLE_CHUBBY 60   // weight over this (the "chubby" status): rests more, plays less
+#define IDLE_CHUBBY PET_CHUBBY_WEIGHT  // weight over this (the "chubby" status): rests more, plays less
 #define IDLE_NIGHT_FROM 20  // the night scene (render(): hour < 6 or >= 20): dozier
 #define IDLE_NIGHT_TO 6
 
@@ -114,6 +116,12 @@ struct IdleRng {
 
 inline bool idleHas(const IdleIn &in, uint8_t pmdAct) { return pmdAct < 16 && (in.acts >> pmdAct) & 1u; }
 inline bool idleCanWalk(const IdleIn &in) { return idleHas(in, PMD_WALKL) && idleHas(in, PMD_WALKR); }
+// The hour of day the planner may use, from the clock's last reading (epoch, 0 = never read)
+// and whether it is stale (a reseed after a power-off, not set yet): -1, no hour, without a
+// trusted clock. The same hour as sceneHour() (scene.cpp) otherwise.
+inline int8_t idleHour(uint32_t epoch, bool stale) {
+  return (!epoch || stale) ? (int8_t)-1 : (int8_t)((epoch / 3600) % 24);
+}
 inline bool idleNight(int8_t hour) {
   return hour >= 0 && (hour >= IDLE_NIGHT_FROM || hour < IDLE_NIGHT_TO);
 }

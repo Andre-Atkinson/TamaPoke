@@ -143,6 +143,8 @@ While **awake**, per minute:
     time the clock hasn't been set since a power-off): no chirp and no light.
   - No calls while it sleeps, as an egg, while choosing a starter or an egg, or during
     a farewell or a run-away.
+    A call waits while a minigame, the training bag, a dialog, the card, gallery,
+    clock or keyboard is open on a lit screen, and comes once you are back.
 - 🐾 **A life of its own:** left alone on a lit screen, the creature keeps itself busy.
   Every few seconds it picks something to do: stand, look around, stroll, rest a
   while, doze, hop, chase and kick a ball about, strike a pose (the few species that
@@ -159,13 +161,12 @@ While **awake**, per minute:
     **+6 of each an hour**, so they never replace your care. Nothing ever lowers a
     stat, and it isn't your care: no streak, bond or medal. The hourly limit starts
     over if the board restarts.
-  - Any touch, PWR or BOOT, a call, or another screen stops what it was doing: it
-    looks up for a moment, then carries on.
+  - Any touch, PWR or BOOT stops what it was doing (opening another screen takes a
+    touch too): it looks up for a moment, then carries on. A call only comes once a
+    need is under 25, and the creature is sad then and shows that instead.
   - Only on the main screen with the creature awake and happy and nothing over it.
     Once the screen dims it just strolls, gestures or stands, as before, with no
     bubbles, ball or perks; with the screen off nothing runs at all.
-    A call waits while a minigame, the training bag, a dialog, the card, gallery,
-    clock or keyboard is open on a lit screen, and comes once you are back.
 
 ### Eggs & who you get (spawn odds)
 - **First ever pet:** you pick a starter — **Bulbasaur / Charmander / Squirtle**.

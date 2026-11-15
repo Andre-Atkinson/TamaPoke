@@ -6,7 +6,12 @@
 # the night scene.
 # "idle ACT" forces the next pick on a free, lit main screen (simulator only); each one comes
 # after a tap on empty sky (x 400: right of the pet zone) that keeps the screen lit and, like
-# any touch, stops what the pet was doing. The screen dims 30 s after the last touch.
+# any touch, stops what the pet was doing.
+# The dim gate (shots 14 to 14e) is a 1.75C check: its default screen-off is 60 s, so the
+# screen dims 30 s after the last touch. The original 1.75 defaults to "never" (dims at 90 s),
+# so there those shots are still lit: 14-dimmed-calm shows a rest bubble, 14c is still
+# dozing and serial.log has one more "idle: doze done" line. Everything else is the same on
+# both boards.
 # What to look at: the emote bubble by the pet's head, under the status line, inside the round
 # panel; the ball on the ground above the bars; nothing over the header, bars or buttons.
 battery 80
@@ -106,7 +111,7 @@ wait 33s
 shot 14-dimmed-calm
 
 # dimming cuts a doze short: it strolls or stands instead, and the cut nap gives nothing
-# (no "idle:" line). The screen dims 30 s after the tap.
+# (no "idle:" line). The screen dims 30 s after the tap (1.75C).
 tap 400 200
 wait 25s
 idle doze
@@ -116,7 +121,7 @@ wait 4s
 shot 14c-the-dim-cut-the-doze
 wait 15s
 
-# an emote showing when the screen dims goes at once (dims 30 s after the tap). The two
+# an emote showing when the screen dims goes at once (dims 30 s after the tap, 1.75C). The two
 # looks only shift the simulator's fixed random sequence so that this stand comes with a
 # heart (a 1-in-3 roll) on the 1.75C; 14d shows it, 14e (dimmed, the heart's time not yet up)
 # doesn't. The 1.75's sequence differs, so there 14d may come without one.
