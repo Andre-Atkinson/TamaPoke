@@ -2545,6 +2545,8 @@ TEST(quietalerts, evolve_chime_due_in_quiet_hours_is_spent_silently) {
   EvoChime c;
   CHECK_MSG(!c.update(true, 4, 16, true), "the button appears in quiet hours: no chime");
   CHECK(c.quieted);
+  CHECK(!c.update(true, 4, 16, true));  // still up, still quiet hours
+  CHECK_MSG(!c.quieted, "only the pass it came due on is a silent one (one serial line, not one a pass)");
   CHECK_MSG(!c.update(true, 4, 16, false), "quiet hours end with the button still there: no chime then");
   CHECK(!c.quieted);
   CHECK(!c.update(false, 4, 16, false));  // a need dips under 40
@@ -2576,6 +2578,8 @@ TEST(quietalerts, run_away_warning_due_in_quiet_hours_is_spent_silently) {
   RunawayWarn w;
   CHECK_MSG(!w.update(true, true), "the button appears in quiet hours: no warning");
   CHECK(w.quieted);
+  CHECK(!w.update(true, true));  // still up, still quiet hours
+  CHECK_MSG(!w.quieted, "only the pass it came due on is a silent one (one serial line, not one a pass)");
   CHECK_MSG(!w.update(true, false), "quiet hours end with the button still there: no warning then");
   CHECK(!w.quieted);
   CHECK(!w.update(false, false));
@@ -2708,6 +2712,44 @@ TEST(quietalerts, a_fit_earned_by_playing_a_game_sounds_in_quiet_hours) {
   CHECK(p.hasMedal(MED_FIT));
   CHECK_EQ(mockSfxCount(), n + 1);
   CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+// An IN SHAPE that exercise completes is gained by the next tick, as before #44, not inside
+// playGame() or trainStrength(): the game's result screen would hide its banner (4 s).
+TEST(quietalerts, an_exercise_fit_is_gained_by_the_next_tick_not_inside_the_game) {
+  Pet p;
+  exerciseAtNight(p);
+  p.trainStrength(30);
+  CHECK_EQ(p.weight, (uint8_t)0);
+  CHECK_MSG(!p.hasMedal(MED_FIT), "not inside trainStrength()");
+  CHECK(!p.showMedal());
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_FIT));
+  CHECK_MSG(p.showMedal(), "the banner starts with the tick, on the creature's screen");
+
+  Pet q;
+  exerciseAtNight(q);
+  q.playGame(GAME_KEEPY, 5);
+  CHECK_EQ(q.weight, (uint8_t)0);
+  CHECK_MSG(!q.hasMedal(MED_FIT), "not inside playGame()");
+  advance(q, 1);
+  CHECK(q.hasMedal(MED_FIT));
+}
+
+// Only the one tick right after the exercise counts as the player's: an hour later, the age's
+// level 10 at night is silent again
+TEST(quietalerts, only_the_tick_right_after_exercise_counts_as_the_players) {
+  Pet p;
+  exerciseAtNight(p);
+  p.weight = 50;  // the exercise leaves some: no IN SHAPE
+  p.trainStrength(30);
+  advance(p, 1);
+  CHECK(!p.hasMedal(MED_FIT));
+  p.ageMinutes = 9 * MINUTES_PER_LEVEL - 1;
+  uint32_t n = mockSfxCount();
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_LV10));
+  CHECK_EQ(mockSfxCount(), n);
 }
 
 // One tick that gains a medal of time (level 10) and one of the player's care (the favourite

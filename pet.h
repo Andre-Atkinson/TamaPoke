@@ -62,13 +62,15 @@ enum : uint16_t {
 };
 #define MED_COUNT 8
 // The medals time can earn by itself: the age levels, and "fit" (the weight burns off by
-// the minute, at level 5 or more; exercise burns it too). Their sound keeps out of quiet
-// hours (Pet::quietHours, #44) only when BOTH hold: the minute tick is what gains them
-// (checkMedals(true)) and every medal gained in that call is one of these. A medal the
-// player's action gains (checkMedals(false): care, a minigame, training, evolving) sounds
-// as before, a FIT that exercise earns included. The others need the player's care (the
-// favourite berry, the streak, the bond, a final form), so the player is there and they
-// sound as before, also when the tick is what notices them a minute later.
+// the minute, at level 5 or more). Their sound keeps out of quiet hours (Pet::quietHours,
+// #44) only when BOTH hold: the minute tick gains them with no exercise since the tick
+// before (checkMedals(true)), and every medal gained in that call is one of these.
+// Exercise burns weight too, so the tick right after a minigame or the bag checks with
+// checkMedals(false) and an IN SHAPE the exercise completed sounds. So do the day's first
+// care (registerCare) and hatching (checkMedals(false); the egg that hatches by itself is
+// level 1, which earns no medal of time). The other medals need the player's care (the
+// favourite berry, the streak, the bond, a final form reached by evolving), so they sound
+// as before, also when the tick is what notices them a minute later.
 #define MED_BY_TIME (MED_LV10 | MED_LV25 | MED_LV50 | MED_FIT)
 
 class Pet {
@@ -276,7 +278,8 @@ private:
   void registerCare();   // primer cuidado del dia: racha + vinculo
   void playReward(uint8_t n);  // recompensa de un minijuego, n = 0..GAME_SCORE_CAP
   void addBond(uint8_t amt);
-  void checkMedals(bool byTick);  // byTick: from the minute tick, not a player's action
+  void checkMedals(bool byTick);  // byTick: from the minute tick, no exercise since the last one
+  bool exercised = false;  // a minigame or the bag since the last tick (#44): RAM only
   bool allNeedsEmpty() const { return fullness == 0 && joy == 0 && energy == 0 && hygiene == 0; }
   void tick();
   void drainBody();  // parte del goteo de necesidades (comida, energia, caca, higiene)

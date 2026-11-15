@@ -190,8 +190,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   buttons, the level and the medal banner show as usual. Sounds the player
   starts, and medals the player's care earns (the favourite berry, the streak,
   the bond, a final form), play as before, and so does an IN SHAPE the player
-  earns by playing or training (exercise burns weight too): only the minute
-  tick noticing a medal of time alone is silent. The serial log has one line for each
+  earns by playing or training (exercise burns weight too; the medal comes with
+  the next minute, as before, after the game's result screen). Only a medal of
+  time alone, noticed by the minute tick with no game or training just before,
+  is silent. The serial log has one line for each
   one skipped (`alert evolve: silent (quiet)`, likewise `run-away`, `level N` and
   `medal`) and for each evolve or run-away alert that sounds. No new NVS keys.
 

@@ -123,6 +123,8 @@ void Pet::tick() {
                             // inicial o huevo: si el tiempo corriera aqui, el
                             // huevo eclosionaria solo a los 3 min con la especie
                             // sorteada y se perderia la eleccion del jugador
+  bool afterExercise = exercised;  // a minigame or the bag since the last tick (#44)
+  exercised = false;
   ageMinutes++;
 
   if (isEgg()) {
@@ -194,7 +196,12 @@ void Pet::tick() {
                            // podia ganar en todo un dia y el vinculo se atascaba
   }
 
-  checkMedals(true);  // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick
+  // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick.
+  // Exercise burns weight too: right after a minigame or the bag this tick's medals count as
+  // the player's (#44), so an IN SHAPE that the exercise completed sounds in quiet hours. It
+  // is gained here, a minute at most after the game, as before #44: gained inside the game,
+  // its banner would run out under the result screen.
+  checkMedals(!afterExercise);
 
   // abandono total: con TODO a cero durante una hora queda lista para escaparse;
   // NO se va sola, la dispara el usuario con el boton (final triste, lo presencia)
@@ -449,7 +456,7 @@ void Pet::addBond(uint8_t amt) {
   bondToday += amt;
 }
 
-// byTick: the minute tick is the caller, not an action of the player (see MED_BY_TIME).
+// byTick: the minute tick is the caller and no exercise came before it (see MED_BY_TIME).
 void Pet::checkMedals(bool byTick) {
   if (isEgg()) return;
   uint16_t before = medals;
@@ -664,7 +671,7 @@ void Pet::playReward(uint8_t n) {
   if (n >= 5) heartUntil = millis() + HEART_MS;
   addBond(2);
   registerCare();
-  checkMedals(false);  // el ejercicio quema peso: un IN SHAPE ganado asi suena siempre (#44)
+  exercised = true;  // el ejercicio quema peso: el proximo tick ve un IN SHAPE como del jugador (#44)
   save();
 }
 
@@ -687,7 +694,7 @@ uint8_t Pet::trainStrength(uint16_t hits) {
   if (hits > strHi) strHi = hits;   // record de golpes
   addBond(2);
   registerCare();
-  checkMedals(false);  // idem: el peso quemado puede dar IN SHAPE (#44)
+  exercised = true;  // idem (#44)
   save();
   return gain;
 }
