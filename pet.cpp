@@ -147,7 +147,11 @@ void Pet::tick() {
     return;
   }
 
-  if (ageMinutes % MINUTES_PER_LEVEL == 0) sfxPlay(SFX_LEVEL);  // subio de nivel (despierto)
+  // subio de nivel (despierto); in quiet hours silently (#44): nobody asked for it
+  if (ageMinutes % MINUTES_PER_LEVEL == 0) {
+    if (!quietHours) sfxPlay(SFX_LEVEL);
+    else Serial.printf("alert level %u: silent (quiet)\n", level());
+  }
 
   // Goteo de necesidades. Ritmo normal: cada minuto. Ritmo relajado: solo los
   // minutos pares (la mitad de rapido). Todo lo demas de este tick (edad, peso,
@@ -461,7 +465,10 @@ void Pet::checkMedals() {
     for (uint16_t m = gained; m; m &= (m - 1)) totalMedals++;
     newMedal = gained;
     medalUntil = millis() + 4000;
-    if (!sleeping) sfxPlay(SFX_MEDAL);
+    // a medal only time earned is silent in quiet hours (#44); the banner shows anyway
+    bool byTimeOnly = !(gained & ~MED_BY_TIME);
+    if (!sleeping && quietHours && byTimeOnly) Serial.println("alert medal: silent (quiet)");
+    else if (!sleeping) sfxPlay(SFX_MEDAL);
     save();
   }
 }

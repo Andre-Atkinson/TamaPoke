@@ -99,6 +99,15 @@ inline bool attnQuiet(uint8_t bedPreset, bool clockKnown, uint16_t minuteOfDay) 
   return isBedtime(p, minuteOfDay);
 }
 
+// attnQuiet() from what the sketch holds: the wall-clock epoch (pet.lastSeenEpoch, 0 = never
+// set) and whether the clock is stale (bedEdge.stale(): reseeded after a full power-off and
+// not set since). The attention calls use it, and so do the sounds nobody asked for (#44):
+// the evolve chime and the run-away warning (loop()), the hourly level-up and a medal that
+// time earned (Pet::tick(), through Pet::quietHours).
+inline bool attnQuietAt(uint8_t bedPreset, uint32_t epoch, bool clockStale) {
+  return attnQuiet(bedPreset, epoch != 0 && !clockStale, bedMinuteOfDay(epoch));
+}
+
 // How the screen is when a call is ready to go out.
 enum AttnScreen : uint8_t {
   ATTN_SCR_LIT = 0,     // on, possibly dimmed

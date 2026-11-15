@@ -61,6 +61,12 @@ enum : uint16_t {
   MED_FINAL = 1 << 6, MED_FIT = 1 << 7,
 };
 #define MED_COUNT 8
+// The medals time earns by itself, noticed by the minute tick: the age levels, and "fit"
+// (the weight burns off by the minute, at level 5 or more). Their sound keeps out of quiet
+// hours (Pet::quietHours, #44). The others need the player's care (the favourite berry, the
+// streak, the bond, evolving or hatching into a final form), so the player is there and
+// they sound as before, also when the tick is what notices them a minute later.
+#define MED_BY_TIME (MED_LV10 | MED_LV25 | MED_LV50 | MED_FIT)
 
 class Pet {
 public:
@@ -146,6 +152,10 @@ public:
   // the last touch. A PMU that never answered counts as unplugged, because the
   // firmware's usbPresent() reports true in that case. RAM only, never saved.
   void setCharger(bool pmuOk, bool usb, uint32_t idleMs);
+  // Quiet hours (attnQuietAt, attention.h; #44): the sketch sets it on every loop pass,
+  // before update(). While it holds, tick() keeps the sounds nobody asked for to itself:
+  // the hourly level-up and a medal only time earned (MED_BY_TIME). RAM only, never saved.
+  bool quietHours = false;
   // A finished doze or ball game on the main screen (#22, idleplan.h): a little energy or
   // joy, already capped per hour by the caller. Never lowers anything, and is not the
   // player's care: no streak, bond, heart or save of its own (the periodic one keeps it).
@@ -282,18 +292,43 @@ private:
 // used to chime. A new form (evolve()) chimes again at the same level; that also covers
 // a new pet: it starts as an egg (speciesId -1), which the loop always sees in between,
 // so the species change clears chimedLevel and the level check needs no reset of its own.
+//
+// `quiet` is quiet hours (attnQuietAt, attention.h; #44). A chime that comes due then is
+// spent silently, as if it had sounded: it never sounds later, not when quiet hours end
+// and not when the button comes back at the same level. The button shows anyway. The
+// sketch's EvoChime lives in RAM, so a reboot with the button showing chimes once more,
+// outside quiet hours only (after a full power-off the clock is stale, which is quiet).
+// `quieted` says the last update() was such a silent one (for the serial log).
 struct EvoChime {
   bool wasReady = false;
   int16_t species = -1;      // the form last seen
   uint16_t chimedLevel = 0;  // 0 = none yet (levels start at 1)
-  bool update(bool ready, int16_t speciesNow, uint16_t level) {
+  bool quieted = false;
+  bool update(bool ready, int16_t speciesNow, uint16_t level, bool quiet) {
     if (speciesNow != species) {
       species = speciesNow;
       chimedLevel = 0;
     }
-    bool chime = ready && !wasReady && level != chimedLevel;
-    if (chime) chimedLevel = level;
+    bool due = ready && !wasReady && level != chimedLevel;
+    if (due) chimedLevel = level;
     wasReady = ready;
-    return chime;
+    quieted = due && quiet;
+    return due && !quiet;
+  }
+};
+
+// "About to run away" warning (the sketch, fed canRunawayNow() on every loop pass): one
+// SFX_DENY when the run-away button appears. It comes due again only after the button
+// went away (a single care saves the pet) and came back. In quiet hours (`quiet`, as for
+// EvoChime) it is spent silently and does not sound later; the button shows anyway, and
+// the pet never runs away by itself (the player has to press the button).
+struct RunawayWarn {
+  bool wasReady = false;
+  bool quieted = false;  // the last update() came due in quiet hours (for the serial log)
+  bool update(bool ready, bool quiet) {
+    bool due = ready && !wasReady;
+    wasReady = ready;
+    quieted = due && quiet;
+    return due && !quiet;
   }
 };

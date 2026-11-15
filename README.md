@@ -103,6 +103,15 @@ While **awake**, per minute:
   opens by itself to ask, or `board.py clock`); it then acts as if the device had just started, so at 22:30 the
   creature goes to sleep and at 14:00 nothing happens.
   Changing the setting never puts the pet to sleep or wakes it by itself.
+- 🔕 **Quiet hours for its own sounds:** the sounds the creature makes by itself, with
+  nobody touching it, keep out of quiet hours: the "ready to evolve" chime, the "about
+  to run away" warning, the hourly level-up and the medal that time earns (level 10,
+  25 or 50, and **IN SHAPE**). Quiet hours are the attention calls' (the bedtime window,
+  or 22:00–07:00 if bedtime is off, and any time the clock hasn't been set since a
+  power-off). A sound that comes due then is skipped, not saved for the morning; the
+  evolve or run-away button, the new level and the medal banner show as usual. Sounds
+  you start (a tap, a minigame, care that earns a medal) play as before, and asleep it
+  makes no sound at all.
 - 🔌 **Self-care while charging** (always on): plugged into USB and untouched for
   **10 minutes**, the pet looks after itself a little. Once a minute, the first
   need under **40**, in the order FOOD, HYG (which also clears the poops), ENE,
