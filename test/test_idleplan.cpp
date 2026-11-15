@@ -83,6 +83,22 @@ TEST(IdlePlan, an_activity_the_sprite_lacks_weighs_nothing) {
   CHECK(none.v[IDLE_HOP] > 0);
 }
 
+// idleAvailable() (the simulator's forced picks) agrees with the weights: what it allows
+// can be picked in that repertoire, what it refuses never is
+TEST(IdlePlan, only_the_calm_activities_are_available_when_calm) {
+  for (int calm = 0; calm < 2; calm++)
+    for (int mi : { (int)(BASE | GESTURES), (int)BASE, (int)bit(PMD_IDLE) }) {
+      IdleIn in = needs(30, 90, 30, 0, 23, (uint16_t)mi, calm);  // hungry, happy, weary, at night
+      W w = weights(in);
+      for (uint8_t a = 0; a < IDLE_ACTS; a++) {
+        bool ok = idleAvailable(in, a);
+        CHECK_MSG(ok == (w.v[a] > 0), std::string(IDLE_ACT_NAMES[a]) + (calm ? " calm" : " full"));
+        if (calm && ok) CHECK(idleCalmAct(a));
+      }
+    }
+  CHECK(!idleAvailable(needs(80, 80, 80), IDLE_ACTS));
+}
+
 TEST(IdlePlan, the_calm_repertoire_is_a_stroll_a_gesture_or_standing_with_no_emote) {
   int seen[IDLE_ACTS] = {};
   for (uint32_t seed = 1; seed <= 3000; seed++) {

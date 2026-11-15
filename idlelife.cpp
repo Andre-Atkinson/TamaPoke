@@ -89,6 +89,9 @@ static void idleFinish(uint32_t now) {
                                            : IDLE_PERK_KINDS;
   if (kind == IDLE_PERK_KINDS) return;
   uint8_t n = perks.grant(kind, now);
+  // one line per finished doze or ball game: a handful an hour at most
+  Serial.printf("idle: %s done, %s +%u%s\n", kind == IDLE_PERK_ENERGY ? "doze" : "ball",
+                kind == IDLE_PERK_ENERGY ? "energy" : "joy", (unsigned)n, n ? "" : " (hourly cap)");
   if (!n) return;
   if (kind == IDLE_PERK_ENERGY) pet.idlePerk(n, 0);
   else pet.idlePerk(0, n);

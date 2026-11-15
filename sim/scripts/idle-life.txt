@@ -70,7 +70,19 @@ idle walk
 wait 2s
 shot 11-walk
 
-# a touch wakes a doze at once
+# finished naps: +3 energy each, then the hourly cap (serial.log: "idle: doze done, energy +3",
+# "+3", then "+0 (hourly cap)"). No touch for the whole nap; the screen dims 30 s after the tap.
+tap 400 200
+idle doze
+wait 16s
+tap 400 200
+idle doze
+wait 16s
+tap 400 200
+idle doze
+wait 16s
+
+# a touch wakes a doze at once, and a nap cut short gives nothing (no "idle:" line)
 tap 400 200
 idle doze
 wait 2s
