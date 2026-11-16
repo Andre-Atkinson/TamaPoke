@@ -111,17 +111,26 @@ TEST(Bubble, no_stars_line_when_the_weather_hides_the_stars) {
   CHECK(sawMorning);
 }
 
-TEST(Bubble, the_mix_is_about_30_50_20_and_80_20_without_a_time_line) {
+// the nature lines' total in a count by line (#86)
+static int natureCount(const int n[BUB_LINES]) {
+  int t = 0;
+  for (int l = BUB_NAT_FIRST; l < BUB_GREET_FIRST; l++) t += n[l];
+  return t;
+}
+
+TEST(Bubble, the_mix_is_30_time_20_nature_30_friendly_20_love_and_60_friendly_without_a_time_line) {
   int n[BUB_LINES] = {};
   for (uint32_t r = 0; r < 30000; r++) n[bubblePick(calm(true, 7, true), r)]++;
   CHECK_EQ(n[BUB_MORNING], 9000);
-  CHECK_EQ(n[BUB_HI] + n[BUB_HAPPY] + n[BUB_PAT], 15000);
+  CHECK_EQ(natureCount(n), 6000);  // #86
+  CHECK_EQ(n[BUB_HI] + n[BUB_HAPPY] + n[BUB_PAT], 9000);
   CHECK_EQ(n[BUB_LOVE_NAME], 6000);
   CHECK_EQ(n[BUB_LOVE], 0);
-  for (int l = BUB_HI; l <= BUB_PAT; l++) CHECK_RANGE(n[l], 4000, 6000);  // each friendly line comes up
+  for (int l = BUB_HI; l <= BUB_PAT; l++) CHECK_RANGE(n[l], 2400, 3600);  // each friendly line comes up
   int m[BUB_LINES] = {};
   for (uint32_t r = 0; r < 30000; r++) m[bubblePick(calm(true, 13, false), r)]++;
-  CHECK_EQ(m[BUB_HI] + m[BUB_HAPPY] + m[BUB_PAT], 24000);
+  CHECK_EQ(m[BUB_HI] + m[BUB_HAPPY] + m[BUB_PAT], 18000);
+  CHECK_EQ(natureCount(m), 6000);
   CHECK_EQ(m[BUB_LOVE], 6000);
   CHECK_EQ(m[BUB_LOVE_NAME], 0);  // no name: the line without one
 }
@@ -130,13 +139,17 @@ TEST(Bubble, a_line_other_than_a_need_is_never_said_twice_in_a_row) {
   for (int last = 0; last < BUB_LINES; last++)
     for (uint8_t h : {7, 13, 22})
       for (bool milk : {false, true})  // the warm-milk hint (#13) due or not
-        for (uint32_t r = 0; r < 2000; r++) {
-          BubbleIn in = calm(true, h, true, (uint8_t)last);
-          in.milkHint = milk;
-          uint8_t l = bubblePick(in, r);
-          CHECK_MSG(l != last, "line " + std::string(BUBBLE_KEYS[last]) + " twice, r=" + std::to_string(r));
-          CHECK(l >= BUB_MORNING && l < BUB_LINES);
-        }
+        for (uint8_t nat = 0; nat < NAT_COUNT; nat++)  // every nature (#86)...
+          for (bool hatch : {false, true})               // ...and its line after a hatch due or not
+            for (uint32_t r = 0; r < 2000; r += 3) {
+              BubbleIn in = calm(true, h, true, (uint8_t)last);
+              in.milkHint = milk;
+              in.nature = nat;
+              in.hatchLine = hatch;
+              uint8_t l = bubblePick(in, r);
+              CHECK_MSG(l != last, "line " + std::string(BUBBLE_KEYS[last]) + " twice, r=" + std::to_string(r));
+              CHECK(l >= BUB_MORNING && l < BUB_LINES);
+            }
 }
 
 // ---------------------------------------------------------------- the warm-milk hint (#13)
@@ -612,3 +625,139 @@ TEST(Bubble, a_due_greeting_comes_first_even_before_a_need) {
   CHECK_EQ(bubblePick(in, 7), (uint8_t)BUB_HUNGRY);
 }
 
+// ---------------------------------------------------------------- the natures (#86)
+// For comparing the stat card's name (capitals) with the line: ASCII, the CP437 capitals the
+// font has (\200 C-cedilla, \220 E-acute) and the Latin-1 ones of ptglyphs.h.
+static std::string folded(const char *s) {
+  std::string o;
+  for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+    unsigned char c = *p;
+    if (c >= 'A' && c <= 'Z') c = (unsigned char)(c + 32);
+    else if (c == 0x80) c = 0x87;
+    else if (c == 0x90) c = 0x82;
+    else if (c >= 0xC0 && c <= 0xDE && c != 0xD7) c = (unsigned char)(c + 32);
+    o += (char)c;
+  }
+  return o;
+}
+
+TEST(Bubble, the_nature_lines_follow_the_strings_and_the_first_names_the_nature) {
+  CHECK_EQ((int)S_SAY_HUNGRY + bubbleNatureLine(NAT_EASYGOING, 0), (int)S_SAY_EASYGOING_1);
+  CHECK_EQ((int)S_SAY_HUNGRY + bubbleNatureLine(NAT_GREEDY, 1), (int)S_SAY_GREEDY_2);
+  CHECK_EQ((int)S_SAY_HUNGRY + bubbleNatureLine(NAT_PLAYFUL, 2), (int)S_SAY_PLAYFUL_3);
+  CHECK_EQ((int)S_SAY_HUNGRY + bubbleNatureLine(NAT_TIDY, 0), (int)S_SAY_TIDY_1);
+  CHECK_EQ((int)S_SAY_HUNGRY + bubbleNatureLine(NAT_LAZY, 2), (int)S_SAY_LAZY_3);
+  CHECK_EQ((int)S_SAY_LAZY_3 + 1, (int)S_SAY_CHRISTMAS_FMT);
+  CHECK_EQ((int)bubbleNatureLine(NAT_LAZY, 2) + 1, (int)BUB_GREET_FIRST);
+  CHECK(!bubbleIsNatureLine(BUB_LOVE));
+  CHECK(bubbleIsNatureLine(BUB_NAT_FIRST));
+  CHECK(bubbleIsNatureLine(bubbleNatureLine(NAT_LAZY, 2)));
+  CHECK(!bubbleIsNatureLine(BUB_CHRISTMAS));
+  // a nature out of range says easygoing's (Pet::load() reads it as easygoing)
+  CHECK_EQ(bubbleNatureLine(NAT_COUNT, 1), bubbleNatureLine(NAT_EASYGOING, 1));
+  CHECK_EQ(bubbleNatureLine(200, 0), (uint8_t)BUB_NAT_FIRST);
+  CHECK_EQ(bubbleNatureLine(NAT_TIDY, 4), bubbleNatureLine(NAT_TIDY, 1));  // i taken modulo BUB_NAT_LINES
+  for (uint8_t nat = 0; nat < NAT_COUNT; nat++)
+    for (uint8_t i = 0; i < BUB_NAT_LINES; i++) {
+      uint8_t l = bubbleNatureLine(nat, i);
+      CHECK_EQ(std::string(BUBBLE_KEYS[l]), std::string(NATURE_KEYS[nat]) + "-" + std::to_string(i + 1));
+      CHECK(!bubbleTakesName(l, true));  // no name in them
+    }
+  // the first line says the nature's name as the stat card's profile page does, in each language
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    for (uint8_t nat = 0; nat < NAT_COUNT; nat++) {
+      std::string line = folded(sayText(bubbleNatureLine(nat, 0)));
+      CHECK_MSG(line.find(folded(natureName(nat))) != std::string::npos,
+                line + " does not name " + natureName(nat) + " in " + LANG_ID[lang]);
+    }
+  }
+  gLang = LANG_EN;
+  CHECK_STREQ(sayText(bubbleNatureLine(NAT_PLAYFUL, 0)), "I'm playful!");
+  CHECK_STREQ(sayText(bubbleNatureLine(NAT_LAZY, 2)), "Nice and slow...");
+  gLang = LANG_PT;
+  CHECK_STREQ(sayText(bubbleNatureLine(NAT_PLAYFUL, 0)), "Sou brincalh\343o!");
+  CHECK_STREQ(sayText(bubbleNatureLine(NAT_LAZY, 0)), "Sou pregui\207oso!");
+  gLang = LANG_DEFAULT;
+}
+
+TEST(Bubble, a_nature_says_only_its_own_lines_one_time_in_five) {
+  for (int nat = 0; nat <= NAT_COUNT + 1; nat++) {  // the last two out of range: easygoing's
+    uint8_t own = nat < NAT_COUNT ? (uint8_t)nat : (uint8_t)NAT_EASYGOING;
+    for (uint8_t h : {7, 13, 22}) {  // a morning line, none, a night line
+      int n[BUB_LINES] = {};
+      for (uint32_t r = 0; r < 30000; r++) {
+        BubbleIn in = calm(true, h, true);
+        in.nature = (uint8_t)(nat == NAT_COUNT + 1 ? 200 : nat);
+        n[bubblePick(in, r)]++;
+      }
+      CHECK_EQ(natureCount(n), 6000);
+      for (uint8_t other = 0; other < NAT_COUNT; other++)
+        for (uint8_t i = 0; i < BUB_NAT_LINES; i++) {
+          int c = n[bubbleNatureLine(other, i)];
+          if (other == own) CHECK_RANGE(c, 1600, 2400);  // each of its three comes up
+          else CHECK_MSG(c == 0, std::string(BUBBLE_KEYS[bubbleNatureLine(other, i)]) + " from " + NATURE_KEYS[own]);
+        }
+      CHECK_EQ(n[BUB_LOVE_NAME], 6000);  // the player's name keeps its share
+    }
+  }
+}
+
+TEST(Bubble, after_a_hatch_the_line_that_names_the_nature_comes_first_after_a_greeting_or_a_need) {
+  for (uint8_t nat = 0; nat < NAT_COUNT; nat++) {
+    uint8_t naming = bubbleNatureLine(nat, 0);
+    for (uint32_t r = 0; r < 1000; r += 7) {
+      BubbleIn in = calm(true, 20, true);
+      in.nature = nat;
+      in.hatchLine = true;
+      in.milkHint = true;
+      CHECK_EQ(bubblePick(in, r), naming);  // before the warm-milk hint and every ordinary line
+      in.needs = attnLevels(80, 80, 20, 80);  // tired: the need's own line first
+      CHECK_EQ(bubblePick(in, r), (uint8_t)BUB_TIRED);
+      in.needs = attnLevels(80, 80, 80, 80);
+      in.greet = BUB_CHRISTMAS;  // a special day's greeting that is due comes first
+      CHECK_EQ(bubblePick(in, r), (uint8_t)BUB_CHRISTMAS);
+      in.greet = BUB_NONE;
+      in.last = naming;  // just said by chance: not twice in a row, it waits
+      CHECK(bubblePick(in, r) != naming);
+      CHECK_EQ(bubblePick(in, r), (uint8_t)BUB_MILK);
+    }
+    // not due: only now and then, by chance
+    int said = 0;
+    for (uint32_t r = 0; r < 30000; r++) {
+      BubbleIn in = calm(true, 13, true);
+      in.nature = nat;
+      said += bubblePick(in, r) == naming;
+    }
+    CHECK_RANGE(said, 1600, 2400);
+  }
+}
+
+TEST(Bubble, the_hatch_line_is_due_from_a_hatch_seen_until_its_line_is_said) {
+  HatchLine h;
+  for (int i = 0; i < 5; i++) CHECK(!h.watch(false));  // a pet from the start: nothing due
+  CHECK(!h.due());
+  CHECK(!h.watch(true));  // an egg
+  CHECK(!h.due());
+  CHECK(!h.watch(true));
+  CHECK(h.watch(false));  // it hatched: true on that pass only
+  CHECK(h.due());
+  CHECK(!h.watch(false));
+  CHECK(h.due());  // still due on later passes
+  h.said(BUB_HI, NAT_TIDY);  // another line: still due
+  h.said(bubbleNatureLine(NAT_PLAYFUL, 0), NAT_TIDY);  // another nature's: still due
+  h.said(bubbleNatureLine(NAT_TIDY, 1), NAT_TIDY);    // its nature's other line: still due
+  CHECK(h.due());
+  h.said(bubbleNatureLine(NAT_TIDY, 0), NAT_TIDY);  // said: done
+  CHECK(!h.due());
+  CHECK(!h.watch(false));
+  CHECK(!h.due());  // and it does not come back
+  // a pet that leaves before saying it: the egg ends it, the next hatch makes it due again
+  CHECK(!h.watch(true));
+  CHECK(h.watch(false));
+  CHECK(h.due());
+  CHECK(!h.watch(true));
+  CHECK(!h.due());
+  CHECK(h.watch(false));
+  CHECK(h.due());
+}

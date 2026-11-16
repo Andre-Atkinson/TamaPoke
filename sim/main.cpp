@@ -259,6 +259,10 @@ int main(int argc, char **argv) {
         pet.nature = (uint8_t)c.a;
         run(50);
         break;
+      case OP_POOPS:
+        pet.poops = (uint8_t)c.a;
+        run(50);
+        break;
       case OP_TRAIN:
         pet.trAtk = (uint8_t)c.a;
         pet.trDef = (uint8_t)c.b;

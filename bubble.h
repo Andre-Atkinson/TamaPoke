@@ -8,9 +8,11 @@
 //    as the "!" bubble, the status line and the attention call (attnShown, ATTN_LOW), so
 //    the four never disagree. Then, in the evening, now and then a hint at warm milk (#13,
 //    MilkHint). Otherwise, at random, a morning or night line (only with a clock that is set
-//    and not stale), a friendly line, or "I love you" (with the player's name when one is
-//    set, owner.h).
+//    and not stale), a line of the pet's nature (#86), a friendly line, or "I love you" (with
+//    the player's name when one is set, owner.h). Right after a hatch the nature's first line,
+//    which names it as the stat card does, comes before the warm-milk hint and the rest.
 //  - bubbleChoose(): bubblePick() plus the greeting's rules (a few a day, never in quiet hours).
+//  - HatchLine: whether a pet that has just hatched still has to name its nature (#86).
 //  - BubbleTimer: when. A bubble is due 1-2 min after the last one started. It waits
 //    until the pet screen has been free and awake for BUBBLE_SETTLE_MS, then shows for
 //    BUBBLE_SHOW_MS. With the default settings the screen dims after 90 s untouched (and
@@ -23,6 +25,9 @@
 #include <stdio.h>
 #include "attention.h"
 #include "holiday.h"
+#include "nature.h"
+
+#define BUB_NAT_LINES 3  // each nature's lines (#86)
 
 // The lines, in the order of their StrIds (S_SAY_HUNGRY...). The four needs come first,
 // in AttnNeed order.
@@ -33,15 +38,27 @@ enum BubbleLine : uint8_t {
   BUB_HI, BUB_HAPPY, BUB_PAT,                      // the friendly lines
   BUB_LOVE_NAME,                                   // "I love you, %s!" (a name is set)
   BUB_LOVE,                                        // "I love you!" (no name)
+  // the natures' lines (#86, nature.h): BUB_NAT_LINES for each nature, in NAT_* order
+  // (bubbleNatureLine). The first names the nature as the stat card does ("I'm playful!"),
+  // the others show it. None asks for care: only a low need's line does.
+  BUB_NAT_FIRST,
   // the greetings of the special days (#26, holiday.h), in Greet order: "Merry Christmas,
   // <name>!" (or without the name when none is set)
-  BUB_CHRISTMAS, BUB_NEW_YEAR, BUB_VALENTINE, BUB_EASTER, BUB_HALLOWEEN, BUB_BIRTHDAY,
+  BUB_CHRISTMAS = BUB_NAT_FIRST + NAT_COUNT * BUB_NAT_LINES, BUB_NEW_YEAR, BUB_VALENTINE, BUB_EASTER, BUB_HALLOWEEN, BUB_BIRTHDAY,
   BUB_LINES
 };
 #define BUB_GREET_FIRST BUB_CHRISTMAS  // = BUB_GREET_FIRST + Greet - GREET_CHRISTMAS
 
+// Line i (0 names the nature, 1 and 2 show it; taken modulo BUB_NAT_LINES) of `nature`; a
+// nature out of range says easygoing's, as Pet::load() reads it.
+constexpr uint8_t bubbleNatureLine(uint8_t nature, uint8_t i) {
+  return (uint8_t)(BUB_NAT_FIRST + (nature < NAT_COUNT ? nature : (uint8_t)NAT_EASYGOING) * BUB_NAT_LINES +
+                   i % BUB_NAT_LINES);
+}
+constexpr bool bubbleIsNatureLine(uint8_t line) { return line >= BUB_NAT_FIRST && line < BUB_GREET_FIRST; }
+
 // The string a line says, as its offset from S_SAY_HUNGRY in i18n.h (bubble.cpp checks the
-// order): one string a line up to BUB_LOVE, then two for each greeting, with the player's
+// order): one string a line up to the natures' last (S_SAY_LAZY_3), then two for each greeting, with the player's
 // name and without (S_SAY_CHRISTMAS_FMT, S_SAY_CHRISTMAS...).
 constexpr int bubbleStrOffset(uint8_t line, bool named) {
   if (line >= BUB_GREET_FIRST && line < BUB_LINES) return BUB_GREET_FIRST + 2 * (line - BUB_GREET_FIRST) + (named ? 0 : 1);
@@ -56,6 +73,8 @@ constexpr bool bubbleTakesName(uint8_t line, bool named) {
 // each line's name in the serial log ("say hungry") and in the simulator's "say" step
 inline const char *const BUBBLE_KEYS[BUB_LINES] = {
   "hungry", "bath", "tired", "bored", "morning", "stars", "milk", "hi", "happy", "pat", "love-name", "love",
+  "easygoing-1", "easygoing-2", "easygoing-3", "greedy-1", "greedy-2", "greedy-3",
+  "playful-1", "playful-2", "playful-3", "tidy-1", "tidy-2", "tidy-3", "lazy-1", "lazy-2", "lazy-3",
   "christmas", "newyear", "valentine", "easter", "halloween", "birthday",
 };
 
@@ -71,6 +90,10 @@ inline const char *const BUBBLE_KEYS[BUB_LINES] = {
 #define BUBBLE_MORNING_TO 10  // exclusive
 #define BUBBLE_NIGHT_FROM 20
 #define BUBBLE_NIGHT_TO 6     // exclusive, the next morning
+// The share of the ordinary picks (r % 100) a nature's line takes (#86): 20 %, always,
+// right after the time lines' 30 so it never takes their place.
+#define BUBBLE_NAT_FROM 30
+#define BUBBLE_NAT_TO 50  // exclusive
 
 struct BubbleIn {
   AttnLevels needs;
@@ -81,33 +104,43 @@ struct BubbleIn {
   uint8_t last;     // the previous line, or BUB_NONE
   uint8_t greet = BUB_NONE;  // a special day's greeting that is due (HolidayGreeter, holiday.h), or BUB_NONE
   bool milkHint = false;  // the warm-milk hint is due (MilkHint::due, #13)
+  uint8_t nature = NAT_EASYGOING;  // the pet's (Pet::nature, #86); out of range counts as easygoing
+  bool hatchLine = false;  // the pet just hatched: the nature's first line is due (#86)
 };
 
 // r: any random number. A special day's greeting that is due comes first, even before a
 // need: it is rare (holiday.h) and the need's "!" bubble is back as soon as it ends.
-// Then a low need, then the warm-milk hint when it is due (#13). Otherwise r % 100 picks the
-// kind (about 30% a time line when one applies, 50% friendly, 20% love; 80% friendly when no
-// time line applies) and r / 100 which friendly line. A need repeats while it lasts; any
-// other line is not said twice in a row (the milk hint either, even MILK_HINT_GAP_S apart:
-// then it waits for the next bubble, and is only counted once said).
+// Then a low need, then right after a hatch the line that names the pet's nature (#86), then
+// the warm-milk hint when it is due (#13). Otherwise r % 100 picks the kind: 30% a time line
+// when one applies (r % 100 under 30), 20% a line of the pet's nature (30-49), 20% love
+// (80-99), and the rest friendly (30% with a time line, 60% without); r / 100 picks which
+// friendly or nature line. A need repeats while it lasts; any other line is not said twice in
+// a row (the hatch line and the milk hint either: then they wait for the next bubble, and
+// are only counted once said).
 inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
   if (in.greet >= BUB_GREET_FIRST && in.greet < BUB_LINES) return in.greet;
   uint8_t need = attnShown(in.needs);
   if (need < ATTN_NEEDS) return (uint8_t)(BUB_HUNGRY + need);
+  uint8_t naming = bubbleNatureLine(in.nature, 0);
+  if (in.hatchLine && in.last != naming) return naming;
   if (in.milkHint && in.last != BUB_MILK) return BUB_MILK;
   uint32_t p = r % 100;
-  uint8_t friendly = (uint8_t)(BUB_HI + (r / 100) % BUB_FRIENDLY);
+  uint8_t which = (uint8_t)((r / 100) % BUB_FRIENDLY);  // BUB_FRIENDLY == BUB_NAT_LINES
+  uint8_t friendly = (uint8_t)(BUB_HI + which);
   uint8_t line;
   if (in.clockKnown && p < 30 && in.hour >= BUBBLE_MORNING_FROM && in.hour < BUBBLE_MORNING_TO) line = BUB_MORNING;
   else if (in.clockKnown && in.starsOut && p < 30 && (in.hour >= BUBBLE_NIGHT_FROM || in.hour < BUBBLE_NIGHT_TO))
     line = BUB_STARS;
+  else if (p >= BUBBLE_NAT_FROM && p < BUBBLE_NAT_TO) line = bubbleNatureLine(in.nature, which);
   else if (p < 80) line = friendly;
   else line = in.named ? BUB_LOVE_NAME : BUB_LOVE;
   if (line != in.last) return line;
-  // the same line again: a friendly one instead, never the one just said
-  if (line == friendly) return (uint8_t)(BUB_HI + (friendly - BUB_HI + 1) % BUB_FRIENDLY);
+  // the same line again: another of its kind, never the one just said
+  if (line == friendly) return (uint8_t)(BUB_HI + (which + 1) % BUB_FRIENDLY);
+  if (bubbleIsNatureLine(line)) return bubbleNatureLine(in.nature, (uint8_t)(which + 1));
   return friendly;
 }
+static_assert(BUB_FRIENDLY == BUB_NAT_LINES, "bubblePick() picks a friendly or nature line with the same index");
 
 // The warm-milk hint (#13): now and then in the evening the pet asks for warm milk, which the
 // moon button's strip gives. The evening runs from MILK_HINT_FROM until quiet hours begin
@@ -155,6 +188,36 @@ struct MilkHint {
     night_ = clock / 86400;
     count_ = 0;
   }
+};
+
+// The line after a hatch (#86): due from the first pass that sees a hatched pet after an
+// egg until its nature's first line is said (BubbleIn::hatchLine). watch() runs on every
+// loop pass, free screen or not: an egg is never free (petSceneFree), so the pet is always
+// seen as an egg first. In RAM: an egg that hatches while the board is off (Pet::syncClock)
+// is never seen, and its pet names its nature only when that line comes up by chance, as
+// every nature line does now and then.
+struct HatchLine {
+  // True on the pass the pet is first seen hatched: the caller forgets the last line said
+  // (BubbleIn::last), which was the previous pet's.
+  bool watch(bool egg) {
+    if (egg) {
+      egg_ = true;
+      due_ = false;  // a pet that left before saying it: the next one says its own
+      return false;
+    }
+    if (!egg_) return false;
+    egg_ = false;
+    due_ = true;
+    return true;
+  }
+  bool due() const { return due_; }
+  // a bubble showed `line`: the nature's first line, by the hatch or by chance, ends it
+  void said(uint8_t line, uint8_t nature) {
+    if (line == bubbleNatureLine(nature, 0)) due_ = false;
+  }
+
+ private:
+  bool egg_ = false, due_ = false;
 };
 
 // The line for a bubble that starts now: bubblePick() with a special day's greeting that is

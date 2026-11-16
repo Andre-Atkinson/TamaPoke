@@ -1,0 +1,116 @@
+# Natures in play (#86): the line a pet says by itself right after it hatches (it names its
+# nature), every nature's three lines by day, two by night, the longest beside the clock
+# badge, and a tidy pet strolling clear of the poops.
+# The steps mean the same on both boards: no step waits long enough for the screen to dim.
+# A manual check: run it in each language on both boards and look at the shots and the
+# "say ..." lines in the serial log; nothing compares them automatically.
+#   tools/sim.sh --board 175c --lang pt --script nature-bubbles --out shots/pt/
+# "say LINE" shows a line now (simulator only, not logged); "nature NAME" sets the nature
+# (simulator only). The nature is rolled at the hatch, so the first shot sets it straight
+# after, before the first bubble comes (3 s after the pet screen is free).
+clock none
+battery 80
+
+# a new game with no time: pick Charmander, skip the clock screen (the badge stays), hatch.
+# The first bubble comes by itself and names the nature: "say playful-1" in serial.log.
+wait 1s
+tap 233 220
+wait 1s
+swipe up
+serial HATCH
+nature playful
+wait 5s
+shot 01-hatch-line-by-itself-badge
+
+# beside the clock badge, the longest line in each language (tidy-3)
+say tidy-3
+wait 300ms
+shot 02-badge-longest-line
+
+# the clock set to 10:00: the badge goes; every nature's three lines
+serial TIME 1794564000
+wait 300ms
+nature easygoing
+say easygoing-1
+wait 300ms
+shot 03-easygoing-1
+say easygoing-2
+wait 300ms
+shot 04-easygoing-2
+say easygoing-3
+wait 300ms
+shot 05-easygoing-3
+nature greedy
+say greedy-1
+wait 300ms
+shot 06-greedy-1
+say greedy-2
+wait 300ms
+shot 07-greedy-2
+say greedy-3
+wait 300ms
+shot 08-greedy-3
+nature playful
+say playful-1
+wait 300ms
+shot 09-playful-1
+say playful-2
+wait 300ms
+shot 10-playful-2
+say playful-3
+wait 300ms
+shot 11-playful-3
+nature tidy
+say tidy-1
+wait 300ms
+shot 12-tidy-1
+say tidy-2
+wait 300ms
+shot 13-tidy-2
+say tidy-3
+wait 300ms
+shot 14-tidy-3
+nature lazy
+say lazy-1
+wait 300ms
+shot 15-lazy-1
+say lazy-2
+wait 300ms
+shot 16-lazy-2
+say lazy-3
+wait 300ms
+shot 17-lazy-3
+
+# night: 22:00 (TIME moves the scene at once)
+serial TIME 1794607200
+wait 300ms
+say lazy-2
+wait 300ms
+shot 18-night-lazy-2
+nature greedy
+say greedy-3
+wait 300ms
+shot 19-night-greedy-3
+
+# back to 10:00. A tidy pet with poops on the ground: its strolls keep to the right part of its
+# range (x 230 and on), clear of them ("poops N", simulator only). A tap on empty sky (x 400)
+# keeps the screen lit; "idle walk" starts a stroll, and the shot catches it on its way or
+# already there. Then without poops: its stroll may go anywhere again (the pet stands where
+# the last one ended, so 22 may or may not show it left of x 230).
+serial TIME 1794564000
+nature tidy
+poops 3
+tap 400 200
+idle walk
+wait 5s
+shot 20-tidy-strolls-clear-of-the-poops
+tap 400 200
+idle walk
+wait 5s
+shot 21-tidy-strolls-clear-again
+poops 0
+tap 400 200
+idle walk
+wait 5s
+shot 22-tidy-no-poops
+serial STATS

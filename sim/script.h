@@ -20,7 +20,9 @@
 //   wait DUR                 dejar correr el firmware DUR (alias: advance)
 //   serial LINEA             mandar una linea por la consola serie (HATCH, SPEC 25...)
 //   say LINE                 show a speech bubble now (#23, bubble.h): hungry bath tired
-//                            bored morning stars milk hi happy pat love-name love, and the
+//                            bored morning stars milk hi happy pat love-name love, the
+//                            natures' lines (#86) NATURE-1 NATURE-2 NATURE-3 for each of
+//                            easygoing greedy playful tidy lazy (playful-1...), and the
 //                            special days' greetings (#26) christmas newyear valentine
 //                            easter halloween birthday (with the name when one is set). It is laid
 //                            out as if it had come up by itself and still ends at once on
@@ -29,6 +31,9 @@
 //   nature NAME              the pet's nature now (#25, nature.h): easygoing greedy playful
 //                            tidy lazy. In RAM, as if it had hatched with it (the next
 //                            save keeps it). Only the simulator has this.
+//   poops N                  the poops on the ground now (0-3, #86: a tidy pet strolls clear
+//                            of them). In RAM, as if they had come by themselves. Only the
+//                            simulator has this.
 //   idle ACT                 the pet's next idle activity (#22: stand look walk rest doze hop
 //                            ball gesture seek), at once on a free, lit main screen; ignored
 //                            if its sprite can't show it. Only the simulator has this.
@@ -49,7 +54,7 @@ enum SimOp : uint8_t {
   OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING, OP_PMU,
   OP_TAP, OP_HOLD, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
   OP_WAIT, OP_SERIAL, OP_SHOT, OP_IDLE, OP_SAY, OP_NATURE,
-  OP_TRAIN, OP_GAME,
+  OP_TRAIN, OP_GAME, OP_POOPS,
 };
 
 struct SimCmd {

@@ -98,6 +98,11 @@ enum StrId : uint8_t {
   S_SAY_HUNGRY, S_SAY_BATH, S_SAY_TIRED, S_SAY_BORED, S_SAY_MORNING, S_SAY_STARS,
   S_SAY_MILK,  // the warm-milk hint (#13)
   S_SAY_HI, S_SAY_HAPPY, S_SAY_PAT, S_SAY_LOVE_FMT, S_SAY_LOVE,
+  // the natures' lines (#86), three for each nature in NAT_* order: the first names it as
+  // the stat card does (S_NAT_*), and none asks for care
+  S_SAY_EASYGOING_1, S_SAY_EASYGOING_2, S_SAY_EASYGOING_3, S_SAY_GREEDY_1, S_SAY_GREEDY_2, S_SAY_GREEDY_3,
+  S_SAY_PLAYFUL_1, S_SAY_PLAYFUL_2, S_SAY_PLAYFUL_3, S_SAY_TIDY_1, S_SAY_TIDY_2, S_SAY_TIDY_3,
+  S_SAY_LAZY_1, S_SAY_LAZY_2, S_SAY_LAZY_3,
   // the special days' greetings (#26, holiday.h), in BubbleLine order: each with the
   // player's name, then without
   S_SAY_CHRISTMAS_FMT, S_SAY_CHRISTMAS, S_SAY_NEW_YEAR_FMT, S_SAY_NEW_YEAR,

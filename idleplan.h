@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdint.h>
 #include "attention.h"  // ATTN_BUBBLE_Y_MIN: the play area's top, under the status line
+#include "nature.h"     // NAT_* (#86: the nature's small biases)
 #include "pet.h"        // PET_CHUBBY_WEIGHT
 #include "sdmon.h"      // PMD_* (the sprite's actions)
 
@@ -24,7 +25,17 @@
 // repertoire only, so all of them pass through a touch too.
 //
 // Idea from Mu-Muu/TamaPoke's behNext()/behEnd() and Pet::selfRest()/selfPlay() (MIT),
-// re-implemented here offline, without the weather. Personalities (#25) can add weights.
+// re-implemented here offline, without the weather.
+//
+// The pet's nature (#25, nature.h) shows in it (#86), looks only, in the full repertoire
+// (the calm one is what the pet always did): a playful pet plays ball and hops more, a lazy
+// one stands and rests more and walks and hops less, a greedy one goes to the food button a
+// little sooner (fullness under IDLE_GREEDY_HUNGRY, still well above the "!" at ATTN_LOW), and
+// a tidy one strolls clear of the poops while there are any, and looks about more. Easygoing
+// (and a nature out of range) changes nothing. The nature's weights go on before the needs'
+// and the hour's, so a tired playful pet still plays less. No duration, drain or perk
+// changes: the ball game's joy and the doze's energy keep IDLE_PERK_CAP an hour, and the lazy
+// pet's doze weight is everyone's.
 //
 // Training shows in it (#76), looks only: strength kicks the ball further (idleBallKick),
 // speed walks and chases a little faster (idleWalkPace), stamina hops a little longer
@@ -76,6 +87,7 @@ enum IdleEmote : uint8_t {
 #define IDLE_HAPPY 70    // joy over this, with energy left: hops and plays more
 #define IDLE_HUNGRY 40   // fullness under this: goes to the food button
 #define IDLE_CHUBBY PET_CHUBBY_WEIGHT  // weight over this (the "chubby" status): rests more, plays less
+#define IDLE_GREEDY_HUNGRY 50  // a greedy pet (#86) goes to the food button from here
 #define IDLE_NIGHT_FROM 20  // the night scene (render(): hour < 6 or >= 20): dozier
 #define IDLE_NIGHT_TO 6
 
@@ -83,6 +95,17 @@ enum IdleEmote : uint8_t {
 #define IDLE_WALK_MIN 150
 #define IDLE_WALK_MAX 325
 #define IDLE_SEEK_X IDLE_WALK_MIN  // the food button (x 140) is at the walk's left end
+// A tidy pet's strolls while there are poops (#86): the poops lie at the bottom left
+// (drawPoops, scene.cpp: x 36..192 for three), so it keeps to the right part of its range.
+#define IDLE_TIDY_WALK_MIN 230
+
+// The nature's weights (#86), added to the full repertoire's (idleWeights)
+#define IDLE_PLAYFUL_BALL 6  // ball 6 -> 12
+#define IDLE_PLAYFUL_HOP 4   // hop 7 -> 11
+#define IDLE_LAZY_STAND 6    // stand 14 -> 20
+#define IDLE_LAZY_REST 6     // rest 4 -> 10
+#define IDLE_LAZY_WALK 6     // walk 20 -> 14 (and its hops are halved)
+#define IDLE_TIDY_LOOK 6     // look 10 -> 16, while there are poops
 
 // how long (ms)
 #define IDLE_ATTEND_MS 1500   // after a touch it stands and looks up this long
@@ -96,6 +119,8 @@ struct IdleIn {
   uint8_t weight = 0;                            // 0-100
   uint8_t stamina = 0;  // training points, 0-100 (Pet::trDef): hops last longer (#76)
   int8_t hour = -1;     // 0-23; -1 = unknown (no clock, or stale after a power-off): no hour term
+  uint8_t nature = NAT_EASYGOING;  // Pet::nature (#86); out of range counts as easygoing
+  uint8_t poops = 0;    // poops on the ground (Pet::poops): a tidy pet strolls clear of them
   uint16_t acts = 0;    // bit a = the sprite has PMD action a (PmdMon::has)
   bool calm = false;    // dimmed or a dialog open: the calm repertoire only
 };
@@ -141,6 +166,10 @@ inline int8_t idleHour(uint32_t epoch, bool stale) {
 inline bool idleNight(int8_t hour) {
   return hour >= 0 && (hour >= IDLE_NIGHT_FROM || hour < IDLE_NIGHT_TO);
 }
+// Fullness under this: it goes to the food button (#86: a greedy pet a little sooner).
+inline uint8_t idleHungryAt(uint8_t nature) { return nature == NAT_GREEDY ? IDLE_GREEDY_HUNGRY : IDLE_HUNGRY; }
+// A tidy pet with poops on the ground, in the full repertoire (#86): its strolls keep clear of them.
+inline bool idleTidyAvoids(const IdleIn &in) { return in.nature == NAT_TIDY && in.poops && !in.calm; }
 
 // The gestures the sprite has, in a fixed order; returns how many.
 inline uint8_t idleGestures(const IdleIn &in, uint8_t out[3]) {
@@ -175,6 +204,23 @@ inline void idleWeights(const IdleIn &in, int w[IDLE_ACTS]) {
   w[IDLE_BALL] = walk ? 6 : 0;
   w[IDLE_DOZE] = doze ? 2 : 0;
   w[IDLE_REST] = 4;
+  switch (in.nature) {  // #86: before the needs and the hour, which then scale these too
+    case NAT_PLAYFUL:
+      w[IDLE_HOP] += IDLE_PLAYFUL_HOP;
+      if (walk) w[IDLE_BALL] += IDLE_PLAYFUL_BALL;
+      break;
+    case NAT_LAZY:
+      w[IDLE_STAND] += IDLE_LAZY_STAND;
+      w[IDLE_REST] += IDLE_LAZY_REST;
+      if (walk) w[IDLE_WALK] -= IDLE_LAZY_WALK;
+      w[IDLE_HOP] /= 2;
+      break;
+    case NAT_TIDY:
+      if (idleTidyAvoids(in) && walk) w[IDLE_LOOK] += IDLE_TIDY_LOOK;
+      break;
+    default:  // easygoing, greedy (idleHungryAt) and anything out of range
+      break;
+  }
   if (in.energy < IDLE_TIRED) {
     if (doze) w[IDLE_DOZE] += 10;
     w[IDLE_REST] += 5;
@@ -189,7 +235,7 @@ inline void idleWeights(const IdleIn &in, int w[IDLE_ACTS]) {
     w[IDLE_HOP] += 6;
     if (walk) w[IDLE_BALL] += 6;
   }
-  if (in.fullness < IDLE_HUNGRY && walk) w[IDLE_SEEK] += 15;
+  if (in.fullness < idleHungryAt(in.nature) && walk) w[IDLE_SEEK] += 15;
   if (idleNight(in.hour)) {
     if (doze) w[IDLE_DOZE] += 8;
     w[IDLE_BALL] /= 2;
@@ -228,10 +274,12 @@ inline IdlePick idlePickAct(const IdleIn &in, uint8_t act, uint32_t seed) {
       p.ms = IDLE_LOOK_MS;
       if (r.below(2) == 0) p.emote = EMO_QUESTION;
       break;
-    case IDLE_WALK:
+    case IDLE_WALK: {
       p.ms = IDLE_WALK_MS;
-      p.targetX = (int16_t)(IDLE_WALK_MIN + r.below(IDLE_WALK_MAX - IDLE_WALK_MIN + 1));
+      int from = idleTidyAvoids(in) ? IDLE_TIDY_WALK_MIN : IDLE_WALK_MIN;  // #86
+      p.targetX = (int16_t)(from + r.below((uint32_t)(IDLE_WALK_MAX - from + 1)));
       break;
+    }
     case IDLE_REST:
       p.ms = 5000 + r.below(5000);
       p.emote = in.energy < IDLE_TIRED ? EMO_SWEAT : EMO_DOTS;

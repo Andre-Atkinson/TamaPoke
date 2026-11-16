@@ -20,6 +20,14 @@ static_assert((int)S_SAY_HUNGRY + bubbleStrOffset(BUB_CHRISTMAS, true) == (int)S
                   (int)S_SAY_HUNGRY + bubbleStrOffset(BUB_BIRTHDAY, true) == (int)S_SAY_BIRTHDAY_FMT &&
                   (int)S_SAY_HUNGRY + bubbleStrOffset(BUB_BIRTHDAY, false) == (int)S_SAY_BIRTHDAY,
               "the greeting strings follow BubbleLine");
+// the natures' lines (#86): BUB_NAT_LINES a nature, in NAT_* order, between love and the greetings
+static_assert((int)S_SAY_HUNGRY + (int)BUB_NAT_FIRST == (int)S_SAY_EASYGOING_1 &&
+                  (int)S_SAY_HUNGRY + bubbleNatureLine(NAT_GREEDY, 0) == (int)S_SAY_GREEDY_1 &&
+                  (int)S_SAY_HUNGRY + bubbleNatureLine(NAT_PLAYFUL, 0) == (int)S_SAY_PLAYFUL_1 &&
+                  (int)S_SAY_HUNGRY + bubbleNatureLine(NAT_TIDY, 0) == (int)S_SAY_TIDY_1 &&
+                  (int)S_SAY_HUNGRY + bubbleNatureLine(NAT_LAZY, 2) == (int)S_SAY_LAZY_3 &&
+                  (int)S_SAY_LAZY_3 + 1 == (int)S_SAY_CHRISTMAS_FMT,
+              "the S_SAY_<nature> strings follow BubbleLine");
 static_assert((int)BUB_GREET_FIRST + (int)GREET_BIRTHDAY - (int)GREET_CHRISTMAS == (int)BUB_BIRTHDAY &&
                   (int)BUB_BIRTHDAY + 1 == (int)BUB_LINES,
               "the greeting lines follow Greet");
@@ -28,6 +36,7 @@ static BubbleTimer bubbleTimer;
 static HolidayGreeter greeter;  // how many greetings today, and when the last (holiday.h, #26)
 static MilkHint milkHint;  // the warm-milk hint's count this evening (#13)
 static uint8_t bubbleLine = BUB_NONE;  // the line showing, or the last one said
+static HatchLine hatchLine;  // a pet that has just hatched names its nature (#86)
 // The line in the active font's encoding. Two lines are split at a space, which becomes
 // the first line's terminator: line 2 starts at bubbleText + bubbleBreak + 1.
 static char bubbleText[48];
@@ -68,6 +77,7 @@ static bool compose(uint8_t line) {
 }
 
 void bubbleLoop(uint32_t now, bool free) {
+  if (hatchLine.watch(pet.isEgg())) bubbleLine = BUB_NONE;  // a new pet has said nothing yet
   if (!bubbleTimer.update(now, free, [] { return (uint32_t)random(BUBBLE_GAP_SPAN_MS); })) return;
   BubbleIn in;
   in.needs = attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene);
@@ -78,6 +88,8 @@ void bubbleLoop(uint32_t now, bool free) {
   in.starsOut = sceneStarsOut();   // ...and not under cloud, rain, snow or fog (#60)
   in.named = ownerName()[0] != 0;
   in.last = bubbleLine;
+  in.nature = pet.nature;  // range-checked by Pet::load(); bubbleNatureLine() checks again
+  in.hatchLine = hatchLine.due();
   // a special day's greeting (#26): the scene's clock (0 while it is not trusted), as the
   // decorations; never in quiet hours. The warm-milk hint (#13) goes by the same clock.
   uint32_t clock = sceneEpoch(e, bedEdge.stale());
@@ -91,6 +103,7 @@ void bubbleLoop(uint32_t now, bool free) {
     return;
   }
   if (line == BUB_MILK) milkHint.said(clock);
+  hatchLine.said(line, pet.nature);
   bubbleLine = line;
   Serial.printf("say %s\n", BUBBLE_KEYS[line]);
 }
