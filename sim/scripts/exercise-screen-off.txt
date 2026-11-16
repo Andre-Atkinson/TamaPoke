@@ -9,6 +9,10 @@
 # (screen off)", and "TRAIN: asleep" for the note. The last section presses PWR on the result
 # screen of a finished punch: that ending prints the normal "Training: punch count=2 gain=3"
 # line once, and no "(screen off)" line (it was paid at the end of the session, not again).
+# Then a ribbon finished by a session that PWR ends: its banner waits in the dark and shows
+# when the screen is back on (shot 56). Last, the battery runs out mid-punch: the punch is
+# paid ("Training: punch count=1 gain=1 ... (screen off)") before the PMU powers the board
+# off, and the simulator stops there.
 # Timing as in exercises.txt: a tap is 80 ms down then 400 ms settling, an exercise starts
 # when the tap that chose it lifts, and the punch's windows are 400-1100 ms into each 1.5 s
 # swing (exercise.h).
@@ -112,3 +116,30 @@ shot 54-result-pwr-on
 swipe up
 swipe left
 shot 55-fitness-after-result-pwr
+
+# A ribbon a session ended by PWR completes (#69, #88): strength set to 28 (the ribbon's goal
+# is 30), two punches (+3), PWR. The ribbon is gained at the press (its chime) and its banner
+# waits in the dark: 6 s later, longer than the banner's 4 s, PWR back on shows it. The card
+# is still open on its Fitness page from the section above.
+train 28 1 0
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+wait 800ms
+tap 233 240
+press pwr
+wait 6s
+press pwr
+wait 500ms
+shot 56-ribbon-banner-after-pwr
+
+# The battery runs out mid-punch (0 %, no USB): the punch is paid before the power-off.
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+battery 0
+wait 2s

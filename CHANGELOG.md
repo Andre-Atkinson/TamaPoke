@@ -167,8 +167,9 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   22:00-07:00 or 23:00-08:00. The pet goes to sleep when the window starts and
   wakes when it ends. Only those two moments act, so waking it in the night
   sticks until the next bedtime. It waits for a minigame, dialog, bath or
-  evolution to finish; a minigame or an exercise left open with the screen off is
-  abandoned without a prize at bedtime. It follows the clock you set; off by default.
+  evolution to finish; a minigame left open with the screen off is abandoned without a
+  prize at bedtime (an exercise never is: turning the screen off ends it, keeping what
+  was earned). It follows the clock you set; off by default.
 - **Choose your egg.** A third button on the Care page, *Eggs*: Surprise (the
   default, one random egg as before) or Choose. With Choose, every ending after
   the first game shows three eggs instead of one. The shell shows the rarity
@@ -311,10 +312,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   engaged (10 s after the screen goes off by default on the 1.75C, never on the 1.75) a
   touch in the dark could land a punch unseen, and the 1.75C kept polling its training
   touch capture. Now the session ends at once and the creature keeps what it did, as when
-  you leave early, with no result screen; the board goes back to its usual low-power
-  screen-off, and the screen comes back on to the creature. A ribbon the session earned
-  chimes as you press PWR and shows its banner when the screen is back on. The same
-  happens if the battery runs out mid-exercise.
+  you leave early, with no result screen (and it keeps it too if the battery runs out
+  mid-exercise); the board goes back to its usual low-power screen-off, and the screen
+  comes back on to the creature. A ribbon a session ended by PWR earned chimes as you
+  press it and shows its banner when the screen is back on. A tap whose finger lifts
+  after PWR has turned the screen off now does nothing.
 
 - **Train says so while the creature sleeps** (#89). Tapping *Train* (or an exercise)
   on the stat card while it slept closed the card and did nothing. Now the card stays

@@ -337,6 +337,7 @@ void pollPwrButton() {
     screenOffByPwr = screenOff;
     attnShowUntil = 0;  // PWR wins over a call's window
     if (!screenOff) wakeUI();
+    else swallowGesture = true;  // a finger already on the glass does nothing as it lifts
   }
 #else
   // Keep the original board's PEK short-press behaviour unchanged.
@@ -349,6 +350,7 @@ void pollPwrButton() {
       screenOffByPwr = screenOff;
       attnShowUntil = 0;  // PWR wins over a call's window
       if (!screenOff) wakeUI();
+      else swallowGesture = true;  // a finger already on the glass does nothing as it lifts
     }
   }
 #endif
