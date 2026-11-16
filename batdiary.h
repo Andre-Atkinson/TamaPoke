@@ -70,7 +70,7 @@ inline uint32_t batLogMinute(uint32_t epoch) {
 // by batRowUnpack(), so a stored row always unpacks.
 inline uint64_t batRowPack(const BatRow &r) {
   uint64_t minute = r.minute <= BATLOG_MINUTE_MAX ? r.minute : 0;
-  uint64_t kind = r.kind < BL_KINDS ? r.kind : BL_HOUR;
+  uint64_t kind = r.kind < BL_KINDS ? r.kind : (uint8_t)BL_HOUR;
   uint64_t pct = r.pct <= 100 ? r.pct : BATLOG_PCT_NONE;
   uint64_t mv = r.mv <= BATLOG_MV_MAX ? r.mv : BATLOG_MV_MAX;
   uint64_t on = r.onMin <= BATLOG_MIN_MAX ? r.onMin : BATLOG_MIN_MAX;
@@ -198,7 +198,7 @@ struct BatReading {
 inline BatRow batRowFrom(uint8_t kind, const BatReading &b, uint32_t epoch) {
   BatRow r;
   r.minute = batLogMinute(epoch);
-  r.kind = kind < BL_KINDS ? kind : BL_HOUR;
+  r.kind = kind < BL_KINDS ? kind : (uint8_t)BL_HOUR;
   r.pct = b.pct < 0 ? BATLOG_PCT_NONE : b.pct > 100 ? 100 : (uint8_t)b.pct;
   r.mv = b.mv <= 0 ? 0 : b.mv > BATLOG_MV_MAX ? BATLOG_MV_MAX : (uint16_t)b.mv;
   r.usb = b.usb;
@@ -214,7 +214,7 @@ inline BatRow batRowFrom(uint8_t kind, const BatReading &b, uint32_t epoch) {
 inline int batLogFormatRow(char *dst, unsigned n, const BatRow &r) {
   if (!dst || !n) return 0;
   return snprintf(dst, n, "%lu,%s,%d,%u,%d,%d,%u,%u", (unsigned long)batLogEpoch(r.minute),
-                  BATLOG_KIND_KEYS[r.kind < BL_KINDS ? r.kind : BL_HOUR],
+                  BATLOG_KIND_KEYS[r.kind < BL_KINDS ? r.kind : (uint8_t)BL_HOUR],
                   r.pct == BATLOG_PCT_NONE ? -1 : (int)r.pct, (unsigned)r.mv, r.usb ? 1 : 0,
                   r.charging ? 1 : 0, (unsigned)r.onMin, (unsigned)r.sleepMin);
 }
