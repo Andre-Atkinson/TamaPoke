@@ -12,6 +12,7 @@
 #include "scene.h"
 #include "sdmon.h"
 #include "species.h"
+#include "trainingtouch.h"  // REPORT_GAP_MS (both boards), the 1.75C exit chip
 #include "uitext.h"
 
 // Used only in this file, and called above its definition (in TamaPoke.ino the
@@ -37,6 +38,7 @@ static bool trainNewHi = false;
 static uint32_t repAt = 0;           // when the last rep was done (the ring flashes)
 #if !BOARD_AMOLED_175C
 static bool trainHeld = false;       // the 1.75: a finger that didn't start on the top strip is on
+static uint32_t trainHeldAt = 0;     // ...as of the last successful touch poll (exerciseHeld)
 #endif
 
 // ---------- minijuegos de Play (logica en minigames.h) ----------
@@ -175,25 +177,39 @@ bool exerciseExit() {
 }
 
 #if !BOARD_AMOLED_175C
-void exerciseHeld(bool on) { trainHeld = on; }
+void exerciseHeld(bool on) {
+  trainHeld = on;
+  trainHeldAt = millis();
+}
 #endif
 
 // A finger is on for the stamina hold (the 1.75C asks the capture, which the loop owns
-// here: renderExercise() reads it before its capture frame starts the worker).
+// here: renderExercise() reads it before its capture frame starts the worker). The 1.75
+// holds only while its last poll is fresh: handleTouch() returns early when the chip
+// doesn't answer, so without this a stalled stream would keep counting reps, where the
+// 1.75C pauses on the same gap.
 static bool exerciseHolding(uint32_t now) {
 #if BOARD_AMOLED_175C
   return !screenIsLocked() && trainingCapture.holding(now);
 #else
-  (void)now;
-  return trainHeld;
+  return trainHeld && now - trainHeldAt <= TrainingTouch::REPORT_GAP_MS;
 #endif
 }
+
+#define TRAIN_HINT_Y 46  // the hint's top, the same on both screens
+#if !BOARD_AMOLED_175C
+// The 1.75's exit label "tap: back" (size 2, 16 px tall) sits at the very top of the round
+// panel, inside the exit strip and clear of the hint.
+#define TRAIN_BACK_Y 20
+static_assert(TRAIN_BACK_Y + 16 <= TRAIN_EXIT_STRIP_H, "the exit label is inside the exit strip");
+static_assert(TRAIN_EXIT_STRIP_H <= TRAIN_HINT_Y, "the exit strip ends above the hint");
+#endif
 
 // the hint at the top and the count under it, the same on both screens
 static void drawTrainHead(const char *hint, uint8_t count, uint16_t ink) {
   gfx->setTextColor(ink);
   setSize(2);
-  setCur(centerX(hint, 2), 46);
+  setCur(centerX(hint, 2), TRAIN_HINT_Y);
   printT(hint);
   char b[4];
   snprintf(b, sizeof(b), "%u", count);
@@ -322,6 +338,10 @@ void renderExercise() {
       sfxPlay(SFX_NOTE0 + (hold.reps - 1) % 4);  // each rep a note up the scale
     }
     if (holding) wakeUI();  // a still finger is someone there: no dimming mid-hold
+  } else {
+    // A punch session outlasts the game's keep-awake (18 s against POWER_GAME_AWAKE_MS) and
+    // a player who only watches never touches: keep it bright until it ends.
+    wakeUI();
   }
   if (trainKind == EX_PUNCH ? punch.over(now) : hold.over(now)) {
     finishExercise(now);
@@ -351,6 +371,11 @@ void renderExercise() {
   setSize(2);
   setCur(centerX(T(S_HOLD_EXIT), 2), ey + 16);
   printT(T(S_HOLD_EXIT));
+#else
+  gfx->setTextColor(ink);  // the 1.75's exit: a tap on the strip this label is in
+  setSize(2);
+  setCur(centerX(T(S_BACK), 2), TRAIN_BACK_Y);
+  printT(T(S_BACK));
 #endif
   flushUI();
 }

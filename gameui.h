@@ -30,7 +30,12 @@ void exerciseTap(uint32_t at);
 // result screen). True when the training screen has closed.
 bool exerciseExit();
 #if !BOARD_AMOLED_175C
-void exerciseHeld(bool on);  // the 1.75: whether a finger that counts for the hold is on
+// The 1.75's exit: a touch-down above this y (the top strip) leaves. The exercise screens
+// draw "tap: back" inside it, so it is no longer invisible, and end it above the hint.
+constexpr int TRAIN_EXIT_STRIP_H = 42;
+// The 1.75: whether a finger that counts for the hold is on. Call it after every
+// successful poll: a hold goes stale when the reports stop (exerciseHolding in gameui.cpp).
+void exerciseHeld(bool on);
 #endif
 void renderExercise();
 void renderTrainPick();                     // the choice, on the stat card

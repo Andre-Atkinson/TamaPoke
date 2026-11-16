@@ -541,7 +541,7 @@ set after a power cut.
 - `standby.h` — when the standby clock replaces screen-off on USB, and its burn-in steps (#60); `scene.cpp` draws it
 - `bubble.h` / `bubble.cpp` — the speech bubbles: which line, when, and where it goes on the round screen (#23)
 - `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the font can draw, and its NVS key
-- `gameui.h` / `gameui.cpp` — the minigames' screens and the strength-training sack (their logic is in `minigames.h`)
+- `gameui.h` / `gameui.cpp` — the minigames' screens and the calm exercises' (the rhythm punch and the stamina hold, #78; their rules are in `minigames.h` and `exercise.h`)
 - `screens.h` / `screens.cpp` — the other screens: starter and egg choice, the pet card's pages, clock and settings, the nickname keyboard, the Pokédex gallery
 - `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
 - `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)

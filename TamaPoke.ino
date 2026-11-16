@@ -41,6 +41,10 @@
 #include "bubble.h"
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
+#include "exercise.h"
+// An untouched hold ends itself after IDLE_END_MS: the screen must not dim before that.
+// (The punch session is longer, so renderExercise() keeps it awake itself.)
+static_assert(StaminaHold::IDLE_END_MS <= POWER_GAME_AWAKE_MS, "an idle hold ends before the game's keep-awake does");
 #include "trainingcapture.h"
 #include "app.h"
 #include "gameui.h"
@@ -1416,14 +1420,14 @@ void handleTouch() {
 #endif
 
 #if !BOARD_AMOLED_175C
-  // Original board: its existing exit, a tap on the top strip (y < 72), which now ends the
-  // session and pays for what was done (#78). Anywhere else a touch-down is a punch's tap
+  // Original board: its exit, a tap on the top strip (y < TRAIN_EXIT_STRIP_H, marked by the
+  // "tap: back" label), which now ends the session and pays for what was done (#78). Anywhere else a touch-down is a punch's tap
   // and the finger that stays is the stamina hold; a release is never a tap.
   if (trainOpen) {
     static bool counts = false;  // this contact didn't start on the top strip
     if (pressed && !wasPressed) {
       wakeUI();
-      counts = y >= 72;
+      counts = y >= TRAIN_EXIT_STRIP_H;
       if (!counts) {
         exerciseHeld(false);
         if (exerciseExit()) {  // closed: leaveTraining() swallows the rest of this touch

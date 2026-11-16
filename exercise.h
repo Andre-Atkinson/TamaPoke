@@ -32,9 +32,11 @@ inline uint8_t exerciseGain(uint8_t count) {
 // EX_COUNT times, and is at the pet halfway through each swing (CONTACT_MS). A tap
 // within WINDOW_MS of that moment, either side, lands that swing's punch: the window is
 // almost half of every swing, so the timing is forgiving. Any other tap, or a second one
-// in the same swing, does nothing. Taps are judged on when they were captured (the
-// 1.75C's TrainingCapture timestamp; the 1.75's 20 ms poll), not on when the loop gets
-// to them, so a frame being drawn never moves a tap out of its window.
+// in the same swing, does nothing. On the 1.75C a tap is judged on when it was captured
+// (TrainingCapture's timestamp), so a frame being drawn never moves it out of its window.
+// The original 1.75 has no capture worker: a tap is timed at the loop's next poll
+// (exerciseTap(millis()) in handleTouch), which doesn't run while a frame draws, so it can
+// be up to a frame late. The 700 ms window absorbs that.
 struct RhythmPunch {
   static constexpr uint32_t SWING_MS = 1500;
   static constexpr uint32_t CONTACT_MS = SWING_MS / 2;

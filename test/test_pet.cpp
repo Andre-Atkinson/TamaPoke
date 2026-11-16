@@ -492,19 +492,38 @@ TEST(train, both_exercises_tire_feed_burn_and_cheer_like_the_bag) {
   for (int kind = 0; kind < 2; kind++) {
     Pet p;
     readyToTrain(p);
+    p.lastSeenEpoch = 100u * 86400 + 10 * 3600;  // a known day, so the care can be seen
+    p.lastCareDay = 0;
     if (kind == 0) p.trainStrength(EX_COUNT);
     else p.trainStamina(EX_COUNT);
     const char *k = kind ? "hold" : "punch";
+    CHECK_MSG(p.lastCareDay == 100, k);  // it is the day's care (registerCare)
     CHECK_MSG(p.energy == 68, k);
     CHECK_MSG(p.fullness == 75, k);
     CHECK_MSG(p.weight == 16, k);  // 40 - 24
     CHECK_MSG(p.joy == 56, k);
-    CHECK_MSG(p.bond == 12, k);
+    CHECK_MSG(p.bond == 16, k);  // +2 for the exercise, +4 for the day's first care
     CHECK_MSG(p.showHeart(), k);
     p.energy = 3;  // el suelo protege de dejarlo a cero
     if (kind == 0) p.trainStrength(EX_COUNT);
     else p.trainStamina(EX_COUNT);
     CHECK_MSG(p.energy == 3, k);
+  }
+}
+
+// An egg doesn't exercise: nothing paid, nothing spent.
+TEST(train, an_egg_does_not_exercise) {
+  for (int kind = 0; kind < 2; kind++) {
+    Pet p;
+    readyToTrain(p);
+    p.speciesId = -1;
+    uint8_t atk = p.trAtk, def = p.trDef;
+    const char *k = kind ? "hold" : "punch";
+    uint8_t got = kind ? p.trainStamina(EX_COUNT) : p.trainStrength(EX_COUNT);
+    CHECK_MSG(got == 0, k);
+    CHECK_MSG(p.trAtk == atk && p.trDef == def, k);
+    CHECK_MSG(p.energy == 80 && p.fullness == 80 && p.weight == 40 && p.joy == 50, k);
+    CHECK_MSG(p.bond == 10 && !p.showHeart(), k);
   }
 }
 

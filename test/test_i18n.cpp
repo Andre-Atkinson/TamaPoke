@@ -454,6 +454,9 @@ TEST(i18n, the_exercise_texts_fit_where_they_are_drawn) {
     for (StrId id : {S_EX_STR, S_EX_STA})
       CHECK_MSG(strlen(T(id)) * 12 <= 320 - 16, std::string("too wide: ") + T(id));
     CHECK_MSG(strlen(T(S_TRAIN)) * 12 <= 274 - 16, std::string("too wide: ") + T(S_TRAIN));
+    // the 1.75's exit label, size 2 at y=20 (gameui.cpp): the round panel's chord there is
+    // about 188 px, and the same 12 px margin each side leaves 164
+    CHECK_MSG(strlen(T(S_BACK)) * 12 <= 164, std::string("too wide: ") + T(S_BACK));
     for (StrId id : {S_ONE_PUNCH, S_ONE_REP})
       CHECK_MSG(strlen(T(id)) * 24 <= 400, std::string("too wide: ") + T(id));
     char b[32];
