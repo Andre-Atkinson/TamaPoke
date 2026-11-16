@@ -27,6 +27,10 @@
 //                            easter halloween birthday (with the name when one is set). It is laid
 //                            out as if it had come up by itself and still ends at once on
 //                            a screen that is not free (asleep, dimmed, another screen...)
+//                            A pet's own naming line (NATURE-1) counts as said for the hatch
+//                            line after a hatch (#86), as one that came by itself; milk does
+//                            not count for the warm-milk hint (#13), and the serial log has
+//                            no "say" line for it
 //   shot NOMBRE              guardar NOMBRE.png con lo que muestra el panel
 //   nature NAME              the pet's nature now (#25, nature.h): easygoing greedy playful
 //                            tidy lazy. In RAM, as if it had hatched with it (the next

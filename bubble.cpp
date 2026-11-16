@@ -89,21 +89,20 @@ void bubbleLoop(uint32_t now, bool free) {
   in.named = ownerName()[0] != 0;
   in.last = bubbleLine;
   in.nature = pet.nature;  // range-checked by Pet::load(); bubbleNatureLine() checks again
-  in.hatchLine = hatchLine.due();
   // a special day's greeting (#26): the scene's clock (0 while it is not trusted), as the
   // decorations; never in quiet hours. The warm-milk hint (#13) goes by the same clock.
   uint32_t clock = sceneEpoch(e, bedEdge.stale());
   bool quiet = attnQuietAt(pet.bedPreset, e, bedEdge.stale());
   in.milkHint = milkHint.due(clock, quiet, [] { return (uint32_t)random(0x7FFFFFFF); });
-  // (a greeting is counted before compose(): test_bubble.cpp proves every one can be laid out)
-  uint8_t line = bubbleChoose(in, (uint32_t)random(0x7FFFFFFF), greeter, clock, quiet, holidayNow().greet);
+  // (a greeting and the hatch line are counted before compose(): test_bubble.cpp proves every
+  // line can be laid out)
+  uint8_t line = bubbleChoose(in, (uint32_t)random(0x7FFFFFFF), greeter, hatchLine, clock, quiet, holidayNow().greet);
   if (!compose(line)) {
     bubbleTimer.cancel();
     Serial.printf("say %s: too wide\n", BUBBLE_KEYS[line]);
     return;
   }
   if (line == BUB_MILK) milkHint.said(clock);
-  hatchLine.said(line, pet.nature);
   bubbleLine = line;
   Serial.printf("say %s\n", BUBBLE_KEYS[line]);
 }
@@ -115,6 +114,7 @@ void bubbleLoop(uint32_t now, bool free) {
 void bubbleSayNow(uint8_t line) {
   if (line >= BUB_LINES || !compose(line)) return;
   bubbleTimer.start(millis());
+  hatchLine.said(line, pet.nature);  // the naming line said by hand ends the hatch line, as one by itself
   bubbleLine = line;  // no "say" log line: the serial log shows only the bubbles that came by themselves
 }
 #endif

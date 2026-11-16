@@ -11,7 +11,8 @@
 //    and not stale), a line of the pet's nature (#86), a friendly line, or "I love you" (with
 //    the player's name when one is set, owner.h). Right after a hatch the nature's first line,
 //    which names it as the stat card does, comes before the warm-milk hint and the rest.
-//  - bubbleChoose(): bubblePick() plus the greeting's rules (a few a day, never in quiet hours).
+//  - bubbleChoose(): bubblePick() plus the greeting's rules (a few a day, never in quiet hours)
+//    and the hatch line's.
 //  - HatchLine: whether a pet that has just hatched still has to name its nature (#86).
 //  - BubbleTimer: when. A bubble is due 1-2 min after the last one started. It waits
 //    until the pet screen has been free and awake for BUBBLE_SETTLE_MS, then shows for
@@ -222,12 +223,18 @@ struct HatchLine {
 
 // The line for a bubble that starts now: bubblePick() with a special day's greeting that is
 // due (HolidayGreeter `g`: `clock` the scene's trusted clock or 0, `quiet` quiet hours now,
-// `greet` today's, holidayNow().greet). Counts the greeting in `g` when that is the line, so
-// at most HOLIDAY_GREETS come a day and none in quiet hours. `in.greet` is set here.
-inline uint8_t bubbleChoose(BubbleIn in, uint32_t r, HolidayGreeter &g, uint32_t clock, bool quiet, uint8_t greet) {
+// `greet` today's, holidayNow().greet) and the line that names a new pet's nature (HatchLine
+// `h`, #86). Counts the greeting in `g` when that is the line, so at most HOLIDAY_GREETS come
+// a day and none in quiet hours, and ends the hatch line in `h` when the pet's first nature
+// line is what comes up. `in.greet` and `in.hatchLine` are set here. Both are counted before
+// the caller lays the line out: test_bubble.cpp proves every line can be.
+inline uint8_t bubbleChoose(BubbleIn in, uint32_t r, HolidayGreeter &g, HatchLine &h, uint32_t clock, bool quiet,
+                            uint8_t greet) {
   in.greet = g.due(clock, quiet, greet) ? (uint8_t)(BUB_GREET_FIRST + greet - GREET_CHRISTMAS) : (uint8_t)BUB_NONE;
+  in.hatchLine = h.due();
   uint8_t line = bubblePick(in, r);
   if (in.greet != BUB_NONE && line == in.greet) g.said(clock);
+  h.said(line, in.nature);
   return line;
 }
 

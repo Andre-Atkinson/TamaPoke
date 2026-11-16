@@ -317,8 +317,9 @@ first page, under the berry and age):
   | Tidy | "I'm tidy!", "Neat and clean!", "A place for everything!" | with poops on the ground, strolls on the right, clear of them, and looks about more |
   | Lazy | "I'm a little lazy!", "So comfy here...", "Nice and slow..." | stands and rests more, walks and hops less |
 
-  Looks only: the drains, the perks and their hourly limit are the same for every nature,
-  and once the screen dims every nature just strolls, gestures or stands, as before.
+  Looks only: what it does left alone changes no stat, and the doze's and the ball game's
+  perks and their hourly limit are the same for every nature; once the screen dims every
+  nature just strolls, gestures or stands, as before.
 
 ### Bonds, streaks, medals, Pokédex
 - **Streak** (player-wide, survives across pets): first care each real day; milestones

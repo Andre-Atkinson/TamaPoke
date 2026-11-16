@@ -149,6 +149,9 @@ TEST(Bubble, a_line_other_than_a_need_is_never_said_twice_in_a_row) {
               uint8_t l = bubblePick(in, r);
               CHECK_MSG(l != last, "line " + std::string(BUBBLE_KEYS[last]) + " twice, r=" + std::to_string(r));
               CHECK(l >= BUB_MORNING && l < BUB_LINES);
+              if (bubbleIsNatureLine(l))
+                CHECK_MSG(l >= bubbleNatureLine(nat, 0) && l < bubbleNatureLine(nat, 0) + BUB_NAT_LINES,
+                          std::string(BUBBLE_KEYS[l]) + " from " + NATURE_KEYS[nat]);
             }
 }
 
@@ -590,8 +593,9 @@ static uint32_t atDate(int y, int m, int d, int hh, int mm) {
 TEST(Bubble, the_greeting_comes_3_times_a_day_30_min_apart_and_never_in_quiet_hours) {
   BubbleIn in = calm(true, 10, false, BUB_HI);
   HolidayGreeter g;
+  HatchLine hl;  // no hatch: never due
   const uint8_t greet = GREET_CHRISTMAS;
-  auto choose = [&](uint32_t clock, bool quiet) { return bubbleChoose(in, 7, g, clock, quiet, greet); };
+  auto choose = [&](uint32_t clock, bool quiet) { return bubbleChoose(in, 7, g, hl, clock, quiet, greet); };
   CHECK_EQ(choose(atDate(2026, 12, 25, 10, 0), false), (uint8_t)BUB_CHRISTMAS);
   CHECK(choose(atDate(2026, 12, 25, 10, 5), false) != BUB_CHRISTMAS);   // 5 min later: an ordinary line
   CHECK_EQ(choose(atDate(2026, 12, 25, 10, 40), false), (uint8_t)BUB_CHRISTMAS);
@@ -601,15 +605,15 @@ TEST(Bubble, the_greeting_comes_3_times_a_day_30_min_apart_and_never_in_quiet_ho
   // quiet hours: never, and nothing counted
   HolidayGreeter q;
   for (int i = 0; i < 6; i++)
-    CHECK(bubbleChoose(in, 7, q, atDate(2026, 12, 25, 10, 0) + i * 3600, true, greet) != BUB_CHRISTMAS);
+    CHECK(bubbleChoose(in, 7, q, hl, atDate(2026, 12, 25, 10, 0) + i * 3600, true, greet) != BUB_CHRISTMAS);
   CHECK_EQ(q.count(), 0);
   // no trusted clock (0): never, and a day with no greeting says none
   HolidayGreeter z;
-  CHECK(bubbleChoose(in, 7, z, 0, false, greet) != BUB_CHRISTMAS);
-  CHECK(bubbleChoose(in, 7, z, atDate(2026, 12, 25, 10, 0), false, GREET_NONE) != BUB_CHRISTMAS);
+  CHECK(bubbleChoose(in, 7, z, hl, 0, false, greet) != BUB_CHRISTMAS);
+  CHECK(bubbleChoose(in, 7, z, hl, atDate(2026, 12, 25, 10, 0), false, GREET_NONE) != BUB_CHRISTMAS);
   CHECK_EQ(z.count(), 0);
   // the day's greeting is the one said (the birthday's, not Christmas)
-  CHECK_EQ(bubbleChoose(in, 7, z, atDate(2026, 12, 25, 10, 0), false, GREET_BIRTHDAY), (uint8_t)BUB_BIRTHDAY);
+  CHECK_EQ(bubbleChoose(in, 7, z, hl, atDate(2026, 12, 25, 10, 0), false, GREET_BIRTHDAY), (uint8_t)BUB_BIRTHDAY);
 }
 
 TEST(Bubble, a_due_greeting_comes_first_even_before_a_need) {
@@ -700,15 +704,20 @@ TEST(Bubble, a_nature_says_only_its_own_lines_one_time_in_five) {
         }
       CHECK_EQ(n[BUB_LOVE_NAME], 6000);  // the player's name keeps its share
       // right after one of its lines: never that one again, another of its own instead
-      int k[BUB_LINES] = {};
-      for (uint32_t r = 0; r < 30000; r++) {
-        BubbleIn in = calm(true, h, true, bubbleNatureLine(own, 1));
-        in.nature = (uint8_t)(nat == NAT_COUNT + 1 ? 200 : nat);
-        k[bubblePick(in, r)]++;
+      // (all three: the last one wraps round to the first)
+      for (uint8_t again = 0; again < BUB_NAT_LINES; again++) {
+        int k[BUB_LINES] = {};
+        for (uint32_t r = 0; r < 30000; r++) {
+          BubbleIn in = calm(true, h, true, bubbleNatureLine(own, again));
+          in.nature = (uint8_t)(nat == NAT_COUNT + 1 ? 200 : nat);
+          k[bubblePick(in, r)]++;
+        }
+        CHECK_EQ(k[bubbleNatureLine(own, again)], 0);
+        CHECK_EQ(natureCount(k), 6000);
+        int ownLines = 0;
+        for (uint8_t i = 0; i < BUB_NAT_LINES; i++) ownLines += k[bubbleNatureLine(own, i)];
+        CHECK_EQ(ownLines, 6000);  // every nature line said is the pet's own
       }
-      CHECK_EQ(k[bubbleNatureLine(own, 1)], 0);
-      CHECK_EQ(natureCount(k), 6000);
-      CHECK_EQ(k[bubbleNatureLine(own, 0)] + k[bubbleNatureLine(own, 2)], 6000);
     }
   }
 }
@@ -769,5 +778,76 @@ TEST(Bubble, the_hatch_line_is_due_from_a_hatch_seen_until_its_line_is_said) {
   CHECK(!h.watch(true));
   CHECK(!h.due());
   CHECK(h.watch(false));
+  CHECK(h.due());
+}
+
+// bubbleChoose() with a HatchLine is what bubbleLoop() runs (bubble.cpp is not compiled by the
+// host tests): `last` is fed back as bubbleLoop()'s bubbleLine, BUB_NONE for a new pet.
+TEST(Bubble, after_a_hatch_the_naming_line_comes_once_first_and_the_normal_mix_goes_on) {
+  for (uint8_t nat = 0; nat < NAT_COUNT; nat++) {
+    uint8_t naming = bubbleNatureLine(nat, 0);
+    HatchLine h;
+    HolidayGreeter g;
+    h.watch(true);
+    CHECK(h.watch(false));
+    uint8_t last = BUB_NONE;
+    // friendly picks only (r % 100 in 60..79): the naming line can only come from the hatch
+    std::vector<uint8_t> said;
+    for (uint32_t i = 0; i < 12; i++) {
+      BubbleIn in = calm(true, 13, true, last);
+      in.nature = nat;
+      last = bubbleChoose(in, i * 100 + 60, g, h, 0, false, GREET_NONE);
+      said.push_back(last);
+    }
+    CHECK_EQ(said[0], naming);  // first
+    for (size_t i = 1; i < said.size(); i++) CHECK_MSG(said[i] != naming, "naming line again at bubble " + std::to_string(i));
+    CHECK(!h.due());
+    // and the mix after it is the normal one: its line by chance, 1 time in 15, not every other bubble
+    int count = 0;
+    for (uint32_t r = 0; r < 3000; r++) {
+      BubbleIn in = calm(true, 13, true, last);
+      in.nature = nat;
+      last = bubbleChoose(in, r, g, h, 0, false, GREET_NONE);
+      count += last == naming;
+    }
+    CHECK_RANGE(count, 100, 320);
+
+    // a low need on the first bubble: it goes first, again while it lasts, and the naming line
+    // is still due; it is the first bubble that is free of the need
+    HatchLine d;
+    d.watch(true);
+    d.watch(false);
+    last = BUB_NONE;
+    for (int i = 0; i < 3; i++) {
+      BubbleIn in = calm(true, 13, true, last);
+      in.needs = attnLevels(5, 80, 80, 80);
+      in.nature = nat;
+      last = bubbleChoose(in, 60, g, d, 0, false, GREET_NONE);
+      CHECK_EQ(last, (uint8_t)BUB_HUNGRY);
+      CHECK(d.due());
+    }
+    BubbleIn fed = calm(true, 13, true, last);
+    fed.nature = nat;
+    CHECK_EQ(bubbleChoose(fed, 60, g, d, 0, false, GREET_NONE), naming);
+    CHECK(!d.due());
+
+    // an egg before it is said cancels it: the next pet says its own after its hatch
+    HatchLine e;
+    e.watch(true);
+    e.watch(false);
+    e.watch(true);  // the pet left
+    BubbleIn egg = calm(true, 13, true, BUB_NONE);
+    egg.nature = nat;
+    CHECK(bubbleChoose(egg, 60, g, e, 0, false, GREET_NONE) != naming);
+    CHECK(e.watch(false));
+    CHECK_EQ(bubbleChoose(egg, 60, g, e, 0, false, GREET_NONE), naming);
+  }
+  // a greeting that is due goes first and leaves the hatch line due
+  HatchLine h;
+  HolidayGreeter g;
+  h.watch(true);
+  h.watch(false);
+  BubbleIn in = calm(true, 10, true, BUB_NONE);
+  CHECK_EQ(bubbleChoose(in, 60, g, h, atDate(2026, 12, 25, 10, 0), false, GREET_CHRISTMAS), (uint8_t)BUB_CHRISTMAS);
   CHECK(h.due());
 }

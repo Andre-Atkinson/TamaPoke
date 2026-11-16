@@ -16,7 +16,7 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   "So comfy here...". None of them asks for anything; only a low need's bubble does. Left
   alone it acts its nature a little too: a playful one plays ball and hops more, a lazy one
   stands and rests more, a greedy one heads for the food button a little sooner, and a tidy
-  one strolls clear of the poops. Looks only: nothing drains faster and nothing gives more.
+  one strolls clear of the poops. Looks only: the lines and the habits add no drain and no reward.
 
 - **Battery diary.** To measure how long a charge really lasts, the board keeps a diary of
   its battery: a row every hour, and one at start-up, when USB is plugged in or pulled out,

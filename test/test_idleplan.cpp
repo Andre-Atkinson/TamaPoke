@@ -354,7 +354,7 @@ TEST(IdleNature, a_lazy_pet_stands_and_rests_more_and_walks_and_hops_less) {
   CHECK_EQ(lazy.v[IDLE_WALK], 20 - 6);
   CHECK_EQ(lazy.v[IDLE_HOP], 7 / 2);
   for (uint8_t a : { IDLE_LOOK, IDLE_DOZE, IDLE_BALL, IDLE_GESTURE, IDLE_SEEK }) CHECK_EQ(lazy.v[a], easy.v[a]);
-  CHECK(lazy.share(IDLE_STAND) + lazy.share(IDLE_REST) > easy.share(IDLE_STAND) + easy.share(IDLE_REST) * 3 / 2);
+  CHECK(lazy.share(IDLE_STAND) + lazy.share(IDLE_REST) > (easy.share(IDLE_STAND) + easy.share(IDLE_REST)) * 3 / 2);
   // weary: its walks halve too (14 / 2), its doze is everyone's
   W weary = weights(natured(needs(80, 60, 30), NAT_LAZY));
   CHECK_EQ(weary.v[IDLE_WALK], 7);
@@ -672,4 +672,22 @@ TEST(IdleEmote, it_stays_in_the_play_area_beside_the_head) {
   CHECK_EQ(idleEmoteAt(300, 100).x, (int16_t)(300 - IDLE_EMOTE_DX));
   // pmdHeight() finds nothing (0): the head "top" is the ground line, and the bubble still stops
   CHECK_EQ(idleEmoteAt(233, 304).y, (int16_t)IDLE_EMOTE_YMAX);  // above the bars
+}
+
+TEST(IdleNature, no_nature_gives_weight_to_or_picks_an_activity_the_sprite_lacks) {
+  int checked = 0;
+  for (const IdleIn &base : variety())
+    for (uint8_t nat = 0; nat <= NAT_COUNT; nat++)  // the last is out of range
+      for (uint8_t poops : { 0, 3 }) {
+        IdleIn in = natured(base, nat, poops);
+        W w = weights(in);
+        for (uint8_t a = 0; a < IDLE_ACTS; a++)
+          if (!idleAvailable(in, a)) CHECK_MSG(w.v[a] == 0, std::string(IDLE_ACT_NAMES[a]) + " weighs " + std::to_string(w.v[a]));
+        for (uint32_t seed = 1; seed <= 300; seed++) {
+          IdlePick p = idlePick(in, seed * 2654435761u);
+          CHECK_MSG(idleAvailable(in, p.act), "picked " + std::string(IDLE_ACT_NAMES[p.act]));
+          checked++;
+        }
+      }
+  CHECK_EQ(checked, (int)variety().size() * (NAT_COUNT + 1) * 2 * 300);
 }
