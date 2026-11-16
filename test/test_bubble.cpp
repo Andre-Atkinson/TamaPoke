@@ -152,6 +152,9 @@ TEST(Bubble, the_milk_hint_comes_after_a_low_need_and_before_the_other_lines) {
     in.needs = attnLevels(80, 80, 20, 80);  // tired: the need's own line
     CHECK_EQ(bubblePick(in, r), (uint8_t)BUB_TIRED);
     in.needs = attnLevels(80, 80, 80, 80);
+    in.greet = BUB_CHRISTMAS;  // a special day's greeting that is due comes first (#26)
+    CHECK_EQ(bubblePick(in, r), (uint8_t)BUB_CHRISTMAS);
+    in.greet = BUB_NONE;
     in.milkHint = false;
     CHECK(bubblePick(in, r) != BUB_MILK);  // never by chance
   }
