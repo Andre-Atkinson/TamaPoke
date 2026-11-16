@@ -163,16 +163,13 @@ void Pet::tick() {
   if (drain) drainBody();
   if (weight > 0 && ageMinutes % 3 == 0) weight--;
 
-  // la disciplina forja la defensa: 12 h seguidas bien cuidado = +1 DEF
-  // (va entre la caida de comida/higiene y la de felicidad, como siempre: lowestStat
-  // incluye la felicidad, y moverlo cambiaria el ritmo normal)
-  if (lowestStat() >= 40) {
-    if (++goodTicks >= 720) {
-      goodTicks = 0;
-      if (trDef < 100) trDef++;
-    }
-  } else {
+  // Steady care builds stamina (#76, STAMINA_CARE_MIN in pet.h): a minute with every need
+  // at 40 or more counts, in total; a minute under 40 only doesn't count. Self-care's minutes
+  // on the charger are not the player's care. (Between the food/hygiene drain and the joy
+  // drain, as always: lowestStat() includes joy, and moving it would change the rhythm.)
+  if (lowestStat() >= 40 && !selfCareOn && ++goodTicks >= STAMINA_CARE_MIN) {
     goodTicks = 0;
+    if (trDef < 100) trDef++;
   }
 
   if (drain) drainJoy();
@@ -444,7 +441,7 @@ void Pet::registerCare() {
               : (streak >= 7)   ? 7   : (streak >= 3)  ? 3 : 0;
   if (ms > lastMilestone) {
     lastMilestone = ms;
-    milestoneUntil = millis() + 4500;
+    milestoneUntil = millis() + MILESTONE_BANNER_MS;
   }
   checkMedals(false);  // de una accion del jugador, no del tick
   save();
@@ -468,11 +465,14 @@ void Pet::checkMedals(bool byTick) {
   if (bond >= 100) medals |= MED_BOND;
   if (DEX_TBL[speciesId].evolvesTo == 0) medals |= MED_FINAL;
   if (weight == 0 && level() >= 5 && careMistakes == 0) medals |= MED_FIT;
+  if (trAtk >= RIBBON_STR) medals |= MED_STR;  // the training ribbons (#76)
+  if (trDef >= RIBBON_STA) medals |= MED_STA;
+  if (trSpe >= RIBBON_SPD) medals |= MED_SPD;
   uint16_t gained = medals & ~before;
   if (gained) {
     for (uint16_t m = gained; m; m &= (m - 1)) totalMedals++;
     newMedal = gained;
-    medalUntil = millis() + 4000;
+    medalUntil = millis() + MEDAL_BANNER_MS;
     // a medal that only time earned, noticed by the tick, is silent in quiet hours (#44);
     // the banner shows anyway. One the player's action gains (exercise burns weight too) sounds.
     bool byTimeOnly = !(gained & ~MED_BY_TIME);
@@ -480,6 +480,15 @@ void Pet::checkMedals(bool byTick) {
     else if (!sleeping) sfxPlay(SFX_MEDAL);
     save();
   }
+}
+
+void Pet::holdBanners() {
+  if (showMedal()) medalUntil = millis() + MEDAL_BANNER_MS;
+  if (showMilestone()) milestoneUntil = millis() + MILESTONE_BANNER_MS;
+}
+
+void Pet::exerciseOver() {
+  if (exercised) checkMedals(false);  // the next tick still sees the exercise, as before
 }
 
 void Pet::rename(const char *name) {
@@ -566,6 +575,7 @@ void Pet::hatch() {
   berryKnown = false;
   bond = 0;          // vinculo, medallas y nombre son del individuo
   bondToday = 0;
+  goodTicks = 0;     // stamina's steady-care minutes are this pet's too (#76)
   medals = 0;
   newMedal = 0;
   nick[0] = 0;
@@ -641,13 +651,13 @@ void Pet::feedCandy() {
 // Fin de un minijuego de Play. Cada juego guarda su record con la puntuacion que
 // ve el jugador; la recompensa sale de la normalizada (gamecore.h), asi que una
 // buena partida paga lo mismo sea cual sea el juego que toco.
-void Pet::playGame(uint8_t game, uint16_t raw) {
-  if (ceremony != CER_NONE || isEgg() || game >= GAME_COUNT) return;
+uint8_t Pet::playGame(uint8_t game, uint16_t raw) {
+  if (ceremony != CER_NONE || isEgg() || game >= GAME_COUNT) return 0;
   if (raw > GAME_REC_MAX[game]) raw = GAME_REC_MAX[game];
   uint16_t *rec = game == GAME_CATCH ? &catchHi : game == GAME_PEEK ? &peekHi
                 : game == GAME_SONG ? &songHi : &gameHi;
   if (raw > *rec) *rec = raw;  // nuevo record
-  playReward(gameNormScore(game, raw));
+  return playReward(gameNormScore(game, raw));
 }
 
 uint16_t Pet::gameBest(uint8_t game) const {
@@ -660,7 +670,8 @@ uint16_t Pet::gameBest(uint8_t game) const {
   }
 }
 
-void Pet::playReward(uint8_t n) {
+uint8_t Pet::playReward(uint8_t n) {
+  uint8_t before = trSpe;
   uint8_t v = trSpe + n / 5;  // jugar entrena la velocidad
   trSpe = v > 100 ? 100 : v;
   joy = clamp100(joy + 5 + (n > 15 ? 30 : n * 2));
@@ -673,6 +684,7 @@ void Pet::playReward(uint8_t n) {
   registerCare();
   exercised = true;  // el ejercicio quema peso: el proximo tick ve un IN SHAPE como del jugador (#44)
   save();
+  return trSpe - before;  // what really went in: at 100 nothing does (#76)
 }
 
 // saco de entrenamiento: los golpes entrenan la fuerza. Devuelve la subida.
@@ -826,6 +838,7 @@ void Pet::save() {
   prefs.putUShort("mgp", peekHi);
   prefs.putUShort("mgs", songHi);
   prefs.putUShort("shi", strHi);
+  prefs.putUShort("tdefm", goodTicks);
   prefs.putString("nick", nick);
 }
 
@@ -847,6 +860,7 @@ void Pet::load() {
   trAtk = prefs.getUChar("tatk", 0);
   trDef = prefs.getUChar("tdef", 0);
   trSpe = prefs.getUChar("tspe", 0);
+  goodTicks = prefs.getUShort("tdefm", 0);  // saves from before #76: none, 0
   berryKnown = prefs.getBool("bk", false);
   shiny = prefs.getBool("shy", false);
   eggShiny = prefs.getBool("eshy", false);
@@ -877,7 +891,7 @@ void Pet::load() {
   bestStreak = prefs.getUShort("bstrk", 0);
   lastCareDay = prefs.getUInt("cday", 0);
   bond = prefs.getUChar("bond", 0);
-  medals = prefs.getUShort("medal", 0);
+  medals = prefs.getUShort("medal", 0) & MED_ALL;  // only the medals this firmware defines
   totalMedals = prefs.getUShort("tmedal", 0);
   lastMilestone = prefs.getUShort("mstone", 0);
   // records de los minijuegos: un valor que el juego no puede dar (NVS danada o de
@@ -901,6 +915,11 @@ void Pet::load() {
   energy = clamp100(energy);
   hygiene = clamp100(hygiene);
   if (poops > 3) poops = 3;
+  weight = clamp100(weight);
+  trAtk = clamp100(trAtk);  // training points are 0-100: the bars, the ribbons and idle life read them
+  trDef = clamp100(trDef);
+  trSpe = clamp100(trSpe);
+  if (goodTicks >= STAMINA_CARE_MIN) goodTicks = 0;
   if (lastEnd > CER_RELEASE) lastEnd = CER_NONE;
   if (pace >= PACE_COUNT) pace = PACE_NORMAL;
   if (bedPreset >= BED_PRESETS) bedPreset = 0;

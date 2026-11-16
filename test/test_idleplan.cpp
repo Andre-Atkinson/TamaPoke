@@ -387,10 +387,94 @@ TEST(IdleBall, the_pet_stands_beside_it_and_kicks_it_away) {
   CHECK(!idleBallKickable(b, 250 - IDLE_BALL_REACH));
   b.vx = 0;
   CHECK(!idleBallKickable(b, 250 - IDLE_BALL_REACH - 5));  // out of reach
-  idleBallKick(b, 214, 0);
+  idleBallKick(b, 214, 0, 0);
   CHECK_EQ(b.vx, (float)IDLE_BALL_KICK_MIN);  // away from the pet: to the right
-  idleBallKick(b, 280, IDLE_BALL_KICK_SPAN - 1);
+  idleBallKick(b, 280, IDLE_BALL_KICK_SPAN - 1, 0);
   CHECK_EQ(b.vx, -(float)(IDLE_BALL_KICK_MIN + IDLE_BALL_KICK_SPAN - 1));
+}
+
+// ---------------------------------------------------------------- training shows (#76)
+// Strength kicks further: up to IDLE_BALL_KICK_TRAIN px/s more at 100, and even the hardest
+// kick, from anywhere in the ball's range, stops inside that range after at most one bounce.
+TEST(IdleTraining, strength_kicks_further_and_the_ball_stays_in_range) {
+  for (uint32_t roll = 0; roll < IDLE_BALL_KICK_SPAN; roll++) {
+    IdleBall a, b;
+    a.x = b.x = 300;
+    idleBallKick(a, 250, roll, 0);
+    idleBallKick(b, 250, roll, 100);
+    CHECK_EQ(b.vx - a.vx, (float)IDLE_BALL_KICK_TRAIN);
+    CHECK_RANGE(a.vx, (float)IDLE_BALL_KICK_MIN, (float)(IDLE_BALL_KICK_MIN + IDLE_BALL_KICK_SPAN - 1));
+    CHECK_RANGE(b.vx, (float)IDLE_BALL_KICK_MIN, (float)IDLE_BALL_KICK_MAX);
+    IdleBall c;
+    c.x = 300;
+    idleBallKick(c, 250, roll, 50);
+    CHECK_EQ(c.vx - a.vx, (float)(IDLE_BALL_KICK_TRAIN / 2));
+    IdleBall d;  // a damaged training value counts as 100
+    d.x = 300;
+    idleBallKick(d, 250, roll, 255);
+    CHECK_EQ(d.vx, b.vx);
+  }
+  for (uint8_t strength : { (uint8_t)0, (uint8_t)100 }) {
+    for (int x = IDLE_BALL_MIN; x <= IDLE_BALL_MAX; x += 5) {
+      for (float side : { -1.0f, 1.0f }) {  // the pet on either side of the ball
+        IdleBall b;
+        b.x = (float)x;
+        idleBallKick(b, b.x - side * IDLE_BALL_REACH, IDLE_BALL_KICK_SPAN - 1, strength);
+        int bounces = 0;
+        float lastDir = b.vx;
+        for (int f = 0; f < 400 && b.vx != 0.0f; f++) {  // 25 fps, up to 16 s
+          idleBallRoll(b, 0.04f);
+          if (b.vx != 0.0f && (b.vx > 0) != (lastDir > 0)) bounces++;
+          if (b.vx != 0.0f) lastDir = b.vx;
+        }
+        std::string where = "strength " + std::to_string(strength) + " from x " + std::to_string(x);
+        CHECK_MSG(b.vx == 0.0f, where + ": stopped");
+        CHECK_MSG(b.x >= IDLE_BALL_MIN && b.x <= IDLE_BALL_MAX, where + ": inside the ball's range");
+        CHECK_MSG(bounces <= 1, where + ": at most one bounce");
+      }
+    }
+  }
+}
+
+// Speed quickens the stroll and the chase after the ball, by IDLE_SPEED_BONUS % at 100.
+TEST(IdleTraining, speed_quickens_the_walk_and_the_chase) {
+  CHECK_EQ(idleWalkPace(false, 0), IDLE_WALK_PX_S);
+  CHECK_EQ(idleWalkPace(true, 0), IDLE_BALL_PX_S);
+  CHECK_EQ(idleWalkPace(false, 100), IDLE_WALK_PX_S * 1.3f);
+  CHECK_EQ(idleWalkPace(true, 100), IDLE_BALL_PX_S * 1.3f);
+  CHECK_EQ(idleWalkPace(false, 50), IDLE_WALK_PX_S * 1.15f);
+  CHECK_EQ(idleWalkPace(true, 255), idleWalkPace(true, 100));  // a damaged value counts as 100
+  float last = 0;
+  for (int sp = 0; sp <= 100; sp++) {
+    float v = idleWalkPace(false, (uint8_t)sp);
+    CHECK(v >= last);
+    last = v;
+  }
+}
+
+// Stamina keeps a happy pet hopping a little longer, and changes nothing else: no weight,
+// and no other activity's length (the doze and the ball game pay a perk when they finish).
+TEST(IdleTraining, stamina_lengthens_the_hops_only) {
+  IdleIn lo = needs(90, 90, 90), hi = needs(90, 90, 90);
+  hi.stamina = 100;
+  for (uint32_t seed = 1; seed < 200; seed++) {
+    for (uint8_t act = 0; act < IDLE_ACTS; act++) {
+      if (!idleAvailable(lo, act)) continue;
+      IdlePick a = idlePickAct(lo, act, seed), b = idlePickAct(hi, act, seed);
+      uint32_t more = act == IDLE_HOP ? IDLE_HOP_STAMINA_MS : 0;
+      CHECK_MSG(b.ms == a.ms + more, std::string("act ") + IDLE_ACT_NAMES[act]);
+      CHECK_EQ(b.targetX, a.targetX);
+      CHECK_EQ(b.emote, a.emote);
+    }
+    CHECK_EQ(idlePick(lo, seed).act, idlePick(hi, seed).act);  // the same choices
+  }
+  int wl[IDLE_ACTS], wh[IDLE_ACTS];
+  idleWeights(lo, wl);
+  idleWeights(hi, wh);
+  for (int i = 0; i < IDLE_ACTS; i++) CHECK_EQ(wl[i], wh[i]);
+  IdleIn bad = needs(90, 90, 90);
+  bad.stamina = 255;  // a damaged value counts as 100
+  CHECK_EQ(idlePickAct(bad, IDLE_HOP, 7).ms, idlePickAct(hi, IDLE_HOP, 7).ms);
 }
 
 // ---------------------------------------------------------------- where the emote goes
