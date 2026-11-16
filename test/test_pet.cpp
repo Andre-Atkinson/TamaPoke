@@ -4218,6 +4218,29 @@ TEST(exercise, only_a_screen_that_closed_dark_holds_until_it_is_back) {
   CHECK_MSG(!q.showMedal(), "the screen back on ended the hold");
 }
 
+// The pet's own animations end for good (Pet::update): a deadline left behind would read as
+// ahead again once millis() is more than 2^31 ms past it (~25 days of uptime with no new
+// evolution, plush play, warm milk, meal or heart), and careBusy() would hold back bedtime and
+// the attention calls for weeks.
+TEST(timers, an_ended_animation_stays_ended_after_25_days_of_uptime) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 60, 50, 60, 70);
+  p.ageMinutes = 20 * 60;
+  p.evolve();         // the evolution's animation
+  p.playToy();        // the plush (and its heart)
+  p.giveMilk();       // warm milk: drinking, eating
+  CHECK(p.evolving() && p.playingToy() && p.drinkingMilk() && p.eating() && p.showHeart());
+  mockAdvanceMillis(EVOLVE_ANIM_MS + TOY_ANIM_MS + EAT_ANIM_MS + HEART_MS);
+  p.update(millis());  // the loop's next pass
+  mockAdvanceMillis(25u * 86400 * 1000);  // more than 2^31 ms
+  CHECK_MSG(!p.evolving(), "the evolution came back");
+  CHECK_MSG(!p.playingToy(), "the plush play came back");
+  CHECK_MSG(!p.drinkingMilk(), "the warm milk came back");
+  CHECK_MSG(!p.eating(), "the meal came back");
+  CHECK_MSG(!p.showHeart(), "the heart came back");
+}
+
 // ---------------------------------------------------------------- idle perks (#22)
 // A finished doze or ball game: a little energy or joy (capped per hour by idleplan.h's
 // IdlePerks). Never lowers a stat, and is not the player's care.

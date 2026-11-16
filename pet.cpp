@@ -110,10 +110,23 @@ void Pet::syncClock(uint32_t nowEpoch) {
   save();
 }
 
+// A deadline that has passed reads 0 from then on (timeLeft(0) is 0)
+static void endIfPast(uint32_t &deadline) {
+  if (deadline && !timeLeft(deadline)) deadline = 0;
+}
+
 void Pet::update(uint32_t nowMs) {
-  // An ended banner leaves the queue now, not when the next one is added: its deadline would
-  // otherwise read as ahead again once millis() is 2^31 ms (~24.8 days) past it.
+  // What has ended is cleared on the next pass: a deadline left behind would read as ahead
+  // again once millis() is 2^31 ms (~24.8 days of uptime) past it, and an evolution, a plush
+  // play, warm milk or a meal from weeks before would then seem to run for weeks more, holding
+  // back bedtime and the attention calls (careBusy() in the sketch); a medal's or a streak's
+  // banner would come back (BannerQueue::update takes the ended ones off its queue).
   banners.update(millis());
+  endIfPast(evolveUntil);
+  endIfPast(toyUntil);
+  endIfPast(milkUntil);
+  endIfPast(eatUntil);
+  endIfPast(heartUntil);
   // fin de ceremonia: la criatura se va y queda un huevo nuevo
   if (ceremony != CER_NONE && !timeLeft(ceremonyUntil)) {
     newEgg();
