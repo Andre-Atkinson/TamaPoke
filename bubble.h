@@ -131,13 +131,15 @@ class BubbleTimer {
 #define BUBBLE_PAD_X 12
 #define BUBBLE_PAD_Y 6
 #define BUBBLE_LINE_GAP 3
-#define BUBBLE_Y 110      // the status line ends near y 106 (drawHeader: size 2 at y 90)
+#define BUBBLE_Y_MIN 110  // the highest the box goes: the status line ends near y 106 (drawHeader: size 2 at y 90)
 #define BUBBLE_TAIL 8     // how far the tail reaches below the box
 #define BUBBLE_GAP 36     // from the pet's centre to the near edge, as the "!" bubble (attnBubbleAt)
 #define BUBBLE_RADIUS 12  // corner radius
 #define BUBBLE_W_MIN 48   // the tail's 14 px base needs a straight stretch between the corners
-// Inside the round panel at BUBBLE_Y with a 6 px margin, corners included: x 37..429.
-// A wider box would reach outside the circle (test_bubble.cpp checks the corners).
+// Inside the round panel at BUBBLE_Y_MIN with a 6 px margin, corners included: x 37..429.
+// That is the narrowest the panel gets where the box can be: lower down (to y 356, and the
+// tail stops at BUBBLE_TIP_LOW 250) it is wider. A wider box would reach outside the
+// circle (test_bubble.cpp checks the corners).
 #define BUBBLE_X_MIN 37
 #define BUBBLE_X_MAX 429  // exclusive right edge
 // The clock badge (clockprompt.h: centre x 76, radius 24) when it asks for the time: the
@@ -175,10 +177,13 @@ struct BubbleBox {
   int16_t tipX, tipY;      // its tip, pointing at the pet's head
 };
 
-// The box for text `textW` px wide in `lines` lines (1 or 2), with the pet at petX. Beside
-// the pet's head on the side with more room (as the "!" bubble), slid toward the pet as far
-// as it must to stay inside the round panel and right of the clock badge (`badge`).
-inline BubbleBox bubbleBoxAt(int petX, int textW, int lines, bool badge) {
+// The box for text `textW` px wide in `lines` lines (1 or 2), with the pet at petX and the
+// top of its head at headTop. Beside the head on the side with more room (as the "!"
+// bubble), its tail pointing down at the head (bubbleTipY in attention.h; `button`: the
+// evolve, farewell or run-away button is over the pet), its top no higher than
+// BUBBLE_Y_MIN, slid toward the pet as far as it must to stay inside the round panel and
+// right of the clock badge (`badge`).
+inline BubbleBox bubbleBoxAt(int petX, int headTop, int textW, int lines, bool badge, bool button) {
   if (petX < 150) petX = 150;  // the walk range (scene.cpp: PET_WALK_MIN..PET_WALK_MAX)
   if (petX > 325) petX = 325;
   int xMin = badge ? BUBBLE_X_MIN_BADGE : BUBBLE_X_MIN;
@@ -187,7 +192,9 @@ inline BubbleBox bubbleBoxAt(int petX, int textW, int lines, bool badge) {
   if (b.w < BUBBLE_W_MIN) b.w = BUBBLE_W_MIN;  // the text is centred in it
   if (b.w > BUBBLE_X_MAX - xMin) b.w = (int16_t)(BUBBLE_X_MAX - xMin);
   b.h = (int16_t)(2 * BUBBLE_PAD_Y + lines * BUBBLE_LINE_H + (lines - 1) * BUBBLE_LINE_GAP);
-  b.y = BUBBLE_Y;
+  int y = bubbleTipY(headTop, button) - BUBBLE_TAIL - b.h;
+  if (y < BUBBLE_Y_MIN) y = BUBBLE_Y_MIN;
+  b.y = (int16_t)y;
   bool right = petX <= 233;  // the screen's centre column
   int x = right ? petX + BUBBLE_GAP : petX - BUBBLE_GAP - b.w;
   if (x + b.w > BUBBLE_X_MAX) x = BUBBLE_X_MAX - b.w;

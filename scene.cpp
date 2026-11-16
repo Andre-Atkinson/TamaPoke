@@ -31,6 +31,7 @@ static void overlayMouth(const Species &sp, int x, int y, int s, bool open);
 static void drawBar(int x, int y, const char *label, uint8_t val);
 static int followLean(uint32_t now);
 static bool heartShown(uint32_t now);
+static bool huffing(uint32_t now);
 static void drawHuffPuff(int x, int y, uint32_t now);
 
 PetBeh beh;
@@ -791,7 +792,18 @@ static void drawEvolveFX(uint32_t now) {
   if (t > 0.9f) gfx->fillCircle(cx, cy, (int)(300 * (t - 0.9f) / 0.1f), UI_WHITE);
 }
 
+// Where drawPet() put the top of the pet's head this frame (#73), for petHeadTop(). On the
+// PMD path the action and hop it drew (its height comes from PmdAct::top, read only when
+// asked); on the others the sprite's top edge. Nothing drawn (evolving, no sprite): top 0,
+// which keeps the bubbles at their highest, under the status line.
+static struct {
+  bool pmd;
+  uint8_t act;
+  int16_t dy, top;
+} headNow;
+
 void drawPet() {
+  headNow = {};
   if (pmd.loaded) {
     drawPetPMD();
     return;
@@ -837,6 +849,7 @@ void drawPet() {
   if (m == MOOD_HAPPY && (millis() / 500) % 2) y -= 6;  // saltito
   reactOffset(millis(), false, x, y);  // gestures (#21): no actions to play here
   x += followLean(millis());
+  headNow.top = (int16_t)y;
 
   drawMap(sp.sprite, SPRITE_H, x, y, s, false);
 
@@ -941,21 +954,21 @@ static uint8_t pmdScale(const PmdMon &m, const PmdAct &a, uint8_t maxS) {
 }
 
 // How far above the ground the top of action actId of the main sprite is drawn, in px: its
-// first frame's highest opaque row (the idle emotes sit by the head, #22). Scanned on each
-// call, so drawPetPMD() calls it only on a frame that draws an emote (idleEmoteDue()).
+// first frame's highest opaque row (the idle emotes and the bubbles sit by the head, #22,
+// #73). The row is found once, when the sprite loads (PmdAct::top).
 static int pmdHeight(uint8_t actId, uint8_t maxS) {
   const PmdAct &a = pmd.acts[actId];
   if (!a.frames) return 0;
-  int top = 0;
-  while (top < a.h) {
-    const uint8_t *row = a.data + top * a.w;
-    bool any = false;
-    for (int c = 0; c < a.w && !any; c++) any = row[c] != 0xFF;
-    if (any) break;
-    top++;
-  }
   int base = a.base ? a.base : a.h;
-  return base > top ? (base - top) * pmdScale(pmd, a, maxS) : 0;
+  return base > a.top ? (base - a.top) * pmdScale(pmd, a, maxS) : 0;
+}
+
+int petHeadTop() {
+  return headNow.pmd ? PET_GROUND + headNow.dy - pmdHeight(headNow.act, 5) : headNow.top;
+}
+
+bool petButtonShown() {
+  return pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton();
 }
 
 // dibuja una accion anclada por la base (centro-x, suelo) y devuelve su escala
@@ -1057,11 +1070,12 @@ static void drawPetPMD() {
   }
 
   drawPmdAct(act, (int)beh.x + dx, PET_GROUND + dy, now - t0, loop || act == PMD_IDLE, false, 5);
+  headNow = { true, act, (int16_t)dy, 0 };
   drawHuffPuff((int)beh.x + petReact.away * 56, PET_GROUND - 120, now);
 
   if (heartShown(now)) drawMap(SPR_HEART, 32, (int)beh.x + 50, PET_GROUND - 190, 2, false);
   // the ball and an emote (#22); the head's height only when an emote is drawn
-  idleDrawOver(now, (int)beh.x, idleEmoteDue(now) ? PET_GROUND + dy - pmdHeight(act, 5) : 0);
+  idleDrawOver(now, (int)beh.x, idleEmoteDue(now) ? petHeadTop() : 0);
 }
 
 // sprite animado desde la SD: zoom entero por pixel, frames a su ritmo
@@ -1078,6 +1092,7 @@ static void drawPetSD() {
     if (pet.mood() == MOOD_HAPPY && (millis() / 500) % 2) y -= 6;  // saltito
     reactOffset(millis(), false, x, y);  // gestures (#21): no actions to play here
     x += followLean(millis());
+    headNow.top = (int16_t)y;
   }
 
   uint16_t fm = mon.frameMs ? mon.frameMs : 100;
@@ -1129,9 +1144,10 @@ void drawAttnBubble() {
   uint8_t need = attnShown(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene));
   if (need >= ATTN_NEEDS || bubbleShowing()) return;
   if (pet.sleeping || pet.eating() || pet.showHeart() || pet.evolving() || timeLeft(bathUntil) || pet.showMedal() ||
-      pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil)))
+      pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil)) ||
+      huffing(millis()))  // the puffs of the huff go by the head, where the bubble is (#73)
     return;
-  AttnBubble b = attnBubbleAt(pmd.loaded ? (int)beh.x : CX);
+  AttnBubble b = attnBubbleAt(pmd.loaded ? (int)beh.x : CX, petHeadTop(), petButtonShown());
   uint16_t ink = inkColor();
   gfx->fillRoundRect(b.x, b.y, b.w, b.h, 12, UI_WHITE);
   gfx->drawRoundRect(b.x, b.y, b.w, b.h, 12, ink);
@@ -1248,6 +1264,7 @@ static int followLean(uint32_t now) {
 }
 
 static bool huffing(uint32_t now) { return reacting(now) && petReact.kind == REACT_HUFF; }
+bool petHuffing() { return huffing(millis()); }
 
 // The heart of the pat before the huff (the 11th tap) is not drawn while the pet turns away.
 // Only the drawing skips it: pet.showHeart() is untouched for its other uses.

@@ -73,6 +73,15 @@ bool PmdMon::load(uint8_t dexNum, bool shiny) {
       }
     }
     a.base = base;
+    // la primera fila con contenido del frame 0: la cabeza, para los emotes y los globos (#22, #73)
+    uint8_t top = 0;
+    while (top < h) {
+      bool any = false;
+      for (int c = 0; c < w && !any; c++) any = a.data[top * w + c] != 0xFF;
+      if (any) break;
+      top++;
+    }
+    a.top = top;
   }
   loaded = true;
   Serial.printf("cargado %s (%u KB)\n", path, size / 1024);
@@ -85,7 +94,7 @@ void PmdMon::unload() {
     blob = nullptr;
   }
   for (auto &a : acts) {
-    a.w = a.h = a.frames = a.base = 0;
+    a.w = a.h = a.frames = a.base = a.top = 0;
     a.data = nullptr;
   }
   loaded = false;

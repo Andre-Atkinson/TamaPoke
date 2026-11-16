@@ -89,10 +89,10 @@ void bubbleSayNow(uint8_t line) {
 bool bubbleShowing() { return bubbleTimer.showing(); }
 
 void drawSpeechBubble() {
-  if (!bubbleTimer.showing() || bubbleLine >= BUB_LINES) return;
+  if (!bubbleTimer.showing() || bubbleLine >= BUB_LINES || petHuffing()) return;  // the huff's puffs go by the head (#73)
   int lines = bubbleBreak < 0 ? 1 : 2;
-  BubbleBox b = bubbleBoxAt(pmd.loaded ? (int)beh.x : CX, bubbleW1 > bubbleW2 ? bubbleW1 : bubbleW2, lines,
-                            badgeShowing());
+  BubbleBox b = bubbleBoxAt(pmd.loaded ? (int)beh.x : CX, petHeadTop(), bubbleW1 > bubbleW2 ? bubbleW1 : bubbleW2,
+                            lines, badgeShowing(), petButtonShown());
   uint16_t ink = inkColor();
   gfx->fillRoundRect(b.x, b.y, b.w, b.h, BUBBLE_RADIUS, UI_WHITE);
   gfx->drawRoundRect(b.x, b.y, b.w, b.h, BUBBLE_RADIUS, ink);

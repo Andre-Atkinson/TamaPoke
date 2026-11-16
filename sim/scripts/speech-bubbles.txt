@@ -2,6 +2,9 @@
 # night, beside the clock badge, the need line in place of the "!" bubble, and the cases
 # where no bubble may show (a heart or banner, a menu open, asleep, an attention call
 # lighting the screen, dimmed or off).
+# The bubbles point at the pet's head as drawn (#73): Charmander (most shots) is short; 20c..20d
+# with the evolve button up; 20e by the lowest awake head (Fearow); 23b..23c by a tall one
+# (Venusaur); 26..27 with the huff playing.
 # A manual check: run it in each language on both boards and look at the shots and the
 # "say ..." lines in the serial log; nothing compares them automatically.
 #   tools/sim.sh --board 175c --lang pt --script speech-bubbles --out shots/pt/
@@ -132,6 +135,31 @@ shot 20-asleep-no-bubble
 tap 265 397
 wait 2s
 
+# #73: with the evolve button up (LVL 30 with every need above 40) the bubble stays above the
+# button, its tail not into it. Then back to level 1 (LVL 0). This section, 20e and 23b..23c come
+# before the shots that follow them, which they move a little (the poops come by chance).
+serial LVL 30
+wait 1s
+say hungry
+wait 300ms
+shot 20c-bubble-above-evolve-button
+say love
+wait 300ms
+shot 20d-bubble-above-evolve-button-2
+serial LVL 0
+wait 1s
+
+# #73: the lowest awake head. Fearow, happy (every need still above 40), stands in its IDLE
+# pose with its head top at y 262, the lowest of any awake pet: the tail stops at y 250, over
+# it, and the box ends above y 244, where the poops are drawn (any there now come by chance).
+serial SPEC 22
+wait 1s
+say pat
+wait 300ms
+shot 20e-speech-low-fearow
+serial SPEC 4
+wait 1s
+
 # a need below 25 by itself. PWR turns the screen off (it is on: just touched), so the call
 # is dark; PWR turns it on again. The "!" bubble is there, and 3 s later the due bubble says
 # that need in its place, then the "!" comes back.
@@ -146,11 +174,51 @@ shot 22-need-in-words
 wait 5s
 shot 23-exclamation-again
 
+# #73: the same bubbles by a tall head. The "!" is still up (the need is still low), and a
+# speech bubble takes its place for a moment. Venusaur, sad, is in its HURT pose with its
+# head top at y 149: both boxes stop under the status line, their tails over the head.
+serial SPEC 3
+wait 1s
+shot 23b-exclamation-tall-venusaur
+say hungry
+wait 300ms
+shot 23c-speech-tall-venusaur
+serial SPEC 4
+wait 1s
+
+# #73: no bubble while the pet huffs (the 12th quick tap on it; the puffs go by its head, where
+# the bubbles are). The pat before it shows a heart for 1.5 s, which hides a bubble too, so
+# the huff goes on for sixteen taps (480 ms apart in the simulator) before the "!" is back
+# (26: the puffs show, the "!" does not) and a "say" is made (27: the same).
+# The finger is left of the pet, so the puffs fly right, over the side the bubble is on.
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+tap 160 250
+shot 26-huff-no-exclamation
+say hungry
+wait 100ms
+shot 27-huff-no-speech-bubble
+
 # an attention call lights the screen for 15 s (food, 128-136 s after the last shot: the
 # 1.75 brightens its dimmed screen, the 1.75C peeks with the screen still off). No bubble in
 # it, even one a "say" starts. The HEALTH line stamps the time to compare with "call food"
 # (the shot must be less than 15 s after it; a change earlier in this script can move it).
-wait 138s
+# (138 s after shot 23 in all, as before #73: 23b..27 take about 10 s, the sixteen taps
+# 480 ms apart)
+wait 128s
 serial HEALTH
 say hi
 wait 300ms

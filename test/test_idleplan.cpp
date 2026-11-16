@@ -399,7 +399,7 @@ TEST(IdleEmote, it_stays_in_the_play_area_beside_the_head) {
     for (int top = 60; top <= 300; top += 5) {
       IdleSpot s = idleEmoteAt(petX, top);
       int r = IDLE_EMOTE_R;
-      CHECK(s.y - r >= ATTN_BUBBLE_Y);  // under the status line (ends near y 106)
+      CHECK(s.y - r >= ATTN_BUBBLE_Y_MIN);  // under the status line (ends near y 106)
       CHECK(s.y + r + 11 < 312);        // the tail dots too stay above the bars' panel
       // inside the round panel, tail dots included (they reach 19 px across and 27 px down)
       int far = s.right ? s.x + r : s.x - r;
