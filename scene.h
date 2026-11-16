@@ -8,6 +8,7 @@
 #include "species.h"  // Species
 #include "skylayout.h"  // STARS, the sun and the moon, the header (#70)
 #include "weather.h"  // WxNow, ScenePlace (#60)
+#include "holiday.h"  // HolidayToday (#26)
 
 // comportamiento del bicho en pantalla
 struct PetBeh {
@@ -53,6 +54,9 @@ WxNow sceneWeather();     // the weather at scenePlace() now (fair during a cere
 WxNow sceneWeatherNow();  // the weather now at today's place (the standby clock's: the latch moves only in drawScene())
 uint8_t sceneSeason();    // the season the scene shows (none during a ceremony or without a clock)
 bool sceneStarsOut();     // the night sky shows its stars (the speech bubbles' night line)
+// Today's special day (holiday.h, #26) on the scene's clock: its decorations and greeting.
+// Nothing without a trusted clock, or during a farewell or a run-away.
+HolidayToday holidayNow();
 // The sky, the place and the weather. The place changes only while nobody is looking
 // (SceneLatch), so call this only for a frame of the main scene that is drawn.
 void drawScene(uint32_t now, bool night);

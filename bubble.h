@@ -3,11 +3,13 @@
 // scene.ino), rewritten here without their network features.
 //
 // Pure logic (no hardware, no clock reads), tested on the PC (test/test_bubble.cpp):
-//  - bubblePick(): which line. A low need always wins, with the same need and threshold
+//  - bubblePick(): which line. A special day's greeting that is due comes first (#26,
+//    holiday.h). Then a low need always wins, with the same need and threshold
 //    as the "!" bubble, the status line and the attention call (attnShown, ATTN_LOW), so
 //    the four never disagree. Otherwise, at random, a morning or night line (only with a
 //    clock that is set and not stale), a friendly line, or "I love you" (with the
 //    player's name when one is set, owner.h).
+//  - bubbleChoose(): bubblePick() plus the greeting's rules (a few a day, never in quiet hours).
 //  - BubbleTimer: when. A bubble is due 1-2 min after the last one started. It waits
 //    until the pet screen has been free and awake for BUBBLE_SETTLE_MS, then shows for
 //    BUBBLE_SHOW_MS. With the default settings the screen dims after 90 s untouched (and
@@ -17,7 +19,9 @@
 // bubble.cpp holds the state and draws it; the sketch tells it when the screen is free.
 #pragma once
 #include <stdint.h>
+#include <stdio.h>
 #include "attention.h"
+#include "holiday.h"
 
 // The lines, in the order of their StrIds (S_SAY_HUNGRY...). The four needs come first,
 // in AttnNeed order.
@@ -27,13 +31,30 @@ enum BubbleLine : uint8_t {
   BUB_HI, BUB_HAPPY, BUB_PAT,                      // the friendly lines
   BUB_LOVE_NAME,                                   // "I love you, %s!" (a name is set)
   BUB_LOVE,                                        // "I love you!" (no name)
+  // the greetings of the special days (#26, holiday.h), in Greet order: "Merry Christmas,
+  // <name>!" (or without the name when none is set)
+  BUB_CHRISTMAS, BUB_NEW_YEAR, BUB_VALENTINE, BUB_EASTER, BUB_HALLOWEEN, BUB_BIRTHDAY,
   BUB_LINES
 };
+#define BUB_GREET_FIRST BUB_CHRISTMAS  // = BUB_GREET_FIRST + Greet - GREET_CHRISTMAS
+
+// The string a line says, as its offset from S_SAY_HUNGRY in i18n.h (bubble.cpp checks the
+// order): one string a line up to BUB_LOVE, then two for each greeting, with the player's
+// name and without (S_SAY_CHRISTMAS_FMT, S_SAY_CHRISTMAS...).
+constexpr int bubbleStrOffset(uint8_t line, bool named) {
+  if (line >= BUB_GREET_FIRST && line < BUB_LINES) return BUB_GREET_FIRST + 2 * (line - BUB_GREET_FIRST) + (named ? 0 : 1);
+  return line;
+}
+// Does that string take the name (a "%s")? The love line as picked, a greeting when a name is set.
+constexpr bool bubbleTakesName(uint8_t line, bool named) {
+  return line == BUB_LOVE_NAME || (named && line >= BUB_GREET_FIRST && line < BUB_LINES);
+}
 #define BUB_NONE 0xFF
 #define BUB_FRIENDLY 3
 // each line's name in the serial log ("say hungry") and in the simulator's "say" step
 inline const char *const BUBBLE_KEYS[BUB_LINES] = {
   "hungry", "bath", "tired", "bored", "morning", "stars", "hi", "happy", "pat", "love-name", "love",
+  "christmas", "newyear", "valentine", "easter", "halloween", "birthday",
 };
 
 #define BUBBLE_SHOW_MS 4500UL      // how long one stays up
@@ -56,12 +77,17 @@ struct BubbleIn {
   bool starsOut = true;  // the night sky shows its stars (sceneStarsOut(), weather.h, #60)
   bool named;       // the player's name is set
   uint8_t last;     // the previous line, or BUB_NONE
+  uint8_t greet = BUB_NONE;  // a special day's greeting that is due (HolidayGreeter, holiday.h), or BUB_NONE
 };
 
-// r: any random number. r % 100 picks the kind (about 30% a time line when one applies,
-// 50% friendly, 20% love; 80% friendly when no time line applies) and r / 100 which
-// friendly line. A need repeats while it lasts; any other line is not said twice in a row.
+// r: any random number. A special day's greeting that is due comes first, even before a
+// need: it is rare (holiday.h) and the need's "!" bubble is back as soon as it ends.
+// Then a low need. Otherwise r % 100 picks the kind (about 30% a time line when one
+// applies, 50% friendly, 20% love; 80% friendly when no time line applies) and r / 100
+// which friendly line. A need repeats while it lasts; any other line is not said twice in
+// a row.
 inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
+  if (in.greet >= BUB_GREET_FIRST && in.greet < BUB_LINES) return in.greet;
   uint8_t need = attnShown(in.needs);
   if (need < ATTN_NEEDS) return (uint8_t)(BUB_HUNGRY + need);
   uint32_t p = r % 100;
@@ -76,6 +102,29 @@ inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
   // the same line again: a friendly one instead, never the one just said
   if (line == friendly) return (uint8_t)(BUB_HI + (friendly - BUB_HI + 1) % BUB_FRIENDLY);
   return friendly;
+}
+
+// The line for a bubble that starts now: bubblePick() with a special day's greeting that is
+// due (HolidayGreeter `g`: `clock` the scene's trusted clock or 0, `quiet` quiet hours now,
+// `greet` today's, holidayNow().greet). Counts the greeting in `g` when that is the line, so
+// at most HOLIDAY_GREETS come a day and none in quiet hours. `in.greet` is set here.
+inline uint8_t bubbleChoose(BubbleIn in, uint32_t r, HolidayGreeter &g, uint32_t clock, bool quiet, uint8_t greet) {
+  in.greet = g.due(clock, quiet, greet) ? (uint8_t)(BUB_GREET_FIRST + greet - GREET_CHRISTMAS) : (uint8_t)BUB_NONE;
+  uint8_t line = bubblePick(in, r);
+  if (in.greet != BUB_NONE && line == in.greet) g.said(clock);
+  return line;
+}
+
+// What `line` says, with the player's `name` ("" for none): "I love you, <name>!" and a
+// greeting with the name when one is set (bubbleTakesName). text(offset) is the string at
+// S_SAY_HUNGRY + offset (i18n.h, not included here); bubble.cpp's compose() and the tests
+// share this.
+template <typename Text>
+inline void bubbleFormat(char *say, size_t n, uint8_t line, const char *name, Text text) {
+  bool named = name[0] != 0;
+  const char *fmt = text(bubbleStrOffset(line, named));
+  if (bubbleTakesName(line, named)) snprintf(say, n, fmt, name);
+  else snprintf(say, n, "%s", fmt);
 }
 
 // When a bubble shows. update() runs on every loop pass with `free`: the pet screen is
