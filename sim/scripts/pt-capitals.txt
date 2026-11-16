@@ -3,11 +3,12 @@
 # case, which also show the four no UI string uses (A` A^ E^ U').
 # By day (10:00): all of it. By night (22:00, shots 13-18): the main screen's status line
 # and release dialog and the 12-rep hold result, whose ink and colours change with the
-# night, and the card pages, which keep their day colours (shot as a check). The banners (MEDALHA!, OTIMO!) and the clock prompt
-# (QUE HORAS SAO?) are not shot at night: they are drawn in fixed colours (UI_BAR_WARN
-# and UI_INK in drawCelebration, UI_BG_DAY and UI_INK in renderClock), the same day and
-# night. The name bubbles are shot by day only: their text is dark on white, day or night
-# (drawSpeechBubble); only the outline follows the night ink.
+# night, and the card pages, which keep their day colours (shot as a check). The banners
+# (MEDALHA!, OTIMO!) and the clock prompt (QUE HORAS SAO?) are not shot at night: they are
+# drawn in fixed colours (UI_BAR_WARN and UI_INK in drawCelebration, UI_BG_DAY and UI_INK
+# in renderClock), the same day and night. The name bubbles are shot by day only: their
+# text is dark on white, day or night (drawSpeechBubble); only the outline follows the
+# night ink.
 # A manual check: run it in Portuguese on both boards and look at the shots.
 #   tools/sim.sh --board 175c --lang pt --script pt-capitals --out shots/175c/
 #   tools/sim.sh --board 175 --lang pt --script pt-capitals --out shots/175/
