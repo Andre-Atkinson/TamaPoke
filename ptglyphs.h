@@ -17,13 +17,14 @@
 // Adafruit-style GFXfont and every other byte from the classic font, so nothing
 // already on screen moves. owner.h maps the same letters in the player's name.
 //
-// The look (#85). The classic font's capitals are 7 rows tall (rows 0-6) and its lowercase
-// letters 5 (rows 2-6), and the cell has no row above the capitals for an accent. So an
-// accented capital is a 6-row letter (rows 1-6) with its accent squeezed into row 0 and no
-// blank row between them, as the font's own O-umlaut does: taller than any lowercase letter,
-// so an upper-case word stays upper-case.
-//  - acute and grave: one pixel at the letter's top corner, clear of its top (U' has it right
-//    of centre, clear of the stem; E' has a 4-column E, like the font's E-acute, to clear it)
+// The look (#85). The classic font's capitals are 7 rows tall (rows 0-6) and its short
+// lowercase letters (a e o u...) 5 (rows 2-6), and the cell has no row above the capitals for
+// an accent. So an accented capital is a 6-row letter (rows 1-6) with its accent squeezed into
+// row 0 and no blank row between them, as the font's own O-umlaut does: taller than a short
+// lowercase letter, so an upper-case word stays upper-case.
+//  - acute and grave: one pixel above a top corner of the letter, where its top row has no
+//    ink, so it reads as a mark rather than a bump (U' has it right of centre, off the stem;
+//    E' has a 4-column E, like the font's E-acute, so the corner is free)
 //  - circumflex: one pixel on top of A and E; O^ is a full-height O whose top is the peak
 //  - tilde: a flat bar, as the font draws its own N-tilde
 // C-cedilla stays the font's: its C is 6 rows from the top, the cedilla below, a capital already.

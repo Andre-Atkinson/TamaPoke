@@ -469,11 +469,12 @@ TEST(PtGlyphs, the_lookup_finds_the_13_codes_and_nothing_else) {
 }
 
 // #85: an upper-case word stays upper-case. The classic font's capitals fill rows 0-6 and
-// its lowercase letters rows 2-6, or rows 3-6 under an accent and a blank row (o' o^). So
-// each accented capital here fills every row from 0 (its accent) to 6 (the baseline), with
-// no blank row between accent and letter: a letter under a gap is a lowercase height (#85:
-// I' and O^ read as i and o). The two lowercase letters keep that gap, like the font's o'
-// and o^, so a~ and o~ never pass for capitals (before #85 O~ and o~ were the same art).
+// its short lowercase letters (a e o...) rows 2-6, or rows 3-6 under an accent and a blank
+// row (o' o^). So each accented capital here fills every row from 0 (its accent) to 6 (the
+// baseline), with no blank row between accent and letter: a letter under a gap is a
+// lowercase height (#85: I' and O^ read as i and o). The two lowercase letters keep that
+// gap, like the font's o' and o^, so a~ and o~ never pass for capitals (before #85 O~ and o~
+// were the same art).
 TEST(PtGlyphs, accented_capitals_are_as_tall_as_the_fonts_capitals) {
   int capitals = 0, lowercase = 0;
   for (int g = 0; g < PTG_COUNT; g++) {
