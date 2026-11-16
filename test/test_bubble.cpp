@@ -395,13 +395,8 @@ static const char *LANG_ID[LANG_COUNT] = { "EN", "PT" };
 // ptglyphs.h have the same 6 px cell.
 static int widthIn(int len) { return len * 12; }
 
-// What bubble.cpp's compose() writes for `line` (bubbleStrOffset and bubbleTakesName),
-// with `name` set or "" for none.
-static void sayLine(char *say, size_t n, int line, const char *name) {
-  const char *fmt = T((StrId)(S_SAY_HUNGRY + bubbleStrOffset((uint8_t)line, name[0] != 0)));
-  if (bubbleTakesName((uint8_t)line, name[0] != 0)) snprintf(say, n, fmt, name);
-  else snprintf(say, n, "%s", fmt);
-}
+// The string at S_SAY_HUNGRY + offset, as bubble.cpp's compose() passes it to bubbleFormat().
+static const char *sayText(int offset) { return T((StrId)(S_SAY_HUNGRY + offset)); }
 
 TEST(Bubble, every_line_fits_two_lines_in_every_language_with_the_longest_name) {
   // the longest name in the font's encoding: one byte per character, no space to wrap at;
@@ -415,7 +410,7 @@ TEST(Bubble, every_line_fits_two_lines_in_every_language_with_the_longest_name) 
       for (const char *nm : { (const char *)name, "" }) {
         if (line == BUB_LOVE_NAME && !nm[0]) continue;  // only picked with a name
         char say[48];
-        sayLine(say, sizeof say, line, nm);
+        bubbleFormat(say, sizeof say, (uint8_t)line, nm, sayText);
         CHECK_MSG(say[0], std::string("empty: ") + BUBBLE_KEYS[line] + " in " + LANG_ID[lang]);
         CHECK_MSG(!strchr(say, '%'), std::string("unformatted: ") + say);
         for (int badge = 0; badge < 2; badge++) {
@@ -437,7 +432,7 @@ TEST(Bubble, the_need_lines_and_most_others_fit_on_one_line) {
     for (int line = 0; line < BUB_LINES; line++) {
       if (line == BUB_LOVE_NAME) continue;
       char s[48];
-      sayLine(s, sizeof s, line, "");
+      bubbleFormat(s, sizeof s, (uint8_t)line, "", sayText);
       CHECK_MSG(widthIn((int)strlen(s)) <= bubbleTextMax(true), std::string("two lines: ") + s);
     }
   }
@@ -448,24 +443,24 @@ TEST(Bubble, the_need_lines_and_most_others_fit_on_one_line) {
 TEST(Bubble, a_greeting_says_the_day_with_the_name_or_without) {
   gLang = LANG_EN;
   char say[48];
-  sayLine(say, sizeof say, BUB_CHRISTMAS, "Sam");
+  bubbleFormat(say, sizeof say, (uint8_t)BUB_CHRISTMAS, "Sam", sayText);
   CHECK_STREQ(say, "Merry Christmas, Sam!");
-  sayLine(say, sizeof say, BUB_CHRISTMAS, "");
+  bubbleFormat(say, sizeof say, (uint8_t)BUB_CHRISTMAS, "", sayText);
   CHECK_STREQ(say, "Merry Christmas!");
-  sayLine(say, sizeof say, BUB_BIRTHDAY, "Sam");
+  bubbleFormat(say, sizeof say, (uint8_t)BUB_BIRTHDAY, "Sam", sayText);
   CHECK_STREQ(say, "Happy birthday, Sam!");
-  sayLine(say, sizeof say, BUB_BIRTHDAY, "");
+  bubbleFormat(say, sizeof say, (uint8_t)BUB_BIRTHDAY, "", sayText);
   CHECK_STREQ(say, "Happy birthday!");
-  sayLine(say, sizeof say, BUB_NEW_YEAR, "Sam");
+  bubbleFormat(say, sizeof say, (uint8_t)BUB_NEW_YEAR, "Sam", sayText);
   CHECK_STREQ(say, "Happy New Year, Sam!");
-  sayLine(say, sizeof say, BUB_HALLOWEEN, "");
+  bubbleFormat(say, sizeof say, (uint8_t)BUB_HALLOWEEN, "", sayText);
   CHECK_STREQ(say, "Happy Halloween!");
-  sayLine(say, sizeof say, BUB_LOVE, "Sam");  // the plain love line never takes the name
+  bubbleFormat(say, sizeof say, (uint8_t)BUB_LOVE, "Sam", sayText);  // the plain love line never takes the name
   CHECK_STREQ(say, "I love you!");
   gLang = LANG_PT;
-  sayLine(say, sizeof say, BUB_EASTER, "Sam");
+  bubbleFormat(say, sizeof say, (uint8_t)BUB_EASTER, "Sam", sayText);
   CHECK_STREQ(say, "Feliz P\240scoa, Sam!");
-  sayLine(say, sizeof say, BUB_VALENTINE, "");
+  bubbleFormat(say, sizeof say, (uint8_t)BUB_VALENTINE, "", sayText);
   CHECK_STREQ(say, "Feliz Dia dos Namorados!");
   gLang = LANG_DEFAULT;
   // only a string with the name is used as a format (a plain one is copied as it is)
@@ -477,6 +472,42 @@ TEST(Bubble, a_greeting_says_the_day_with_the_name_or_without) {
   CHECK(!bubbleTakesName(BUB_HI, true));
   CHECK_EQ((int)BUB_GREET_FIRST + GREET_BIRTHDAY - GREET_CHRISTMAS, (int)BUB_BIRTHDAY);
   CHECK_EQ((int)BUB_BIRTHDAY + 1, (int)BUB_LINES);
+}
+
+// bubbleChoose() is what bubbleLoop() calls: the pick, the HolidayGreeter's rules and its
+// count (bubble.cpp itself is not compiled by the host tests). A local epoch for a date,
+// worked out as test_holiday.cpp's at().
+static uint32_t atDate(int y, int m, int d, int hh, int mm) {
+  y -= m <= 2;
+  int era = y / 400, yoe = y - era * 400;
+  int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return (uint32_t)(era * 146097 + doe - 719468) * 86400u + (uint32_t)(hh * 3600 + mm * 60);
+}
+
+TEST(Bubble, the_greeting_comes_3_times_a_day_30_min_apart_and_never_in_quiet_hours) {
+  BubbleIn in = calm(true, 10, false, BUB_HI);
+  HolidayGreeter g;
+  const uint8_t greet = GREET_CHRISTMAS;
+  auto choose = [&](uint32_t clock, bool quiet) { return bubbleChoose(in, 7, g, clock, quiet, greet); };
+  CHECK_EQ(choose(atDate(2026, 12, 25, 10, 0), false), (uint8_t)BUB_CHRISTMAS);
+  CHECK(choose(atDate(2026, 12, 25, 10, 5), false) != BUB_CHRISTMAS);   // 5 min later: an ordinary line
+  CHECK_EQ(choose(atDate(2026, 12, 25, 10, 40), false), (uint8_t)BUB_CHRISTMAS);
+  CHECK_EQ(choose(atDate(2026, 12, 25, 21, 0), false), (uint8_t)BUB_CHRISTMAS);
+  CHECK(choose(atDate(2026, 12, 25, 21, 40), false) != BUB_CHRISTMAS);  // three said today
+  CHECK_EQ(g.count(), 3);
+  // quiet hours: never, and nothing counted
+  HolidayGreeter q;
+  for (int i = 0; i < 6; i++)
+    CHECK(bubbleChoose(in, 7, q, atDate(2026, 12, 25, 10, 0) + i * 3600, true, greet) != BUB_CHRISTMAS);
+  CHECK_EQ(q.count(), 0);
+  // no trusted clock (0): never, and a day with no greeting says none
+  HolidayGreeter z;
+  CHECK(bubbleChoose(in, 7, z, 0, false, greet) != BUB_CHRISTMAS);
+  CHECK(bubbleChoose(in, 7, z, atDate(2026, 12, 25, 10, 0), false, GREET_NONE) != BUB_CHRISTMAS);
+  CHECK_EQ(z.count(), 0);
+  // the day's greeting is the one said (the birthday's, not Christmas)
+  CHECK_EQ(bubbleChoose(in, 7, z, atDate(2026, 12, 25, 10, 0), false, GREET_BIRTHDAY), (uint8_t)BUB_BIRTHDAY);
 }
 
 TEST(Bubble, a_due_greeting_comes_first_even_before_a_need) {

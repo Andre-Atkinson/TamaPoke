@@ -49,10 +49,7 @@ static bool compose(uint8_t line) {
   char say[48];
   char name[OWNER_NAME_MAX + 1];
   ownerNameForScreen(name, sizeof name);
-  // "I love you, <name>!" and a greeting with the name when one is set (bubbleTakesName)
-  const char *fmt = T((StrId)(S_SAY_HUNGRY + bubbleStrOffset(line, name[0] != 0)));
-  if (bubbleTakesName(line, name[0] != 0)) snprintf(say, sizeof say, fmt, name);
-  else snprintf(say, sizeof say, "%s", fmt);
+  bubbleFormat(say, sizeof say, line, name, [](int o) { return T((StrId)(S_SAY_HUNGRY + o)); });
   setSize(2);
   int n = (int)strlen(say);
   int br = bubbleSplit(say, n, bubbleTextMax(badgeShowing()), measure);
@@ -79,16 +76,14 @@ void bubbleLoop(uint32_t now, bool free) {
   // a special day's greeting (#26): the scene's clock (0 while it is not trusted), as the
   // decorations; never in quiet hours
   uint32_t clock = sceneEpoch(e, bedEdge.stale());
-  uint8_t greet = holidayNow().greet;
-  if (greeter.due(clock, attnQuietAt(pet.bedPreset, e, bedEdge.stale()), greet))
-    in.greet = (uint8_t)(BUB_GREET_FIRST + greet - GREET_CHRISTMAS);
-  uint8_t line = bubblePick(in, (uint32_t)random(0x7FFFFFFF));
+  // (a greeting is counted before compose(): test_bubble.cpp proves every one can be laid out)
+  uint8_t line = bubbleChoose(in, (uint32_t)random(0x7FFFFFFF), greeter, clock,
+                              attnQuietAt(pet.bedPreset, e, bedEdge.stale()), holidayNow().greet);
   if (!compose(line)) {
     bubbleTimer.cancel();
     Serial.printf("say %s: too wide\n", BUBBLE_KEYS[line]);
     return;
   }
-  if (line == in.greet) greeter.said(clock);
   bubbleLine = line;
   Serial.printf("say %s\n", BUBBLE_KEYS[line]);
 }

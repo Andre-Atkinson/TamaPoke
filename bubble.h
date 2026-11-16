@@ -9,6 +9,7 @@
 //    the four never disagree. Otherwise, at random, a morning or night line (only with a
 //    clock that is set and not stale), a friendly line, or "I love you" (with the
 //    player's name when one is set, owner.h).
+//  - bubbleChoose(): bubblePick() plus the greeting's rules (a few a day, never in quiet hours).
 //  - BubbleTimer: when. A bubble is due 1-2 min after the last one started. It waits
 //    until the pet screen has been free and awake for BUBBLE_SETTLE_MS, then shows for
 //    BUBBLE_SHOW_MS. With the default settings the screen dims after 90 s untouched (and
@@ -18,7 +19,9 @@
 // bubble.cpp holds the state and draws it; the sketch tells it when the screen is free.
 #pragma once
 #include <stdint.h>
+#include <stdio.h>
 #include "attention.h"
+#include "holiday.h"
 
 // The lines, in the order of their StrIds (S_SAY_HUNGRY...). The four needs come first,
 // in AttnNeed order.
@@ -99,6 +102,29 @@ inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
   // the same line again: a friendly one instead, never the one just said
   if (line == friendly) return (uint8_t)(BUB_HI + (friendly - BUB_HI + 1) % BUB_FRIENDLY);
   return friendly;
+}
+
+// The line for a bubble that starts now: bubblePick() with a special day's greeting that is
+// due (HolidayGreeter `g`: `clock` the scene's trusted clock or 0, `quiet` quiet hours now,
+// `greet` today's, holidayNow().greet). Counts the greeting in `g` when that is the line, so
+// at most HOLIDAY_GREETS come a day and none in quiet hours. `in.greet` is set here.
+inline uint8_t bubbleChoose(BubbleIn in, uint32_t r, HolidayGreeter &g, uint32_t clock, bool quiet, uint8_t greet) {
+  in.greet = g.due(clock, quiet, greet) ? (uint8_t)(BUB_GREET_FIRST + greet - GREET_CHRISTMAS) : (uint8_t)BUB_NONE;
+  uint8_t line = bubblePick(in, r);
+  if (in.greet != BUB_NONE && line == in.greet) g.said(clock);
+  return line;
+}
+
+// What `line` says, with the player's `name` ("" for none): "I love you, <name>!" and a
+// greeting with the name when one is set (bubbleTakesName). text(offset) is the string at
+// S_SAY_HUNGRY + offset (i18n.h, not included here); bubble.cpp's compose() and the tests
+// share this.
+template <typename Text>
+inline void bubbleFormat(char *say, size_t n, uint8_t line, const char *name, Text text) {
+  bool named = name[0] != 0;
+  const char *fmt = text(bubbleStrOffset(line, named));
+  if (bubbleTakesName(line, named)) snprintf(say, n, fmt, name);
+  else snprintf(say, n, "%s", fmt);
 }
 
 // When a bubble shows. update() runs on every loop pass with `free`: the pet screen is

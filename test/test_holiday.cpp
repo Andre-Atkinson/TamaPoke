@@ -365,7 +365,13 @@ TEST(Holiday, a_new_day_starts_the_count_again) {
   uint32_t e = at(2026, 12, 31, 12, 0);
   for (int i = 0; i < HOLIDAY_GREETS; i++) g.said(e + i * 3600);
   CHECK(!g.due(e + 5 * 3600, false, GREET_BIRTHDAY));
-  uint32_t ny = at(2027, 1, 1, 0, 10);  // ten minutes after the last
+  // a new day starts fresh: no 30-minute gap is carried over midnight (a greeting at 23:55
+  // does not hold back the next day's at 00:10; in practice midnight is quiet hours)
+  uint32_t late = at(2026, 12, 31, 23, 55);
+  HolidayGreeter h;
+  h.said(late);
+  CHECK(h.due(at(2027, 1, 1, 0, 10), false, GREET_NEW_YEAR));
+  uint32_t ny = at(2027, 1, 1, 0, 10);
   CHECK(g.due(ny, false, GREET_NEW_YEAR));
   g.said(ny);
   CHECK_EQ(g.count(), 1);
