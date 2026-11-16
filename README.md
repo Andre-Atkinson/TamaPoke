@@ -432,7 +432,10 @@ with every new pet:
 - **Stamina** ← steady care: a point for every 30 awake minutes with every need
   at 40 or more. The minutes add up (a minute under 40 just doesn't count), survive
   a restart, and don't count while the pet sleeps or self-care keeps it on the
-  charger.
+  charger. Energy is one of those needs, and awake it only goes down (only sleep
+  brings it back), so a pet that is put to bed for a while when it's tired builds
+  stamina far faster: looked after hourly with such naps, the stamina ribbon comes
+  in about a day and a half; never napped, it takes a week or more.
 - **Speed** ← the Play minigames: a fifth of the game's score (3 for a game at par).
 
 The stat card's **Fitness** page shows the three bars, what trains each, a ribbon

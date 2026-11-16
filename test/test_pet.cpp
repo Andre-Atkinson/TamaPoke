@@ -990,21 +990,43 @@ TEST(ribbons, each_ribbon_comes_at_its_threshold) {
 
 // The thresholds are within a normal pet's life (pet.h): a few bag sessions, about two good
 // hours a day of steady care for two or three days, about ten Play games at par.
+// A player who looks in once an hour while the pet is awake: feeds it to 80, cleans it,
+// pets it to 80 joy and, when it's tired (ENE under 45), puts it to bed for 10 minutes. Energy
+// only comes back asleep, so those naps are what keep every need over 40 (pet.h, RIBBON_STA).
+static void hourlyCare(Pet &p) {
+  uint8_t plain = 0;
+  while (p.lovesBerry(plain)) plain++;  // an ordinary berry: no favourite's hearts or medal
+  while (p.fullness < 80) p.feedBerry(plain);
+  p.clean();
+  while (p.joy < 80) p.caress();
+  if (p.energy < 45) {
+    p.toggleLight();  // a nap
+    advance(p, 10);
+    p.toggleLight();
+  }
+}
+
 TEST(ribbons, the_thresholds_are_reachable) {
   CHECK(RIBBON_STR <= 3 * 18);  // the bag's cap per session (Pet::trainStrength)
   CHECK(RIBBON_SPD <= 10 * 3);  // a game at par
-  CHECK(RIBBON_STA * STAMINA_CARE_MIN <= 6 * 60);  // good hours of care, all told
   Pet p;
   makePet(p, 4);
   for (int i = 0; i < 10; i++) p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);
   for (int i = 0; i < 3; i++) p.trainStrength(40);
-  for (int m = 0; m < RIBBON_STA * STAMINA_CARE_MIN; m++) {
-    setStats(p, 100, 100, 100, 100);
-    advance(p, 1);
-  }
+  p.exerciseOver();  // as the last game's screen closes
   CHECK(p.hasMedal(MED_SPD));
   CHECK(p.hasMedal(MED_STR));
-  CHECK(p.hasMedal(MED_STA));
+  // stamina: three days of hourly care on the normal pace, 16 h awake and 8 h asleep
+  for (int day = 0; day < 3 && !p.hasMedal(MED_STA); day++) {
+    for (int h = 0; h < 16; h++) {
+      hourlyCare(p);
+      advance(p, 60);
+    }
+    p.toggleLight();  // the night
+    advance(p, 8 * 60);
+    p.toggleLight();
+  }
+  CHECK_MSG(p.hasMedal(MED_STA), "stamina " + std::to_string(p.trDef) + " after three days of hourly care with naps");
 }
 
 // A save from before #76 has the ribbons' bits clear: a pet already past a goal earns its

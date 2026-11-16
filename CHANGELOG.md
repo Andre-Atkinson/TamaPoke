@@ -206,7 +206,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   every awake minute with every need at 40 or more counts towards the next point,
   one point per 30 such minutes; a minute under 40 just doesn't count, and the
   count is saved, so a restart keeps it. Minutes self-care keeps the creature going
-  on the charger don't count, nor does sleep.
+  on the charger don't count, nor does sleep. Energy is one of the needs and only
+  sleep restores it, so putting a tired creature to bed for a while is part of the
+  steady care: looked after hourly with such naps, the stamina ribbon comes in about
+  a day and a half.
 
 - **Two languages: English and European Portuguese** (#61). Spanish, French,
   German, Italian, Japanese and Korean are gone. **A board set to one of them

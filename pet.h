@@ -71,7 +71,13 @@ enum : uint16_t {
 //   strength 30: the bag pays 1 point per 4 hits, at most 18 a session, so about three
 //     sessions of 40 hits;
 //   stamina 10: steady care pays 1 point per STAMINA_CARE_MIN awake minutes with every need
-//     at 40 or more, so about 5 good hours, two or three days of normal care;
+//     at 40 or more, so 5 good hours. Energy counts too, and awake it only falls (about an
+//     hour from full to 40; only sleep brings it back), so the good minutes come from a pet
+//     that is fed, clean, happy AND rested: put to bed a while when it's tired, as its
+//     "Worn out..." status asks. Looked after hourly with such naps, about a day and a half
+//     (the test ribbons.the_thresholds_are_reachable plays it); never napped, about a week on
+//     the relaxed pace, longer on the normal one (#78's stamina exercise adds a faster way).
+//     Owner's call, 2026-11-16: rest is part of steady care;
 //   speed 30: a Play minigame at par pays 3, so about ten games.
 #define RIBBON_STR 30
 #define RIBBON_STA 10

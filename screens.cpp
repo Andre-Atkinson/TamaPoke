@@ -776,7 +776,7 @@ bool careTap(int16_t x, int16_t y) {
 
 void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  gfx->fillCircle(CX, CY, CARD_R, UI_BG_DAY);  // the disc cardlayout.h lays the pages out on
   if (cardPage == 0) renderCardProfile();
   else if (cardPage == 1) renderCardStats();
   else if (cardPage == 2) renderCardMedals();
