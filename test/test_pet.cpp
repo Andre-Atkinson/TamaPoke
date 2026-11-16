@@ -1435,6 +1435,28 @@ TEST(banners, one_that_comes_while_another_shows_waits_its_turn) {
   CHECK_EQ((int)q.shown(t + 2 * MEDAL_BANNER_MS), (int)BANNER_NONE);
 }
 
+// add() takes the banner that ended off the screen first: a medal that comes after it ended, with
+// no pass in between, shows at once for its whole time, not behind the stale one.
+TEST(banners, a_medal_added_after_the_one_on_screen_ended_shows_at_once) {
+  BannerQueue q;
+  q.add(MED_STR, false, 1000);
+  uint32_t t = 1000 + MEDAL_BANNER_MS + 5000;  // strength ended, and no update came
+  q.add(MED_SPD, false, t);
+  CHECK_EQ((int)q.shown(t), (int)bitOf(MED_SPD));
+  CHECK_EQ((int)q.shown(t + MEDAL_BANNER_MS - 1), (int)bitOf(MED_SPD));
+  CHECK_EQ((int)q.shown(t + MEDAL_BANNER_MS), (int)BANNER_NONE);
+}
+
+// hold() takes the banner that ended off first too: a minigame that opens late does not bring an
+// ended banner back for another whole time.
+TEST(banners, hold_does_not_bring_back_a_banner_that_ended) {
+  BannerQueue q;
+  q.add(MED_STR, false, 0);
+  uint32_t t = MEDAL_BANNER_MS + 1000;
+  q.hold(t);
+  CHECK_EQ((int)q.shown(t), (int)BANNER_NONE);
+}
+
 // Bounded by its shape: every medal at once (an old save's first tick after an update could)
 // and a milestone make MED_COUNT + 1 banners, each once, then none and an empty queue.
 TEST(banners, the_queue_is_bounded_each_once_then_none) {
@@ -4126,6 +4148,7 @@ TEST(exercise, a_banner_under_the_screen_waits_for_it_to_close) {
   CHECK(p.bannerShown() == BANNER_NONE);
 }
 
+// ExerciseScreen calls exerciseOver() once, on the pass the screen has closed.
 TEST(exercise, the_screen_closing_gains_the_ribbon_once) {
   Pet p;
   makePet(p, 4);
@@ -4231,6 +4254,10 @@ TEST(timers, an_ended_animation_stays_ended_after_25_days_of_uptime) {
   p.playToy();        // the plush (and its heart)
   p.giveMilk();       // warm milk: drinking, eating
   CHECK(p.evolving() && p.playingToy() && p.drinkingMilk() && p.eating() && p.showHeart());
+  mockAdvanceMillis(100);
+  p.update(millis());  // a pass while they run leaves them alone
+  CHECK_MSG(p.evolving() && p.playingToy() && p.drinkingMilk() && p.eating() && p.showHeart(),
+            "a running animation is left alone");
   mockAdvanceMillis(EVOLVE_ANIM_MS + TOY_ANIM_MS + EAT_ANIM_MS + HEART_MS);
   p.update(millis());  // the loop's next pass
   mockAdvanceMillis(25u * 86400 * 1000);  // more than 2^31 ms

@@ -404,7 +404,9 @@ void renderExercise() {
   if (trainKind == EX_PUNCH ? punch.over(now) : hold.over(now)) {
     finishExercise(now);
     if (!trainOpen) return;
-    drawGameScene(true);  // the result's first frame: the sky again, without the stars (#84)
+    // The result's first frame: the sky again, without the stars (#84). The pass that ends the
+    // session has painted the game's background above; this repaints it, one extra fill once a session.
+    drawGameScene(true);
     drawExerciseResult(ink);
     flushUI();
     return;
