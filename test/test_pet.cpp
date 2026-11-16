@@ -1457,6 +1457,21 @@ TEST(banners, hold_does_not_bring_back_a_banner_that_ended) {
   CHECK_EQ((int)q.shown(t), (int)BANNER_NONE);
 }
 
+// A milestone waiting behind the banner on screen keeps its place when a medal comes after it:
+// the day's first care reaches the milestone while a medal shows, and its checkMedals() adds the
+// 7 STREAK medal right after (Pet::registerCare)
+TEST(banners, a_waiting_milestone_stays_when_a_medal_comes_after_it) {
+  BannerQueue q;
+  q.add(MED_STR, false, 1000);  // on screen
+  q.add(0, true, 2000);         // the milestone waits
+  q.add(MED_STREAK7, false, 2000);
+  uint32_t t = 1000 + MEDAL_BANNER_MS;
+  CHECK_EQ((int)q.shown(t), (int)BANNER_STREAK);
+  t += MILESTONE_BANNER_MS;
+  CHECK_EQ((int)q.shown(t), (int)bitOf(MED_STREAK7));
+  CHECK_EQ((int)q.shown(t + MEDAL_BANNER_MS), (int)BANNER_NONE);
+}
+
 // Bounded by its shape: every medal at once (an old save's first tick after an update could)
 // and a milestone make MED_COUNT + 1 banners, each once, then none and an empty queue.
 TEST(banners, the_queue_is_bounded_each_once_then_none) {
