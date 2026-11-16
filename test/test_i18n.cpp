@@ -473,8 +473,8 @@ TEST(PtGlyphs, the_lookup_finds_the_12_codes_and_nothing_else) {
 // if the flag is ever dropped.
 TEST(host, char_is_unsigned_like_the_esp32s3) {
   CHECK(!std::numeric_limits<char>::is_signed);
-  // each PT letter's byte, read through a plain char as a string hands it over, keeps
-  // its value (signed, a~ \343 would read as -29)
+  // each PT letter's byte, stored in a plain char and read back, keeps its value
+  // (signed, \343 would read as -29)
   for (int g = 0; g < PTG_COUNT; g++) {
     const char c = (char)PT_GLYPHS[g].code;
     CHECK_EQ((int)c, (int)PT_GLYPHS[g].code);
