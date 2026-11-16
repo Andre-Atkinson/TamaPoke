@@ -44,11 +44,20 @@ static uint32_t trainHeldAt = 0;     // ...as of the last successful touch poll 
 
 // ---------- minijuegos de Play (logica en minigames.h) ----------
 
+#if HOST_SIM
+static uint8_t forcedGame = GAME_COUNT;  // the simulator's "game" step; GAME_COUNT: the bag deals
+void gameForceNext(uint8_t g) { forcedGame = g; }
+#endif
+
 void startGame() {
   if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
   uint8_t fav = 0;
   while (fav < 2 && !pet.lovesBerry(fav)) fav++;
   games.start(millis(), (uint32_t)random(0x7FFFFFFF) ^ micros(), fav, pet.berryKnown);
+#if HOST_SIM
+  if (forcedGame < GAME_COUNT) games.begin(forcedGame, millis(), fav, pet.berryKnown);  // in place of the bag's pick
+  forcedGame = GAME_COUNT;
+#endif
   gameOpen = true;
   gameOverUntil = 0;
   gameNewHi = false;
@@ -101,8 +110,34 @@ static void finishGame() {
   gameShownScore = games.score();
   gameNewHi = gameShownScore > pet.gameBest(g);
   gameSpeedGain = pet.playGame(g, gameShownScore);
+  Serial.printf("Play: %s score=%u speed=+%u\n", GAME_KEYS[g], gameShownScore, gameSpeedGain);
   if (!games.won()) sfxPlay(gameNewHi && gameShownScore > 0 ? SFX_MEDAL : SFX_LEVEL);
   gameOverUntil = millis() + 4000;
+}
+
+// The screen went dark with a minigame open (#94; MiniGames::endDark). The game ends here
+// and the pet gets what its score so far earns, as the game's own end pays (Pet::playGame:
+// joy, speed, the energy and food it costs, the weight it burns, bond and the day's care),
+// but with no result screen to draw and no sound, and the game's screen closes: no 240 MHz
+// with the screen off, and the screen comes back on to the creature. A game nobody touched
+// pays nothing; the result screen only closes (paid at its end). A finger still on the glass
+// does nothing as it lifts, as after the exit chip.
+static void gameScreenOff() {
+  if (!gameOpen) return;
+  if (!games.over()) {  // over: on its result screen, paid by finishGame()
+    uint8_t g = games.game();
+    if (games.endDark()) {
+      uint16_t score = games.score();
+      uint8_t gain = pet.playGame(g, score);
+      Serial.printf("Play: %s score=%u speed=+%u (screen off)\n", GAME_KEYS[g], score, gain);
+    } else {
+      Serial.printf("Play: %s untouched (screen off)\n", GAME_KEYS[g]);
+    }
+  }
+  gameOpen = false;
+  gameOverUntil = 0;
+  holdFired = true;
+  swallowGesture = true;
 }
 
 // ---------- the calm exercises (#78): the rhythm punch and the stamina hold ----------
@@ -176,10 +211,15 @@ static void finishExercise(uint32_t now) {
 // was done, as the exit does, but with no result screen to draw and no sound to go with it,
 // and the training screen closes: no 240 MHz and no touch capture with the screen off, and
 // the screen comes back on to the creature. The result screen only closes (paid already).
-void exerciseScreenOff() {
+static void exerciseScreenOff() {
   if (!trainOpen) return;
   if (!trainOverUntil) payExercise(" (screen off)");
   leaveTraining();
+}
+
+void playScreenOff() {
+  gameScreenOff();
+  exerciseScreenOff();
 }
 
 void exerciseTap(uint32_t at) {

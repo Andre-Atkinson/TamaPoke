@@ -55,6 +55,20 @@ struct MiniGames {
   bool over() const { return flow.phase == GP_OVER; }
   bool playing() const { return flow.phase == GP_PLAY; }
 
+  // The screen went dark with the game open (#94: PWR, the 1.75C's pocket lock; bedtime and
+  // the battery shutdown go the same way): the game ends now, keeping its score. True when
+  // the pet is paid for score() (Pet::playGame), as the game's own end would pay it: a game
+  // in play that the player touched, even one scoring 0. A game nobody touched (its title
+  // card, or no touch counted yet) pays nothing and spends nothing, as the exit chip leaves
+  // it and as an exercise with nothing done (#92). A game already over was paid at its end
+  // (the sketch's finishGame runs on the frame that ends it), so it isn't paid again, and
+  // neither is this one on a second call.
+  bool endDark() {
+    bool pay = flow.phase == GP_PLAY && played;
+    flow.phase = GP_OVER;
+    return pay;
+  }
+
   // One frame: advance the clock and the game; ends it when the game is done
   // or nobody touched it for GameFlow::IDLE_MS.
   void frame(uint32_t now) {

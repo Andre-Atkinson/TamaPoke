@@ -1,0 +1,205 @@
+# A Play minigame when the screen goes dark (#94). For both boards, both languages, by day
+# and by night:
+#   tools/sim.sh --board 175c --lang en --script game-screen-off --out shots/
+#   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script game-screen-off --out shots/
+# PWR (and on the 1.75C the pocket lock, three presses) ends a minigame at once and the pet
+# gets what its score so far earns (Pet::playGame), with no result screen and no sound; a
+# game nobody touched pays nothing. The screen comes back on to the creature. The serial log
+# (shots/serial.log) has one "Play:" line per game, in this order (the scores and speeds
+# differ from run to run: the games' dice follow the time and the board):
+#   Play: song untouched (screen off)           1. nobody touched it: nothing paid
+#   Play: peek score=6 speed=+1 (screen off)    2. played: paid its score so far
+#   Play: keepy score=0 speed=+0                3. ran to its end: paid there, once; PWR on
+#                                                  its result screen adds no line
+#   Play: catch score=0 speed=+0 (screen off)   4. the pocket lock (one tap: played, so paid)
+#   Play: peek score=14 speed=+3 (screen off)   5. the speed ribbon (shot 15: its banner)
+#   Play: song score=0 speed=+0 (screen off)    6. the battery runs out mid-game
+# What must hold on every run: line 1 says "untouched"; lines 2, 4, 5 and 6 end in "(screen
+# off)"; line 3 does not (shot 08 is the keepy's result screen, paid at its end), and no
+# line comes between 3 and 4; line 5 has speed=+1 or more (+1 completes the ribbon in shot 15).
+# Each section names its game with the simulator's "game" step, so the bag's dice don't
+# decide which comes. The Play button is at (202, 404) and its strip's Poke Ball at
+# (169, 320) (#13); a game shows its title card for 1.2 s, then plays. In Peekaboo a tap on
+# an empty bush costs nothing, so the taps go round the five bushes (game_peek.h) and catch
+# the pet as it pops up.
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# 1. A game nobody touched (Berry Song, its tune playing), then PWR: dark at once, the game
+# closed with nothing paid and nothing spent; PWR again: the creature, not the game
+game song
+tap 202 404
+tap 169 320
+wait 1700ms
+shot 01-untouched-game
+press pwr
+shot 02-untouched-pwr-off
+wait 3s
+press pwr
+wait 1s
+shot 03-untouched-pwr-on
+
+# 2. A played game (Peekaboo, about 12 s of its 30), then PWR: dark at once, the pet keeps
+# what the score so far earns; PWR again: the creature; the Fitness page shows the speed
+# it earned (the "speed=+" of the serial line)
+game peek
+tap 202 404
+tap 169 320
+wait 1700ms
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+shot 04-game-playing
+press pwr
+shot 05-game-pwr-off
+wait 5s
+press pwr
+wait 1s
+shot 06-game-pwr-on
+swipe up
+swipe left
+shot 07-fitness-speed
+swipe up
+wait 1s
+
+# 3. A game that ran to its end (keepy-uppy, one tap that missed, three drops): paid there,
+# with its result screen; PWR on the result only closes it (nothing paid again), and PWR
+# back on shows the creature
+game keepy
+tap 202 404
+tap 169 320
+wait 1700ms
+tap 40 233
+wait 11s
+shot 08-keepy-result
+press pwr
+shot 09-result-pwr-off
+wait 2s
+press pwr
+wait 1s
+shot 10-result-pwr-on
+
+# 4. The pocket lock (three presses) on a game with one tap (Berry Catch): on the 1.75C the
+# lock hint, then dark, and three more presses unlock. The 1.75 has no lock: it reads PWR
+# every 250 ms, so quick presses merge and each three toggle the screen once or twice.
+# Either way the first dark ends the game, paid; a tap on nothing then wakes a screen the
+# 1.75 left dark (on a lit one it does nothing).
+game catch
+tap 202 404
+tap 169 320
+wait 1700ms
+tap 233 350
+press pwr 3
+shot 11-game-locked
+wait 3s
+press pwr 3
+tap 40 233
+wait 1s
+shot 12-game-unlocked
+
+# 5. A ribbon a game ended by PWR completes (#69, #94): speed set to 29 (the speed ribbon's
+# goal is 30), Peekaboo played for about 25 s (a margin over the +1 the ribbon needs; it
+# still ends by PWR, before its 20th pop-up), PWR. The ribbon is gained at the press (its
+# chime) and its banner waits in the dark: 6 s later, longer than the banner's 4 s, PWR back
+# on shows it on the creature's screen.
+train 0 0 29
+game peek
+tap 202 404
+tap 169 320
+wait 1700ms
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+shot 13-ribbon-game
+press pwr
+shot 14-ribbon-pwr-off
+wait 6s
+press pwr
+wait 500ms
+shot 15-ribbon-banner-after-pwr
+
+# 6. The battery runs out mid-game (0 %, no USB): the game is paid before the power-off, and
+# the simulator stops there.
+wait 5s
+game song
+tap 202 404
+tap 169 320
+wait 1700ms
+tap 233 300
+battery 0
+wait 2s

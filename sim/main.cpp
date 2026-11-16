@@ -18,6 +18,7 @@
 #include "../board.h"
 #include "../idlelife.h"
 #include "../bubble.h"
+#include "../gameui.h"
 #include "../pet.h"
 
 extern Pet pet;  // the sketch's (TamaPoke.ino): the "nature" and "train" steps set it
@@ -262,6 +263,10 @@ int main(int argc, char **argv) {
         pet.trAtk = (uint8_t)c.a;
         pet.trDef = (uint8_t)c.b;
         pet.trSpe = (uint8_t)c.c;
+        run(50);
+        break;
+      case OP_GAME:
+        gameForceNext((uint8_t)c.a);
         run(50);
         break;
       case OP_SHOT:

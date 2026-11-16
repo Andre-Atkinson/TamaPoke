@@ -3,6 +3,7 @@
 #include "framework.h"
 #include "../idleplan.h"
 #include "../nature.h"
+#include "../gamecore.h"
 #include "../sim/interactive.h"
 #include "../sim/png.h"
 #include "../sim/runner.h"
@@ -297,6 +298,28 @@ TEST(SimScript, nature_names_a_nature) {
            std::string("r.txt:2: usage: nature easygoing|greedy|playful|tidy|lazy"));
   CHECK(!simParseScript("nature\n").error.empty());
   CHECK(!simParseScript("nature tidy lazy\n").error.empty());
+}
+
+// "game NAME" (#94): the next Play deals this minigame; it runs the firmware, so it closes
+// the boot steps like any other step that runs
+TEST(SimScript, game_names_a_minigame) {
+  SimScript s = simParseScript("game catch\ngame song\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)2);
+  if (s.cmds.size() != 2) return;
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_GAME);
+  CHECK_EQ(s.cmds[0].a, (int32_t)GAME_CATCH);
+  CHECK_EQ(s.cmds[1].a, (int32_t)GAME_SONG);
+  for (int i = 0; i < GAME_COUNT; i++) {
+    SimScript t = simParseScript(std::string("game ") + GAME_KEYS[i] + "\n");
+    CHECK_EQ(t.error, std::string(""));
+    CHECK_EQ(t.cmds.size(), (size_t)1);
+    if (t.cmds.size() == 1) CHECK_EQ(t.cmds[0].a, (int32_t)i);
+  }
+  CHECK_EQ(simParseScript("wait 1s\ngame chess\n", "g.txt").error, std::string("g.txt:2: usage: game keepy|catch|peek|song"));
+  CHECK(!simParseScript("game\n").error.empty());
+  CHECK(!simParseScript("game catch song\n").error.empty());
+  CHECK_EQ(simPreBootEnd(simParseScript("battery 50\ngame keepy\n")), (size_t)1);
 }
 
 // "train STR STA SPD" (#76): the pet's training points, each 0-100, set at once

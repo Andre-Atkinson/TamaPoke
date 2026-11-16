@@ -316,6 +316,16 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **Turning the screen off ends a minigame** (#94), as it already ends an exercise. PWR
+  during a Play minigame (or the 1.75C's pocket lock) left it open in the dark with the CPU
+  at full speed, and bedtime then took it away with no prize; if the battery ran out
+  mid-game the score was lost. Now the game ends at once and the creature keeps what its
+  score so far earned, as when the game ends by itself, but with no result screen and no
+  sound; a game nobody has touched yet just closes, for nothing and at no cost. The board
+  goes back to its usual low-power screen-off, and the screen comes back on to the
+  creature. A medal or ribbon the game earned chimes as you press PWR and shows its
+  banner when the screen is back on.
+
 - **Turning the screen off ends an exercise** (#88). PWR during the punch or the hold
   (or the 1.75C's pocket lock) left it open in the dark, keeping the CPU at full speed
   until the screen came back on or bedtime ended it with no prize. Until the touch lock

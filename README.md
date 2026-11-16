@@ -70,6 +70,9 @@ While **awake**, per minute:
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
 - 🍬 **Candy:** +10 FOOD, +12 JOY, but **+12 weight** (fattening).
 - ⚽ **Play / minigames:** +JOY, −ENE; a random one of four short games (keepy-uppy, Berry Catch, Peekaboo, Berry Song). Each trains **SPEED** and burns weight, and keeps its own best score.
+  Turning the screen off (PWR, or the 1.75C's pocket lock) ends the game at once and the
+  creature keeps what its score so far earned, with no result screen; a game you haven't
+  touched yet just closes, for nothing and at no cost. The screen comes back on to the creature.
 - 🧸 **Plush toy** (the Play button's strip): it hops about with its plush, +10 JOY and a heart
   (+15 for a playful creature), no minigame, so no SPEED and no cost. Two plays an hour give joy;
   after that (or with JOY already full) it still plays, for no joy, so the games stay the main fun.
@@ -112,9 +115,9 @@ While **awake**, per minute:
   window starts (silently) and wakes when it ends (one soft chime if sound is on).
   Only those two moments act, so if you wake it at night it stays awake until the
   next bedtime, and if you put it to bed early it still wakes in the morning.
-  It waits until a minigame, dialog, bath or evolution is finished; a minigame left
-  open with the screen off is abandoned (no prize) at bedtime (an exercise never is:
-  turning the screen off ends it, keeping what was earned). Eggs, farewell
+  It waits until a minigame, dialog, bath or evolution is finished (a minigame or an
+  exercise is never left open with the screen off: turning the screen off ends it,
+  keeping what was earned). Eggs, farewell
   scenes, the starter pick and the egg choice are skipped. It follows the clock you set (swipe
   down): after a full power-off the 1.75C clock can be wrong until you set it, so
   after a power-off bedtime stays paused until the clock is set (clock screen, which
@@ -728,7 +731,8 @@ A script is one step per line (the full list is in `sim/script.h`):
 `sim/scripts/idle-life.txt`), `say hungry` (a speech bubble now, simulator only; `say christmas`
 and the other special days' greetings too),
 `train 30 10 30` (the creature's strength, stamina and speed training, simulator only; see
-`sim/scripts/fitness.txt`), and `shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
+`sim/scripts/fitness.txt`), `game catch` (the next Play deals this minigame, `keepy`,
+`catch`, `peek` or `song`, simulator only; see `sim/scripts/game-screen-off.txt`), and `shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
 doesn't answer) set the language, the time and the PMU before boot, and only
 there (`clock none`: no time, as after a power-off; see `sim/scripts/clock-prompt.txt`);
 `battery`, `usb` and `charging` placed before the first step that

@@ -163,8 +163,9 @@ inline AttnAction attnDecide(const AttnScene &s) {
     a.brighten = true;
     a.closeViews = s.screen == ATTN_SCR_LIT_IDLE && s.browsing;
   } else if (s.screen == ATTN_SCR_TIMED_OUT && !s.playing) {
-    // a minigame or an exercise can't time out (autoScreenOff), so `playing` here would be a
-    // state the sketch never reaches; it stays dark rather than showing a game
+    // a minigame or an exercise can't time out (autoScreenOff), and PWR and the pocket lock
+    // end one (#88, #94), so `playing` on a dark screen is a state the sketch never reaches;
+    // it stays dark rather than showing a game
     a.peek = true;
     a.closeViews = s.browsing;
   }
