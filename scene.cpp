@@ -1222,7 +1222,7 @@ void drawCareMenu(int left) {
   static const char *const *const PLAY[PLAY_ITEMS] = { SPR_ICON_PLAY, SPR_ICON_PLUSH };
   static const char *const *const MOON[MOON_ITEMS] = { SPR_ICON_LIGHT, SPR_ICON_MILK };
   const char *const *const *icons = menuKind == MENU_PLAY ? PLAY : menuKind == MENU_MOON ? MOON : FOOD;
-  uint8_t n = icons == FOOD ? FOOD_ITEMS : menuItems(menuKind);
+  uint8_t n = icons == FOOD ? (uint8_t)FOOD_ITEMS : menuItems(menuKind);
   gfx->fillRoundRect(left, MENU_Y, n * MENU_ITEM_W, MENU_H, MENU_RADIUS, UI_WHITE);
   gfx->drawRoundRect(left, MENU_Y, n * MENU_ITEM_W, MENU_H, MENU_RADIUS, inkColor());
   for (uint8_t i = 0; i < n; i++) drawMap(icons[i], 16, left + i * MENU_ITEM_W + MENU_ICON_IN, MENU_ICON_Y, 3, false);

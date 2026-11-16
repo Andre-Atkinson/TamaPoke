@@ -209,6 +209,8 @@ TEST(treats, the_plush_gives_a_little_joy_and_a_heart_and_nothing_else) {
   setStats(p, 60, 95, 40, 70);
   CHECK_EQ(p.playToy(), (uint8_t)5);  // up to 100: it returns what really went in
   CHECK_EQ(p.joy, (uint8_t)100);
+  p.toggleLight();  // put to bed mid-play: the play stops (no plush tossed beside a sleeper)
+  CHECK(!p.playingToy());
 }
 
 TEST(treats, the_plush_gives_joy_twice_an_hour_then_plays_for_none) {

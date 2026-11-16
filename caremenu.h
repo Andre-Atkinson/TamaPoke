@@ -31,7 +31,10 @@ enum : uint8_t { MOON_LIGHTS = 0, MOON_MILK, MOON_ITEMS };
 #define MENU_RADIUS 14
 
 inline uint8_t menuItems(uint8_t kind) {
-  return kind == MENU_FOOD ? FOOD_ITEMS : kind == MENU_PLAY ? PLAY_ITEMS : kind == MENU_MOON ? MOON_ITEMS : 0;
+  if (kind == MENU_FOOD) return FOOD_ITEMS;
+  if (kind == MENU_PLAY) return PLAY_ITEMS;
+  if (kind == MENU_MOON) return MOON_ITEMS;
+  return 0;
 }
 inline int menuW(uint8_t kind) { return menuItems(kind) * MENU_ITEM_W; }
 

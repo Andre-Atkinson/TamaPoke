@@ -185,9 +185,9 @@ public:
   void feedCandy();
   // The plush toy (#13, TOY_* above): the pet plays with it for TOY_ANIM_MS (playingToy()).
   // Returns the joy it gave, 0 once this hour's plays have given theirs. As an egg, asleep or
-  // in a ceremony nothing happens at all (no play either).
+  // in a ceremony nothing happens at all (no play either). Put to bed mid-play, it stops.
   uint8_t playToy();
-  bool playingToy() const { return timeLeft(toyUntil) > 0; }
+  bool playingToy() const { return !sleeping && timeLeft(toyUntil) > 0; }
   uint32_t toyElapsed() const {  // ms into the play (0 when none), for its animation
     uint32_t left = timeLeft(toyUntil);
     return left ? TOY_ANIM_MS - left : 0;
