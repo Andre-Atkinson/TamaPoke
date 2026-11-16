@@ -186,7 +186,6 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   rounded up so a small gain still counts. A creature from before the update is
   Easygoing. `STATS` prints `nat=<name>`. Idea from Mu-Muu/TamaPoke, re-implemented
   offline.
-
 - **`CARE?` serial command** prints `pace=<n> bed=<n> inbed=<0|1> stale=<0|1>
   egg=<0|1> picking=<0|1>` (`stale=1`: bedtime paused until the clock is set;
   `egg=1`: Eggs set to Choose; `picking=1`: the three-egg choice is on screen).

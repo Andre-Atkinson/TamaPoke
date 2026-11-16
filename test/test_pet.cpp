@@ -1144,6 +1144,24 @@ TEST(nature, lazy_energy_drains_a_point_more_every_fourth_minute) {
   checkNeeds(p, 32, 86, 85, 86, "lazy, 4 min");
 }
 
+// The greedy pet's extra food point comes after the poop roll, so the roll sees the food it
+// always saw (more than 40). From 49: 47, 45, 43, then minute 4 rolls at 41 and only then
+// takes the extra point (41 - 1 = 40).
+TEST(nature, greedy_extra_point_comes_after_the_poop_roll) {
+  Pet p;
+  naturePet(p, NAT_GREEDY);
+  setStats(p, 49, 90, 90, 90);
+  mockForceRandom(99);  // random(100) < 15 fails: no poop
+  advance(p, 3);
+  CHECK_EQ(p.fullness, (uint8_t)43);
+  CHECK_EQ(p.poops, (uint8_t)0);
+  mockForceRandom(0);  // the roll passes whenever it runs
+  advance(p, 1);
+  mockClearForcedRandom();
+  CHECK_EQ(p.poops, (uint8_t)1);
+  CHECK_EQ(p.fullness, (uint8_t)40);
+}
+
 // The relaxed pace drains on even minutes only: the extra point comes on every fourth of
 // those (minute 8), the same share of the drain as at the normal pace.
 TEST(nature, relaxed_pace_the_extra_point_comes_every_eighth_minute) {
