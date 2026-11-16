@@ -611,13 +611,14 @@ void bedClockSet(uint32_t set) {
 // animacion de evolucion abiertos NO se interrumpe: el evento queda pendiente y se
 // aplica en cuanto se cierran. Si el bicho no puede (huevo, ceremonia, eleccion de
 // inicial) pet.autoSleep/autoWake no hacen nada y el evento se descarta.
-// El minijuego, el ejercicio, el teclado y el reloj no tienen caducidad con la pantalla
-// apagada (el juego solo avanza y termina al dibujarse): solo bloquean mientras la
-// pantalla esta encendida y sin bloquear. Si se quedaron abiertos y el panel se apago
+// El teclado y el reloj no tienen caducidad con la pantalla apagada: solo bloquean mientras
+// la pantalla esta encendida y sin bloquear. Si se quedaron abiertos y el panel se apago
 // (PWR o bloqueo de bolsillo) el horario se aplica igual: ni renombrar (solo toca el nick)
 // ni ajustar la hora (el siguiente muestreo trata el salto como un borde mas) dependen de
-// pet.sleeping, y al dormir el juego se abandona sin premio (bedApply). An exercise is
-// never left open on a dark screen: PWR and the lock end it as they darken it (#88).
+// pet.sleeping. A minigame or an exercise is never left open on a dark screen: PWR and the
+// pocket lock end it as they darken it (#88, #94), so in the dark only the keyboard and the
+// clock screen can still be open when bedtime comes (bedBusy lists the game and the exercise
+// too, but only while the screen is lit).
 // El bano se compara con timeLeft, no en bruto: bathUntil solo se pone a 0 en drawBath(),
 // que no corre con la pantalla apagada.
 //
@@ -680,7 +681,7 @@ void bedApply() {
   BedEvent ev = bedPending;
   bedPending = BED_NONE;
   if (ev == BED_SLEEP) {
-    lightsOutNow();  // see there: an open game is abandoned, an open exercise ends as it was
+    lightsOutNow();  // see there: an open minigame or exercise ends as it was, keeping what it earned
   } else if (pet.autoWake()) {
     audioSetSleeping(false);  // el amplificador se enciende antes de encolar el sonido
     sfxPlay(SFX_HEART);       // un solo sonido suave (sfxPlay calla si el sonido esta apagado)

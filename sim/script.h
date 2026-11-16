@@ -35,6 +35,8 @@
 //   train STR STA SPD        the pet's training points (#76: strength, stamina, speed, each
 //                            0-100), set at once, as if earned; the ribbons follow at the next
 //                            medal check (the minute tick). Only the simulator has this.
+//   game NAME                the next Play deals this minigame (#94), one of keepy, catch, peek
+//                            or song, in place of the bag's pick. Only the simulator has this.
 //
 // Duraciones: 500ms, 2s, 5m, 2h, 1d y combinaciones (1h30m); un numero solo = ms.
 #pragma once

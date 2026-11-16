@@ -310,8 +310,12 @@ TEST(SimScript, game_names_a_minigame) {
   CHECK_EQ((int)s.cmds[0].op, (int)OP_GAME);
   CHECK_EQ(s.cmds[0].a, (int32_t)GAME_CATCH);
   CHECK_EQ(s.cmds[1].a, (int32_t)GAME_SONG);
-  for (int i = 0; i < GAME_COUNT; i++)
-    CHECK_EQ(simParseScript(std::string("game ") + GAME_KEYS[i] + "\n").cmds[0].a, (int32_t)i);
+  for (int i = 0; i < GAME_COUNT; i++) {
+    SimScript t = simParseScript(std::string("game ") + GAME_KEYS[i] + "\n");
+    CHECK_EQ(t.error, std::string(""));
+    CHECK_EQ(t.cmds.size(), (size_t)1);
+    if (t.cmds.size() == 1) CHECK_EQ(t.cmds[0].a, (int32_t)i);
+  }
   CHECK_EQ(simParseScript("wait 1s\ngame chess\n", "g.txt").error, std::string("g.txt:2: usage: game keepy|catch|peek|song"));
   CHECK(!simParseScript("game\n").error.empty());
   CHECK(!simParseScript("game catch song\n").error.empty());
