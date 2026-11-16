@@ -294,10 +294,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   engaged (10 s after the screen goes off by default on the 1.75C, never on the 1.75) a
   touch in the dark could land a punch unseen, and the 1.75C kept polling its training
   touch capture. Now the session ends at once and the creature keeps what it did, as when
-  you leave early, with no result screen; the board goes back to its usual low-power screen-off, and the screen comes
-  back on to the creature. A ribbon the session earned chimes as you press PWR and shows
-  its banner when the screen is back on. The same happens if the battery runs out
-  mid-exercise.
+  you leave early, with no result screen; the board goes back to its usual low-power
+  screen-off, and the screen comes back on to the creature. A ribbon the session earned
+  chimes as you press PWR and shows its banner when the screen is back on. The same
+  happens if the battery runs out mid-exercise.
 
 - **Train says so while the creature sleeps** (#89). Tapping *Train* (or an exercise)
   on the stat card while it slept closed the card and did nothing. Now the card stays
