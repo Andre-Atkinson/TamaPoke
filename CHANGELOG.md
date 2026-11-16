@@ -167,7 +167,7 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   22:00-07:00 or 23:00-08:00. The pet goes to sleep when the window starts and
   wakes when it ends. Only those two moments act, so waking it in the night
   sticks until the next bedtime. It waits for a minigame, dialog, bath or
-  evolution to finish; a minigame or the bag left open with the screen off is
+  evolution to finish; a minigame or an exercise left open with the screen off is
   abandoned without a prize at bedtime. It follows the clock you set; off by default.
 - **Choose your egg.** A third button on the Care page, *Eggs*: Surprise (the
   default, one random egg as before) or Choose. With Choose, every ending after
@@ -214,7 +214,7 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 - **Fitness page and training ribbons** (#76). The stat card's "Battle" page is now
   **Fitness**: three bars for the training you gave the creature, 0 to 100, as
   **Strength**, **Stamina** and **Speed**, each with a line saying what trains it (the
-  bag, steady care, the Play games), and the weight under them. Reaching **30**
+  punch, steady care and the hold, the Play games), and the weight under them. Reaching **30**
   strength, **10** stamina or **30** speed earns that stat's **ribbon**; its goal sits
   on the bar as a rosette that turns green once earned, and the Medals page shows the
   three ribbons in a row under the medals (now 11 in all). A creature already past a
@@ -228,6 +228,22 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   training for screenshots (`sim/scripts/fitness.txt`).
 
 ### Changed
+
+- **Calmer exercises** (#78). The stat card's button is now *Train*, and it offers
+  two exercises instead of tapping the bag as fast as possible:
+  - **Punch** (strength): the bag swings in to the creature and back, 12 times. Tap as it
+    swings in, when it lights up, to land a punch; a tap at any other time does nothing
+    and costs nothing.
+  - **Hold** (stamina): keep a finger on the screen and the creature does reps, one every
+    1.5 s, up to 12. Lifting the finger only pauses it; 15 s with no finger ends it.
+
+  Each punch or rep is worth 1.5 points, so a full session still gives +18 at most (+23
+  for a greedy creature's strength or a tidy one's stamina, #25), and
+  either one tires and feeds like the bag did. Leaving early (*Hold to exit* on the
+  1.75C, a tap at the very top on the 1.75) keeps what was earned; a session with
+  nothing done costs nothing. The punch keeps its own record (most punches in a session);
+  the old bag's tap record is no longer shown but stays in the save. Stamina still grows
+  by itself with steady care, as before.
 
 - **Stamina grows with steady care you can actually give** (#76). It took 12 hours
   in a row, awake, with every need at 40 or more, counted in memory only, so a
@@ -289,8 +305,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
-- **A medal or streak banner earned during a minigame or the bag shows after it**
-  (#69). When a game or the bag was the day's first care, the medal or streak
+- **"Hold to exit" is readable at night on the 1.75C's training screen** (#78). Its
+  label and outline were drawn in the night ink, light on the light button, as no
+  minigame's is.
+
+- **A medal or streak banner earned during a minigame or an exercise shows after it**
+  (#69). When a game or an exercise was the day's first care, the medal or streak
   milestone it completed showed its banner only under the result screen, so you
   heard it but never saw which. The banner now waits for the result to close, then
   shows its full time on the creature's screen. A medal the exercise completes (IN

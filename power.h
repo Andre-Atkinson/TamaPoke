@@ -32,7 +32,7 @@ struct PowerCtx {
   uint32_t idleMs;    // ms sin interaccion
   bool screenOff;     // apagada con el boton PWR
   bool sleeping;      // el bicho duerme
-  bool gameOpen;      // minijuego o saco: la fisica esta afinada a 85 ms por frame
+  bool gameOpen;      // minijuego o ejercicio: la fisica esta afinada a 85 ms por frame
   bool usb;           // alimentacion externa
   bool charging;
   int batPct;         // 0-100, -1 si no hay bateria

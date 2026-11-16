@@ -170,6 +170,17 @@ int main(int argc, char **argv) {
   setup();
 
   int shots = 0;
+  auto shot = [&](const std::string &name) {
+    std::string path = o.out + "/" + name + ".png";
+    if (!pngWriteRgb565(path, simShownPixels(), SIM_W, SIM_H, !o.square)) {
+      fprintf(stderr, "cannot write %s\n", path.c_str());
+      return false;
+    }
+    shots++;
+    if (!o.quiet)
+      printf("sim: %s%s\n", path.c_str(), simPanelVisible() ? "" : " (panel dark: screen off or locked)");
+    return true;
+  };
   for (size_t i = first; i < script.cmds.size() && !gSimPower.poweredOff; i++) {
     const SimCmd &c = script.cmds[i];
     switch (c.op) {
@@ -189,6 +200,7 @@ int main(int argc, char **argv) {
       case OP_HOLD:
         simTouchSet(true, (int16_t)c.a, (int16_t)c.b);
         run(c.ms);
+        if (!c.text.empty() && !shot(c.text)) return 1;  // the finger still down
         simTouchSet(false, 0, 0);
         run(SETTLE_MS);
         break;
@@ -252,17 +264,9 @@ int main(int argc, char **argv) {
         pet.trSpe = (uint8_t)c.c;
         run(50);
         break;
-      case OP_SHOT: {
-        std::string path = o.out + "/" + c.text + ".png";
-        if (!pngWriteRgb565(path, simShownPixels(), SIM_W, SIM_H, !o.square)) {
-          fprintf(stderr, "cannot write %s\n", path.c_str());
-          return 1;
-        }
-        shots++;
-        if (!o.quiet)
-          printf("sim: %s%s\n", path.c_str(), simPanelVisible() ? "" : " (panel dark: screen off or locked)");
+      case OP_SHOT:
+        if (!shot(c.text)) return 1;
         break;
-      }
     }
   }
   fclose(serialLog);

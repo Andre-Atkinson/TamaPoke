@@ -69,15 +69,15 @@ enum : uint16_t {
 #define MED_ALL ((uint16_t)((1u << MED_COUNT) - 1))
 #define MED_CARE_COUNT 8  // the medals page's grid: bits 0-7; the ribbons are bits 8 to MED_COUNT - 1
 // Training points (0-100) that earn each ribbon (#76), reachable in a normal pet's life:
-//   strength 30: the bag pays 1 point per 4 hits, at most 18 a session, so about three
-//     sessions of 40 hits;
+//   strength 30: the rhythm punch (#78) pays 1.5 points a punch, at most 18 a session, so
+//     two sessions;
 //   stamina 10: steady care pays 1 point per STAMINA_CARE_MIN awake minutes with every need
 //     at 40 or more, so 5 good hours. Energy counts too, and awake it only falls (about an
 //     hour from full to 40; only sleep brings it back), so the good minutes come from a pet
 //     that is fed, clean, happy AND rested: put to bed a while when it's tired, as its
 //     "Worn out..." status asks. Looked after hourly with such naps, about a day and a half
 //     (the test ribbons.the_thresholds_are_reachable plays it); never napped, about a week on
-//     the relaxed pace, longer on the normal one (#78's stamina exercise adds a faster way).
+//     the relaxed pace, longer on the normal one (the stamina hold, #78, adds a faster way: up to 18 a session).
 //     Owner's call, 2026-11-16: rest is part of steady care;
 //   speed 30: a Play minigame at par pays 3, so about ten games.
 #define RIBBON_STR 30
@@ -99,7 +99,7 @@ enum : uint16_t {
 // qualifies for (the first tick after the update). Their sound keeps out of quiet hours
 // (Pet::quietHours, #44) only when BOTH hold: the minute tick gains them with no exercise
 // since the tick before (checkMedals(true)), and every medal gained in that call is one of
-// these. Exercise burns weight and trains, so the tick right after a minigame or the bag,
+// these. Exercise burns weight and trains, so the tick right after a minigame or an exercise,
 // and the end of its screen (exerciseOver), check with checkMedals(false): an IN SHAPE or a
 // ribbon the exercise completed sounds. So do the day's first care (registerCare) and
 // hatching (checkMedals(false); the egg that hatches by itself is level 1, which earns no
@@ -147,7 +147,12 @@ public:
   uint16_t lastMilestone = 0;  // hito de racha ya celebrado
   uint16_t gameHi = 0;     // record de keepy-uppy, el minijuego original (del jugador)
   uint16_t catchHi = 0, peekHi = 0, songHi = 0;  // records de Berry Catch, Peekaboo y Berry Song
-  uint16_t strHi = 0;      // record de golpes al saco
+  // Most punches landed in one rhythm-punch session (#78), 0 to EX_COUNT: NVS `phi`, the
+  // player's like the minigames' records. The old tap-as-fast-as-you-can bag's record
+  // (`shi`) is no longer read, written or shown: a rhythm session lands far fewer punches,
+  // so it would be out of reach. Its key stays in NVS as it was, so an older firmware
+  // flashed back still finds it.
+  uint8_t punchHi = 0;
 
   void begin();                 // carga estado de NVS (o crea el primer huevo)
   void update(uint32_t nowMs);  // llamar en cada loop()
@@ -165,7 +170,12 @@ public:
   // result screen (#76).
   uint8_t playGame(uint8_t game, uint16_t raw);
   uint16_t gameBest(uint8_t game) const;  // record de un minijuego (0 si no existe)
-  uint8_t trainStrength(uint16_t hits);  // saco de entrenamiento (entrena FUE)
+  // The calm exercises (exercise.h, #78): a rhythm-punch session with `punches` landed
+  // trains strength, a stamina-hold session with `reps` done trains stamina, 1.5 points
+  // each up to EX_GAIN_CAP. Both cost and reward like any exercise (exerciseDone); a
+  // session with nothing done does neither. They return the points that went in.
+  uint8_t trainStrength(uint8_t punches);
+  uint8_t trainStamina(uint8_t reps);
 
   // stats de combate: base real de gen 1 x genes + nivel + entrenamiento
   uint16_t atkStat() const;
@@ -273,15 +283,16 @@ public:
   bool hasMedal(uint16_t m) const { return medals & m; }
   bool showMedal() const { return timeLeft(medalUntil) > 0; }
   bool showMilestone() const { return timeLeft(milestoneUntil) > 0; }
-  // While a Play minigame or the strength bag is on screen (the sketch, every loop pass,
+  // While a Play minigame or an exercise is on screen (the sketch, every loop pass,
   // #69): a medal or streak banner that came up under it (the exercise was the day's first
   // care) waits, and shows its whole time once the creature's screen is back. Its sound
   // played when it was gained, as before.
   void holdBanners();
-  // A minigame or the bag just closed (the sketch, once, as its screen goes; #76): a medal
+  // A minigame or an exercise just closed (the sketch, once, as its screen goes; #76): a medal
   // its exercise completed (IN SHAPE, a training ribbon) is gained now, on the creature's
   // screen, as the player's (it sounds, quiet hours or not), instead of on the next tick.
-  // Nothing new if the screen paid nothing (left by the hold before the end).
+  // Nothing new if the screen paid nothing (a game left by its exit hold, an exercise with
+  // nothing done).
   void exerciseOver();
   int careBonus() const;  // mejora del huevo por racha + vinculo
 
@@ -327,9 +338,10 @@ private:
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo
   uint8_t playReward(uint8_t n);  // recompensa de un minijuego, n = 0..GAME_SCORE_CAP; the speed gained
+  void exerciseDone(uint8_t work);  // an exercise session's cost and reward (#78)
   void addBond(uint8_t amt);
   void checkMedals(bool byTick);  // byTick: from the minute tick, no exercise since the last one
-  bool exercised = false;  // a minigame or the bag since the last tick (#44): RAM only
+  bool exercised = false;  // a minigame or an exercise since the last tick (#44): RAM only
   bool allNeedsEmpty() const { return fullness == 0 && joy == 0 && energy == 0 && hygiene == 0; }
   void tick();
   void drainBody();  // parte del goteo de necesidades (comida, energia, caca, higiene)
@@ -380,8 +392,8 @@ struct EvoChime {
   }
 };
 
-// The Play minigames' and the strength bag's screen (the sketch, every loop pass, fed
-// gameOpen || sackOpen; #69, #76). While one is up, a medal or streak banner that came up
+// The Play minigames' and the exercises' screens (the sketch, every loop pass, fed
+// gameOpen || trainOpen; #69, #76, #78). While one is up, a medal or streak banner that came up
 // under it waits (Pet::holdBanners); on the pass it has closed, the medals its exercise
 // completed are gained (Pet::exerciseOver), so a training ribbon's banner shows as the
 // creature's screen comes back.

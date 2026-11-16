@@ -603,12 +603,12 @@ static void renderCardStats() {
   }
   drawCardStat(FIT_WGT_Y, T(S_STAT_WGT), pet.weight, 100, 0xB3C8);
 
-  // boton: saco de entrenamiento de fuerza
+  // the TRAIN button: opens the exercise choice (trainPick, #78)
   gfx->fillRoundRect(96, 300, 274, 40, 12, UI_BAR_BAD);
   gfx->setTextColor(UI_BG_DAY);
   setSize(2);
-  setCur(centerX(T(S_TRAIN_STR), 2), 311);
-  printT(T(S_TRAIN_STR));
+  setCur(centerX(T(S_TRAIN), 2), 311);
+  printT(T(S_TRAIN));
 }
 
 // pagina 2: medallas con etiqueta descriptiva. The 8 care medals in a 2x4 grid whose rows
@@ -784,6 +784,7 @@ void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, CARD_R, UI_BG_DAY);  // the disc cardlayout.h lays the pages out on
   if (cardPage == 0) renderCardProfile();
+  else if (cardPage == 1 && trainPick) renderTrainPick();  // the TRAIN button's choice (#78)
   else if (cardPage == 1) renderCardStats();
   else if (cardPage == 2) renderCardMedals();
   else if (cardPage == 3) renderCardProgress();

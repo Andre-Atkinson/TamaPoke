@@ -40,28 +40,25 @@ wait 3s
 shot ribbon-banner
 wait 5s
 
-# the training bag, with the strength goal two points off: ten hits (about four a point) make
-# +2. As for the game, the banner waits under the result (#69) and shows once the bag has closed
+# the rhythm punch (#78), with the strength goal two points off: two punches on the beat
+# make +3 (1.5 a punch). As for the game, the banner waits under the result (#69) and
+# shows once the punch's screen has closed. The punch starts as the PUNCH tap lifts; its
+# windows are 400-1100 ms into each 1.5 s swing (exercise.h), and a tap is 480 ms long.
 train 28 10 30
 swipe up
 swipe left
 tap 233 320
-wait 1s
-shot bag-open
-tap 233 233
-tap 233 233
-tap 233 233
-tap 233 233
-tap 233 233
-tap 233 233
-tap 233 233
-tap 233 233
-tap 233 233
-tap 233 233
-wait 6s
-shot bag-result
-wait 3s
-shot bag-ribbon-banner
+tap 233 140
+wait 300ms
+shot punch-open
+tap 233 240
+wait 750ms
+tap 233 240
+# the session is 18 s; its result for 3.5 s, then the banner
+wait 16s
+shot punch-result
+wait 3500ms
+shot punch-ribbon-banner
 wait 5s
 swipe up
 swipe left
