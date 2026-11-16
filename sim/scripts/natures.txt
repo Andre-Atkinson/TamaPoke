@@ -1,0 +1,55 @@
+# Natures (#25): the stat card's profile page shows the pet's nature under its berry and
+# age. Every nature, by day and by night, with and without a nickname (the "(species)" line),
+# and by a tall pet. "nature NAME" sets it (simulator only); the STATS line in the serial
+# log names it (nat=...).
+# A manual check: run it in each language on both boards and look at the shots; nothing
+# compares them automatically.
+#   tools/sim.sh --board 175c --lang pt --script natures --out shots/pt/
+
+# a new game: Charmander (second row), three taps hatch it, then the card
+wait 1s
+tap 233 220
+wait 500ms
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial STATS
+swipe up
+
+nature easygoing
+wait 300ms
+shot 01-easygoing
+nature greedy
+wait 300ms
+shot 02-greedy
+nature playful
+wait 300ms
+shot 03-playful
+nature tidy
+wait 300ms
+shot 04-tidy
+nature lazy
+wait 300ms
+shot 05-lazy
+serial STATS
+
+# a nickname adds the "(species)" line under it; the longest name in Portuguese is BRINCALHAO
+serial NICK Wwwwwwwwwww
+nature playful
+wait 300ms
+shot 06-nickname-playful
+
+# a tall pet (Venusaur) over the lines below its portrait
+serial SPEC 3
+wait 300ms
+shot 07-tall-pet
+
+# by night (22:00): the card, then the main screen behind it
+serial TIME 1794607200
+nature greedy
+wait 300ms
+shot 08-night-greedy
+swipe up
+wait 500ms
+shot 09-night-main

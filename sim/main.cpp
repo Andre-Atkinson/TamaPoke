@@ -18,9 +18,11 @@
 #include "../board.h"
 #include "../idlelife.h"
 #include "../bubble.h"
+#include "../pet.h"
 
 void setup();
 void loop();
+extern Pet pet;  // the sketch's (TamaPoke.ino): the "nature" step sets it
 
 namespace {
 
@@ -237,6 +239,10 @@ int main(int argc, char **argv) {
         break;
       case OP_SAY:
         bubbleSayNow((uint8_t)c.a);
+        run(50);
+        break;
+      case OP_NATURE:
+        pet.nature = (uint8_t)c.a;
         run(50);
         break;
       case OP_SHOT: {

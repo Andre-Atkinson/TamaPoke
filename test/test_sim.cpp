@@ -2,6 +2,7 @@
 // escritor de PNG. La parte que corre el firmware se prueba con tools/sim.sh.
 #include "framework.h"
 #include "../idleplan.h"
+#include "../nature.h"
 #include "../sim/interactive.h"
 #include "../sim/png.h"
 #include "../sim/runner.h"
@@ -174,7 +175,7 @@ TEST(SimScript, sin_pasos_de_preparacion_o_sin_pasos_que_corran) {
 TEST(SimScript, todos_los_pasos_que_corren_cierran_la_preparacion) {
   const char *const RUN[] = { "tap 1 1", "hold 1 1 1s", "swipe left", "swipe 1 1 200 1 200ms",
                               "press pwr", "press boot", "wait 1s", "advance 1s", "serial X", "shot a",
-                              "idle doze", "say hi" };
+                              "idle doze", "say hi", "nature lazy" };
   for (const char *step : RUN) {
     std::string s = std::string(step) + "\nlang pt\n";
     CHECK_EQ(simParseScript(s, "r.txt").error, std::string("r.txt:2: lang must come before the first step that runs the firmware"));
@@ -262,6 +263,23 @@ TEST(SimScript, idle_names_an_activity) {
            std::string("r.txt:2: usage: idle stand|look|walk|rest|doze|hop|ball|gesture|seek"));
   CHECK(!simParseScript("idle\n").error.empty());
   CHECK(!simParseScript("idle doze hop\n").error.empty());
+}
+
+// "nature NAME" (#25): the pet's nature, by its name in NATURE_KEYS (nature.h)
+TEST(SimScript, nature_names_a_nature) {
+  SimScript s = simParseScript("nature easygoing\nnature tidy\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)2);
+  if (s.cmds.size() != 2) return;
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_NATURE);
+  CHECK_EQ(s.cmds[0].a, (int32_t)NAT_EASYGOING);
+  CHECK_EQ(s.cmds[1].a, (int32_t)NAT_TIDY);
+  for (int i = 0; i < NAT_COUNT; i++)
+    CHECK_EQ(simParseScript(std::string("nature ") + NATURE_KEYS[i] + "\n").cmds[0].a, (int32_t)i);
+  CHECK_EQ(simParseScript("wait 1s\nnature grumpy\n", "r.txt").error,
+           std::string("r.txt:2: usage: nature easygoing|greedy|playful|tidy|lazy"));
+  CHECK(!simParseScript("nature\n").error.empty());
+  CHECK(!simParseScript("nature tidy lazy\n").error.empty());
 }
 
 // pmu ok|none (#24): the firmware asks the AXP2101 once, in setup(), so it is boot-only

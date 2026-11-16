@@ -3,6 +3,7 @@
 #include <Preferences.h>
 #include "clockprompt.h"  // CLOCK_EPOCH_END
 #include "gamecore.h"  // GameId, records and normalised scores of the Play minigames
+#include "nature.h"    // NAT_*, the drains, care boosts and training bonus of each nature (#25)
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
 // (p. ej. 5000UL = las estadisticas caen 12x mas rapido).
@@ -23,6 +24,11 @@
 #define SELFCARE_IDLE_MS (10UL * 60 * 1000)
 #define SELFCARE_BELOW 40
 #define SELFCARE_LEVEL 50
+// Stamina by itself (DEF, Pet::tick): GOOD_DEF_MINUTES awake in a row with every need at 40
+// or more trains it by 1. goodTicks counts GOOD_STEP a minute, passed through
+// natureTrainGain() (#25), so a tidy pet's +25% is exact: 5 a minute, the point in 9.6 h.
+#define GOOD_DEF_MINUTES 720
+#define GOOD_STEP 4
 // Over this weight the status line says "chubby" (statusMsg) and the idle planner (#22) has
 // the pet rest more and play less. Weight is 0-100.
 #define PET_CHUBBY_WEIGHT 60
@@ -85,6 +91,7 @@ public:
   // genes (90-110%, se tiran al eclosionar) y entrenamiento (0-100)
   uint8_t geneAtk = 100, geneDef = 100, geneSpe = 100;
   uint8_t trAtk = 0, trDef = 0, trSpe = 0;
+  uint8_t nature = NAT_EASYGOING;  // rolled at hatch (#25, nature.h); NVS "nature"
   bool berryKnown = false;  // ya descubrio su baya favorita
   bool shiny = false;       // variante de color rara (se sortea en el huevo)
   uint32_t ageMinutes = 0;
@@ -267,7 +274,7 @@ private:
   bool eggPick = false;         // esperando que elija uno de los tres huevos (NVS "ecpk")
   int16_t eggCand[EGG_CHOICES] = { 0, 0, 0 };  // candidatos (NVS "ec0".."ec2")
   uint8_t neglectTicks = 0;
-  uint16_t goodTicks = 0;  // racha bien cuidado: forja la DEF
+  uint16_t goodTicks = 0;  // racha bien cuidado: forja la DEF (GOOD_STEP por minuto)
   uint32_t ceremonyUntil = 0;
   uint8_t bondToday = 0;       // tope diario de subida de vinculo
   uint32_t medalUntil = 0;     // celebracion de medalla en pantalla
@@ -284,6 +291,12 @@ private:
   void tick();
   void drainBody();  // parte del goteo de necesidades (comida, energia, caca, higiene)
   void drainJoy();   // ...y la felicidad (depende de comida e higiene ya bajadas)
+  // this drain carries the nature's extra point for `nat` (#25): 1 or 0
+  uint8_t natureDrain(uint8_t nat) const {
+    return nature == nat && natureDrainMinute(ageMinutes, pace == PACE_RELAXED) ? 1 : 0;
+  }
+  uint8_t playJoyExtra() const { return nature == NAT_PLAYFUL ? NAT_PLAY_JOY_EXTRA : 0; }
+  uint8_t sleepEnergy() const { return nature == NAT_LAZY ? NAT_SLEEP_ENERGY : 6; }  // per minute asleep
   void selfCare();   // one need back up to half while charging (#24), from tick()
   void hatch();
   void registerSpecies(int16_t dex);

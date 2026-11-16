@@ -50,6 +50,8 @@ enum StrId : uint8_t {
   // ficha: perfil
   S_STREAK_FMT, S_VIN, S_BERRY_UNK, S_BERRY_RED, S_BERRY_BLUE, S_BERRY_GREEN,
   S_INFO_FMT, S_RENAME_HINT,
+  // ficha: perfil, the nature (#25): "NATURE %s" and the names in NAT_* order (nature.h)
+  S_NATURE_FMT, S_NAT_EASYGOING, S_NAT_GREEDY, S_NAT_PLAYFUL, S_NAT_TIDY, S_NAT_LAZY,
   // ficha: combate
   S_BATTLE, S_STAT_ATK, S_STAT_DEF, S_STAT_SPE, S_STAT_WGT, S_TRAIN_STR,
   // ficha: medallas
@@ -94,6 +96,7 @@ enum StrId : uint8_t {
 };
 
 const char *T(StrId id);       // texto en el idioma activo
+const char *natureName(uint8_t n);  // the nature's name (#25, NAT_*); easygoing's when out of range
 const char *medalName(int i);  // banner de medalla (MED_COUNT)
 const char *medalDesc(int i);  // descripcion larga de medalla
 // The date as the standby clock shows it (#60), short: "Sat 15 Nov", "s\240b, 15 nov".

@@ -480,7 +480,7 @@ void clockTap(int16_t x, int16_t y) {
   if (OK_BTN.contains(x, y)) { applyClock(); return; }
 }
 
-// pagina 0: perfil (retrato grande, identidad, racha, vinculo, baya)
+// pagina 0: perfil (retrato grande, identidad, racha, vinculo, baya, naturaleza)
 static void renderCardProfile() {
   const DexEntry &d = DEX_TBL[pet.speciesId];
   const char *nm = pet.nick[0] ? pet.nick : dexName(pet.speciesId);
@@ -529,11 +529,17 @@ static void renderCardProfile() {
            (unsigned long)(pet.ageMinutes / 1440));
   gfx->setTextColor(UI_INK);
   setSize(2);
-  setCur(centerX(info, 2), 296);
+  setCur(centerX(info, 2), 286);
   printT(info);
 
+  // its nature (#25), under the berry and age
+  char nat[32];
+  snprintf(nat, sizeof(nat), T(S_NATURE_FMT), natureName(pet.nature));
+  setCur(centerX(nat, 2), 310);
+  printT(nat);
+
   gfx->setTextColor(UI_TRACK);
-  setCur(centerX(T(S_RENAME_HINT), 2), 332);
+  setCur(centerX(T(S_RENAME_HINT), 2), 336);
   printT(T(S_RENAME_HINT));
 }
 

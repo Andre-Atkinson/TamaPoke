@@ -3,6 +3,7 @@
 #include "shim/Arduino.h"
 #include "shim/Preferences.h"
 #include "../i18n.h"
+#include "../nature.h"
 #include "../pet.h"  // MED_COUNT, Pet::nick
 #include "../dex.h"
 #include "../uitext.h"  // headerSize()
@@ -54,6 +55,7 @@ static const ExpectedFmt EXPECTED[] = {
   { S_STREAK_DAYS_FMT, "%u" },
   { S_STREAK_FMT,      "%u,%u" },
   { S_INFO_FMT,        "%s,%lu" },
+  { S_NATURE_FMT,      "%s" },  // natureName() (#25, renderCardProfile)
   { S_MEDALS_FMT,      "%d,%d" },
   { S_REC_FMT,         "%u" },
   { S_LVL_FMT,         "%u" },
@@ -160,6 +162,24 @@ TEST(i18n, every_accented_byte_is_a_portuguese_letter_the_font_draws) {
     }
   });
   CHECK(seen > 20);  // the PT row really has accents to check
+}
+
+// the nature on the stat card (#25): natureName() follows NAT_* (nature.h), and a value out of
+// range reads as easygoing instead of past the table
+TEST(i18n, nature_names_follow_the_natures) {
+  gLang = LANG_EN;
+  CHECK_EQ(std::string(natureName(NAT_EASYGOING)), std::string("EASYGOING"));
+  CHECK_EQ(std::string(natureName(NAT_GREEDY)), std::string("GREEDY"));
+  CHECK_EQ(std::string(natureName(NAT_PLAYFUL)), std::string("PLAYFUL"));
+  CHECK_EQ(std::string(natureName(NAT_TIDY)), std::string("TIDY"));
+  CHECK_EQ(std::string(natureName(NAT_LAZY)), std::string("LAZY"));
+  CHECK_EQ(std::string(natureName(NAT_COUNT)), std::string("EASYGOING"));
+  CHECK_EQ(std::string(natureName(255)), std::string("EASYGOING"));
+  gLang = LANG_PT;
+  CHECK_EQ(std::string(natureName(NAT_PLAYFUL)), std::string("BRINCALH\303O"));
+  CHECK_EQ(std::string(natureName(NAT_LAZY)), std::string("PREGUI\200OSO"));
+  CHECK_EQ(std::string(natureName(200)), std::string("TRANQUILO"));
+  gLang = LANG_DEFAULT;
 }
 
 // un %u de mas o de menos en una traduccion es una lectura de basura de la pila
