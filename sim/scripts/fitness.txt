@@ -28,7 +28,7 @@ shot fitness-partway
 swipe left
 shot medals-none
 tap 233 420
-wait 1s
+wait 520ms  # 1 s less the strip's extra tap (#13), so the bag deals the same game as before
 
 # the stamina and speed goals reached, then a Play game: as its result closes, the ribbons are
 # gained (Pet::exerciseOver) and the banner names the first; under the result, it would wait
@@ -99,7 +99,7 @@ shot fitness-night
 swipe left
 shot medals-night
 tap 233 420
-wait 1s
+wait 520ms  # 1 s less the strip's extra tap (#13): the same game as before
 tap 202 404
 tap 169 320
 wait 22s

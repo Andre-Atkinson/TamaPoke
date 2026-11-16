@@ -41,10 +41,12 @@ shot 08-evolved
 hold 233 200 3500ms
 shot 09-release-dialog
 tap 298 278
-wait 1s
+wait 520ms
 
-# every minigame (the Play strip's Poke Ball, #13): the bag deals each one once in four plays. Untouched, each ends on
-# its own (a dropped ball, or 15 s idle) and shows its result for 4 s.
+# every minigame: the bag deals each one once in four plays. Untouched, each ends on its own
+# (a dropped ball, or 15 s idle) and shows its result for 4 s. The Play button opens its strip
+# (#13) and the Poke Ball deals the game; each wait before the button is 480 ms shorter than
+# before the strip, so each game starts at the same moment and the bag deals the same ones.
 tap 202 404
 tap 169 320
 wait 1700ms
@@ -53,7 +55,7 @@ wait 3s
 shot 11-game-1-later
 wait 12s
 shot 12-game-1-end
-wait 6s
+wait 5520ms
 tap 202 404
 tap 169 320
 wait 1700ms
@@ -62,7 +64,7 @@ wait 3s
 shot 14-game-2-later
 wait 12s
 shot 15-game-2-end
-wait 6s
+wait 5520ms
 tap 202 404
 tap 169 320
 wait 1700ms
@@ -71,7 +73,7 @@ wait 3s
 shot 17-game-3-later
 wait 12s
 shot 18-game-3-end
-wait 6s
+wait 5520ms
 tap 202 404
 tap 169 320
 wait 1700ms

@@ -312,6 +312,11 @@ TEST(treats, warm_milk_settles_it_happily_and_adds_less_weight_than_candy) {
   mockAdvanceMillis(EAT_ANIM_MS);
   CHECK(!p.eating());
   CHECK(!p.drinkingMilk());
+  // put to bed mid-drink (lights out from the moon strip): no mug beside a sleeper
+  CHECK(p.giveMilk());
+  CHECK(p.drinkingMilk());
+  p.toggleLight();
+  CHECK(!p.drinkingMilk());
 }
 
 TEST(treats, the_plush_and_the_milk_count_as_the_days_care) {

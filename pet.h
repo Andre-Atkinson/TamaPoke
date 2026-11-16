@@ -199,7 +199,7 @@ public:
   // its next sleep, until it wakes, restores more energy (milkNight()). The sketch puts it to
   // bed once the drink is over. False, and nothing given, as an egg, asleep or in a ceremony.
   bool giveMilk();
-  bool drinkingMilk() const { return timeLeft(milkUntil) > 0; }
+  bool drinkingMilk() const { return !sleeping && timeLeft(milkUntil) > 0; }  // put to bed mid-drink, its mug goes
   bool milkNight() const { return milked; }
   bool lovesBerry(uint8_t color) const {
     return !isEgg() && (speciesId % 3) == color;  // gusto oculto por especie
