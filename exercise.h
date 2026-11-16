@@ -60,11 +60,6 @@ struct RhythmPunch {
   static bool inWindow(uint32_t phase) {
     return phase + WINDOW_MS >= CONTACT_MS && phase < CONTACT_MS + WINDOW_MS;
   }
-  // The swing `t` falls in (EX_COUNT once the session is over).
-  uint8_t swing(uint32_t t) const {
-    uint32_t e = elapsed(t);
-    return e >= TOTAL_MS ? (uint8_t)EX_COUNT : (uint8_t)(e / SWING_MS);
-  }
   // Inside a window whose punch hasn't landed yet: the screen's "now!" cue.
   bool open(uint32_t now) const {
     uint32_t e = elapsed(now);

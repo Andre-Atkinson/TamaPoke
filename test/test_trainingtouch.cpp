@@ -137,6 +137,11 @@ TEST(TrainingTouch, TheExitChipNeverHoldsAndAHoldNeverExits) {
   }
   CHECK_EQ(t.update(true, 233, 405, 1000), T::EXIT);
   CHECK(!t.holding(1000));
+  T o;  // a touch-down off the round panel (inside 0..466, outside the circle) never holds
+  CHECK_EQ(o.update(true, 5, 5, 0), T::NONE);
+  CHECK(!o.holding(0));
+  CHECK_EQ(o.update(true, 5, 5, 20), T::NONE);
+  CHECK(!o.holding(20));
   T u;  // a hold on the pet that slides onto the chip keeps holding and never exits
   CHECK_EQ(u.update(true, 233, 300, 0), T::HIT);
   for (uint32_t n = 20; n <= 3000; n += 20) {
@@ -201,7 +206,6 @@ TEST(RhythmPunch, ASessionIsTwelveSwingsAndTapsAreJudgedWhenCaptured) {
   CHECK(!s.tap(5000 + RP::TOTAL_MS + RP::CONTACT_MS));  // after the end
   CHECK(!s.tap(4999));                                  // before the start
   CHECK_EQ(s.punches, (uint8_t)1);
-  CHECK_EQ(s.swing(5000 + RP::TOTAL_MS), (uint8_t)EX_COUNT);
 }
 TEST(RhythmPunch, SurvivesMillisRollover) {
   RP r; uint32_t start = 0xFFFFFF00u;
@@ -228,6 +232,11 @@ TEST(StaminaHold, EachRepIsOneAndAHalfSecondsHeld) {
   CHECK(h.step(1500, true));
   CHECK_EQ(h.reps, (uint8_t)1);
   CHECK_EQ(h.into, (uint32_t)0);
+  // frames that don't divide 1.5 s: the time past a rep goes into the next one
+  SH k; k.begin(0);
+  for (uint32_t t = 0; t <= 1600; t += 200) k.step(t, true);
+  CHECK_EQ(k.reps, (uint8_t)1);
+  CHECK_EQ(k.into, (uint32_t)100);
 }
 TEST(StaminaHold, LiftingPausesTheRepAndHoldingAgainGoesOn) {
   SH h; h.begin(0);

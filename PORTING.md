@@ -254,8 +254,8 @@ bits [3:2] = 00, set with `setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S)`).
 
 ## Training (1.75C)
 
-On the original layout, any touch with y < 72 (an invisible strip, no button)
-quit training, so fast taps near the top often ended the session. Taps that
+On the original layout (before #78), any touch with y < 72 (an invisible strip, no
+button) quit training, so fast taps near the top often ended the session. Taps that
 started and ended while a frame was being drawn were also lost.
 
 On the 1.75C:
@@ -286,8 +286,9 @@ taps** in a session with no noticeable lag. The rhythm punch and the stamina
 hold (#78) have not been tried on the panel yet. `TRAINTRACE ON` / `OFF` / `?` prints raw CST9217 reports
 (`TRAINRAW ...`) for diagnosis; it's off by default and not saved.
 
-The original board keeps its existing touch polling, training layout and
-y < 72 exit; the worker and trace commands are compiled out.
+The original board keeps its touch polling. Its exit is a tap on the top strip
+(y < 42, `TRAIN_EXIT_STRIP_H` in `gameui.h`) under a "tap: back" label, and since
+#78 it pays for what was done; the worker and trace commands are compiled out.
 
 ## Tests
 
