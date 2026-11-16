@@ -23,14 +23,14 @@ python3 test/test_tools.py    # solo las herramientas de tools/
 
 | Fichero | Que comprueba |
 |---|---|
-| `test_pet.cpp` | huevo y eleccion de inicial, comida, tick de estadisticas, sueno, descuidos, niveles, evolucion (incluida la rama de Eevee), stats de combate, entrenamiento y minijuego, racha y vinculo, medallas, ceremonias, progresion offline y guardado en NVS |
+| `test_pet.cpp` | huevo y eleccion de inicial, comida, tick de estadisticas, sueno, descuidos, niveles, evolucion (incluida la rama de Eevee), stats de combate, entrenamiento y minijuego (el folego del cuidado constante, #76), racha y vinculo, medallas y cintas de entrenamiento, la pantalla del ejercicio (#69), ceremonias, progresion offline y guardado en NVS |
 | `test_dex.cpp` | integridad de la Pokedex: nombres ASCII, cadenas evolutivas sin bucles, toda especie alcanzable, ninguna linea imposible de completar, limites de los buffers de la UI |
 | `test_i18n.cpp` | los dos idiomas (EN, PT) completos, cada acento en un byte que la fuente dibuja (CP437 o `ptglyphs.h`), los mismos `%u`/`%s` que le pasa el sketch en cada llamada, los textos que caben en su sitio, la clave `lang` de la NVS (#61) y los 12 glifos de `ptglyphs.h` |
 | `test_screenlock.cpp` | PWR triple-press, lock hint timing, unlocked reboot, BOOT gesture reset, render/brightness/sleep policy and rollover; `screenlock.cpp` also checks 22 gesture/lock scenarios at compile time |
 | `test_bootbutton.cpp` | 1.75C BOOT button: debounce, single/double/long press timing and edge cases |
 | `test_trainingtouch.cpp` | 1.75C strength training: tap target, hold-to-exit button, CST9217 report decoding |
 | `test_touchgesture.cpp` | pantalla principal (`touchgesture.h`): deslizar, tocar y la pulsacion larga de siempre, y los gestos sobre el bicho (caricia, toque doble, cosquillas, bufido, mantener y arrastrar) con trazas de toque sinteticas, incluido que ninguno se resuelva como otro |
-| `test_idleplan.cpp` | the pet's own life (`idleplan.h`, #22): the planner never picks what the sprite can't show, the needs, hour and weight weightings, calm vs full repertoire, deterministic seeded picks, the perks' hourly cap, the ball and where the emote goes |
+| `test_idleplan.cpp` | the pet's own life (`idleplan.h`, #22): the planner never picks what the sprite can't show, the needs, hour and weight weightings, calm vs full repertoire, deterministic seeded picks, the perks' hourly cap, the ball and where the emote goes, and how training shows (#76: the kick, the pace, the hops) |
 | `test_tools.py` | los scripts de `tools/` compilan, los datos de la Pokedex son coherentes y `dex.h` sigue coincidiendo con lo que genera `tools/gen_dex.py` |
 | `test_sim.cpp` | simulador de escritorio (`sim/`): lectura de guiones (pasos, duraciones, hora, idiomas, errores con linea), avance del reloj falso (vuelta de `millis()`, tramos de mas de 25 dias, corte por apagado) y el escritor de PNG (CRC-32, Adler-32, zlib) |
 | `test_tools.py` (sim) | `sim/gen_sketch.py` (prototipos del `.ino` como arduino-cli, con sus `#if`), y la imagen que escribe `test_sim.cpp` leida con el zlib de Python |

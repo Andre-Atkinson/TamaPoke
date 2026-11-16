@@ -24,8 +24,8 @@ and complete them all (shinies included).
 
 Running on hardware. Implemented: the 151 + shinies animated from microSD, full
 life cycle (egg by rarity → evolution → farewell/release/runaway, each gated
-behind a decision dialog), bred-Pokédex with gallery, battle stats (genes +
-training), retention hooks (streak / bond / medals / name), biome + real-time
+behind a decision dialog), bred-Pokédex with gallery, fitness training (strength, stamina,
+speed) with ribbons, retention hooks (streak / bond / medals / name), biome + real-time
 backgrounds, four minigames, training bag, animated bath, RTC with offline
 progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
 **sound (ES8311)**, **English and European Portuguese UI (English default)**, **starter choice on
@@ -106,12 +106,13 @@ While **awake**, per minute:
 - 🔕 **Quiet hours for its own sounds:** the sounds the creature makes by itself, with
   nobody touching it, keep out of quiet hours: the "ready to evolve" chime, the "about
   to run away" warning, the hourly level-up and the medal that time earns (level 10,
-  25 or 50, and **IN SHAPE**). Quiet hours are the attention calls' (the bedtime window,
+  25 or 50, **IN SHAPE**, and the stamina ribbon, which steady care earns by the
+  minute). Quiet hours are the attention calls' (the bedtime window,
   or 22:00–07:00 if bedtime is off, and any time the clock hasn't been set since a
   power-off). A sound that comes due then is skipped, not saved for the morning; the
   evolve or run-away button, the new level and the medal banner show as usual. Sounds
-  you start (a tap, a minigame, training, care that earns a medal, an **IN SHAPE** you
-  earn by exercise) play as before, and asleep it makes no sound at all.
+  you start (a tap, a minigame, training, care that earns a medal, an **IN SHAPE** or a
+  ribbon you earn by exercise) play as before, and asleep it makes no sound at all.
 - 🔌 **Self-care while charging** (always on): plugged into USB and untouched for
   **10 minutes**, the pet looks after itself a little. Once a minute, the first
   need under **40**, in the order FOOD, HYG (which also clears the poops), ENE,
@@ -250,12 +251,14 @@ After any ending, a **new egg** appears.
 - **Bond** (per pet, resets on hatch): grows with affection (**cap +8/day**), cools on
   neglect. Both streak & bond improve egg/shiny odds.
 - **8 medals** (Lv10/25/50, favorite berry found, 7-day streak, max bond, final form,
-  "fit" = weight 0 & no slip-ups), per-pet + a global counter.
+  "fit" = weight 0 & no slip-ups) and **3 training ribbons** (strength 30, stamina 10,
+  speed 30), per-pet + a global counter.
 - **Pokédex:** raising a species registers it; **151 + shinies** to complete.
 
-### Battle stats
-ATK / DEF / SPD = real **Gen-1 base** × genes + level + training (STRENGTH ← bag,
-SPEED ← minigame, DEFENSE ← 12 h of unbroken good care). *(Battles: on the roadmap.)*
+### Fitness
+Training points 0–100 for **strength** (the bag), **stamina** (steady care: every
+need at 40+) and **speed** (the Play minigames), shown on the card's Fitness page
+with a ribbon at each goal. They show in the pet's idle life (looks only).
 
 ## Hardware
 
@@ -361,8 +364,8 @@ If one bottoms out it counts as a *slip-up*.
 **Touch gestures:**
 - Tap the creature = pet it (+happiness, bond).
 - Horizontal swipe = open the **Pokédex / gallery**.
-- Vertical swipe up = open the **stat card** (5 pages: Profile / Battle / Medals /
-  Progress / Care; swipe between them; tap the name on Profile to rename; on Battle the
+- Vertical swipe up = open the **stat card** (5 pages: Profile / Fitness / Medals /
+  Progress / Care; swipe between them; tap the name on Profile to rename; on Fitness the
   "Train strength" button opens the bag; on Care two big buttons cycle the pace
   Normal ↔ Relaxed and the bedtime Off → 21–07 → 22–07 → 23–08).
 - Swipe down = **set the clock** and the **settings**. The first row is sound, brightness and
@@ -421,16 +424,31 @@ Pokédex number (persisted in NVS).
   branches to whichever evolution you're missing). Each slip-up delays it 1
   level; it won't evolve with any stat < 40 or while asleep.
 
-## Battle stats and training
+## Fitness and training
 
-Each creature has ATK/DEF/SPD = real gen-1 base × **genes** (90–110 %, rolled at
-hatch) + level + **training**:
-- SPEED ← the minigames
-- DEFENSE ← sustained good care (12 h with no slip-ups)
-- STRENGTH ← the training bag (whacking)
+Each creature trains three stats, from 0 to 100 points each, which start again
+with every new pet:
+- **Strength** ← the training bag: a point per 4 hits, at most 18 a session.
+- **Stamina** ← steady care: a point for every 30 awake minutes with every need
+  at 40 or more. The minutes add up (a minute under 40 just doesn't count), survive
+  a restart, and don't count while the pet sleeps or self-care keeps it on the
+  charger. Energy is one of those needs, and awake it only goes down (only sleep
+  brings it back), so a pet that is put to bed for a while when it's tired builds
+  stamina far faster: looked after hourly with such naps, the stamina ribbon comes
+  in about a day and a half; never napped, it takes a week or more.
+- **Speed** ← the Play minigames: a fifth of the game's score (3 for a game at par).
 
-Shown on the Battle page of the stat card. The (hidden) weight goes up with candy
-and burns off with training.
+The stat card's **Fitness** page shows the three bars, what trains each, a ribbon
+at each goal, and the weight (which goes up with candy and burns off with exercise).
+Each Play minigame's result shows the speed it trained (**SPEED +3**), as the bag
+shows its strength. Reaching **30** strength, **10** stamina or **30** speed earns
+that stat's **ribbon** (Medals page). Training also shows in the creature's own
+life, as looks only: a strong pet kicks its ball further, a fast one strolls and
+chases the ball up to 30 % faster, and one with stamina hops a little longer when
+it's happy. Nothing else changes: no need, perk or care balance depends on it.
+
+The serial `STATS` line still prints ATK/DEF/SPD, the gen-1 base × **genes**
+(90–110 %, rolled at hatch) + level + training.
 
 ## Retention: streak, bond, medals, name
 
@@ -438,8 +456,10 @@ and burns off with training.
   real day advances the streak; 3/7/30/100 milestones are celebrated; skipping a
   day breaks it. Flame badge on the main screen.
 - **Bond** (the creature's): rises slowly with care and petting, drops with slip-ups.
-- **Medals** for the individual (level, berry, streak, bond, final form, fit) +
-  a global counter. Medals page of the stat card.
+- **Medals** for the individual (level, berry, streak, bond, final form, fit, and
+  the strength, stamina and speed ribbons) + a global counter. Medals page of the
+  stat card. A medal or streak banner earned while a minigame or the bag is on screen
+  waits for it to close.
 - **Name**: touch keyboard; the nickname rules the header and the card.
 
 High streak and bond **improve the egg roll** (rarity and shiny): caring well
@@ -637,7 +657,9 @@ A script is one step per line (the full list is in `sim/script.h`):
 `tap X Y`, `hold X Y 3s`, `swipe left|right|up|down`, `press pwr 3`,
 `press boot`, `wait 2h`, `serial SPEC 25`, `battery 15`, `usb on`,
 `idle doze` (the creature's next idle activity, simulator only; see
-`sim/scripts/idle-life.txt`), `say hungry` (a speech bubble now, simulator only), and `shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
+`sim/scripts/idle-life.txt`), `say hungry` (a speech bubble now, simulator only),
+`train 30 10 30` (the creature's strength, stamina and speed training, simulator only; see
+`sim/scripts/fitness.txt`), and `shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
 doesn't answer) set the language, the time and the PMU before boot, and only
 there (`clock none`: no time, as after a power-off; see `sim/scripts/clock-prompt.txt`);
 `battery`, `usb` and `charging` placed before the first step that

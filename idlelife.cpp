@@ -32,6 +32,7 @@ static IdleIn idleInputs(bool full) {
   in.joy = pet.joy;
   in.energy = pet.energy;
   in.weight = pet.weight;
+  in.stamina = pet.trDef;
   // the hour only from a trusted clock, as the quiet hours read it (attnLoop): no clock, or
   // one reseeded after a power-off and not set yet, is no hour at all
   in.hour = idleHour(pet.lastSeenEpoch, bedEdge.stale());
@@ -103,7 +104,7 @@ static void ballTick(uint32_t now) {
   ballLast = now;
   idleBallRoll(ball, dt / 1000.0f);
   if (idleBallKickable(ball, beh.x)) {
-    idleBallKick(ball, beh.x, (uint32_t)random(0x7FFFFFFF));
+    idleBallKick(ball, beh.x, (uint32_t)random(0x7FFFFFFF), pet.trAtk);
     if (random(3) == 0) showEmote(EMO_NOTE, now, 900);
   }
   beh.mode = 1;
@@ -164,7 +165,7 @@ void idleArrived(uint32_t now) {
   idleNext(now, lastFull);
 }
 
-float idleWalkSpeed() { return beh.activity == IDLE_BALL ? IDLE_BALL_PX_S : 30.0f; }
+float idleWalkSpeed() { return idleWalkPace(beh.activity == IDLE_BALL, pet.trSpe); }
 
 uint8_t idleFrameAct(uint32_t now, int &dy, uint32_t &t0, bool &loop) {
   t0 = beh.t0;

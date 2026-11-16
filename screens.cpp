@@ -4,6 +4,7 @@
 #include "audio.h"
 #include "bedtime.h"
 #include "blit.h"
+#include "cardlayout.h"
 #include "clockprompt.h"
 #include "clockset.h"
 #include "dex.h"
@@ -21,6 +22,10 @@
 
 // settingslayout.h lays the settings pills out around its own copy of the centre
 static_assert(CX == SET_PANEL_C && CY == SET_PANEL_C, "settingslayout.h assumes the panel centre is (CX, CY)");
+// ...and cardlayout.h the Fitness and Medals pages (#76)
+static_assert(CX == CARD_C && CY == CARD_C, "cardlayout.h assumes the panel centre is (CX, CY)");
+static_assert(MEDAL_CARE == MED_CARE_COUNT && MEDAL_CARE + MEDAL_RIBBONS == MED_COUNT,
+              "cardlayout.h lays out every medal: the care ones, then the ribbons");
 
 // Used only in this file, and called above its definition (in TamaPoke.ino the
 // prototype arduino-cli generates covered that).
@@ -169,30 +174,30 @@ void eggSelectTap(int16_t x, int16_t y) {
 // ---------- ficha del bicho (deslizar vertical) ----------
 
 // x donde arrancan las barras de la ficha. Se calcula a partir de la etiqueta mas
-// larga para que las cuatro barras sigan alineadas en cualquier idioma, con 150
-// como suelo (las etiquetas de 3 o 4 letras caben de sobra).
+// larga para que las barras sigan alineadas en cualquier idioma, con 150 como suelo
+// (las etiquetas de 3 o 4 letras caben de sobra). STRENGTH, the longest, starts them at 204.
 static int statBarX() {
-  const StrId ids[] = { S_STAT_ATK, S_STAT_DEF, S_STAT_SPE, S_STAT_WGT, S_VIN };
+  const StrId ids[] = { S_STAT_STR, S_STAT_STA, S_STAT_SPD, S_STAT_WGT, S_VIN };
   int ancho = 0;
   for (StrId id : ids) {
     int w = textW(T(id), 2);
     if (w > ancho) ancho = w;
   }
-  int x = 96 + ancho + 12;   // 12 px de aire entre etiqueta y barra
+  int x = FIT_LABEL_X + ancho + 12;   // 12 px de aire entre etiqueta y barra
   return x < 150 ? 150 : x;
 }
 
 static void drawCardStat(int y, const char *label, uint16_t val, uint16_t maxBar, uint16_t color) {
   gfx->setTextColor(UI_INK);
   setSize(2);
-  setCur(96, y);
+  setCur(FIT_LABEL_X, y);
   printT(label);
   char num[8];
   snprintf(num, sizeof(num), "%u", val);
   setCur(330, y);
   printT(num);
   int bx = statBarX();
-  int bw = 310 - bx;   // la barra siempre acaba en 310, dejando aire hasta el numero
+  int bw = FIT_BAR_END - bx;   // la barra siempre acaba en 310, dejando aire hasta el numero
   int fw = (int)val * bw / maxBar;
   if (fw > bw) fw = bw;
   gfx->fillRoundRect(bx, y + 2, bw, 11, 3, UI_TRACK);
@@ -537,17 +542,60 @@ static void renderCardProfile() {
   printT(T(S_RENAME_HINT));
 }
 
-// pagina 1: combate (4 barras + boton de entrenar)
+// The three trained stats (#76), in the order of their bars, their ribbons (MED_STR,
+// MED_STA, MED_SPD) and their medals-page tiles.
+enum : uint8_t { FIT_STR = 0, FIT_STA, FIT_SPD };  // FIT_STATS of them (cardlayout.h)
+static const uint16_t FIT_COLOR[FIT_STATS] = { UI_BAR_BAD, 0x4C98, UI_BAR_WARN };
+static const uint16_t FIT_RIBBON[FIT_STATS] = { MED_STR, MED_STA, MED_SPD };
+static const uint8_t FIT_GOAL[FIT_STATS] = { RIBBON_STR, RIBBON_STA, RIBBON_SPD };
+#define FIT_HINT_INK 0x8410  // the line under each bar: grey, quieter than the labels
+static_assert(S_STAT_STA == S_STAT_STR + 1 && S_STAT_SPD == S_STAT_STR + 2 &&
+              S_TRAIN_HINT_STA == S_TRAIN_HINT_STR + 1 && S_TRAIN_HINT_SPD == S_TRAIN_HINT_STR + 2,
+              "the fitness rows index the labels and the hints by FIT_*");
+static_assert(MED_STR == 1 << MED_CARE_COUNT && MED_STA == 1 << (MED_CARE_COUNT + 1) &&
+              MED_SPD == 1 << (MED_CARE_COUNT + 2) && MED_CARE_COUNT + FIT_STATS == MED_COUNT,
+              "the ribbons are the medals after the care ones, in FIT_* order");
+
+// A rosette 12 px across centred at (x, y), its two tails spreading down and out to 13 px
+// below it: a training ribbon (#76). Won: green, with tails and heart in the stat's colour;
+// not yet: white, an outline to aim for.
+static void drawRosette(int x, int y, bool won, uint16_t color) {
+  uint16_t fill = won ? UI_BAR_OK : UI_WHITE, tail = won ? color : UI_WHITE;
+  for (int side = -1; side <= 1; side += 2) {  // each tail: a slanted strip, outlined
+    int ax = x + side * 1, bx = x + side * 4, cx = x + side * 9, dx = x + side * 5;
+    gfx->fillTriangle(ax, y + 3, bx, y + 2, cx, y + 11, tail);
+    gfx->fillTriangle(ax, y + 3, cx, y + 11, dx, y + 13, tail);
+    gfx->drawLine(bx, y + 2, cx, y + 11, UI_INK);
+    gfx->drawLine(cx, y + 11, dx, y + 13, UI_INK);
+    gfx->drawLine(dx, y + 13, ax, y + 3, UI_INK);
+  }
+  gfx->fillCircle(x, y, 6, fill);
+  gfx->drawCircle(x, y, 6, UI_INK);
+  if (won) gfx->fillCircle(x, y, 2, color);
+}
+
+// pagina 1: fitness (#76). The training the player built for each stat (0-100, the same
+// points the ribbons and the pet's idle life read), with its ribbon's goal on the bar and,
+// under it, what trains it; then the weight and the training button. Rows: cardlayout.h.
 static void renderCardStats() {
   gfx->setTextColor(UI_INK);
   setSize(3);
-  setCur(centerX(T(S_BATTLE), 3), 48);
-  printT(T(S_BATTLE));
+  setCur(centerX(T(S_FITNESS), 3), FIT_TITLE_Y);
+  printT(T(S_FITNESS));
 
-  drawCardStat(118, T(S_STAT_ATK), pet.atkStat(), 260, UI_BAR_BAD);
-  drawCardStat(160, T(S_STAT_DEF), pet.defStat(), 260, 0x4C98);
-  drawCardStat(202, T(S_STAT_SPE), pet.speStat(), 260, UI_BAR_WARN);
-  drawCardStat(244, T(S_STAT_WGT), pet.weight, 100, 0xB3C8);
+  const uint8_t tr[FIT_STATS] = { pet.trAtk, pet.trDef, pet.trSpe };
+  int bx = statBarX(), bw = FIT_BAR_END - bx;  // as drawCardStat lays the bar out
+  for (uint8_t i = 0; i < FIT_STATS; i++) {
+    int y = fitRowY(i);
+    drawCardStat(y, T((StrId)(S_STAT_STR + i)), tr[i], 100, FIT_COLOR[i]);
+    drawRosette(bx + bw * FIT_GOAL[i] / 100, y + 4, pet.hasMedal(FIT_RIBBON[i]), FIT_COLOR[i]);
+    const char *hint = T((StrId)(S_TRAIN_HINT_STR + i));
+    gfx->setTextColor(FIT_HINT_INK);
+    setSize(2);
+    setCur(centerX(hint, 2), y + FIT_HINT_DY);
+    printT(hint);
+  }
+  drawCardStat(FIT_WGT_Y, T(S_STAT_WGT), pet.weight, 100, 0xB3C8);
 
   // boton: saco de entrenamiento de fuerza
   gfx->fillRoundRect(96, 300, 274, 40, 12, UI_BAR_BAD);
@@ -557,7 +605,9 @@ static void renderCardStats() {
   printT(T(S_TRAIN_STR));
 }
 
-// pagina 2: medallas con etiqueta descriptiva
+// pagina 2: medallas con etiqueta descriptiva. The 8 care medals in a 2x4 grid whose rows
+// follow the round edge, the three training ribbons (#76) in a row under it, then each
+// Play minigame's best. Tiles: cardlayout.h.
 static void renderCardMedals() {
   int got = 0;
   for (int i = 0; i < MED_COUNT; i++)
@@ -566,29 +616,39 @@ static void renderCardMedals() {
   snprintf(head, sizeof(head), T(S_MEDALS_FMT), got, MED_COUNT);
   gfx->setTextColor(UI_INK);
   setSize(3);
-  setCur(centerX(head, 3), 48);
+  setCur(centerX(head, 3), MEDAL_TITLE_Y);
   printT(head);
 
-  for (int i = 0; i < MED_COUNT; i++) {
-    int x = 28 + (i % 2) * 206, y = 104 + (i / 2) * 54;
+  for (uint8_t i = 0; i < MED_COUNT; i++) {
+    CardRect r = medalTile(i);
     bool g = pet.hasMedal(1 << i);
-    gfx->fillRoundRect(x, y, 196, 44, 10, g ? UI_BAR_OK : UI_TRACK);
-    if (g) {  // marca de conseguida
-      gfx->fillCircle(x + 22, y + 22, 11, UI_BG_DAY);
-      gfx->setTextColor(UI_BAR_OK);
-      setSize(2);
-      setCur(x + 16, y + 13);
-      printT("v");
-    }
+    gfx->fillRoundRect(r.x, r.y, r.w, r.h, 10, g ? UI_BAR_OK : UI_TRACK);
+    int ty = r.y + r.h / 2 - 8;
     gfx->setTextColor(g ? UI_BG_DAY : 0x8410);
     setSize(2);
-    setCur(x + 44, y + 14);
-    printT(medalDesc(i));
+    if (i < MED_CARE_COUNT) {
+      if (g) {  // marca de conseguida
+        gfx->fillCircle(r.x + 20, r.y + r.h / 2, 10, UI_BG_DAY);
+        gfx->setTextColor(UI_BAR_OK);
+        setCur(r.x + 15, r.y + r.h / 2 - 7);
+        printT("v");
+        gfx->setTextColor(UI_BG_DAY);
+      }
+      setCur(r.x + MEDAL_TEXT_X, ty);
+      printT(medalDesc(i));
+    } else {  // a training ribbon: its rosette and the stat's name, centred in the room left
+      uint8_t k = i - MED_CARE_COUNT;
+      drawRosette(r.x + RIBBON_ROSETTE_X, r.y + 13, g, FIT_COLOR[k]);
+      const char *name = medalDesc(i);
+      int room = r.w - RIBBON_TEXT_X - MEDAL_TEXT_PAD;
+      setCur(r.x + RIBBON_TEXT_X + (room - textW(name, 2)) / 2, ty);
+      printT(name);
+    }
   }
 
   // records de los minijuegos de Play: icono y mejor puntuacion de cada uno
   for (uint8_t g = 0; g < GAME_COUNT; g++) {
-    int x = 61 + g * 88, y = 322;
+    int x = 61 + g * 88, y = RECORDS_Y;
     gfx->fillRoundRect(x, y, 80, 40, 10, UI_TRACK);
     drawMap(GAME_ICON[g], 16, x + 4, y + 4, 2, false);
     char n[8];
@@ -716,7 +776,7 @@ bool careTap(int16_t x, int16_t y) {
 
 void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  gfx->fillCircle(CX, CY, CARD_R, UI_BG_DAY);  // the disc cardlayout.h lays the pages out on
   if (cardPage == 0) renderCardProfile();
   else if (cardPage == 1) renderCardStats();
   else if (cardPage == 2) renderCardMedals();

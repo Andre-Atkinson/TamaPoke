@@ -26,6 +26,13 @@
 // Idea from Mu-Muu/TamaPoke's behNext()/behEnd() and Pet::selfRest()/selfPlay() (MIT),
 // re-implemented here offline, without the weather. Personalities (#25) can add weights.
 //
+// Training shows in it (#76), looks only: strength kicks the ball further (idleBallKick),
+// speed walks and chases a little faster (idleWalkPace), stamina hops a little longer
+// (idlePickAct). They read the training points (Pet::trAtk/trDef/trSpe, 0-100), which are
+// the player's work, not the full stat (whose species base and level would make a Machamp
+// kick hardest whatever the player did). None of them changes a weight or a perk: the hop
+// pays nothing, and the doze and ball game (the two that pay a perk) keep their lengths.
+//
 // Sprite facts (the 151 shipped species, 2026-11-15): every one has IDLE, WALKL, WALKR,
 // SLEEP, HURT, ATTACK and HOP; only 30 have POSE, NOD or BREATH. PMD_SIT shows the pet's
 // back (#21 uses it for the huff), so "sit" is a rest in place on IDLE for every species.
@@ -87,6 +94,7 @@ enum IdleEmote : uint8_t {
 struct IdleIn {
   uint8_t fullness = 80, joy = 80, energy = 80;  // the needs, 0-100
   uint8_t weight = 0;                            // 0-100
+  uint8_t stamina = 0;  // training points, 0-100 (Pet::trDef): hops last longer (#76)
   int8_t hour = -1;     // 0-23; -1 = unknown (no clock, or stale after a power-off): no hour term
   uint16_t acts = 0;    // bit a = the sprite has PMD action a (PmdMon::has)
   bool calm = false;    // dimmed or a dialog open: the calm repertoire only
@@ -100,6 +108,14 @@ struct IdlePick {
   uint8_t emote = EMO_NONE;  // shown from the start, for emoteMs
   uint16_t emoteMs = 0;
 };
+
+// ---------------------------------------------------------------- training (#76)
+// Training points are 0-100; a damaged one counts as 100.
+inline uint32_t idleTrained(uint8_t points) { return points > 100 ? 100u : points; }
+
+#define IDLE_HOP_STAMINA_MS 900  // stamina 100: a hop session runs this much longer (2 more hops)
+#define IDLE_WALK_PX_S 30.0f     // a stroll, untrained
+#define IDLE_SPEED_BONUS 30      // speed 100: walks and the ball chase are this % faster (idleWalkPace)
 
 // Small seeded generator: a given seed always gives the same pick (xorshift32).
 struct IdleRng {
@@ -226,7 +242,7 @@ inline IdlePick idlePickAct(const IdleIn &in, uint8_t act, uint32_t seed) {
       p.emote = EMO_ZZZ;
       break;
     case IDLE_HOP:
-      p.ms = 1800 + r.below(1000);
+      p.ms = 1800 + r.below(1000) + idleTrained(in.stamina) * IDLE_HOP_STAMINA_MS / 100;
       p.emote = EMO_NOTE;
       break;
     case IDLE_BALL:
@@ -326,8 +342,12 @@ struct IdlePerks {
 #define IDLE_BALL_DRAG 110.0f  // px/s each second the grass takes off
 #define IDLE_BALL_BOUNCE 0.6f  // speed kept off an end
 #define IDLE_BALL_PX_S 50.0f   // the pet's pace after the ball (a stroll is 30 px/s)
-#define IDLE_BALL_KICK_MIN 110 // a kick's speed, px/s: rolls about 55-160 px
+#define IDLE_BALL_KICK_MIN 110 // a kick's speed, px/s, untrained: rolls about 55-160 px
 #define IDLE_BALL_KICK_SPAN 80
+#define IDLE_BALL_KICK_TRAIN 30  // strength 100 adds this: rolls about 90-220 px
+// The fastest kick (strength 100, the top of the span) and how far it rolls on the grass
+// before it stops: v^2 / (2 * drag), plus a frame or two.
+#define IDLE_BALL_KICK_MAX (IDLE_BALL_KICK_MIN + IDLE_BALL_KICK_TRAIN + IDLE_BALL_KICK_SPAN - 1)
 
 struct IdleBall {
   float x = 233, vx = 0;
@@ -353,6 +373,19 @@ inline void idleBallRoll(IdleBall &b, float dt) {
 
 #define IDLE_BALL_KICK_AT (IDLE_BALL_REACH + 4)  // within this, it can kick
 
+// Even the strongest kick stops within the ball's range: kicked from one end, it rolls at
+// most to the other, so it bounces off an end at most once and never rattles about.
+static_assert((float)IDLE_BALL_KICK_MAX * IDLE_BALL_KICK_MAX / (2.0f * IDLE_BALL_DRAG) <=
+                  (float)(IDLE_BALL_MAX - IDLE_BALL_MIN),
+              "a full-strength kick must stop inside the ball's range");
+
+// The pace of a walk the planner started, px/s: a stroll or, in a ball game, the chase,
+// up to IDLE_SPEED_BONUS % faster with speed training (#76).
+inline float idleWalkPace(bool ballGame, uint8_t speed) {
+  float base = ballGame ? IDLE_BALL_PX_S : IDLE_WALK_PX_S;
+  return base * (float)(100 + idleTrained(speed) * IDLE_SPEED_BONUS / 100) / 100.0f;
+}
+
 // The spot beside the ball is always inside the walk range, so the pet can reach every ball.
 static_assert(IDLE_BALL_MIN + IDLE_BALL_REACH >= IDLE_WALK_MIN && IDLE_BALL_MAX - IDLE_BALL_REACH <= IDLE_WALK_MAX,
               "the pet must be able to stand beside the ball anywhere in its range");
@@ -374,9 +407,11 @@ inline bool idleBallKickable(const IdleBall &b, float petX) {
   return fabsf(b.x - petX) <= IDLE_BALL_KICK_AT && fabsf(b.vx) < IDLE_BALL_SLOW;
 }
 
-// Kicks it away from the pet; roll picks the strength.
-inline void idleBallKick(IdleBall &b, float petX, uint32_t roll) {
-  float sp = (float)(IDLE_BALL_KICK_MIN + roll % IDLE_BALL_KICK_SPAN);
+// Kicks it away from the pet; roll picks how hard, and strength training (0-100) adds up
+// to IDLE_BALL_KICK_TRAIN px/s, so a trained pet kicks further (#76).
+inline void idleBallKick(IdleBall &b, float petX, uint32_t roll, uint8_t strength) {
+  float sp = (float)(IDLE_BALL_KICK_MIN + idleTrained(strength) * IDLE_BALL_KICK_TRAIN / 100 +
+                     roll % IDLE_BALL_KICK_SPAN);
   b.vx = b.x >= petX ? sp : -sp;
 }
 

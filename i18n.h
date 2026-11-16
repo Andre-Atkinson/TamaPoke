@@ -41,6 +41,7 @@ enum StrId : uint8_t {
   S_RELEASE_FMT, S_YES, S_NO,
   // minijuego y saco
   S_HITS_FMT, S_STR_GAIN_FMT, S_NEW_RECORD, S_RECORD_FMT, S_HIT_FAST,
+  S_SPD_GAIN_FMT,  // the Play minigame result's speed gain (#76), as the bag shows its strength
   S_SCORE_FMT, S_GREAT_JOY, S_PLUS_JOY,
   // reloj / ajustes
   S_SET_TIME, S_HOUR, S_MIN, S_CLOCK_CANCEL,
@@ -50,8 +51,11 @@ enum StrId : uint8_t {
   // ficha: perfil
   S_STREAK_FMT, S_VIN, S_BERRY_UNK, S_BERRY_RED, S_BERRY_BLUE, S_BERRY_GREEN,
   S_INFO_FMT, S_RENAME_HINT,
-  // ficha: combate
-  S_BATTLE, S_STAT_ATK, S_STAT_DEF, S_STAT_SPE, S_STAT_WGT, S_TRAIN_STR,
+  // ficha: fitness (#76; the page was "battle"): the title, the four bars' labels, and
+  // under each trained bar what trains it
+  S_FITNESS, S_STAT_STR, S_STAT_STA, S_STAT_SPD, S_STAT_WGT,
+  S_TRAIN_HINT_STR, S_TRAIN_HINT_STA, S_TRAIN_HINT_SPD,
+  S_TRAIN_STR,
   // ficha: medallas
   S_MEDALS_FMT, S_BACK,
   // teclado y galeria
