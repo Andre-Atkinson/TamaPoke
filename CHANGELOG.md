@@ -174,6 +174,18 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   at most once per level for each form, since the needs keep coming back over 40.
 - Simulator: `pmu none` before boot simulates a power chip that doesn't answer;
   `sim/scripts/self-care.txt` and `self-care-no-pmu.txt` show self-care.
+- **Natures** (#25). Every creature now hatches with one of five natures, shown on the
+  stat card (swipe up) under its berry and age. *Easygoing* has no quirks. *Greedy* gets
+  hungry a little sooner, berries fill it more and it trains strength a little faster.
+  *Playful* gets bored a little sooner, play and the Play games cheer it more and it
+  trains speed a little faster. *Tidy* needs a bath a little sooner, a bath also cheers
+  it up and it trains stamina a little faster. *Lazy* tires a little sooner and sleep
+  restores it faster. The quirk is small: one extra point off that need every four
+  minutes awake (every eight at the relaxed pace), nothing extra asleep, and a long
+  power-off still stops every need at the same floor of 15. The training bonus is +25%,
+  rounded up so a small gain still counts. A creature from before the update is
+  Easygoing. `STATS` prints `nat=<name>`. Idea from Mu-Muu/TamaPoke, re-implemented
+  offline.
 - **`CARE?` serial command** prints `pace=<n> bed=<n> inbed=<0|1> stale=<0|1>
   egg=<0|1> picking=<0|1>` (`stale=1`: bedtime paused until the clock is set;
   `egg=1`: Eggs set to Choose; `picking=1`: the three-egg choice is on screen).
@@ -208,7 +220,8 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   - **Hold** (stamina): keep a finger on the screen and the creature does reps, one every
     1.5 s, up to 12. Lifting the finger only pauses it; 15 s with no finger ends it.
 
-  Each punch or rep is worth 1.5 points, so a full session still gives +18 at most, and
+  Each punch or rep is worth 1.5 points, so a full session still gives +18 at most (+23
+  for a greedy creature's strength or a tidy one's stamina, #25), and
   either one tires and feeds like the bag did. Leaving early (*Hold to exit* on the
   1.75C, a tap at the very top on the 1.75) keeps what was earned; a session with
   nothing done costs nothing. The punch keeps its own record (most punches in a session);

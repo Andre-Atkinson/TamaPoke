@@ -16,7 +16,9 @@ static void advance(Pet &p, uint32_t minutes) {
   }
 }
 
-// mascota recien eclosionada de la especie pedida, con la NVS limpia
+// mascota recien eclosionada de la especie pedida, con la NVS limpia. Easygoing (#25): the
+// nature rolled at hatch would change the drains and boosts, so every test that does not
+// set one checks the game as it was before natures.
 static void makePet(Pet &p, int16_t dex) {
   mockNvsReset();
   mockSetMillis(0);
@@ -25,6 +27,7 @@ static void makePet(Pet &p, int16_t dex) {
   p.eggTap();
   p.eggTap();
   p.eggTap();  // 3 toques = eclosion inmediata
+  p.nature = NAT_EASYGOING;
 }
 
 static void setStats(Pet &p, uint8_t f, uint8_t j, uint8_t e, uint8_t h) {
@@ -1373,6 +1376,434 @@ TEST(offline, sin_reloj_no_se_aplica_nada) {
   p.syncClock(0);
   CHECK_EQ(p.ageMinutes, (uint32_t)0);
   CHECK_EQ(p.fullness, (uint8_t)80);
+}
+
+// ---------------------------------------------------------------- naturalezas (#25)
+// A fresh pet of that nature, with the needs where a few minutes' drain is easy to count:
+// food 40 (the poop roll needs more than 40, so no random number is drawn, and food stays at
+// 30 or more for 4 minutes, so joy gets no penalty), the rest at 90, no poops, no weight.
+static void naturePet(Pet &p, uint8_t nat, uint8_t pace = PACE_NORMAL) {
+  makePet(p, 4);
+  p.nature = nat;
+  p.setPace(pace);
+  setStats(p, 40, 90, 90, 90);
+  p.poops = 0;
+  p.weight = 0;
+}
+
+static void checkNeeds(const Pet &p, uint8_t f, uint8_t j, uint8_t e, uint8_t h, const char *what) {
+  char msg[160];
+  snprintf(msg, sizeof msg, "%s: food %u joy %u energy %u hygiene %u, expected %u %u %u %u", what,
+           p.fullness, p.joy, p.energy, p.hygiene, f, j, e, h);
+  CHECK_MSG(p.fullness == f && p.joy == j && p.energy == e && p.hygiene == h, msg);
+}
+
+TEST(nature, hatching_rolls_each_of_the_five) {
+  Pet p;
+  makePet(p, 4);
+  int seen[NAT_COUNT] = { 0 };
+  for (int i = 0; i < 250; i++) {
+    p.newEgg();
+    p.eggTap();
+    p.eggTap();
+    p.eggTap();
+    CHECK(!p.isEgg());
+    CHECK(p.nature < NAT_COUNT);
+    if (p.nature < NAT_COUNT) seen[p.nature]++;
+  }
+  for (int n = 0; n < NAT_COUNT; n++) CHECK_RANGE(seen[n], 25, 75);  // 50 each on average
+}
+
+TEST(nature, easygoing_drains_as_before) {
+  Pet p;
+  naturePet(p, NAT_EASYGOING);
+  advance(p, 4);
+  checkNeeds(p, 32, 86, 86, 86, "easygoing, 4 min");
+  naturePet(p, NAT_EASYGOING, PACE_RELAXED);
+  advance(p, 8);
+  checkNeeds(p, 32, 86, 86, 86, "easygoing relaxed, 8 min");
+}
+
+// one extra point off its own need on every fourth minute, the other needs as easygoing
+TEST(nature, greedy_food_drains_a_point_more_every_fourth_minute) {
+  Pet p;
+  naturePet(p, NAT_GREEDY);
+  advance(p, 3);
+  checkNeeds(p, 34, 87, 87, 87, "greedy, 3 min");
+  advance(p, 1);
+  checkNeeds(p, 31, 86, 86, 86, "greedy, 4 min");
+}
+
+TEST(nature, playful_joy_drains_a_point_more_every_fourth_minute) {
+  Pet p;
+  naturePet(p, NAT_PLAYFUL);
+  advance(p, 3);
+  checkNeeds(p, 34, 87, 87, 87, "playful, 3 min");
+  advance(p, 1);
+  checkNeeds(p, 32, 85, 86, 86, "playful, 4 min");
+}
+
+TEST(nature, tidy_hygiene_drains_a_point_more_every_fourth_minute) {
+  Pet p;
+  naturePet(p, NAT_TIDY);
+  advance(p, 3);
+  checkNeeds(p, 34, 87, 87, 87, "tidy, 3 min");
+  advance(p, 1);
+  checkNeeds(p, 32, 86, 86, 85, "tidy, 4 min");
+}
+
+TEST(nature, lazy_energy_drains_a_point_more_every_fourth_minute) {
+  Pet p;
+  naturePet(p, NAT_LAZY);
+  advance(p, 3);
+  checkNeeds(p, 34, 87, 87, 87, "lazy, 3 min");
+  advance(p, 1);
+  checkNeeds(p, 32, 86, 85, 86, "lazy, 4 min");
+}
+
+// The greedy pet's extra food point comes after the poop roll, so the roll sees the food it
+// always saw (more than 40). From 49: 47, 45, 43, then minute 4 rolls at 41 and only then
+// takes the extra point (41 - 1 = 40).
+TEST(nature, greedy_extra_point_comes_after_the_poop_roll) {
+  Pet p;
+  naturePet(p, NAT_GREEDY);
+  setStats(p, 49, 90, 90, 90);
+  mockForceRandom(99);  // random(100) < 15 fails: no poop
+  advance(p, 3);
+  CHECK_EQ(p.fullness, (uint8_t)43);
+  CHECK_EQ(p.poops, (uint8_t)0);
+  mockForceRandom(0);  // the roll passes whenever it runs
+  advance(p, 1);
+  mockClearForcedRandom();
+  CHECK_EQ(p.poops, (uint8_t)1);
+  CHECK_EQ(p.fullness, (uint8_t)40);
+}
+
+// The relaxed pace drains on even minutes only: the extra point comes on every fourth of
+// those (minute 8), the same share of the drain as at the normal pace.
+TEST(nature, relaxed_pace_the_extra_point_comes_every_eighth_minute) {
+  Pet p;
+  naturePet(p, NAT_GREEDY, PACE_RELAXED);
+  advance(p, 7);
+  checkNeeds(p, 34, 87, 87, 87, "greedy relaxed, 7 min");
+  advance(p, 1);
+  checkNeeds(p, 31, 86, 86, 86, "greedy relaxed, 8 min");
+  naturePet(p, NAT_PLAYFUL, PACE_RELAXED);
+  advance(p, 8);
+  checkNeeds(p, 32, 85, 86, 86, "playful relaxed, 8 min");
+  naturePet(p, NAT_TIDY, PACE_RELAXED);
+  advance(p, 8);
+  checkNeeds(p, 32, 86, 86, 85, "tidy relaxed, 8 min");
+  naturePet(p, NAT_LAZY, PACE_RELAXED);
+  advance(p, 8);
+  checkNeeds(p, 32, 86, 85, 86, "lazy relaxed, 8 min");
+}
+
+// Powered off (syncClock), the same extra point every fourth minute, down to the same floor
+// of 15: a long power-off ends exactly where it does for an easygoing pet.
+TEST(nature, powered_off_the_extra_point_keeps_the_floor_of_15) {
+  static const uint8_t WANT[NAT_COUNT][4] = {
+    { 40, 60, 60, 80 },  // easygoing: 20 min at food -2, the rest -1
+    { 35, 60, 60, 80 },  // greedy: 5 points more food
+    { 40, 55, 60, 80 },  // playful: joy
+    { 40, 60, 60, 75 },  // tidy: hygiene
+    { 40, 60, 55, 80 },  // lazy: energy
+  };
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    setStats(p, 80, 80, 80, 100);
+    p.setClock(1000u * 86400);
+    p.syncClock(1000u * 86400 + 20 * 60);
+    checkNeeds(p, WANT[n][0], WANT[n][1], WANT[n][2], WANT[n][3], NATURE_KEYS[n]);
+    p.syncClock(1000u * 86400 + 20 * 60 + 600 * 60);  // 10 h more
+    checkNeeds(p, 15, 15, 15, 15, NATURE_KEYS[n]);
+    CHECK_EQ(p.careMistakes, (uint8_t)0);
+  }
+}
+
+// asleep: no extra drain for any nature, and a lazy pet's energy comes back 8 a minute
+TEST(nature, asleep_lazy_restores_8_energy_a_minute) {
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    setStats(p, 90, 90, 20, 90);
+    p.toggleLight();
+    advance(p, 5);
+    CHECK_EQ(p.energy, (uint8_t)(n == NAT_LAZY ? 60 : 50));
+    checkNeeds(p, 88, 88, p.energy, 89, NATURE_KEYS[n]);
+  }
+}
+
+TEST(nature, asleep_and_powered_off_lazy_restores_8_energy_a_minute) {
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    setStats(p, 90, 90, 20, 90);
+    p.toggleLight();
+    p.setClock(1000u * 86400);
+    p.syncClock(1000u * 86400 + 5 * 60);
+    CHECK_EQ(p.energy, (uint8_t)(n == NAT_LAZY ? 60 : 50));
+    checkNeeds(p, 88, 88, p.energy, 89, NATURE_KEYS[n]);
+  }
+}
+
+// species 4 (Charmander) loves the blue berry (speciesId % 3 == 1)
+TEST(nature, greedy_berries_fill_5_more) {
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    uint8_t extra = n == NAT_GREEDY ? 5 : 0;
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    setStats(p, 40, 50, 50, 50);
+    p.feedBerry(0);  // red: not its favourite
+    CHECK_EQ(p.fullness, (uint8_t)(40 + 25 + extra));
+    CHECK_EQ(p.joy, (uint8_t)50);
+    setStats(p, 40, 50, 50, 50);
+    p.feedBerry(1);  // blue: its favourite
+    CHECK_EQ(p.fullness, (uint8_t)(40 + 35 + extra));
+    CHECK_EQ(p.joy, (uint8_t)60);
+  }
+}
+
+TEST(nature, playful_play_cheers_5_more) {
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    uint8_t extra = n == NAT_PLAYFUL ? 5 : 0;
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    setStats(p, 60, 40, 80, 60);
+    p.play();
+    CHECK_EQ(p.joy, (uint8_t)(40 + 25 + extra));
+  }
+}
+
+TEST(nature, playful_minigames_cheer_5_more) {
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    uint8_t extra = n == NAT_PLAYFUL ? 5 : 0;
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    setStats(p, 60, 40, 80, 60);
+    p.playGame(GAME_KEEPY, 10);  // normalised 10: joy + 5 + 20
+    CHECK_EQ(p.joy, (uint8_t)(40 + 25 + extra));
+  }
+}
+
+TEST(nature, tidy_bath_lifts_joy_by_10) {
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    setStats(p, 60, 40, 80, 20);
+    p.poops = 2;
+    p.clean();
+    CHECK_EQ(p.hygiene, (uint8_t)100);
+    CHECK_EQ(p.poops, (uint8_t)0);
+    CHECK_EQ(p.joy, (uint8_t)(n == NAT_TIDY ? 50 : 40));
+  }
+  Pet p;  // an egg has no nature yet: the last pet's does not lift its joy
+  makePet(p, 4);
+  p.nature = NAT_TIDY;
+  p.newEgg();
+  p.joy = 40;
+  p.clean();
+  CHECK_EQ(p.joy, (uint8_t)40);
+}
+
+// ---- the training bonus (#25 "Stat growth")
+TEST(nature, the_training_bonus_is_25_percent_rounded_up) {
+  static const uint8_t BASE[] = { 0, 1, 2, 3, 4, 5, 6, 8, 18, 100, 204, 205, 255 };
+  static const uint8_t WITH[] = { 0, 2, 3, 4, 5, 7, 8, 10, 23, 125, 255, 255, 255 };
+  for (size_t i = 0; i < sizeof BASE; i++) {
+    CHECK_EQ(natureTrainGain(NAT_GREEDY, TRAIN_STRENGTH, BASE[i]), WITH[i]);
+    CHECK_EQ(natureTrainGain(NAT_TIDY, TRAIN_STAMINA, BASE[i]), WITH[i]);
+    CHECK_EQ(natureTrainGain(NAT_PLAYFUL, TRAIN_SPEED, BASE[i]), WITH[i]);
+    // a bonus only: the other stats, the other natures and garbage get the gain as it is
+    for (uint8_t stat = 0; stat <= TRAIN_NONE; stat++) {
+      CHECK_EQ(natureTrainGain(NAT_EASYGOING, stat, BASE[i]), BASE[i]);
+      CHECK_EQ(natureTrainGain(NAT_LAZY, stat, BASE[i]), BASE[i]);
+      CHECK_EQ(natureTrainGain(NAT_COUNT, stat, BASE[i]), BASE[i]);
+      CHECK_EQ(natureTrainGain(200, stat, BASE[i]), BASE[i]);
+    }
+    CHECK_EQ(natureTrainGain(NAT_GREEDY, TRAIN_SPEED, BASE[i]), BASE[i]);
+    CHECK_EQ(natureTrainGain(NAT_GREEDY, TRAIN_STAMINA, BASE[i]), BASE[i]);
+    CHECK_EQ(natureTrainGain(NAT_TIDY, TRAIN_STRENGTH, BASE[i]), BASE[i]);
+    CHECK_EQ(natureTrainGain(NAT_PLAYFUL, TRAIN_NONE, BASE[i]), BASE[i]);
+  }
+}
+
+// strength: the rhythm punch (Pet::trainStrength, #78), 1.5 points a punch, 18 at most a session
+TEST(nature, greedy_trains_strength_25_percent_more) {
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    bool bonus = n == NAT_GREEDY;
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    CHECK_EQ(p.trainStrength(1), (uint8_t)(bonus ? 2 : 1));  // a small gain still counts
+    CHECK_EQ(p.trainStrength(EX_COUNT), (uint8_t)(bonus ? 23 : 18));
+    CHECK_EQ(p.trAtk, (uint8_t)(bonus ? 25 : 19));
+    p.trAtk = 90;  // the cap still holds, and the punch says what really went in
+    CHECK_EQ(p.trainStrength(EX_COUNT), (uint8_t)10);
+    CHECK_EQ(p.trAtk, (uint8_t)100);
+    CHECK_EQ(p.trSpe, (uint8_t)0);
+    CHECK_EQ(p.trDef, (uint8_t)0);
+  }
+}
+
+// stamina's active route: the stamina hold (Pet::trainStamina, #78), 1.5 points a rep, 18 at
+// most a session; tidy trains it 25% more, as it does the passive one (Pet::tick)
+TEST(nature, tidy_trains_stamina_in_the_hold_25_percent_more) {
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    bool bonus = n == NAT_TIDY;
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    CHECK_EQ(p.trainStamina(1), (uint8_t)(bonus ? 2 : 1));
+    CHECK_EQ(p.trainStamina(EX_COUNT), (uint8_t)(bonus ? 23 : 18));
+    CHECK_EQ(p.trDef, (uint8_t)(bonus ? 25 : 19));
+    p.trDef = 90;
+    CHECK_EQ(p.trainStamina(EX_COUNT), (uint8_t)10);
+    CHECK_EQ(p.trDef, (uint8_t)100);
+    CHECK_EQ(p.trAtk, (uint8_t)0);
+    CHECK_EQ(p.trSpe, (uint8_t)0);
+  }
+}
+
+// speed: the Play minigames (Pet::playReward), normalised score / 5
+TEST(nature, playful_trains_speed_25_percent_more) {
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    bool bonus = n == NAT_PLAYFUL;
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    // playGame() returns the speed gained (#76): the boosted gain, what really went in
+    CHECK_EQ(p.playGame(GAME_KEEPY, 5), (uint8_t)(bonus ? 2 : 1));  // normalised 5: 1 point
+    CHECK_EQ(p.trSpe, (uint8_t)(bonus ? 2 : 1));
+    CHECK_EQ(p.playGame(GAME_KEEPY, 30), (uint8_t)(bonus ? 8 : 6));  // normalised 30 (the cap): 6
+    CHECK_EQ(p.trSpe, (uint8_t)(bonus ? 10 : 7));
+    p.trSpe = 97;
+    CHECK_EQ(p.playGame(GAME_KEEPY, 30), (uint8_t)3);
+    CHECK_EQ(p.trSpe, (uint8_t)100);
+    CHECK_EQ(p.trAtk, (uint8_t)0);
+    CHECK_EQ(p.trDef, (uint8_t)0);
+  }
+}
+
+// A damaged save can hold trained stats past 100 (the other 0-100 values are clamped too);
+// load() caps each, and a playful pet at the cap stays there after a top-score game.
+TEST(nature, trained_stats_out_of_range_load_capped_at_100) {
+  Pet a;
+  makePet(a, 4);
+  a.saveNow();
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putUChar("tatk", 250);
+    raw.putUChar("tdef", 101);
+    raw.putUChar("tspe", 250);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.trAtk, (uint8_t)100);
+  CHECK_EQ(b.trDef, (uint8_t)100);
+  CHECK_EQ(b.trSpe, (uint8_t)100);
+  b.nature = NAT_PLAYFUL;
+  b.playGame(GAME_KEEPY, 30);  // 6 points, 8 for a playful pet: 108 must not wrap
+  CHECK_EQ(b.trSpe, (uint8_t)100);
+  // defence in depth: playReward does not rely on load() for the 8-bit sum (a value that
+  // load() caps can't reach this; it is set directly)
+  b.trSpe = 250;
+  b.playGame(GAME_KEEPY, 30);
+  CHECK_EQ(b.trSpe, (uint8_t)100);
+}
+
+// stamina by itself (Pet::tick, #76): a point per STAMINA_CARE_MIN (30) awake minutes with
+// every need at 40 or more, 24 if tidy (GOOD_STEP 4 a minute, 5 for a tidy pet)
+TEST(nature, tidy_trains_stamina_by_itself_25_percent_faster) {
+  CHECK_EQ(STAMINA_CARE_MIN, 30);  // the minutes below assume it
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    uint32_t mins = n == NAT_TIDY ? 24 : 30;
+    Pet p;
+    makePet(p, 4);
+    p.nature = n;
+    for (uint32_t m = 0; m < mins - 1; m++) {
+      setStats(p, 100, 100, 100, 100);
+      advance(p, 1);
+    }
+    CHECK_EQ(p.trDef, (uint8_t)0);
+    setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+    CHECK_EQ(p.trDef, (uint8_t)1);
+    CHECK_EQ(p.trAtk, (uint8_t)0);
+    CHECK_EQ(p.trSpe, (uint8_t)0);
+  }
+}
+
+// ---- the save
+TEST(nature, survives_a_restart) {
+  for (uint8_t n = 0; n < NAT_COUNT; n++) {
+    Pet a;
+    makePet(a, 4);
+    a.nature = n;
+    a.saveNow();
+    Pet b;
+    b.begin();
+    CHECK_EQ(b.nature, n);
+  }
+}
+
+TEST(nature, a_pet_saved_before_natures_loads_as_easygoing) {
+  Pet a;
+  makePet(a, 7);
+  a.nature = NAT_LAZY;
+  a.trAtk = 12;
+  a.saveNow();
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.remove("nature");  // as a save from before #25
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.nature, (uint8_t)NAT_EASYGOING);
+  CHECK_EQ(b.speciesId, (int16_t)7);  // the rest of the pet as it was
+  CHECK_EQ(b.trAtk, (uint8_t)12);
+}
+
+TEST(nature, a_nature_out_of_range_loads_as_easygoing) {
+  static const uint8_t BAD[] = { NAT_COUNT, 200, 255 };
+  for (uint8_t v : BAD) {
+    Pet a;
+    makePet(a, 4);
+    a.saveNow();
+    {
+      Preferences raw;
+      raw.begin("tamapoke", false);
+      raw.putUChar("nature", v);
+      raw.end();
+    }
+    Pet b;
+    b.begin();
+    CHECK_EQ(b.nature, (uint8_t)NAT_EASYGOING);
+    CHECK_EQ(b.speciesId, (int16_t)4);
+  }
+  Pet a;  // the last valid one is kept
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putUChar("nature", NAT_LAZY);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.nature, (uint8_t)NAT_LAZY);
 }
 
 // ---------------------------------------------------------------- guardado

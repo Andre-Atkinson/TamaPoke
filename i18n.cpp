@@ -1,5 +1,6 @@
 #include "i18n.h"
 #include "pet.h"        // MED_COUNT
+#include "nature.h"     // NAT_* (#25)
 #include <Preferences.h>
 
 Lang gLang = LANG_DEFAULT;
@@ -26,6 +27,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "MEDAL!", "AWESOME!", "%u DAY STREAK!",
     "STREAK %u  best %u", "BOND", "BERRY ???", "RED BERRY", "BLUE BERRY", "GREEN BERRY",
     "%s   AGE %lud", "tap name: rename",
+    "NATURE: %s", "EASYGOING", "GREEDY", "PLAYFUL", "TIDY", "LAZY",
     "FITNESS", "STRENGTH", "STAMINA", "SPEED", "WEIGHT",
     "Punching trains it", "Care and holding train it", "Play games train it",
     "MEDALS %d/%d", "tap: back",
@@ -82,6 +84,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "MEDALHA!", "\323TIMO!", "%u DIAS SEGUIDOS!",
     "SEQ %u  rec %u", "LA\200O", "BAGA ???", "BAGA VERMELHA", "BAGA AZUL", "BAGA VERDE",
     "%s   IDADE %lud", "toca no nome: renomear",
+    "NATUREZA: %s", "TRANQUILO", "GULOSO", "BRINCALH\303O", "ASSEADO", "PREGUI\200OSO",
     "FORMA F\315SICA", "FOR\200A", "F\324LEGO", "RAPIDEZ", "PESO",
     "Sobe com os socos", "Sobe com cuidado e segurar", "Sobe com os jogos",
     "MEDALHAS %d/%d", "toca: voltar",
@@ -153,6 +156,9 @@ void formatDate(char *buf, size_t n, uint8_t weekday, uint8_t day, uint8_t month
   }
   snprintf(buf, n, T(S_DATE_FMT), WEEKDAY[gLang][weekday], (unsigned)day, MONTH[gLang][month - 1]);
 }
+static_assert(S_NAT_LAZY - S_NAT_EASYGOING == NAT_LAZY - NAT_EASYGOING && NAT_LAZY + 1 == NAT_COUNT,
+              "the nature names follow NAT_* (nature.h)");
+const char *natureName(uint8_t n) { return T((StrId)(S_NAT_EASYGOING + (n < NAT_COUNT ? n : (uint8_t)NAT_EASYGOING))); }
 const char *medalName(int i)  { return MED_NAME[gLang][i]; }
 const char *medalDesc(int i)  { return MED_DSC[gLang][i]; }
 

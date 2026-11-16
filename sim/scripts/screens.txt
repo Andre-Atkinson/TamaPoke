@@ -71,15 +71,19 @@ shot 14-minigame
 hold 233 40 1200ms
 wait 1s
 
-# card page 2 button: strength training (1.75C: hold the button 1 s to leave)
+# card page 2 button: TRAIN opens the exercise choice; the punch (#78), two punches on the
+# beat (its windows are 400-1100 ms into each 1.5 s swing), then its result after 18 s
+# (1.75C: hold the "Hold to exit" chip 1 s to leave early; 1.75: tap "tap: back")
 swipe up
 swipe left
 tap 233 320
-tap 233 250
-tap 233 250
-tap 233 250
+tap 233 140
+wait 300ms
+tap 233 240
+wait 750ms
+tap 233 240
 shot 15-training
-wait 11s
+wait 16s
 shot 16-training-result
 wait 4s
 
