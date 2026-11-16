@@ -257,28 +257,96 @@ TEST(tick, descuido_enfria_el_vinculo_sin_arrasarlo) {
   CHECK_MSG(p.bond == 1, "el vinculo no cae por debajo de 1");
 }
 
-TEST(tick, buen_cuidado_12h_forja_defensa) {
+// Steady care builds stamina (#76): STAMINA_CARE_MIN awake minutes with every need at 40
+// or more = +1 stamina. Until #76 it took 720 in a row.
+TEST(tick, steady_care_builds_stamina) {
   Pet p;
   makePet(p, 4);
   CHECK_EQ(p.trDef, (uint8_t)0);
-  for (int h = 0; h < 720; h++) {  // mantener todo >= 40 durante 12 h
+  for (int m = 0; m < STAMINA_CARE_MIN - 1; m++) {  // every need >= 40
+    setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+  }
+  CHECK_EQ(p.trDef, (uint8_t)0);
+  setStats(p, 100, 100, 100, 100);
+  advance(p, 1);
+  CHECK_EQ(p.trDef, (uint8_t)1);
+  for (int m = 0; m < STAMINA_CARE_MIN; m++) {
+    setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+  }
+  CHECK_EQ(p.trDef, (uint8_t)2);
+}
+
+// La racha de buen cuidado mira la felicidad ANTES de que baje ese minuto (el
+// orden del tick: goodTicks, luego drainJoy). Con joy justo en 40 antes del tick,
+// el minuto cuenta; si drainJoy corriera antes, joy valdria 39 y el minuto no contaria.
+TEST(tick, la_racha_ve_la_felicidad_antes_de_bajar) {
+  Pet p;
+  makePet(p, 4);
+  for (int m = 0; m < STAMINA_CARE_MIN; m++) {
+    setStats(p, 100, 40, 100, 100);
+    advance(p, 1);
+  }
+  CHECK_EQ(p.trDef, (uint8_t)1);
+}
+
+// A minute with a need under 40 only doesn't count (#76): the count is kept, not reset, so a
+// player who checks in now and then still builds stamina.
+TEST(tick, a_minute_under_40_pauses_the_stamina_count) {
+  Pet p;
+  makePet(p, 4);
+  for (int m = 0; m < STAMINA_CARE_MIN - 5; m++) {
+    setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+  }
+  for (int m = 0; m < 10; m++) {  // hungry for ten minutes
+    setStats(p, 20, 100, 100, 100);
+    advance(p, 1);
+  }
+  CHECK_EQ(p.trDef, (uint8_t)0);
+  for (int m = 0; m < 5; m++) {
+    setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+  }
+  CHECK_MSG(p.trDef == 1, "the good minutes before the dip still count");
+}
+
+// A minute self-care holds up on the charger (#24) is not the player's care (#76).
+TEST(tick, self_care_minutes_do_not_build_stamina) {
+  Pet p;
+  makePet(p, 4);
+  for (int m = 0; m < 3 * STAMINA_CARE_MIN; m++) {
+    p.setCharger(true, true, SELFCARE_IDLE_MS);
+    setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+  }
+  CHECK_EQ(p.trDef, (uint8_t)0);
+  for (int m = 0; m < STAMINA_CARE_MIN; m++) {  // the player back: a touch ends self-care
+    p.setCharger(true, true, 0);
     setStats(p, 100, 100, 100, 100);
     advance(p, 1);
   }
   CHECK_EQ(p.trDef, (uint8_t)1);
 }
 
-// La racha de buen cuidado mira la felicidad ANTES de que baje ese minuto (el
-// orden del tick: goodTicks, luego drainJoy). Con joy justo en 40 antes del tick,
-// el minuto cuenta; si drainJoy corriera antes, joy valdria 39 y la racha se
-// reiniciaria cada minuto.
-TEST(tick, la_racha_ve_la_felicidad_antes_de_bajar) {
+// Asleep the count waits (#76, as before): the night neither adds to it nor clears it.
+TEST(tick, sleep_neither_builds_stamina_nor_clears_the_count) {
   Pet p;
   makePet(p, 4);
-  for (int h = 0; h < 720; h++) {
-    setStats(p, 100, 40, 100, 100);
+  for (int m = 0; m < STAMINA_CARE_MIN - 1; m++) {
+    setStats(p, 100, 100, 100, 100);
     advance(p, 1);
   }
+  p.toggleLight();  // asleep
+  for (int m = 0; m < 3 * STAMINA_CARE_MIN; m++) {
+    setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+  }
+  CHECK_EQ(p.trDef, (uint8_t)0);
+  p.toggleLight();  // awake: the next good minute completes the point
+  setStats(p, 100, 100, 100, 100);
+  advance(p, 1);
   CHECK_EQ(p.trDef, (uint8_t)1);
 }
 
@@ -529,6 +597,24 @@ TEST(play, a_la_par_todos_los_minijuegos_pagan_lo_mismo) {
     CHECK_MSG(p.energy == 63, where + ": ENE -(10 + 15/2)");
     CHECK_MSG(p.showHeart(), where + ": corazon");
   }
+}
+
+// playGame() returns the speed it really trained (#76), for the result screen's "SPEED +3"
+TEST(play, play_game_returns_the_speed_it_trained) {
+  Pet p;
+  freshPlayer(p);  // speed 10
+  CHECK_EQ(p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]), (uint8_t)3);
+  CHECK_EQ(p.trSpe, (uint8_t)13);
+  CHECK_EQ(p.playGame(GAME_KEEPY, 4), (uint8_t)0);  // 4 points pay no speed
+  p.trSpe = 99;
+  CHECK_MSG(p.playGame(GAME_CATCH, 200) == 1, "at 99 only 1 fits, not 6");
+  CHECK_EQ(p.trSpe, (uint8_t)100);
+  CHECK_EQ(p.playGame(GAME_CATCH, 200), (uint8_t)0);
+  CHECK_EQ(p.playGame(GAME_COUNT, 10), (uint8_t)0);  // not a game
+  mockNvsReset();
+  Pet egg;
+  egg.begin();
+  CHECK_EQ(egg.playGame(GAME_KEEPY, 15), (uint8_t)0);
 }
 
 TEST(play, la_recompensa_se_topa_en_30_pero_el_record_no) {
@@ -880,6 +966,111 @@ TEST(medals, el_total_acumula_entre_crianzas) {
   p.eggTap(); p.eggTap(); p.eggTap();
   CHECK_MSG(p.medals == MED_FINAL, "las medallas del individuo se reinician");
   CHECK_MSG(p.totalMedals == 2, "el total del jugador se conserva");
+}
+
+// ---------------------------------------------------------------- training ribbons (#76)
+// One ribbon per trained stat, at RIBBON_STR / RIBBON_STA / RIBBON_SPD training points.
+TEST(ribbons, each_ribbon_comes_at_its_threshold) {
+  const struct { uint16_t medal; uint8_t goal; } R[] = {
+    { MED_STR, RIBBON_STR }, { MED_STA, RIBBON_STA }, { MED_SPD, RIBBON_SPD } };
+  for (uint8_t k = 0; k < 3; k++) {
+    Pet p;
+    makePet(p, 4);
+    uint8_t *tr = k == 0 ? &p.trAtk : k == 1 ? &p.trDef : &p.trSpe;
+    std::string where = "ribbon " + std::to_string(k);
+    *tr = R[k].goal - 1;
+    advance(p, 1);
+    CHECK_MSG(!p.hasMedal(R[k].medal), where + ": not one point short");
+    CHECK_MSG(p.medals == 0, where + ": no other medal either");
+    *tr = R[k].goal;
+    advance(p, 1);
+    CHECK_MSG(p.hasMedal(R[k].medal), where + ": at the goal");
+    CHECK_MSG(p.medals == R[k].medal, where + ": that ribbon only");
+    CHECK_MSG(p.showMedal() && p.newMedal == R[k].medal, where + ": its banner");
+    CHECK_MSG(p.totalMedals == 1, where + ": counted once");
+  }
+}
+
+// The thresholds are within a normal pet's life (pet.h): a few bag sessions, about two good
+// hours a day of steady care for two or three days, about ten Play games at par.
+// A player who looks in once an hour while the pet is awake: feeds it to 80, cleans it,
+// pets it to 80 joy and, when it's tired (ENE under 45), puts it to bed for 10 minutes. Energy
+// only comes back asleep, so those naps are what keep every need over 40 (pet.h, RIBBON_STA).
+static void hourlyCare(Pet &p) {
+  uint8_t plain = 0;
+  while (p.lovesBerry(plain)) plain++;  // an ordinary berry: no favourite's hearts or medal
+  while (p.fullness < 80) p.feedBerry(plain);
+  p.clean();
+  while (p.joy < 80) p.caress();
+  if (p.energy < 45) {
+    p.toggleLight();  // a nap
+    advance(p, 10);
+    p.toggleLight();
+  }
+}
+
+TEST(ribbons, the_thresholds_are_reachable) {
+  CHECK(RIBBON_STR <= 3 * 18);  // the bag's cap per session (Pet::trainStrength)
+  CHECK(RIBBON_SPD <= 10 * 3);  // a game at par
+  Pet p;
+  makePet(p, 4);
+  for (int i = 0; i < 10; i++) p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);
+  for (int i = 0; i < 3; i++) p.trainStrength(40);
+  p.exerciseOver();  // as the last game's screen closes
+  CHECK(p.hasMedal(MED_SPD));
+  CHECK(p.hasMedal(MED_STR));
+  // stamina: three days of hourly care on the normal pace, 16 h awake and 8 h asleep
+  for (int day = 0; day < 3 && !p.hasMedal(MED_STA); day++) {
+    for (int h = 0; h < 16; h++) {
+      hourlyCare(p);
+      advance(p, 60);
+    }
+    p.toggleLight();  // the night
+    advance(p, 8 * 60);
+    p.toggleLight();
+  }
+  CHECK_MSG(p.hasMedal(MED_STA), "stamina " + std::to_string(p.trDef) + " after three days of hourly care with naps");
+}
+
+// A save from before #76 has the ribbons' bits clear: a pet already past a goal earns its
+// ribbon at the next medal check (the minute tick), once.
+TEST(ribbons, an_older_pet_past_a_goal_earns_its_ribbon_at_the_next_tick) {
+  Pet a;
+  makePet(a, 4);
+  a.trAtk = 60;
+  a.trSpe = 45;
+  a.saveNow();
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putUShort("medal", MED_LV10);  // what an older firmware saved: no ribbon bits
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.medals, (uint16_t)MED_LV10);
+  uint16_t total = b.totalMedals;
+  mockAdvanceMillis(PET_TICK_MS);
+  b.update(millis());
+  CHECK(b.hasMedal(MED_STR));
+  CHECK(b.hasMedal(MED_SPD));
+  CHECK(!b.hasMedal(MED_STA));
+  CHECK_EQ(b.totalMedals, (uint16_t)(total + 2));
+  mockAdvanceMillis(PET_TICK_MS);
+  b.update(millis());
+  CHECK_EQ(b.totalMedals, (uint16_t)(total + 2));
+}
+
+TEST(ribbons, a_new_pet_starts_without_ribbons) {
+  Pet p;
+  makePet(p, 4);
+  p.trAtk = p.trDef = p.trSpe = 100;
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_STR) && p.hasMedal(MED_STA) && p.hasMedal(MED_SPD));
+  p.newEgg();
+  p.eggTap(); p.eggTap(); p.eggTap();
+  CHECK_EQ(p.trAtk, (uint8_t)0);
+  CHECK(!p.hasMedal(MED_STR) && !p.hasMedal(MED_STA) && !p.hasMedal(MED_SPD));
 }
 
 // ---------------------------------------------------------------- ceremonias
@@ -1385,10 +1576,12 @@ TEST(nature, trained_stats_out_of_range_load_capped_at_100) {
   CHECK_EQ(b.trSpe, (uint8_t)100);
 }
 
-// stamina by itself (Pet::tick): every need at 40 or more for 12 h in a row, 9.6 h if tidy
+// stamina by itself (Pet::tick, #76): a point per STAMINA_CARE_MIN (30) awake minutes with
+// every need at 40 or more, 24 if tidy (GOOD_STEP 4 a minute, 5 for a tidy pet)
 TEST(nature, tidy_trains_stamina_by_itself_25_percent_faster) {
+  CHECK_EQ(STAMINA_CARE_MIN, 30);  // the minutes below assume it
   for (uint8_t n = 0; n < NAT_COUNT; n++) {
-    uint32_t mins = n == NAT_TIDY ? 576 : 720;
+    uint32_t mins = n == NAT_TIDY ? 24 : 30;
     Pet p;
     makePet(p, 4);
     p.nature = n;
@@ -1549,6 +1742,74 @@ TEST(save, out_of_range_save_data_is_sanitised_on_load) {
   CHECK(b.speciesId >= 1 && b.speciesId <= DEX_COUNT);
 }
 
+// The stamina count is saved (#76, NVS "tdefm"): a restart keeps the good minutes so far.
+TEST(save, the_stamina_count_survives_a_restart) {
+  Pet a;
+  makePet(a, 4);
+  for (int m = 0; m < STAMINA_CARE_MIN - 1; m++) {
+    setStats(a, 100, 100, 100, 100);
+    advance(a, 1);
+  }
+  a.saveNow();
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.trDef, (uint8_t)0);
+  setStats(b, 100, 100, 100, 100);
+  mockAdvanceMillis(PET_TICK_MS);
+  b.update(millis());
+  CHECK_MSG(b.trDef == 1, "one more good minute after the restart completes the point");
+}
+
+// A new pet starts its own count (#76): the last pet's good minutes don't carry over.
+TEST(save, a_new_pet_starts_its_own_stamina_count) {
+  Pet p;
+  makePet(p, 4);
+  for (int m = 0; m < STAMINA_CARE_MIN - 1; m++) {
+    setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+  }
+  p.newEgg();
+  p.eggTap(); p.eggTap(); p.eggTap();
+  CHECK(!p.isEgg());
+  setStats(p, 100, 100, 100, 100);
+  advance(p, 1);
+  CHECK_EQ(p.trDef, (uint8_t)0);
+}
+
+// #76: the training points and the weight are 0-100, the stamina count under
+// STAMINA_CARE_MIN, and the medal word holds only the medals this firmware defines.
+TEST(save, out_of_range_training_weight_and_medals_are_clamped) {
+  Pet a;
+  makePet(a, 4);
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putUChar("tatk", 200);
+    raw.putUChar("tdef", 101);
+    raw.putUChar("tspe", 255);
+    raw.putUChar("wgt", 180);
+    raw.putUShort("tdefm", STAMINA_CARE_MIN * GOOD_STEP);  // one past the last valid count
+    raw.putUShort("medal", 0xFFFF);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.speciesId, (int16_t)4);
+  CHECK_EQ(b.trAtk, (uint8_t)100);
+  CHECK_EQ(b.trDef, (uint8_t)100);
+  CHECK_EQ(b.trSpe, (uint8_t)100);
+  CHECK_EQ(b.weight, (uint8_t)100);
+  CHECK_EQ(b.medals, (uint16_t)MED_ALL);
+  // the count loaded as 0: a point needs a whole STAMINA_CARE_MIN again
+  b.trDef = 50;
+  for (int m = 0; m < STAMINA_CARE_MIN - 1; m++) {
+    setStats(b, 100, 100, 100, 100);
+    mockAdvanceMillis(PET_TICK_MS);
+    b.update(millis());
+  }
+  CHECK_EQ(b.trDef, (uint8_t)50);
+}
+
 TEST(save, out_of_range_stats_and_egg_target_are_clamped) {
   Pet a;
   makePet(a, 4);
@@ -1637,11 +1898,11 @@ TEST(pace, relajado_sigue_quemando_peso_cada_3_minutos) {
   CHECK_EQ(p.weight, (uint8_t)20);  // igual que en normal
 }
 
-TEST(pace, relajado_sigue_forjando_defensa_en_12_horas) {
+TEST(pace, relajado_sigue_forjando_el_folego_al_mismo_ritmo) {
   Pet p;
   makePet(p, 4);
   p.setPace(PACE_RELAXED);
-  for (int h = 0; h < 720; h++) { setStats(p, 100, 100, 100, 100); advance(p, 1); }
+  for (int m = 0; m < STAMINA_CARE_MIN; m++) { setStats(p, 100, 100, 100, 100); advance(p, 1); }
   CHECK_EQ(p.trDef, (uint8_t)1);
 }
 
@@ -1651,7 +1912,7 @@ TEST(pace, relajado_la_racha_ve_la_felicidad_antes_de_bajar) {
   Pet p;
   makePet(p, 4);
   p.setPace(PACE_RELAXED);
-  for (int h = 0; h < 720; h++) { setStats(p, 100, 40, 100, 100); advance(p, 1); }
+  for (int m = 0; m < STAMINA_CARE_MIN; m++) { setStats(p, 100, 40, 100, 100); advance(p, 1); }
   CHECK_EQ(p.trDef, (uint8_t)1);
 }
 
@@ -3180,6 +3441,188 @@ TEST(quietalerts, a_tick_gaining_a_time_medal_and_a_players_one_still_sounds) {
   CHECK(p.hasMedal(MED_BERRY));
   CHECK_EQ(mockSfxCount(), n + 1);
   CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+// The stamina ribbon comes from steady care, counted by the minute tick (#76): with nobody
+// there it is a medal of time, silent in quiet hours; its banner shows anyway.
+static void oneMinuteShortOfStamina(Pet &p) {
+  awakeWithSound(p);
+  p.trDef = RIBBON_STA - 1;
+  for (int m = 0; m < STAMINA_CARE_MIN - 1; m++) {
+    setStats(p, 100, 100, 100, 100);
+    advance(p, 1);
+  }
+  CHECK_EQ(p.trDef, (uint8_t)(RIBBON_STA - 1));
+  setStats(p, 100, 100, 100, 100);
+}
+
+TEST(quietalerts, the_stamina_ribbon_is_silent_in_quiet_hours_and_still_earned) {
+  Pet p;
+  oneMinuteShortOfStamina(p);
+  p.quietHours = true;
+  uint32_t n = mockSfxCount();
+  advance(p, 1);
+  CHECK_EQ(p.trDef, (uint8_t)RIBBON_STA);
+  CHECK(p.hasMedal(MED_STA));
+  CHECK_MSG(p.showMedal(), "the banner shows as usual");
+  CHECK_EQ(mockSfxCount(), n);
+
+  Pet q;
+  oneMinuteShortOfStamina(q);  // the same in the daytime: it sounds
+  n = mockSfxCount();
+  advance(q, 1);
+  CHECK(q.hasMedal(MED_STA));
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+}
+
+// A ribbon an older save already qualifies for, noticed by the first tick after the update
+// with nobody there: silent in quiet hours too.
+TEST(quietalerts, an_older_pets_ribbon_noticed_by_the_tick_is_silent_in_quiet_hours) {
+  Pet p;
+  awakeWithSound(p);
+  p.trAtk = 50;
+  p.trSpe = 50;
+  p.quietHours = true;
+  uint32_t n = mockSfxCount();
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_STR));
+  CHECK(p.hasMedal(MED_SPD));
+  CHECK_EQ(mockSfxCount(), n);
+}
+
+// A ribbon the player's exercise completes is theirs: it sounds in quiet hours, whether the
+// end of the game's screen (exerciseOver) or the next tick gains it.
+TEST(quietalerts, a_ribbon_earned_by_exercise_sounds_in_quiet_hours) {
+  Pet p;
+  awakeWithSound(p);
+  p.trSpe = RIBBON_SPD - 3;
+  p.quietHours = true;
+  uint32_t n = mockSfxCount();
+  p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);  // +3: at the goal
+  CHECK_MSG(!p.hasMedal(MED_SPD), "not inside playGame(): its result screen is up");
+  p.exerciseOver();
+  CHECK(p.hasMedal(MED_SPD));
+  CHECK(p.showMedal());
+  CHECK_EQ(mockSfxCount(), n + 1);
+  CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+
+  Pet q;  // the bag's, gained by the next tick (the screen's end not seen)
+  awakeWithSound(q);
+  q.trAtk = RIBBON_STR - 10;
+  q.quietHours = true;
+  n = mockSfxCount();
+  q.trainStrength(40);
+  advance(q, 1);
+  CHECK(q.hasMedal(MED_STR));
+  CHECK_EQ(mockSfxCount(), n + 1);
+}
+
+// Bedtime closes a game and puts the pet to sleep in one pass (bedApply: autoSleep()): the
+// ribbon its exercise completed is gained without SFX_MEDAL, as checkMedals() plays nothing
+// while the pet sleeps.
+TEST(quietalerts, a_ribbon_gained_as_bedtime_closes_the_game_is_silent) {
+  Pet p;
+  awakeWithSound(p);
+  p.trSpe = RIBBON_SPD - 3;
+  p.quietHours = true;
+  p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);  // +3: at the goal
+  CHECK(p.autoSleep());
+  uint32_t n = mockSfxCount();
+  p.exerciseOver();
+  CHECK_EQ(mockSfxCount(), n);
+  CHECK_MSG(p.hasMedal(MED_SPD), "gained silently");
+}
+
+// ---------------------------------------------------------------- the exercise screen (#69, #76)
+// exerciseOver(): as a minigame or the bag closes, the medals its exercise completed.
+TEST(exercise, the_end_of_the_screen_gains_what_the_exercise_completed) {
+  Pet p;
+  makePet(p, 4);
+  p.ageMinutes = 5 * MINUTES_PER_LEVEL + 1;  // level 6: IN SHAPE needs only the weight gone
+  p.weight = 2;
+  p.trSpe = RIBBON_SPD - 3;
+  p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);
+  CHECK(!p.hasMedal(MED_FIT));
+  CHECK(!p.hasMedal(MED_SPD));
+  p.exerciseOver();
+  CHECK(p.hasMedal(MED_FIT));
+  CHECK(p.hasMedal(MED_SPD));
+  CHECK(p.showMedal());
+}
+
+// Without an exercise that paid (left by the hold, or nothing since the last tick), the end
+// of the screen gains nothing: a goal reached some other way waits for the tick.
+TEST(exercise, a_screen_that_paid_nothing_gains_nothing) {
+  Pet p;
+  makePet(p, 4);
+  p.trAtk = RIBBON_STR;
+  p.exerciseOver();
+  CHECK(!p.hasMedal(MED_STR));
+  CHECK(!p.showMedal());
+  advance(p, 1);
+  CHECK(p.hasMedal(MED_STR));
+}
+
+// #69: a medal or streak banner that came up under a minigame's or the bag's result waits for
+// it to close, then shows its whole time on the creature's screen.
+TEST(exercise, a_banner_under_the_screen_waits_for_it_to_close) {
+  Pet p;
+  makePet(p, 4);
+  p.lastSeenEpoch = 100u * 86400 + 12 * 3600;
+  p.lastCareDay = 99;  // yesterday: today's first care continues the streak
+  p.streak = 6;        // ...to 7: the 7 STREAK medal and the 7-day milestone
+  p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);
+  CHECK(p.hasMedal(MED_STREAK7));
+  CHECK(p.showMedal());
+  CHECK(p.showMilestone());
+  ExerciseScreen screen;
+  for (int i = 0; i < 100; i++) {  // 10 s of result screen, a pass every 100 ms
+    mockAdvanceMillis(100);
+    screen.update(true, p);
+  }
+  CHECK_MSG(p.showMedal(), "the medal banner waited");
+  CHECK_MSG(p.showMilestone(), "the milestone waited too");
+  screen.update(false, p);  // the creature's screen is back
+  mockAdvanceMillis(MEDAL_BANNER_MS - 100);
+  CHECK_MSG(p.showMedal(), "all of its time on the creature's screen");
+  mockAdvanceMillis(200);
+  CHECK(!p.showMedal());
+  mockAdvanceMillis(MILESTONE_BANNER_MS);
+  CHECK(!p.showMilestone());
+}
+
+// ExerciseScreen calls exerciseOver() once, on the pass the screen has closed.
+TEST(exercise, the_screen_closing_gains_the_ribbon_once) {
+  Pet p;
+  makePet(p, 4);
+  p.trSpe = RIBBON_SPD - 3;
+  ExerciseScreen screen;
+  screen.update(false, p);
+  screen.update(true, p);
+  p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);
+  screen.update(true, p);
+  CHECK(!p.hasMedal(MED_SPD));
+  screen.update(false, p);
+  CHECK(p.hasMedal(MED_SPD));
+  uint16_t total = p.totalMedals;
+  screen.update(false, p);
+  CHECK_EQ(p.totalMedals, total);
+  // a second pass of the closed screen must not call exerciseOver() again: the exercise is
+  // still flagged (no tick ran), so a goal reached meanwhile would be gained early
+  p.trAtk = RIBBON_STR;
+  screen.update(false, p);
+  CHECK_MSG(!p.hasMedal(MED_STR), "exerciseOver() ran on a second closed pass");
+}
+
+// Holding never starts a banner that wasn't showing
+TEST(exercise, holding_starts_no_banner) {
+  Pet p;
+  makePet(p, 4);
+  ExerciseScreen screen;
+  for (int i = 0; i < 10; i++) screen.update(true, p);
+  CHECK(!p.showMedal());
+  CHECK(!p.showMilestone());
 }
 
 // ---------------------------------------------------------------- idle perks (#22)

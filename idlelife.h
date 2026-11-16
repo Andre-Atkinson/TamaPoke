@@ -14,7 +14,8 @@ void idleReset();
 void idleUpdate(uint32_t now, bool full);
 // A walk (beh.mode 1) reached beh.targetX.
 void idleArrived(uint32_t now);
-// The pace of a walk the planner started, px/s.
+// The pace of a walk the planner started, px/s: a stroll or the ball chase, a little faster
+// with speed training (idleWalkPace, idleplan.h; #76).
 float idleWalkSpeed();
 // What drawPetPMD() draws while the pet is not walking (beh.mode 0 or 2): the PMD action,
 // how far up a hop has it (dy, added), and the animation's start and looping.

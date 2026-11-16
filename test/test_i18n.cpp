@@ -9,6 +9,7 @@
 #include "../uitext.h"  // headerSize()
 #include <algorithm>
 #include "../ptglyphs.h"
+#include "../cardlayout.h"
 #include <ctype.h>
 #include <string.h>
 #include <functional>
@@ -50,6 +51,7 @@ static const ExpectedFmt EXPECTED[] = {
   { S_RELEASE_FMT,     "%s" },
   { S_HITS_FMT,        "%u" },
   { S_STR_GAIN_FMT,    "%u" },
+  { S_SPD_GAIN_FMT,    "%u" },  // the minigame result's speed gain (gameui.cpp, #76)
   { S_RECORD_FMT,      "%u" },
   { S_SCORE_FMT,       "%u" },
   { S_STREAK_DAYS_FMT, "%u" },
@@ -215,9 +217,9 @@ TEST(i18n, los_formatos_cuadran_con_las_llamadas_del_sketch) {
   gLang = LANG_DEFAULT;
 }
 
-// Medal names go in the celebration banner (size 2, a 320 px box) and the descriptions
-// in the medal grid: size 2 from 44 px into a 196 px box, so 12 letters (144 px) before
-// the box's edge.
+// Medal names go in the celebration banner (size 2, a 320 px box, drawCelebration): 24
+// letters keep one clear of each end. The descriptions go in the medals page's tiles
+// (cardlayout.h), whose width follows the round edge row by row: each must fit its own.
 TEST(i18n, las_medallas_estan_en_todos_los_idiomas) {
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;
@@ -227,9 +229,74 @@ TEST(i18n, las_medallas_estan_en_todos_los_idiomas) {
       snprintf(where, sizeof(where), "[%s][medalla %d]", LANG_NAME[lang], m);
       CHECK_MSG(n && n[0], std::string("medalName vacio ") + where);
       CHECK_MSG(d && d[0], std::string("medalDesc vacio ") + where);
-      if (n) CHECK_MSG(strlen(n) <= 12, std::string("nombre demasiado largo ") + where + ": " + n);
-      if (d) CHECK_MSG(strlen(d) <= 12, std::string("descripcion demasiado larga ") + where + ": " + d);
+      if (n) CHECK_MSG(strlen(n) * CARD_LETTER_W <= 320 - 2 * CARD_LETTER_W,
+                       std::string("nombre demasiado largo ") + where + ": " + n);
+      if (d) CHECK_MSG((int)strlen(d) * CARD_LETTER_W <= medalTextRoom((uint8_t)m),
+                       std::string("descripcion demasiado larga ") + where + ": " + d);
     }
+  }
+  gLang = LANG_DEFAULT;
+}
+
+// The medals page's tiles (#76): every one on the card's disc (its rounded corners, radius
+// 10, may cut the disc's edge by at most 3 px), none overlapping another, the ribbon row
+// under the grid and the minigames' records under it, all above the page dots (y 369).
+TEST(cardlayout, the_medal_tiles_sit_on_the_disc_without_overlapping) {
+  for (uint8_t i = 0; i < MED_COUNT; i++) {
+    CardRect r = medalTile(i);
+    std::string where = "tile " + std::to_string(i);
+    CHECK_MSG(r.w > 0 && r.h == MEDAL_TILE_H, where);
+    const int cx[2] = { r.x + 3, r.x + r.w - 3 }, cy[2] = { r.y + 3, r.y + r.h - 3 };
+    for (int a = 0; a < 2; a++)
+      for (int b = 0; b < 2; b++) {
+        int dx = cx[a] - CARD_C, dy = cy[b] - CARD_C;
+        CHECK_MSG(dx * dx + dy * dy <= CARD_R * CARD_R, where + ": a corner off the disc");
+      }
+    CHECK_MSG(medalTextRoom(i) >= 8 * CARD_LETTER_W, where + ": room for 8 letters at least");
+    for (uint8_t j = 0; j < i; j++) {
+      CardRect o = medalTile(j);
+      bool apart = r.x >= o.x + o.w || o.x >= r.x + r.w || r.y >= o.y + o.h || o.y >= r.y + r.h;
+      CHECK_MSG(apart, where + " overlaps tile " + std::to_string(j));
+    }
+  }
+  CHECK(RIBBON_ROW_Y >= medalTile(MEDAL_CARE - 1).y + MEDAL_TILE_H);
+  CHECK(RECORDS_Y >= RIBBON_ROW_Y + MEDAL_TILE_H);
+  CHECK(RECORDS_Y + 40 < 369);
+  CHECK(MEDAL_TITLE_Y + 21 < MEDAL_ROW_Y);  // the size-3 title is 21 px tall
+}
+
+// The Fitness page (#76): the labels leave every bar FIT_BAR_MIN_W px at least (statBarX
+// starts the bars past the longest), each hint fits the round edge where it is drawn, the
+// size-3 title fits at its height, and the minigame result's "SPEED +100" fits at size 3.
+TEST(i18n, the_fitness_page_texts_fit) {
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    for (StrId id : { S_STAT_STR, S_STAT_STA, S_STAT_SPD, S_STAT_WGT, S_VIN })
+      CHECK_MSG(strlen(T(id)) <= FIT_LABEL_MAX, std::string("label too long: ") + T(id));
+    for (uint8_t i = 0; i < FIT_STATS; i++) {
+      const char *hint = T((StrId)(S_TRAIN_HINT_STR + i));
+      int y = fitRowY(i) + FIT_HINT_DY;
+      int room = 2 * cardHalfWidth(y, y + 14, CARD_LETTER_W, 1000);
+      CHECK_MSG((int)strlen(hint) * CARD_LETTER_W <= room, std::string("hint too wide: ") + hint);
+    }
+    int titleRoom = 2 * cardHalfWidth(FIT_TITLE_Y, FIT_TITLE_Y + 21, 18, 1000);
+    CHECK_MSG((int)strlen(T(S_FITNESS)) * 18 <= titleRoom, std::string("title too wide: ") + T(S_FITNESS));
+    char gain[18];
+    snprintf(gain, sizeof(gain), T(S_SPD_GAIN_FMT), 100u);
+    CHECK_MSG(strlen(gain) * 18 <= 300, std::string("too wide at size 3: ") + gain);
+  }
+  gLang = LANG_DEFAULT;
+}
+
+// The Medals page header at a full count ("MEDALHAS 11/11" is the widest) at size 3, with
+// 4 px to spare each side of the disc (at y 40 it started on the rim).
+TEST(i18n, the_medals_header_fits_at_a_full_count) {
+  int room = 2 * cardHalfWidth(MEDAL_TITLE_Y, MEDAL_TITLE_Y + 21, 4, 1000);
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    char head[32];
+    snprintf(head, sizeof(head), T(S_MEDALS_FMT), (unsigned)MED_COUNT, (unsigned)MED_COUNT);
+    CHECK_MSG((int)strlen(head) * 18 <= room, std::string("medals header too wide: ") + head);
   }
   gLang = LANG_DEFAULT;
 }

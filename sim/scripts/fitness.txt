@@ -1,0 +1,107 @@
+# The Fitness page, the training ribbons and the minigame result's speed gain (#76).
+#   tools/sim.sh --lang pt --script fitness --out shots/
+# `train STR STA SPD` sets the training points at once (simulator only); the ribbons come
+# with the next medal check, the minute tick, which shows the banner on the main screen.
+clock 2026-11-16 10:00
+battery 64
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# the card's second page, untrained: every bar empty, each ribbon's goal an outline
+swipe up
+swipe left
+shot fitness-untrained
+tap 233 420
+wait 1s
+
+# part of the way: no ribbon yet
+train 18 4 27
+swipe up
+swipe left
+shot fitness-partway
+swipe left
+shot medals-none
+tap 233 420
+wait 1s
+
+# the stamina and speed goals reached, then a Play game: as its result closes, the ribbons are
+# gained (Pet::exerciseOver) and the banner names the first; under the result, it would wait
+train 0 10 30
+tap 202 404
+wait 18s
+shot game-result
+wait 3s
+shot ribbon-banner
+wait 5s
+
+# the training bag, with the strength goal two points off: ten hits (about four a point) make
+# +2. As for the game, the banner waits under the result (#69) and shows once the bag has closed
+train 28 10 30
+swipe up
+swipe left
+tap 233 320
+wait 1s
+shot bag-open
+tap 233 233
+tap 233 233
+tap 233 233
+tap 233 233
+tap 233 233
+tap 233 233
+tap 233 233
+tap 233 233
+tap 233 233
+tap 233 233
+wait 6s
+shot bag-result
+wait 3s
+shot bag-ribbon-banner
+wait 5s
+swipe up
+swipe left
+shot fitness-ribbons
+swipe left
+shot medals-ribbons
+tap 233 420
+wait 1s
+
+# fully trained: the ball kicks hardest and the pet walks and chases fastest (#76)
+train 100 100 100
+idle ball
+wait 3s
+shot idle-ball-trained
+swipe up
+swipe left
+shot fitness-full
+tap 233 420
+wait 1s
+
+# the Profile page's bond bar starts where the Fitness bars do (statBarX)
+swipe up
+shot profile
+tap 233 420
+wait 1s
+
+# the same pages at night, and the ball game under the moon
+wait 1s
+serial TIME 1794866400
+wait 2s
+idle ball
+wait 3s
+shot idle-ball-night
+swipe up
+swipe left
+shot fitness-night
+swipe left
+shot medals-night
+tap 233 420
+wait 1s
+tap 202 404
+wait 22s
+shot game-result-night

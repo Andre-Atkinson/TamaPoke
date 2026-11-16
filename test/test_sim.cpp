@@ -282,6 +282,24 @@ TEST(SimScript, nature_names_a_nature) {
   CHECK(!simParseScript("nature tidy lazy\n").error.empty());
 }
 
+// "train STR STA SPD" (#76): the pet's training points, each 0-100, set at once
+TEST(SimScript, train_sets_the_three_training_points) {
+  SimScript s = simParseScript("train 30 10 30\ntrain 0 0 0\ntrain 100 100 100\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)3);
+  if (s.cmds.size() != 3) return;
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_TRAIN);
+  CHECK_EQ(s.cmds[0].a, (int32_t)30);
+  CHECK_EQ(s.cmds[0].b, (int32_t)10);
+  CHECK_EQ(s.cmds[0].c, (int32_t)30);
+  CHECK_EQ(s.cmds[2].c, (int32_t)100);
+  CHECK_EQ(simPreBootEnd(s), (size_t)0);  // it runs the firmware: not a boot step
+  CHECK_EQ(simParseScript("wait 1s\ntrain 30 10\n", "r.txt").error,
+           std::string("r.txt:2: usage: train STRENGTH STAMINA SPEED (training points, 0-100 each)"));
+  for (const char *bad : { "train\n", "train 101 0 0\n", "train 0 -1 0\n", "train 1 2 3 4\n", "train a b c\n" })
+    CHECK_MSG(!simParseScript(bad).error.empty(), std::string("accepted: ") + bad);
+}
+
 // pmu ok|none (#24): the firmware asks the AXP2101 once, in setup(), so it is boot-only
 // "say LINE" (#23): a speech bubble by its serial-log name, in BubbleLine order
 TEST(SimScript, say_takes_a_speech_bubble_line_by_name) {

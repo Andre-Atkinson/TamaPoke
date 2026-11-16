@@ -20,9 +20,10 @@
 #include "../bubble.h"
 #include "../pet.h"
 
+extern Pet pet;  // the sketch's (TamaPoke.ino): the "nature" and "train" steps set it
+
 void setup();
 void loop();
-extern Pet pet;  // the sketch's (TamaPoke.ino): the "nature" step sets it
 
 namespace {
 
@@ -243,6 +244,12 @@ int main(int argc, char **argv) {
         break;
       case OP_NATURE:
         pet.nature = (uint8_t)c.a;
+        run(50);
+        break;
+      case OP_TRAIN:
+        pet.trAtk = (uint8_t)c.a;
+        pet.trDef = (uint8_t)c.b;
+        pet.trSpe = (uint8_t)c.c;
         run(50);
         break;
       case OP_SHOT: {

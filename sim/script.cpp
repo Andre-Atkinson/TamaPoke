@@ -261,6 +261,10 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
         if (w[1] == NATURE_KEYS[i]) c.a = i;
       if (c.a < 0) return fail("usage: nature easygoing|greedy|playful|tidy|lazy");
       c.op = OP_NATURE;
+    } else if (op == "train") {
+      if (n != 4 || !toInt(w[1], c.a, 0, 100) || !toInt(w[2], c.b, 0, 100) || !toInt(w[3], c.c, 0, 100))
+        return fail("usage: train STRENGTH STAMINA SPEED (training points, 0-100 each)");
+      c.op = OP_TRAIN;
     } else if (op == "shot") {
       if (n != 2) return fail("usage: shot NAME");
       for (char ch : w[1])
