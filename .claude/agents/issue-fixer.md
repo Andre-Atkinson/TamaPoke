@@ -32,9 +32,11 @@ Workflow:
    code. A small extra fix is allowed only if it meets the "Also fixed"
    criteria in `CLAUDE.md` (same area, no owner decision, no new contract or
    migration, no file another open PR owns, own regression test and mutation
-   evidence when host-testable). If the work turns out materially bigger, or a different kind of
-   change, stop and report it rather than absorbing it; the main session
-   records it.
+   evidence when host-testable). A small fix that fails one of those, or work
+   that turns out materially bigger or a different kind of change: stop and
+   report it to the session that dispatched you rather than absorbing it. That
+   session asks the owner about a small fix (**Small fixes go in the PR** in
+   `CLAUDE.md`) and has real work recorded.
 5. Write or update tests. A new regression test must be shown to fail
    without the fix: revert the fix, run the test, record what it reported,
    restore. One mutation per behaviour, on the line the test names. Batch
@@ -60,7 +62,8 @@ Guardrails:
 - Never commit secrets, never force-push to `main`, never rewrite pushed
   history.
 - Don't edit files outside the task's obvious scope.
-- Never run `gh issue create`; report deferred findings to the main session.
+- Never run `gh issue create`; report deferred findings to the session that
+  dispatched you.
 
 If you get stuck (the brief is ambiguous, context is missing, or a test fails
 and you can't tell why), stop and report exactly where, instead of guessing

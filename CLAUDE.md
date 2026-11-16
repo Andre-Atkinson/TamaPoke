@@ -209,7 +209,10 @@ rounds before it is merged. Both are mandatory, and two is also the cap.
 4. **After round 2** no more review agents. The main session fixes any
    HIGH/MEDIUM findings itself (a large set can go to one fresh
    `issue-fixer`, whose diff the main session then reviews), re-runs the gate,
-   and fixes or explicitly dispositions LOW ones. Nothing gets silently dropped.
+   fixes the small LOW ones it would be comfortable merging without another
+   independent look (asking the owner first where **Small fixes go in the
+   PR** below says so) and explicitly dispositions the rest. Nothing gets
+   silently dropped.
 
 **Reviewers take the firmware builds from CI** (owner's decision,
 2026-11-14). Reviews were rebuilding commits that CI builds anyway, and with at
@@ -254,36 +257,38 @@ its test, records the result and restores the file.
 
 **Merging** needs all three: the work is verified (gate, plus hardware when
 relevant), both review rounds are done with every finding fixed or
-dispositioned (deferred ones filed as issues), and CI is green. The owner has
-given standing approval (2026-11-13) to merge a PR as soon as all three hold,
-so don't ask for each merge. The *main session* is one the owner works in
-directly; a session started by another session is not one, and neither is an
-agent. A main session merges its own PRs and files their issues. A session
-started by another reports "READY #<n>" to the one that started it, listing
-any deferred findings, so that session can file their issues before it
-merges. Use a merge commit, or squash when the branch has WIP commits, and
+dispositioned (deferred ones filed as issues, declined ones recorded as such),
+and CI is green. The owner has given standing approval (2026-11-13) to merge a
+PR as soon as all three hold, so don't ask for each merge. The *main session*
+is one the owner works in directly; a session started by another session is
+not one, and neither is an agent. A main session merges its own PRs and files
+their issues. A session started by another reports "READY #<n>" to the one
+that started it, listing any deferred findings (only ones the owner chose to
+defer, or real work), so that session can file their issues before it merges.
+A small fix is settled with the owner before READY; it does not wait there for
+an answer. Use a merge commit, or squash when the branch has WIP commits, and
 say which in the merge commit message. Design decisions, flashing the board,
-and anything else the hard rules reserve for the owner still need the
-owner's say. Subagents never merge, and nobody submits an approving review.
-Once a session's work is merged and nothing is pending, the session that
-started it (or the owner) archives it.
+and anything else the hard rules reserve for the owner still need the owner's
+say. Subagents never merge, and nobody submits an approving review. Once a
+session's work is merged and nothing is pending, the session that started it
+(or the owner) archives it.
 
 Mutation evidence for round-1 fixes and for the main session's post-round-2
 fixes goes in the PR body (`gh pr edit`), not only in a comment.
 
 **Recording findings.** Every review finding's outcome goes in the PR body
-under **Review findings** (ID, severity, fixed in `<sha>`, or deferred with
-the reason). Anything deferred past the PR becomes a GitHub issue (`gh issue
-create --repo Andre-Atkinson/TamaPoke`, label `roadmap` plus an area label
-such as `care`, `power`, `ui` or `tooling`, milestone `Next` or `Later`),
-linked from the PR body. The milestone is what ranks an issue; there is no
-`later` label. The main session adds the `in-progress` label while a session
-is designing or building an issue, and removes it when the PR merges. File
-the issue **before the PR merges**: a deferred finding counts as dispositioned
-only once its issue exists and is linked from the PR body. A PR that fixes a
-roadmap issue says `Closes #<n>` in its description. Only the main session
-files issues; agents never run `gh issue create` and report deferred findings
-back instead.
+under **Review findings** (ID, severity, fixed in `<sha>`, deferred with the
+reason, or declined by the owner with the date, which needs no issue).
+Anything deferred past the PR becomes a GitHub issue (`gh issue create --repo
+Andre-Atkinson/TamaPoke`, label `roadmap` plus an area label such as `care`,
+`power`, `ui` or `tooling`, milestone `Next` or `Later`), linked from the PR
+body. The milestone is what ranks an issue; there is no `later` label. The
+main session adds the `in-progress` label while a session is designing or
+building an issue, and removes it when the PR merges. File the issue **before
+the PR merges**: a deferred finding counts as dispositioned only once its
+issue exists and is linked from the PR body. A PR that fixes a roadmap issue
+says `Closes #<n>` in its description. Only the main session files issues;
+agents never run `gh issue create` and report deferred findings back instead.
 
 PR descriptions say what changed, why, how it was tested (including what was
 not tested on hardware), and list anything fixed beyond the brief under
@@ -292,6 +297,23 @@ the same area as the PR, needs no owner decision, adds no new contract or
 migration, touches no file another open PR owns (`gh pr list --repo
 Andre-Atkinson/TamaPoke --json number,files`), and comes with its own
 regression test and mutation evidence when the behaviour is host-testable
-(otherwise say how it was checked). Anything bigger is reported to the main
-session, which records it (see **Recording findings**); findings are never
-silently dropped.
+(otherwise say how it was checked). Anything outside those conditions is
+reported back: a small fix goes to the owner as **Small fixes go in the PR**
+below says, and the rest is recorded (see **Recording findings**). Findings
+are never silently dropped.
+
+**Small fixes go in the PR, not in an issue** (owner's decision, 2026-11-17).
+A small fix beyond the brief, found while working on a PR by its author or by
+either review round, is made in that PR. When it meets the conditions above,
+make it and list it under **Also fixed** (a review finding fixed this way is
+also recorded under **Review findings**). When one fails (another area, a call
+the owner has to make, a file another open PR owns), the session working on
+the PR asks the owner whether to fold it in, instead of deferring it. That
+session is a main session or one started by another session; the owner answers
+in either. An agent never asks the owner: it reports the fix to the session
+that dispatched it, which asks. A GitHub issue is only for real work: a design
+call that needs its own session, an NVS migration, a new serial command, a
+second component, work that needs its own review, a small fix the owner chose
+to defer, or anything else too big to fold in. A small fix the owner declines
+is recorded as declined, with no issue. When picking work, bundle closely
+related small open issues into one PR instead of one session each.
