@@ -54,6 +54,13 @@ y los modulos que salieron de el: `scene.cpp`, `gameui.cpp`, `screens.cpp`,
 `uitext.cpp` y `serialcmd.cpp`), audio (`audio.cpp`), tarjeta SD (`sdmon.cpp`) y
 RTC/bateria (`rtcbat.cpp`). El `.ino` y esos modulos tampoco se compilan aqui:
 los compila el simulador (`tools/sim.sh`, ver la seccion "Simulator" del README)
-contra una placa simulada, y `tools/gate.sh` lo corre en las dos placas. Los
-tests de este directorio se compilan con el `char` del Mac (con signo); el
-simulador usa `-funsigned-char`, como el ESP32-S3.
+contra una placa simulada, y `tools/gate.sh` lo corre en las dos placas.
+
+Los tests de este directorio y el simulador se compilan con `-funsigned-char`:
+en el ESP32-S3 `char` no tiene signo y en el Mac si, y sin el flag un byte
+`>= 0x80` (las letras del PT) no se leeria como en la placa (#29). En
+`test/Makefile` va en `HOSTFLAGS`, fuera de `CXXFLAGS`, para que un `CXXFLAGS`
+propio no lo quite; si se pierde, falla `host.char_is_unsigned_like_the_esp32s3`
+(`test_i18n.cpp`), y el simulador ni compila (`static_assert` en `sim/boot.cpp`;
+todos sus objetos dependen de `sim/Makefile`, asi que tambien una compilacion
+incremental lo rehace todo y falla).

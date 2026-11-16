@@ -13,6 +13,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <functional>
+#include <limits>
 #include <vector>
 
 static const char *LANG_NAME[LANG_COUNT] = { "EN", "PT" };
@@ -464,6 +465,20 @@ TEST(PtGlyphs, the_lookup_finds_the_12_codes_and_nothing_else) {
   // classic font are not glyphs here
   for (uint8_t b : {(uint8_t)'A', (uint8_t)'a', (uint8_t)'\n', (uint8_t)0x80, (uint8_t)0x87, (uint8_t)0xA0})
     CHECK_EQ(ptGlyphIndex(b), -1);
+}
+
+// #29: char is unsigned on the ESP32-S3 and signed on the Mac. test/Makefile builds
+// with -funsigned-char (HOSTFLAGS), so these tests read a byte >= 0x80, such as the PT
+// letters above, the way the board does. This fails at run time, not at compile time,
+// if the flag is ever dropped.
+TEST(host, char_is_unsigned_like_the_esp32s3) {
+  CHECK(!std::numeric_limits<char>::is_signed);
+  // each PT letter's byte, stored in a plain char and read back, keeps its value
+  // (signed, \343 would read as -29)
+  for (int g = 0; g < PTG_COUNT; g++) {
+    const char c = (char)PT_GLYPHS[g].code;
+    CHECK_EQ((int)c, (int)PT_GLYPHS[g].code);
+  }
 }
 
 // las etiquetas de la pagina Care van en botones de 320 px a tamano 4 (24 px por letra)
