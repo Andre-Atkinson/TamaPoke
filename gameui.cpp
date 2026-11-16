@@ -44,11 +44,20 @@ static uint32_t trainHeldAt = 0;     // ...as of the last successful touch poll 
 
 // ---------- minijuegos de Play (logica en minigames.h) ----------
 
+#if HOST_SIM
+static uint8_t forcedGame = GAME_COUNT;  // the simulator's "game" step; GAME_COUNT: the bag deals
+void gameForceNext(uint8_t g) { forcedGame = g; }
+#endif
+
 void startGame() {
   if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
   uint8_t fav = 0;
   while (fav < 2 && !pet.lovesBerry(fav)) fav++;
   games.start(millis(), (uint32_t)random(0x7FFFFFFF) ^ micros(), fav, pet.berryKnown);
+#if HOST_SIM
+  if (forcedGame < GAME_COUNT) games.begin(forcedGame, millis(), fav, pet.berryKnown);  // in place of the bag's pick
+  forcedGame = GAME_COUNT;
+#endif
   gameOpen = true;
   gameOverUntil = 0;
   gameNewHi = false;
@@ -95,16 +104,13 @@ static void gameSounds() {
   else if ((e & GEV_GOOD) && games.game() != GAME_SONG) sfxPlay(games.game() == GAME_CATCH ? SFX_EAT : SFX_PLAY);
 }
 
-// each game's name in the serial log, in the order of GameId
-static const char *const GAME_LOG_NAME[GAME_COUNT] = { "keepy", "catch", "peek", "song" };
-
 // fin de la partida (el juego acabo o nadie lo toco en 15 s): record y recompensa
 static void finishGame() {
   uint8_t g = games.game();
   gameShownScore = games.score();
   gameNewHi = gameShownScore > pet.gameBest(g);
   gameSpeedGain = pet.playGame(g, gameShownScore);
-  Serial.printf("Play: %s score=%u speed=+%u\n", GAME_LOG_NAME[g], gameShownScore, gameSpeedGain);
+  Serial.printf("Play: %s score=%u speed=+%u\n", GAME_KEYS[g], gameShownScore, gameSpeedGain);
   if (!games.won()) sfxPlay(gameNewHi && gameShownScore > 0 ? SFX_MEDAL : SFX_LEVEL);
   gameOverUntil = millis() + 4000;
 }
@@ -123,9 +129,9 @@ static void gameScreenOff() {
     if (games.endDark()) {
       uint16_t score = games.score();
       uint8_t gain = pet.playGame(g, score);
-      Serial.printf("Play: %s score=%u speed=+%u (screen off)\n", GAME_LOG_NAME[g], score, gain);
+      Serial.printf("Play: %s score=%u speed=+%u (screen off)\n", GAME_KEYS[g], score, gain);
     } else {
-      Serial.printf("Play: %s untouched (screen off)\n", GAME_LOG_NAME[g]);
+      Serial.printf("Play: %s untouched (screen off)\n", GAME_KEYS[g]);
     }
   }
   gameOpen = false;

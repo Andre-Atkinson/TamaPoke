@@ -2,6 +2,7 @@
 #include "../idleplan.h"  // IDLE_ACT_NAMES
 #include "../bubble.h"
 #include "../nature.h"  // NATURE_KEYS
+#include "../gamecore.h"  // GAME_KEYS
 #include <ctype.h>
 #include <stdlib.h>
 #include <sstream>
@@ -279,6 +280,12 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       if (n != 4 || !toInt(w[1], c.a, 0, 100) || !toInt(w[2], c.b, 0, 100) || !toInt(w[3], c.c, 0, 100))
         return fail("usage: train STRENGTH STAMINA SPEED (training points, 0-100 each)");
       c.op = OP_TRAIN;
+    } else if (op == "game") {
+      c.a = -1;
+      for (int i = 0; n == 2 && i < GAME_COUNT; i++)
+        if (w[1] == GAME_KEYS[i]) c.a = i;
+      if (c.a < 0) return fail("usage: game keepy|catch|peek|song");
+      c.op = OP_GAME;
     } else if (op == "shot") {
       if (n != 2) return fail("usage: shot NAME");
       if (!shotName(w[1])) return fail("shot names use letters, digits, '-', '_' and '.' only");

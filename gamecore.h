@@ -7,6 +7,8 @@
 // the state. Coordinates are the native 466x466 UI coordinates.
 
 enum GameId : uint8_t { GAME_KEEPY = 0, GAME_CATCH, GAME_PEEK, GAME_SONG, GAME_COUNT };
+// each game's name in the serial log (the "Play:" lines) and in the simulator's "game" step
+inline const char *const GAME_KEYS[GAME_COUNT] = { "keepy", "catch", "peek", "song" };
 
 // ---------------------------------------------------------------- reward
 

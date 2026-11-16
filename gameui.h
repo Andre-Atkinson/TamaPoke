@@ -18,6 +18,12 @@ extern bool trainOpen;  // an exercise is on screen (the rhythm punch or the sta
 extern bool trainPick;  // the stat card shows the exercise choice in place of the stats
 
 void startGame();
+#if HOST_SIM
+// The simulator's "game NAME" step (sim/script.h): the next Play deals this game (GameId)
+// in place of the bag's pick, so a script doesn't depend on how the dice fall (every
+// random() call before it, the idle life's and the scene's too, moves them).
+void gameForceNext(uint8_t g);
+#endif
 void gameTouch(bool pressed, int16_t x, int16_t y);
 void renderGame();
 

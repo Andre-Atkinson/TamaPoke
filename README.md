@@ -731,7 +731,8 @@ A script is one step per line (the full list is in `sim/script.h`):
 `sim/scripts/idle-life.txt`), `say hungry` (a speech bubble now, simulator only; `say christmas`
 and the other special days' greetings too),
 `train 30 10 30` (the creature's strength, stamina and speed training, simulator only; see
-`sim/scripts/fitness.txt`), and `shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
+`sim/scripts/fitness.txt`), `game catch` (the next Play deals this minigame, `keepy`,
+`catch`, `peek` or `song`, simulator only; see `sim/scripts/game-screen-off.txt`), and `shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
 doesn't answer) set the language, the time and the PMU before boot, and only
 there (`clock none`: no time, as after a power-off; see `sim/scripts/clock-prompt.txt`);
 `battery`, `usb` and `charging` placed before the first step that
