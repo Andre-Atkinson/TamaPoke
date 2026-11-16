@@ -452,7 +452,7 @@ TEST(BatLogNvs, a_diary_of_another_format_is_not_read_and_is_erased_at_the_next_
   putRaw16("fmt", (uint16_t)(BATLOG_FMT + 1));
   putRaw16("n", 3);
   for (int i = 0; i < 3; i++) {
-    char k[8];
+    char k[16];  // room for any int: GCC's -Wformat-truncation cannot see that i < 3
     snprintf(k, sizeof k, "r%d", i);
     putRaw64(k, rowNo(i));
   }
