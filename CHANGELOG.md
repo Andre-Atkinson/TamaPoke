@@ -288,6 +288,21 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **Turning the screen off ends an exercise** (#88). PWR during the punch or the hold
+  (or the 1.75C's pocket lock) left it open in the dark, keeping the CPU at full speed
+  and, on the 1.75C, the training touch capture polling, until the screen came back on or
+  bedtime ended it with no prize; a touch in the dark could land a punch unseen. Now the session ends
+  at once and the creature keeps what it did, as when you leave early, with no result
+  screen; the board goes back to its usual low-power screen-off, and the screen comes
+  back on to the creature. A ribbon the session earned chimes as you press PWR and shows
+  its banner when the screen is back on. The same happens if the battery runs out
+  mid-exercise.
+
+- **Train says so while the creature sleeps** (#89). Tapping *Train* (or an exercise)
+  on the stat card while it slept closed the card and did nothing. Now the card stays
+  open on its Fitness page and a note says "Shh, it's sleeping" for 2 s. The note is the
+  1.75C's toast, which the original 1.75 now has too.
+
 - **"Hold to exit" is readable at night on the 1.75C's training screen** (#78). Its
   label and outline were drawn in the night ink, light on the light button, as no
   minigame's is.

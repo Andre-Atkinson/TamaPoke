@@ -1,0 +1,87 @@
+# The exercises when the screen goes dark (#88), and TRAIN while the pet sleeps (#89). For
+# both boards, both languages, by day and by night:
+#   tools/sim.sh --board 175c --lang en --script exercise-screen-off --out shots/
+#   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script exercise-screen-off --out shots/
+# PWR (and on the 1.75C the pocket lock, three presses) ends an exercise at once and pays for
+# what was done, with no result screen; the screen comes back on to the creature. The serial
+# log (shots/serial.log) has one line per ending, "Training: punch count=2 gain=3 ... (screen
+# off)", "Training: hold count=1 gain=1 ... (screen off)", "Training: punch count=1 gain=1 ...
+# (screen off)", and "TRAIN: asleep" for the note.
+# Timing as in exercises.txt: a tap is 80 ms down then 400 ms settling, an exercise starts
+# when the tap that chose it lifts, and the punch's windows are 400-1100 ms into each 1.5 s
+# swing (exercise.h).
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# the punch: two punches on the beat, then PWR: dark at once, the session paid
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+wait 800ms
+tap 233 240
+shot 40-punch-two
+press pwr
+shot 41-punch-pwr-off
+wait 5s
+# PWR again: the creature, not the exercise (no result screen, nothing resumed)
+press pwr
+wait 1s
+shot 42-punch-pwr-on
+# the Fitness page: strength +3 (two punches)
+swipe up
+swipe left
+shot 43-fitness-after-punch
+
+# the hold: a rep and a bit, lifted, then PWR: one rep paid
+tap 233 320
+tap 233 240
+hold 233 270 2200ms 44-hold-held
+press pwr
+shot 45-hold-pwr-off
+wait 5s
+press pwr
+wait 1s
+shot 46-hold-pwr-on
+
+# the pocket lock (three presses): on the 1.75C the lock hint, then dark, and three more
+# presses unlock. The 1.75 has no lock: it reads PWR every 250 ms, so quick presses merge
+# and each three toggle the screen once or twice. Either way the first dark ends the punch
+# with its one punch paid; a tap on nothing then wakes a screen the 1.75 left dark (on a
+# lit one it does nothing).
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+press pwr 3
+shot 47-punch-locked
+wait 3s
+press pwr 3
+tap 40 233
+wait 1s
+shot 48-punch-unlocked
+
+# TRAIN while it sleeps (the light button): the card stays on its Fitness page with a note,
+# which goes after 2 s; the light button again wakes it
+tap 264 404
+wait 1s
+swipe up
+swipe left
+tap 233 320
+shot 49-train-asleep-note
+wait 2500ms
+shot 50-train-asleep-after
+swipe up
+tap 264 404
+wait 1s
+shot 51-awake-again

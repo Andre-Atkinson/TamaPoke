@@ -142,27 +142,44 @@ void startExercise(uint8_t kind) {
   trainOpen = true;
 }
 
+// Pays the pet for what the session did (Pet::trainStrength or trainStamina) and logs it,
+// `why` at the end of the line. False when nothing was done: nothing paid, nothing spent.
+static bool payExercise(const char *why) {
+  bool p = trainKind == EX_PUNCH;
+  trainCount = p ? punch.punches : hold.reps;
+  if (!trainCount) return false;
+  trainNewHi = p && trainCount > pet.punchHi;
+  trainGain = p ? pet.trainStrength(trainCount) : pet.trainStamina(trainCount);
+#if BOARD_AMOLED_175C
+  Serial.printf("Training: %s count=%u gain=%u input_drops=%lu%s\n", p ? "punch" : "hold", trainCount,
+                trainGain, (unsigned long)trainingCapture.dropped(), why);
+#else
+  Serial.printf("Training: %s count=%u gain=%u%s\n", p ? "punch" : "hold", trainCount, trainGain, why);
+#endif
+  return true;
+}
+
 // The session is over (its end, or the exit): pay for what was done and show the result
 // for 3.5 s. With nothing done, back to the pet at once: nothing paid, nothing spent.
 static void finishExercise(uint32_t now) {
   if (trainOverUntil) return;
-  bool p = trainKind == EX_PUNCH;
-  trainCount = p ? punch.punches : hold.reps;
-  if (!trainCount) {
+  if (!payExercise("")) {
     leaveTraining();
     return;
   }
-  trainNewHi = p && trainCount > pet.punchHi;
-  trainGain = p ? pet.trainStrength(trainCount) : pet.trainStamina(trainCount);
-#if BOARD_AMOLED_175C
-  Serial.printf("Training: %s count=%u gain=%u input_drops=%lu\n", p ? "punch" : "hold", trainCount,
-                trainGain, (unsigned long)trainingCapture.dropped());
-#else
-  Serial.printf("Training: %s count=%u gain=%u\n", p ? "punch" : "hold", trainCount, trainGain);
-#endif
   sfxPlay(trainNewHi ? SFX_MEDAL : SFX_PLAY);
   trainOverUntil = now + 3500;
   if (!trainOverUntil) trainOverUntil = 1;  // 0 means "still training"
+}
+
+// The screen went dark during an exercise (#88). The session ends here and pays for what
+// was done, as the exit does, but with no result screen to draw and no sound to go with it,
+// and the training screen closes: no 240 MHz and no touch capture with the screen off, and
+// the screen comes back on to the creature. The result screen only closes (paid already).
+void exerciseScreenOff() {
+  if (!trainOpen) return;
+  if (!trainOverUntil) payExercise(" (screen off)");
+  leaveTraining();
 }
 
 void exerciseTap(uint32_t at) {

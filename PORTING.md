@@ -195,7 +195,7 @@ work against LittleFS.
 | `screenlock.cpp` / `screenlock.h` | **New.** PWR triple-press detector and lock state (pure logic, compile-time and host tests). |
 | `bootbutton.cpp` / `bootbutton.h` | **New.** BOOT single/double/long gesture detector (pure logic, tests). |
 | `trainingtouch.*` / `trainingcapture.*` | **New.** 1.75C training touch policy (taps, the stamina hold, the exit hold), CST9217 report decoder and the capture worker. |
-| `i18n.cpp` / `i18n.h` | The 1.75C's strings: `S_HOLD_EXIT`, and the BOOT and lock toasts (`S_TOAST_*`, #61), in both languages. |
+| `i18n.cpp` / `i18n.h` | The 1.75C's strings: `S_HOLD_EXIT`, and the BOOT and lock toasts (`S_TOAST_*`, #61), in both languages. The toast itself (`showControlToast`) is on both boards since #89. |
 | `TamaPoke.ino` | 1.75C-only lock, BOOT, overlay and training paths; boot banner prints `BOARD_NAME`. |
 | `serialcmd.cpp` | The 1.75C-only serial commands `LOCK?` and `TRAINTRACE` (the serial console moved here from `TamaPoke.ino`, #41). |
 | `gameui.cpp` | The 1.75C-only training capture in the exercises (#78): its start check, the capture frame and the hold-to-exit chip (the minigame screens moved here from `TamaPoke.ino`, #41). |
@@ -266,6 +266,10 @@ On the 1.75C:
   it for **1 s**; its fill shows progress. Quick taps on it neither quit nor
   score. Since #78 leaving ends the session and pays for what was done; the
   result screen stays 3.5 s.
+- Turning the screen off or locking it ends the session the same way, with no
+  result screen (#88, `pollPwrButton`), so the capture stops polling as the
+  screen goes dark; a finger still on the glass is only read until it lifts,
+  and does nothing.
 - `trainingcapture` keeps polling the CST9217 at the usual **20 ms** while the
   frame is drawn and flushed (that part of the frame does no I2C), and queues
   timestamped hits. An RAII guard joins the worker before the frame returns, so
