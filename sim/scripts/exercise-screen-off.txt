@@ -6,7 +6,9 @@
 # what was done, with no result screen; the screen comes back on to the creature. The serial
 # log (shots/serial.log) has one line per ending, "Training: punch count=2 gain=3 ... (screen
 # off)", "Training: hold count=1 gain=1 ... (screen off)", "Training: punch count=1 gain=1 ...
-# (screen off)", and "TRAIN: asleep" for the note.
+# (screen off)", and "TRAIN: asleep" for the note. The last section presses PWR on the result
+# screen of a finished punch: that ending prints the normal "Training: punch count=2 gain=3"
+# line once, and no "(screen off)" line (it was paid at the end of the session, not again).
 # Timing as in exercises.txt: a tap is 80 ms down then 400 ms settling, an exercise starts
 # when the tap that chose it lifts, and the punch's windows are 400-1100 ms into each 1.5 s
 # swing (exercise.h).
@@ -85,3 +87,28 @@ swipe up
 tap 264 404
 wait 1s
 shot 51-awake-again
+
+# PWR on the RESULT screen: the session ran to its end and was paid there (one "Training:
+# punch count=2 gain=3" line, no "(screen off)"), so PWR only closes the result and pays
+# nothing again. Dark at the press, the creature when the screen comes back on, and the
+# Fitness page shows strength 7 (3 + 1 from the sections above + this punch's 3, paid once;
+# 10 would be a second payment).
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+wait 800ms
+tap 233 240
+wait 17s
+shot 52-punch-result-before-pwr
+press pwr
+shot 53-result-pwr-off
+wait 2s
+press pwr
+wait 1s
+shot 54-result-pwr-on
+swipe up
+swipe left
+shot 55-fitness-after-result-pwr

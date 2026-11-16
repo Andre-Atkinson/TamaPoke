@@ -196,7 +196,7 @@ work against LittleFS.
 | `bootbutton.cpp` / `bootbutton.h` | **New.** BOOT single/double/long gesture detector (pure logic, tests). |
 | `trainingtouch.*` / `trainingcapture.*` | **New.** 1.75C training touch policy (taps, the stamina hold, the exit hold), CST9217 report decoder and the capture worker. |
 | `i18n.cpp` / `i18n.h` | The 1.75C's strings: `S_HOLD_EXIT`, and the BOOT and lock toasts (`S_TOAST_*`, #61), in both languages. The toast itself (`showControlToast`) is on both boards since #89. |
-| `TamaPoke.ino` | 1.75C-only lock, BOOT, overlay and training paths; boot banner prints `BOARD_NAME`. |
+| `TamaPoke.ino` | 1.75C-only lock hint, BOOT and training paths; the toast overlay (`showControlToast`, the box in `flushUI()`, the redraw at the top of `render()`) is on both boards; boot banner prints `BOARD_NAME`. |
 | `serialcmd.cpp` | The 1.75C-only serial commands `LOCK?` and `TRAINTRACE` (the serial console moved here from `TamaPoke.ino`, #41). |
 | `gameui.cpp` | The 1.75C-only training capture in the exercises (#78): its start check, the capture frame and the hold-to-exit chip (the minigame screens moved here from `TamaPoke.ino`, #41). |
 | `tools/build_175c.sh` | **New.** 1.75C build (flag + partition table), also used by CI. |

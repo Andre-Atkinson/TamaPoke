@@ -290,10 +290,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 - **Turning the screen off ends an exercise** (#88). PWR during the punch or the hold
   (or the 1.75C's pocket lock) left it open in the dark, keeping the CPU at full speed
-  and, on the 1.75C, the training touch capture polling, until the screen came back on or
-  bedtime ended it with no prize; a touch in the dark could land a punch unseen. Now the session ends
-  at once and the creature keeps what it did, as when you leave early, with no result
-  screen; the board goes back to its usual low-power screen-off, and the screen comes
+  until the screen came back on or bedtime ended it with no prize. Until the touch lock
+  engaged (10 s after the screen goes off by default on the 1.75C, never on the 1.75) a
+  touch in the dark could land a punch unseen, and the 1.75C kept polling its training
+  touch capture. Now the session ends at once and the creature keeps what it did, as when
+  you leave early, with no result screen; the board goes back to its usual low-power screen-off, and the screen comes
   back on to the creature. A ribbon the session earned chimes as you press PWR and shows
   its banner when the screen is back on. The same happens if the battery runs out
   mid-exercise.
