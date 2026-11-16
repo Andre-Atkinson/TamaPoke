@@ -57,6 +57,7 @@ static_assert(StaminaHold::IDLE_END_MS <= POWER_GAME_AWAKE_MS, "an idle hold end
 #include "uitext.h"
 #include "owner.h"
 #include "holiday.h"
+#include "batdiary.h"
 #include <Preferences.h>
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
@@ -438,11 +439,12 @@ void setup() {
   // CRITICO: sin esto, Serial.print BLOQUEA el juego cuando no hay un
   // monitor serie abierto en el host (el bufer TX del USB CDC se llena
   // y nadie lo vacia) -> con timeout 0 los mensajes se descartan
-  Serial.setTxTimeoutMs(0);
+  Serial.setTxTimeoutMs(SERIAL_TX_TIMEOUT_MS);
   Serial.printf("TamaPoke fw v%s (%s)\n", FW_VERSION, BOARD_NAME);
   loadLang();  // saved language; English when none or not EN/PT (i18n.h)
   ownerLoad();  // the player's name for the speech bubbles (owner.h), if the owner set one
   birthdayLoad();  // the player's birthday for the special days (holiday.h, #26), if set
+  batLogLoad();  // the battery diary (batdiary.h, #14): its first row comes from the loop
   Wire.begin(IIC_SDA, IIC_SCL);
 #if BOARD_AMOLED_175C
   // QMI8658 is on VCC3V3 and is not used by this firmware. CTRL7=0 disables its sensors; the
@@ -791,6 +793,11 @@ static bool bubbleFree(uint32_t now) {
 
 void loop() {
   uint32_t now = millis();
+  // battery diary (#14): the time since the last pass counts as screen-on if the previous
+  // pass left the panel lit (syncPanelPower() and updateBrightness() are the only writers)
+  static uint32_t diaryPassAt = now;
+  if (!panelAsleep && panelBrightness) batLogScreenOn(now - diaryPassAt);
+  diaryPassAt = now;
   // self-care while charging (#24): the cached USB reading, no extra I2C
   pet.setCharger(pmuReady, usbPresent(), idleSince(now, lastInteract));
   // quiet hours for the sounds nobody asked for (#44): the hourly level-up and a medal that
@@ -917,9 +924,14 @@ void loop() {
   if (batShouldShutdown() && !usbPresent()) {
     exerciseScreenOff();  // the pet keeps what an exercise did so far, as with PWR (#88)
     pet.flushSave();
+    batLogCutoff(now, diaryEpoch());  // the end of a run on battery, saved before the power goes
     panel->setBrightness(0);
     batPowerOff();
   }
+  // the battery diary's hourly and plug/unplug rows (batdiary.h): only cached reads until one
+  // is due, then one voltage read
+  uint8_t diaryRow = batLogDue(now);
+  if (diaryRow != BL_NONE) batLogRecord(diaryRow, now, diaryEpoch());
 
   // vuelca el autoguardado periodico SOLO con la pantalla atenuada/apagada o
   // durmiendo: la escritura a NVS congela ~1s ambos cores (caché de flash off),
@@ -931,8 +943,11 @@ void loop() {
   lockBlank = screenLock.blank(millis());
 #endif
   // (not while a call's window lights the panel: the freeze would show)
-  if (pet.savePending() && ((screenOff && !attnShow) || lockBlank || dimStage >= 1 || pet.sleeping)) {
+  bool flashQuiet = (screenOff && !attnShow) || lockBlank || dimStage >= 1 || pet.sleeping;
+  if (pet.savePending() && flashQuiet) {
     pet.flushSave();
+  } else if (flashQuiet && batLogSaveDue()) {
+    batLogSave();  // the battery diary's new rows: the same quiet moments, never in the same pass
   }
 
   // anota la hora real cada 30 s (se persiste en cada save del juego)
@@ -1089,6 +1104,11 @@ static bool sceneNight() {
   return pet.sleeping || h < 6 || h >= 20;
 }
 
+// The battery diary's time stamp (batdiary.h): the wall clock, or 0 while it is not trusted
+// (reseeded after a power-off and not set since, bedtime.h), so a row never carries a made-up
+// time. Read only when a row is written: on the original 1.75 it is an I2C read.
+static uint32_t diaryEpoch() { return bedEdge.stale() ? 0 : rtcEpoch(); }
+
 // the standby clock is on screen: up, and no call's window showing the pet (see powerCtx())
 static bool standbyShown(uint32_t now) { return standby && !attnShowing(now); }
 
@@ -1162,7 +1182,9 @@ void idleWait(PowerCtx c) {
     if (!locked) gpio_wakeup_enable((gpio_num_t)BOOT_BUTTON_PIN, GPIO_INTR_LOW_LEVEL);
 #endif
     esp_sleep_enable_gpio_wakeup();
+    uint32_t sleptFrom = millis();
     esp_light_sleep_start();
+    batLogAsleep(millis() - sleptFrom);  // the battery diary's asleep minutes (#14)
 #if BOARD_AMOLED_175C
     if (!locked) gpio_wakeup_disable((gpio_num_t)BOOT_BUTTON_PIN);
 #endif

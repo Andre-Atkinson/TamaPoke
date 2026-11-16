@@ -1809,6 +1809,102 @@ class TestBoardPy(unittest.TestCase):
         msg = self.run_clock(b'')
         self.assertIn('clock not set: board answered rtc=1794564000', msg)
 
+    # The battery diary (#14): the lines test/test_batdiary.cpp's
+    # the_dump_lists_the_rows_oldest_first checks the firmware prints for BATLOG?.
+    BATLOG_REPLY = [
+        'BATLOG rows=3 cap=96 unsaved=1 period_min=60',
+        'epoch,event,pct,mv,usb,chg,on_min,sleep_min',
+        '0,boot,90,4110,0,0,0,0',
+        '1794564000,hour,84,4056,0,0,5,50',
+        '1794567600,hour,79,4011,0,0,0,0',
+    ]
+
+    def test_parse_batlog_reads_the_firmwares_dump(self):
+        rows, info = self.board.parse_batlog(['HEALTH up=1s', *self.BATLOG_REPLY])  # a heartbeat first
+        self.assertEqual(info, {'rows': '3', 'cap': '96', 'unsaved': '1', 'period_min': '60'})
+        self.assertEqual([r['event'] for r in rows], ['boot', 'hour', 'hour'])
+        self.assertEqual(rows[1], {'epoch': 1794564000, 'event': 'hour', 'pct': 84, 'mv': 4056,
+                                   'usb': False, 'charging': False, 'on_min': 5, 'asleep_min': 50})
+
+    def test_parse_batlog_refuses_a_dump_cut_short(self):
+        # the firmware stops the dump when nobody takes the bytes: the count gives it away
+        with self.assertRaises(self.board.BatlogError) as cm:
+            self.board.parse_batlog(self.BATLOG_REPLY[:-1])
+        self.assertIn('cut short: got 2 of 3 rows', str(cm.exception))
+        with self.assertRaises(self.board.BatlogError):
+            self.board.parse_batlog(self.BATLOG_REPLY + ['1794571200,hour,70,3990,0,0,0,0'])
+
+    def test_parse_batlog_refuses_a_reply_that_is_not_a_diary(self):
+        for lines in (['rtc=1'], self.BATLOG_REPLY[:1] + ['epoch,event'] + self.BATLOG_REPLY[2:],
+                      self.BATLOG_REPLY[:2] + ['0,boot,90,4110,0,0,0'] + self.BATLOG_REPLY[3:],
+                      self.BATLOG_REPLY[:2] + ['0,boot,x,4110,0,0,0,0'] + self.BATLOG_REPLY[3:],
+                      ['BATLOG cap=96'] + self.BATLOG_REPLY[1:]):
+            with self.subTest(lines=lines[:3]), self.assertRaises(self.board.BatlogError):
+                self.board.parse_batlog(lines)
+
+    def test_batlog_rows_become_the_csv_columns(self):
+        row = lambda **kw: {'epoch': 1794564000, 'event': 'hour', 'pct': 84, 'mv': 4056, 'usb': False,
+                            'charging': False, 'on_min': 5, 'asleep_min': 50, **kw}
+        self.assertEqual(self.board.batlog_csv_row(row()),
+                         ['2026-11-13 10:00', 'hour', 84, 4056, 'discharging', 5, 50])
+        self.assertEqual(self.board.batlog_csv_row(row(usb=True, charging=True))[4], 'charging')
+        self.assertEqual(self.board.batlog_csv_row(row(usb=True))[4], 'full')
+        # no time (clock not set), no battery reading, no voltage: empty cells
+        self.assertEqual(self.board.batlog_csv_row(row(epoch=0, pct=-1, mv=0, usb=True))[:5],
+                         ['', 'hour', '', '', 'no battery'])
+
+    def run_batlog(self, reply):
+        """board.py batlog against a board that answers `reply`; (lines sent, stdout, stderr, exit)."""
+        import contextlib
+        import io
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, slave)
+        sent = []
+
+        def board_side():
+            sent.append(os.read(master, 64))
+            if reply:
+                os.write(master, reply)
+        threading.Thread(target=board_side, daemon=True).start()
+        out, err = io.StringIO(), io.StringIO()
+        code = None
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                self.board.main(['--port', os.ttyname(slave), 'batlog'])
+            except SystemExit as e:
+                code = e.code
+        return sent, out.getvalue(), err.getvalue(), code
+
+    def test_batlog_prints_csv_and_sends_only_the_read_only_command(self):
+        reply = ('\r\n'.join(self.BATLOG_REPLY) + '\r\nDONE\r\n').encode()
+        sent, out, err, code = self.run_batlog(reply)
+        self.assertIsNone(code)
+        self.assertEqual(sent, [b'BATLOG?\n'], 'batlog must send only the read-only BATLOG?')
+        self.assertEqual(out.splitlines(), [
+            'time,event,battery_pct,battery_mv,state,screen_on_min,asleep_min',
+            ',boot,90,4110,discharging,0,0',
+            '2026-11-13 10:00,hour,84,4056,discharging,5,50',
+            '2026-11-13 11:00,hour,79,4011,discharging,0,0',
+        ])
+        self.assertIn('3 rows', err)
+        self.assertIn('the newest 1 are not in flash yet', err)
+
+    def test_batlog_says_when_the_dump_was_cut_short(self):
+        reply = ('\n'.join(self.BATLOG_REPLY[:-1]) + '\nDONE\n').encode()
+        _, out, _, code = self.run_batlog(reply)
+        self.assertIsInstance(code, str, 'a cut dump must exit non-zero')
+        self.assertIn('cut short', code)
+        self.assertEqual(out, '', 'no partial CSV on stdout')
+
+    def test_batlog_on_a_firmware_without_the_diary(self):
+        old = self.board.BATLOG_TIMEOUT
+        self.board.BATLOG_TIMEOUT = 1
+        self.addCleanup(setattr, self.board, 'BATLOG_TIMEOUT', old)
+        _, _, _, code = self.run_batlog(b'')
+        self.assertIsInstance(code, str)
+        self.assertIn('older than the battery diary', code)
+
 
 SIM = os.path.join(ROOT, 'sim')
 

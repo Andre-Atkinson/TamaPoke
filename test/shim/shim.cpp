@@ -169,8 +169,19 @@ typedef std::map<std::string, std::vector<uint8_t> > KV;
 static std::map<std::string, KV> gStore;
 
 static bool gNvsFailWrites = false;
-void mockNvsReset() { gStore.clear(); gNvsFailWrites = false; }
+static size_t gNvsWrites = 0;
+static long gNvsOkLeft = -1;  // mockNvsFailAfter(): writes left before they fail (-1 = no limit)
+void mockNvsReset() { gStore.clear(); gNvsFailWrites = false; gNvsWrites = 0; gNvsOkLeft = -1; }
 void mockNvsFailWrites(bool fail) { gNvsFailWrites = fail; }
+size_t mockNvsWrites() { return gNvsWrites; }
+void mockNvsFailAfter(long ok) { gNvsOkLeft = ok; }
+// a write may go through now; counts the ones that do
+static bool nvsWriteOk() {
+  if (gNvsFailWrites || gNvsOkLeft == 0) return false;
+  if (gNvsOkLeft > 0) gNvsOkLeft--;
+  gNvsWrites++;
+  return true;
+}
 size_t mockNvsKeyCount(const char *ns) {
   std::map<std::string, KV>::iterator it = gStore.find(ns);
   return it == gStore.end() ? 0 : it->second.size();
@@ -184,7 +195,7 @@ bool Preferences::begin(const char *name, bool readOnly) {
 }
 void Preferences::end() { open_ = false; }
 bool Preferences::clear() {
-  if (!open_ || ro_) return false;
+  if (!open_ || ro_ || !nvsWriteOk()) return false;
   gStore[ns_].clear();
   return true;
 }
@@ -194,13 +205,13 @@ bool Preferences::isKey(const char *key) {
   return kv.find(key) != kv.end();
 }
 bool Preferences::remove(const char *key) {
-  if (!open_ || ro_ || gNvsFailWrites) return false;
+  if (!open_ || ro_ || !gStore[ns_].count(key) || !nvsWriteOk()) return false;
   return gStore[ns_].erase(key) > 0;
 }
 
 static size_t rawPut(std::map<std::string, KV> &store, const std::string &ns, bool open,
                      bool ro, const char *k, const void *v, size_t len) {
-  if (!open || ro || gNvsFailWrites) return 0;
+  if (!open || ro || !nvsWriteOk()) return 0;
   const uint8_t *p = (const uint8_t *)v;
   store[ns][k].assign(p, p + len);
   return len;
@@ -231,6 +242,7 @@ size_t Preferences::putShort(const char *k, int16_t v)   { return putScalar(gSto
 size_t Preferences::putUShort(const char *k, uint16_t v) { return putScalar(gStore, ns_, open_, ro_, k, v); }
 size_t Preferences::putInt(const char *k, int32_t v)     { return putScalar(gStore, ns_, open_, ro_, k, v); }
 size_t Preferences::putUInt(const char *k, uint32_t v)   { return putScalar(gStore, ns_, open_, ro_, k, v); }
+size_t Preferences::putULong64(const char *k, uint64_t v) { return putScalar(gStore, ns_, open_, ro_, k, v); }
 size_t Preferences::putBytes(const char *k, const void *v, size_t len) {
   return rawPut(gStore, ns_, open_, ro_, k, v, len);
 }
@@ -245,6 +257,7 @@ int16_t Preferences::getShort(const char *k, int16_t def)  { return getScalar(gS
 uint16_t Preferences::getUShort(const char *k, uint16_t def){ return getScalar(gStore, ns_, open_, k, def); }
 int32_t Preferences::getInt(const char *k, int32_t def)    { return getScalar(gStore, ns_, open_, k, def); }
 uint32_t Preferences::getUInt(const char *k, uint32_t def) { return getScalar(gStore, ns_, open_, k, def); }
+uint64_t Preferences::getULong64(const char *k, uint64_t def) { return getScalar(gStore, ns_, open_, k, def); }
 
 size_t Preferences::getBytes(const char *k, void *buf, size_t maxLen) {
   if (!open_) return 0;
