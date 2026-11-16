@@ -49,5 +49,7 @@ void mockNvsFailWrites(bool fail);
 size_t mockNvsKeyCount(const char *ns);
 // writes (put, remove, clear) that reached the store since the last mockNvsReset()
 size_t mockNvsWrites();
+// while on, Preferences::begin() fails (nvs_open failing: a namespace that cannot be opened)
+void mockNvsFailBegin(bool fail);
 // the next `ok` writes succeed, then every write fails (as mockNvsFailWrites(true)); -1 = off
 void mockNvsFailAfter(long ok);

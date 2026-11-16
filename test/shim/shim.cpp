@@ -67,6 +67,22 @@ size_t mockSerialTxRefused() { return gTxRefused; }
 uint32_t mockSerialTxTimeout() { return gTxTimeout; }
 void MockSerial::setTxTimeoutMs(uint32_t ms) { gTxTimeout = ms; }
 
+struct SerialCall { uint32_t timeout; bool shortWrite; };
+static std::vector<SerialCall> gSerialCalls;
+void mockSerialLogClear() { gSerialCalls.clear(); }
+size_t mockSerialWriteCalls() { return gSerialCalls.size(); }
+uint32_t mockSerialWriteTimeout(size_t call) { return call < gSerialCalls.size() ? gSerialCalls[call].timeout : 0; }
+bool mockSerialWriteShort(size_t call) { return call < gSerialCalls.size() && gSerialCalls[call].shortWrite; }
+
+// Like HWCDC::write(): stops at the first byte the host does not take and reports how many it did.
+size_t MockSerial::write(const uint8_t *buf, size_t n) {
+  size_t k = 0;
+  while (k < n && write(buf[k]) == 1) k++;
+  gTxRefused += n - k - (k < n ? 1 : 0);  // the first refused byte was counted by write(uint8_t)
+  gSerialCalls.push_back({gTxTimeout, k < n});
+  return k;
+}
+
 size_t MockSerial::write(uint8_t c) {
   if (gTxRoom == 0) { gTxRefused++; return 0; }
   if (gTxRoom > 0) gTxRoom--;
@@ -181,7 +197,9 @@ static std::map<std::string, KV> gStore;
 static bool gNvsFailWrites = false;
 static size_t gNvsWrites = 0;
 static long gNvsOkLeft = -1;  // mockNvsFailAfter(): writes left before they fail (-1 = no limit)
-void mockNvsReset() { gStore.clear(); gNvsFailWrites = false; gNvsWrites = 0; gNvsOkLeft = -1; }
+static bool gNvsFailBegin = false;
+void mockNvsReset() { gStore.clear(); gNvsFailWrites = false; gNvsFailBegin = false; gNvsWrites = 0; gNvsOkLeft = -1; }
+void mockNvsFailBegin(bool fail) { gNvsFailBegin = fail; }
 void mockNvsFailWrites(bool fail) { gNvsFailWrites = fail; }
 size_t mockNvsWrites() { return gNvsWrites; }
 void mockNvsFailAfter(long ok) { gNvsOkLeft = ok; }
@@ -198,6 +216,7 @@ size_t mockNvsKeyCount(const char *ns) {
 }
 
 bool Preferences::begin(const char *name, bool readOnly) {
+  if (gNvsFailBegin) return false;
   ns_ = name;
   ro_ = readOnly;
   open_ = true;

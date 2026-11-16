@@ -7,7 +7,8 @@
 # On the 1.75C the screen goes off after a minute untouched, so an hour on battery shows about
 # 1 screen-on minute and 59 asleep. The original 1.75 keeps its screen on (Never) and only
 # light-sleeps once it is almost off, after 5 minutes: about 60 on and 50 asleep.
-# unsaved=0 in a dump means the new rows reached the NVS copy (written while the screen is dark).
+# unsaved=0 in a dump means the new rows reached the NVS copy (written in the pet's autosave
+# moments: screen dimmed or off, the pocket lock blank, or the pet asleep).
 
 battery 90
 clock 2026-11-13 10:00

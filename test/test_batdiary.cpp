@@ -615,28 +615,112 @@ TEST(BatLogNvs, the_dump_lists_the_rows_oldest_first) {
   poll(10000 + 2 * HOUR_MS, T0 + 3600);
   std::string out = captureDump();
   CHECK_STREQ(out.c_str(),
-              "BATLOG rows=3 cap=96 unsaved=1 period_min=60\n"
-              "epoch,event,pct,mv,usb,chg,on_min,sleep_min\n"
-              "0,boot,90,4110,0,0,0,0\n"
-              "1794564000,hour,84,4056,0,0,5,50\n"
-              "1794567600,hour,79,4011,0,0,0,0\n");
+              "BATLOG rows=3 cap=96 unsaved=1 period_min=60\r\n"
+              "epoch,event,pct,mv,usb,chg,on_min,sleep_min\r\n"
+              "0,boot,90,4110,0,0,0,0\r\n"
+              "1794564000,hour,84,4056,0,0,5,50\r\n"
+              "1794567600,hour,79,4011,0,0,0,0\r\n");
 }
 
 // The dump is about 4 KB, more than the USB transmit buffer: it waits for the host while it
-// prints (a longer transmit timeout), stops at the first write that still comes back short
-// (nobody reading: one wait, not one per row), and puts the console's timeout back.
-TEST(BatLogNvs, the_dump_stops_when_nobody_reads_it) {
+// prints (a longer transmit timeout), sends each line as one write call, and puts the console's
+// timeout back.
+TEST(BatLogNvs, each_dump_line_is_one_write_with_the_dumps_own_transmit_wait) {
+  FreshBoard board;
+  for (uint32_t h = 0; h < 3; h++) poll(10000 + h * HOUR_MS, T0 + h * 3600);
+  Serial.setTxTimeoutMs(SERIAL_TX_TIMEOUT_MS);
+  mockSerialLogClear();
+  batLogPrint();
+  size_t calls = mockSerialWriteCalls();
+  CHECK_EQ(calls, (size_t)5);  // the BATLOG line, the header and three rows: one call each
+  for (size_t i = 0; i < calls; i++) {
+    CHECK_EQ(mockSerialWriteTimeout(i), (uint32_t)BATLOG_TX_WAIT_MS);
+    CHECK(!mockSerialWriteShort(i));
+  }
+  CHECK_EQ(mockSerialTxTimeout(), (uint32_t)SERIAL_TX_TIMEOUT_MS);  // and the console's again
+}
+
+// A stalled write call costs about BATLOG_TX_RETRIES waits (HWCDC::write() retries before it
+// returns short), not one: the wait is chosen so that stays within BATLOG_STALL_MAX_MS.
+TEST(BatLogNvs, a_stalled_write_holds_the_loop_for_at_most_the_stall_bound) {
+  CHECK_RANGE(BATLOG_TX_WAIT_MS * BATLOG_TX_RETRIES, 1, BATLOG_STALL_MAX_MS);
+  FreshBoard board;
+  poll(10000);
+  Serial.setTxTimeoutMs(SERIAL_TX_TIMEOUT_MS);
+  mockSerialLogClear();
+  mockSerialTxRoom(0);  // nobody is reading
+  batLogPrint();
+  mockSerialTxRoom(-1);
+  CHECK_EQ(mockSerialWriteCalls(), (size_t)1);
+  CHECK(mockSerialWriteShort(0));
+  CHECK_RANGE(mockSerialWriteTimeout(0) * BATLOG_TX_RETRIES, (uint32_t)1, (uint32_t)BATLOG_STALL_MAX_MS);
+}
+
+// With the host taking only the next `room` bytes (-1: all of them), how the dump ends: the
+// write calls it made, and how many of them came back short.
+static size_t dumpCallsWithRoom(long room, size_t &shortCalls) {
+  Serial.setTxTimeoutMs(SERIAL_TX_TIMEOUT_MS);
+  mockSerialLogClear();
+  mockSerialTxRoom(room);
+  batLogPrint();
+  mockSerialTxRoom(-1);
+  size_t calls = mockSerialWriteCalls();
+  shortCalls = 0;
+  for (size_t i = 0; i < calls; i++) shortCalls += mockSerialWriteShort(i);
+  return calls;
+}
+
+// Where line `k` (0 = the BATLOG line, 1 = the header, 2 = the first row...) starts in a dump.
+static long lineStart(const std::string &dump, int k) {
+  size_t at = 0;
+  while (k-- > 0) at = dump.find('\n', at) + 1;
+  return (long)at;
+}
+
+TEST(BatLogNvs, the_dump_stops_at_the_first_write_the_host_does_not_take) {
   FreshBoard board;
   for (uint32_t h = 0; h < 40; h++) poll(10000 + h * HOUR_MS, T0 + h * 3600);
-  Serial.setTxTimeoutMs(SERIAL_TX_TIMEOUT_MS);
-  mockSerialTxRoom(120);  // the first line and the header, then nothing more is taken
-  batLogPrint();
-  size_t refused = mockSerialTxRefused();
-  mockSerialTxRoom(-1);
-  CHECK_RANGE(refused, (size_t)1, (size_t)64);  // the rest of one line, not 40 rows
+  std::string dump = captureDump();
+  size_t shortCalls;
+  // a cut inside a line makes that line's write the one short call, and the last
+  CHECK_EQ(dumpCallsWithRoom(lineStart(dump, 0) + 10, shortCalls), (size_t)1);  // the BATLOG line
+  CHECK_EQ(shortCalls, (size_t)1);
+  CHECK_EQ(dumpCallsWithRoom(lineStart(dump, 1) + 5, shortCalls), (size_t)2);   // the header
+  CHECK_EQ(shortCalls, (size_t)1);
+  CHECK_EQ(dumpCallsWithRoom(lineStart(dump, 4) + 7, shortCalls), (size_t)5);   // the third row
+  CHECK_EQ(shortCalls, (size_t)1);
   CHECK_EQ(mockSerialTxTimeout(), (uint32_t)SERIAL_TX_TIMEOUT_MS);
-  std::string all = captureDump();  // a host reading takes it all
-  size_t lines = 0;
-  for (char c : all) lines += c == '\n';
-  CHECK_EQ(lines, (size_t)42);
+  // a cut exactly between two lines: the next line's write is the short one
+  CHECK_EQ(dumpCallsWithRoom(lineStart(dump, 3), shortCalls), (size_t)4);
+  CHECK_EQ(shortCalls, (size_t)1);
+  // a host reading takes the 2 lines and the 40 rows, one call each
+  CHECK_EQ(dumpCallsWithRoom(-1, shortCalls), (size_t)42);
+  CHECK_EQ(shortCalls, (size_t)0);
+}
+
+TEST(BatLogNvs, a_cutoff_after_a_clear_is_logged_again) {
+  FreshBoard board;
+  poll(10000);
+  batLogCutoff(10000 + MIN_MS, T0);
+  CHECK_EQ(rowsInRam().size(), (size_t)2);
+  CHECK(batLogClear(20000));
+  batLogCutoff(20000 + MIN_MS, T0);  // the diary is empty: this cutoff is the first row of it
+  std::vector<BatRow> rows = rowsInRam();
+  CHECK_EQ(rows.size(), (size_t)1);
+  CHECK_EQ(rows[0].kind, (uint8_t)BL_CUTOFF);
+}
+
+TEST(BatLogNvs, a_namespace_that_will_not_open_is_not_retried_every_pass) {
+  FreshBoard board;
+  poll(10000);
+  mockNvsFailBegin(true);
+  CHECK(!batLogSave());
+  CHECK(!batLogSaveDue());  // as for a failed write: the next row tries again
+  mockNvsFailBegin(false);
+  CHECK(!batLogSaveDue());
+  CHECK_EQ(rowsInRam().size(), (size_t)1);
+  poll(10000 + HOUR_MS);
+  CHECK(batLogSaveDue());
+  CHECK(batLogSave());
+  CHECK_EQ(rowsAfterReboot().size(), (size_t)2);
 }

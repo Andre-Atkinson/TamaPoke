@@ -219,6 +219,17 @@ inline int batLogFormatRow(char *dst, unsigned n, const BatRow &r) {
                   r.charging ? 1 : 0, (unsigned)r.onMin, (unsigned)r.sleepMin);
 }
 
+// How long the dump waits for the host while BATLOG? prints (batdiary.cpp). One write call that
+// stalls costs far more than the transmit timeout: in arduino-esp32 3.3.10 HWCDC::write()
+// (cores/esp32/HWCDC.cpp) retries xRingbufferSend() up to max_consec_timeouts = 20 times, each
+// waiting the timeout (1 tick is 1 ms, CONFIG_FREERTOS_HZ=1000), before it returns a short
+// count. The loop (screen and touch) is frozen for that long, so the product is kept small.
+#define BATLOG_TX_WAIT_MS 5          // the transmit timeout while the dump prints
+#define BATLOG_TX_RETRIES 20         // HWCDC::write()'s max_consec_timeouts (not in a header: re-check on a core update)
+#define BATLOG_STALL_MAX_MS 100      // the longest one stalled write call may hold the loop
+static_assert(BATLOG_TX_WAIT_MS * BATLOG_TX_RETRIES <= BATLOG_STALL_MAX_MS,
+              "one stalled write call must not hold the loop for more than BATLOG_STALL_MAX_MS");
+
 static_assert(BATLOG_ROWS <= 255, "BatRing::unsaved is a uint8_t");
 static_assert(2 * BATLOG_ROWS <= 0xFFFF, "BatRing::n is a uint16_t");
 static_assert(BATLOG_ROWS < 1000, "the slot keys are r0..r999");
@@ -231,7 +242,8 @@ void batLogLoad();                  // setup(): the saved rows, each one checked
 uint8_t batLogDue(uint32_t now);    // the row due now, or BL_NONE (cached reads only)
 void batLogRecord(uint8_t kind, uint32_t now, uint32_t epoch);  // takes a reading and keeps the row in RAM
 bool batLogSaveDue();               // rows to write, and the last write did not fail
-bool batLogSave();                  // writes them: call it only while the screen is dark
+bool batLogSave();                  // writes them: call it only in the quiet moments of the pet's autosave
+                                    // (screen dimmed or off, the pocket lock blank, or the pet asleep)
 void batLogCutoff(uint32_t now, uint32_t epoch);  // the power-off row (one in a row), saved at once
 void batLogScreenOn(uint32_t ms);   // the screen was lit for this long
 void batLogAsleep(uint32_t ms);     // the CPU was in light sleep for this long

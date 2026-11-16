@@ -72,7 +72,11 @@ void batLogRecord(uint8_t kind, uint32_t now, uint32_t epoch) {
   saveFailed = false;  // a new row: try the flash again
 }
 
-bool batLogSaveDue() { return !saveFailed && (ring.unsaved || (fmtSaved && ring.n != savedN)); }
+// Only rows not yet written count: with saveFailed clear and no unsaved row, "n" in NVS already
+// equals ring.n (saveFailed is cleared by a new row, which raises unsaved, by batLogLoad() and
+// batLogClear(), or by a save that wrote the counter too). batLogSave() itself still checks the
+// counter, because batLogCutoff() calls it after a save that wrote the rows but not "n".
+bool batLogSaveDue() { return !saveFailed && ring.unsaved; }
 
 // The rows not yet saved, oldest first, then the counter. A power cut between them loses only
 // the rows whose counter was not written: the counter in NVS still says the rows before, and
@@ -137,25 +141,40 @@ bool batLogClear(uint32_t now) {
 }
 
 // The dump is up to about 4 KB and the USB serial's transmit buffer holds 256 bytes; with the
-// console's 0 ms timeout (SERIAL_TX_TIMEOUT_MS) the rest would be dropped. While it prints, a
-// write waits up to BATLOG_TX_WAIT_MS at a time for the host to take the bytes, and a write
-// that still comes back short (nobody reading) ends it. tools/board.py checks that it got
-// every row the first line announces.
-#define BATLOG_TX_WAIT_MS 50
+// console's 0 ms timeout (SERIAL_TX_TIMEOUT_MS) the rest would be dropped. While it prints, the
+// transmit timeout is BATLOG_TX_WAIT_MS (batdiary.h), so a host that reads gets every line. A
+// host that has stopped reading costs one write call, which HWCDC retries up to
+// BATLOG_TX_RETRIES times: at most BATLOG_STALL_MAX_MS (100 ms) with the loop frozen. Each line
+// goes out as one write call (its own "\r\n") and the first one that comes back short ends the
+// dump. tools/board.py checks that it got every row the first line announces.
+// One line in one write call: `len` characters are in line[], which has room for "\r\n".
+static bool batLogPutLine(char (&line)[80], int len) {
+  if (len < 0) len = 0;
+  if (len > (int)sizeof line - 2) len = (int)sizeof line - 2;
+  line[len++] = '\r';
+  line[len++] = '\n';
+  return Serial.write((const uint8_t *)line, (size_t)len) == (size_t)len;
+}
+
 void batLogPrint() {
   uint16_t rows = 0;
   BatRow r;
   for (uint16_t i = 0; i < ring.filled(); i++)
     if (batRowUnpack(ring.slot[ring.slotOf(i)], r)) rows++;
+  char line[80];
   Serial.setTxTimeoutMs(BATLOG_TX_WAIT_MS);
-  Serial.printf("BATLOG rows=%u cap=%u unsaved=%u period_min=%lu\n", (unsigned)rows,
-                (unsigned)BATLOG_ROWS, (unsigned)ring.unsaved, (unsigned long)(BATLOG_PERIOD_MS / 60000UL));
-  bool sent = Serial.println(BATLOG_CSV_HEADER) >= strlen(BATLOG_CSV_HEADER);
-  char line[64];
+  int n = snprintf(line, sizeof line - 2, "BATLOG rows=%u cap=%u unsaved=%u period_min=%lu",
+                   (unsigned)rows, (unsigned)BATLOG_ROWS, (unsigned)ring.unsaved,
+                   (unsigned long)(BATLOG_PERIOD_MS / 60000UL));
+  bool sent = batLogPutLine(line, n);
+  if (sent) {
+    n = snprintf(line, sizeof line - 2, "%s", BATLOG_CSV_HEADER);
+    sent = batLogPutLine(line, n);
+  }
   for (uint16_t i = 0; sent && i < ring.filled(); i++) {
     if (!batRowUnpack(ring.slot[ring.slotOf(i)], r)) continue;
-    batLogFormatRow(line, sizeof line, r);
-    sent = Serial.println(line) >= strlen(line);
+    n = batLogFormatRow(line, sizeof line - 2, r);
+    sent = batLogPutLine(line, n);
   }
   Serial.setTxTimeoutMs(SERIAL_TX_TIMEOUT_MS);
 }

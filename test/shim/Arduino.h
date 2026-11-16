@@ -44,6 +44,7 @@ public:
   void setTxTimeoutMs(uint32_t ms);
   void setTimeout(unsigned long) {}
   size_t write(uint8_t c) override;
+  size_t write(const uint8_t *buf, size_t n) override;  // one call, as HWCDC::write(): logged
   using Print::write;
   int available();
   int read();
@@ -63,6 +64,12 @@ void mockSerialFeed(const char *text);  // encola entrada como si llegara por US
 void mockSerialTxRoom(long bytes);
 size_t mockSerialTxRefused();
 uint32_t mockSerialTxTimeout();  // the last setTxTimeoutMs()
+// A log of the write(buf, n) calls (every print, println and printf ends in one or more of them):
+// the transmit timeout in force at each call, and whether it took every byte.
+void mockSerialLogClear();
+size_t mockSerialWriteCalls();
+uint32_t mockSerialWriteTimeout(size_t call);   // setTxTimeoutMs() in force at that call
+bool mockSerialWriteShort(size_t call);         // the host did not take all of that call's bytes
 
 // ---- utilidades ------------------------------------------------------------
 template <class T> static inline T min(T a, T b) { return a < b ? a : b; }

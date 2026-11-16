@@ -672,8 +672,9 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
 (`batdiary.h`): a row every hour, and one at boot, when USB is plugged in or pulled out, and at
 the low-battery power-off, with the time, the battery level and voltage, the charge state, and
 how many minutes the screen was lit and the CPU in light sleep since the previous row. The
-newest 96 rows (about four days) are kept in flash in their own NVS namespace, written only
-while the screen is dark, so they survive a flat battery. `python3 tools/board.py batlog`
+newest 96 rows (about four days) are kept in flash in their own NVS namespace, written in the
+same quiet moments as the pet's autosave (the screen dimmed or off, the pocket lock blank, or the
+pet asleep), so they survive a flat battery. `python3 tools/board.py batlog`
 prints them as CSV; `PORTING.md` (*Measuring battery life*) has the steps of a battery test.
 
 ## Serial console (115200, debug)

@@ -1853,10 +1853,14 @@ class TestBoardPy(unittest.TestCase):
         self.assertEqual(self.board.batlog_csv_row(row(epoch=0, pct=-1, mv=0, usb=True))[:5],
                          ['', 'hour', '', '', 'no battery'])
 
-    def run_batlog(self, reply):
-        """board.py batlog against a board that answers `reply`; (lines sent, stdout, stderr, exit)."""
+    def run_batlog(self, reply, timeout=None):
+        """board.py batlog against a board that answers `reply`; (chunks sent, stdout, stderr, exit).
+
+        The chunks are everything board.py wrote to the port: the first read, then whatever else
+        is still waiting once it has returned (a second command would show up there)."""
         import contextlib
         import io
+        import select
         master, slave = os.openpty()
         self.addCleanup(os.close, master)
         self.addCleanup(os.close, slave)
@@ -1866,7 +1870,12 @@ class TestBoardPy(unittest.TestCase):
             sent.append(os.read(master, 64))
             if reply:
                 os.write(master, reply)
-        threading.Thread(target=board_side, daemon=True).start()
+        thread = threading.Thread(target=board_side, daemon=True)
+        thread.start()
+        if timeout is not None:
+            old = self.board.BATLOG_TIMEOUT
+            self.board.BATLOG_TIMEOUT = timeout
+            self.addCleanup(setattr, self.board, 'BATLOG_TIMEOUT', old)
         out, err = io.StringIO(), io.StringIO()
         code = None
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -1874,6 +1883,9 @@ class TestBoardPy(unittest.TestCase):
                 self.board.main(['--port', os.ttyname(slave), 'batlog'])
             except SystemExit as e:
                 code = e.code
+        thread.join(5)
+        while select.select([master], [], [], 0.1)[0]:
+            sent.append(os.read(master, 64))
         return sent, out.getvalue(), err.getvalue(), code
 
     def test_batlog_prints_csv_and_sends_only_the_read_only_command(self):
@@ -1897,11 +1909,24 @@ class TestBoardPy(unittest.TestCase):
         self.assertIn('cut short', code)
         self.assertEqual(out, '', 'no partial CSV on stdout')
 
+    def test_batlog_says_when_the_dump_was_cut_short_and_the_done_was_lost_with_it(self):
+        # the firmware stops a dump the host does not take, and its DONE is lost with the rest:
+        # the reply starts and never ends, which is still a dump cut short
+        reply = ('\r\n'.join(self.BATLOG_REPLY[:-1]) + '\r\n').encode()
+        _, out, _, code = self.run_batlog(reply, timeout=1)
+        self.assertIsInstance(code, str, 'a cut dump must exit non-zero')
+        self.assertIn('cut short', code)
+        self.assertIn('got 2 of 3 rows', code)
+        self.assertEqual(out, '', 'no partial CSV on stdout')
+
+    def test_batlog_keeps_a_whole_dump_whose_done_was_lost(self):
+        reply = ('\r\n'.join(self.BATLOG_REPLY) + '\r\n').encode()
+        _, out, _, code = self.run_batlog(reply, timeout=1)
+        self.assertIsNone(code)
+        self.assertEqual(len(out.splitlines()), 4)
+
     def test_batlog_on_a_firmware_without_the_diary(self):
-        old = self.board.BATLOG_TIMEOUT
-        self.board.BATLOG_TIMEOUT = 1
-        self.addCleanup(setattr, self.board, 'BATLOG_TIMEOUT', old)
-        _, _, _, code = self.run_batlog(b'')
+        _, _, _, code = self.run_batlog(b'', timeout=1)
         self.assertIsInstance(code, str)
         self.assertIn('older than the battery diary', code)
 

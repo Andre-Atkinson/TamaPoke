@@ -54,6 +54,14 @@ class NoReply(TimeoutError):
     """The board printed nothing at all (an unknown command, or not TamaPoke)."""
 
 
+class NoDone(TimeoutError):
+    """A reply that started but never ended with DONE; `lines` is what arrived."""
+
+    def __init__(self, message, lines):
+        super().__init__(message)
+        self.lines = lines
+
+
 class Console:
     def __init__(self, port):
         self.fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
@@ -109,7 +117,7 @@ class Console:
                 return lines
         if not lines:
             raise NoReply(f'no reply to {line!r} within {timeout:.0f} s (unknown command?)')
-        raise TimeoutError(f'no DONE after {line!r} within {timeout:.0f} s; got {lines!r}')
+        raise NoDone(f'no DONE after {line!r} within {timeout:.0f} s; got {lines!r}', lines)
 
 
 def parse_rtc(lines):
@@ -231,6 +239,13 @@ def run(args):
         elif args.what == 'batlog':
             try:
                 reply = con.command('BATLOG?', timeout=BATLOG_TIMEOUT)
+            except NoDone as e:
+                # The firmware stops the dump when the host stops taking bytes, and the DONE
+                # after it is lost with them: a reply with the BATLOG line is a dump cut short
+                # (parse_batlog says so), or a whole one whose DONE alone was lost.
+                if not any(t.startswith('BATLOG ') for t in e.lines):
+                    raise
+                reply = e.lines
             except NoReply:
                 raise NoReply('no reply to BATLOG?: the firmware on the board is older than the '
                               'battery diary (#14); update it first') from None
@@ -242,7 +257,8 @@ def run(args):
             note = f'{len(rows)} rows (the board keeps the newest {info.get("cap", "?")})'
             if info.get('unsaved', '0') != '0':
                 note += (f'; the newest {info["unsaved"]} are not in flash yet (they are written '
-                         'once the screen is dark) and a power-off now would lose them')
+                         "in the pet's quiet moments: the screen dimmed or off, or the pet asleep) "
+                         'and a power-off now would lose them')
             print(note, file=sys.stderr)
         elif args.what == 'status':
             for cmd in ('HEALTH', 'STATS'):

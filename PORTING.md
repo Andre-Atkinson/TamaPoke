@@ -193,8 +193,8 @@ the next boot. A battery test:
    To start with an empty diary: `python3 tools/board.py cmd BATLOG CLEAR`.
 3. Unplug it, and let the player look after the pet as usual.
 4. Plug it back in when you want to look, or let it run flat: at 3.30 V the
-   firmware saves a `cutoff` row and powers off. Plugged in, the board starts
-   again on USB.
+   firmware saves a `cutoff` row and powers off. After a power-off, plug it
+   in and, if the screen stays dark, press PWR to turn it on.
 5. `python3 tools/board.py batlog > run.csv` and open it in a spreadsheet.
 
 The columns:
@@ -207,23 +207,27 @@ The columns:
 | `battery_mv` | the battery voltage read for the row |
 | `state` | `discharging`, `charging`, `full` (on USB, the charger done) or `no battery` |
 | `screen_on_min` | minutes the screen was lit since the previous row, at any brightness (dimmed and almost off count too) |
-| `asleep_min` | minutes the CPU spent in light sleep since the previous row |
+| `asleep_min` | minutes the CPU spent in light sleep since the previous row; it overlaps `screen_on_min` |
 
 The run on battery is the rows from `unplug` to `cutoff` (or the next `plug`):
 the time between them is the battery life, and the hours in between show where
-the charge went. An hour with the screen off should be nearly all asleep; one
-with the screen off but few asleep minutes means something kept the CPU awake.
-On USB the CPU never light-sleeps (the serial port has to stay up), so
-`asleep_min` is 0 there.
+the charge went. The two minute columns overlap: light sleep is allowed while the
+panel is almost off but still dimly lit (counted as screen on), so
+`screen_on_min + asleep_min` can come to more than 60 in an hour row (the
+original 1.75 shows 60 and 48 in the simulator). An hour with the screen
+turned off should be nearly all asleep; if its `screen_on_min` is near 0 and
+`asleep_min` is low, something kept the CPU awake. On USB the CPU never
+light-sleeps (the serial port has to stay up), so `asleep_min` is 0 there.
 
 - **What it costs:** 8 bytes per row, so 768 bytes of RAM, and 99 of the
   roughly 500 entries of the 20 KB NVS partition (96 rows, the format, the
   row counter and the namespace). Each row is one 8-byte NVS entry plus the
   counter's, 64 bytes of flash a row (about 1.5 KB a day), so the wear is
-  negligible. Rows are written only while the screen is dark, at the same
-  moments as the pet's autosave (a flash write pauses both cores briefly,
-  and nothing on screen is moving then); `batlog` says when the newest rows
-  are not in flash yet. The `cutoff` row is written at once.
+  negligible. Rows are written only in the quiet moments of the pet's
+  autosave (the screen dimmed or off, the pocket lock blank, or the pet
+  asleep, as `flashQuiet` in `TamaPoke.ino` decides: a flash write pauses
+  both cores briefly, and little on screen is moving then); `batlog` says
+  when the newest rows are not in flash yet. The `cutoff` row is written at once.
 - **Where it lives:** NVS namespace `batlog`, apart from the pet's save, so
   app-only updates keep it and `WIPE` does not erase it. `BATLOG CLEAR`
   erases only it. `pet_save.sh backup` copies the whole NVS partition, the
