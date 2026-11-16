@@ -14,6 +14,7 @@ static_assert((int)S_SAY_HUNGRY + (int)BUB_LOVE_NAME == (int)S_SAY_LOVE_FMT &&
               "the S_SAY_* strings follow BubbleLine");
 
 static BubbleTimer bubbleTimer;
+static MilkHint milkHint;  // the warm-milk hint's count this evening (#13)
 static uint8_t bubbleLine = BUB_NONE;  // the line showing, or the last one said
 // The line in the active font's encoding. Two lines are split at a space, which becomes
 // the first line's terminator: line 2 starts at bubbleText + bubbleBreak + 1.
@@ -22,6 +23,10 @@ static int bubbleBreak = -1;  // -1: one line
 static uint16_t bubbleW1 = 0, bubbleW2 = 0;  // each line's width in px
 
 static bool badgeShowing() { return clockPrompt.asking(bedEdge.stale()); }
+
+// The local epoch the milk hint goes by (#13): the clock as the quiet hours read it, 0 when it
+// is not set or is stale. The loop refreshes lastSeenEpoch every 30 s: no I2C read here.
+static uint32_t trustedClock() { return bedEdge.stale() ? 0 : pet.lastSeenEpoch; }
 
 // Width of the first `len` bytes of s at size 2.
 static int measure(const char *s, int len) {
@@ -65,12 +70,15 @@ void bubbleLoop(uint32_t now, bool free) {
   in.starsOut = sceneStarsOut();   // ...and not under cloud, rain, snow or fog (#60)
   in.named = ownerName()[0] != 0;
   in.last = bubbleLine;
+  in.milkHint = milkHint.due(trustedClock(), attnQuietAt(pet.bedPreset, e, bedEdge.stale()),
+                             [] { return (uint32_t)random(0x7FFFFFFF); });
   uint8_t line = bubblePick(in, (uint32_t)random(0x7FFFFFFF));
   if (!compose(line)) {
     bubbleTimer.cancel();
     Serial.printf("say %s: too wide\n", BUBBLE_KEYS[line]);
     return;
   }
+  if (line == BUB_MILK) milkHint.said(trustedClock());
   bubbleLine = line;
   Serial.printf("say %s\n", BUBBLE_KEYS[line]);
 }
@@ -87,6 +95,8 @@ void bubbleSayNow(uint8_t line) {
 #endif
 
 bool bubbleShowing() { return bubbleTimer.showing(); }
+
+void bubbleMilkGiven() { milkHint.milkGiven(trustedClock()); }
 
 void drawSpeechBubble() {
   if (!bubbleTimer.showing() || bubbleLine >= BUB_LINES || petHuffing()) return;  // the huff's puffs go by the head (#73)

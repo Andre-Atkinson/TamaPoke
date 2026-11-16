@@ -28,6 +28,8 @@ TEST(Bubble, the_lines_follow_the_needs_and_the_strings) {
   CHECK_EQ((int)S_SAY_HUNGRY + BUB_LINES - 1, (int)S_SAY_LOVE);
   CHECK_EQ((int)S_SAY_HUNGRY + BUB_LOVE_NAME, (int)S_SAY_LOVE_FMT);
   CHECK_EQ((int)S_SAY_HUNGRY + BUB_STARS, (int)S_SAY_STARS);
+  CHECK_EQ((int)S_SAY_HUNGRY + BUB_MILK, (int)S_SAY_MILK);  // #13
+  CHECK_EQ(std::string(BUBBLE_KEYS[BUB_MILK]), std::string("milk"));
   CHECK_EQ((int)S_SAY_HUNGRY + BUB_PAT, (int)S_SAY_PAT);
   for (int i = 0; i < BUB_LINES; i++) CHECK(BUBBLE_KEYS[i] && BUBBLE_KEYS[i][0]);
 }
@@ -126,11 +128,95 @@ TEST(Bubble, the_mix_is_about_30_50_20_and_80_20_without_a_time_line) {
 TEST(Bubble, a_line_other_than_a_need_is_never_said_twice_in_a_row) {
   for (int last = 0; last < BUB_LINES; last++)
     for (uint8_t h : {7, 13, 22})
-      for (uint32_t r = 0; r < 2000; r++) {
-        uint8_t l = bubblePick(calm(true, h, true, (uint8_t)last), r);
-        CHECK_MSG(l != last, "line " + std::string(BUBBLE_KEYS[last]) + " twice, r=" + std::to_string(r));
-        CHECK(l >= BUB_MORNING && l < BUB_LINES);
-      }
+      for (bool milk : {false, true})  // the warm-milk hint (#13) due or not
+        for (uint32_t r = 0; r < 2000; r++) {
+          BubbleIn in = calm(true, h, true, (uint8_t)last);
+          in.milkHint = milk;
+          uint8_t l = bubblePick(in, r);
+          CHECK_MSG(l != last, "line " + std::string(BUBBLE_KEYS[last]) + " twice, r=" + std::to_string(r));
+          CHECK(l >= BUB_MORNING && l < BUB_LINES);
+        }
+}
+
+// ---------------------------------------------------------------- the warm-milk hint (#13)
+// MilkHint::due() decides whether the bubble that comes due is the hint; bubblePick() puts it
+// after a low need.
+static uint32_t at(uint32_t day, uint8_t h, uint8_t m = 0) { return day * 86400u + h * 3600u + m * 60u; }
+
+TEST(Bubble, the_milk_hint_comes_after_a_low_need_and_before_the_other_lines) {
+  for (uint32_t r = 0; r < 1000; r += 7) {
+    BubbleIn in = calm(true, 20, true);
+    in.milkHint = true;
+    CHECK_EQ(bubblePick(in, r), (uint8_t)BUB_MILK);
+    in.needs = attnLevels(80, 80, 20, 80);  // tired: the need's own line
+    CHECK_EQ(bubblePick(in, r), (uint8_t)BUB_TIRED);
+    in.needs = attnLevels(80, 80, 80, 80);
+    in.milkHint = false;
+    CHECK(bubblePick(in, r) != BUB_MILK);  // never by chance
+  }
+}
+
+TEST(Bubble, the_milk_hint_only_in_the_evening_with_a_known_clock_and_not_in_quiet_hours) {
+  auto yes = [] { return (uint32_t)0; };  // the 1-in-MILK_HINT_ODDS roll comes up
+  for (uint8_t h = 0; h < 24; h++) {
+    MilkHint m;
+    bool quiet = attnQuietAt(0, at(100, h, 30), false);  // bedtime off: 22:00-07:00
+    CHECK_EQ(m.due(at(100, h, 30), quiet, yes), h >= MILK_HINT_FROM && h < 22);
+  }
+  // the bedtime window, when one is set, is when quiet hours start: 21:00 with preset 1
+  MilkHint m;
+  CHECK(m.due(at(100, 20, 59), attnQuietAt(1, at(100, 20, 59), false), yes));
+  MilkHint q;
+  CHECK(!q.due(at(100, 21, 0), attnQuietAt(1, at(100, 21, 0), false), yes));
+  MilkHint late;
+  CHECK(late.due(at(100, 22, 30), attnQuietAt(3, at(100, 22, 30), false), yes));  // preset 3: 23:00
+  // no clock, or one that is stale (the caller passes 0 then)
+  MilkHint none;
+  CHECK(!none.due(0, false, yes));
+}
+
+TEST(Bubble, the_milk_hint_at_most_twice_an_evening_45_min_apart) {
+  auto yes = [] { return (uint32_t)0; };
+  MilkHint m;
+  CHECK(m.due(at(100, 19, 0), false, yes));
+  m.said(at(100, 19, 0));
+  CHECK(!m.due(at(100, 19, 44), false, yes));
+  CHECK(m.due(at(100, 19, 45), false, yes));
+  m.said(at(100, 19, 45));
+  CHECK(!m.due(at(100, 21, 0), false, yes));   // twice already
+  CHECK(!m.due(at(100, 23, 59), false, yes));
+  CHECK(m.due(at(101, 19, 0), false, yes));     // the next evening
+}
+
+TEST(Bubble, the_milk_hint_comes_now_and_then_and_rolls_only_in_the_evening) {
+  struct {
+    uint32_t v = 0;
+    int calls = 0;
+    uint32_t operator()() { calls++; return v; }
+  } rnd;
+  MilkHint m;
+  CHECK(!m.due(at(100, 13, 0), false, [&] { return rnd(); }));
+  CHECK(!m.due(at(100, 23, 0), true, [&] { return rnd(); }));  // quiet hours
+  CHECK(!m.due(0, false, [&] { return rnd(); }));
+  CHECK_MSG(rnd.calls == 0, "outside the evening the random sequence must not move");
+  int hits = 0;
+  for (uint32_t v = 0; v < 300; v++) {
+    rnd.v = v;
+    MilkHint e;
+    hits += e.due(at(100, 20, 0), false, [&] { return rnd(); });
+  }
+  CHECK_EQ(hits, 300 / MILK_HINT_ODDS);
+  CHECK_EQ(rnd.calls, 300);
+}
+
+TEST(Bubble, no_more_milk_hints_once_it_had_its_milk_that_evening) {
+  auto yes = [] { return (uint32_t)0; };
+  MilkHint m;
+  m.milkGiven(at(100, 15, 0));                 // milk before a nap: the evening still hints
+  CHECK(m.due(at(100, 19, 0), false, yes));
+  m.milkGiven(at(100, 19, 10));
+  CHECK(!m.due(at(100, 20, 30), false, yes));
+  CHECK(m.due(at(101, 19, 30), false, yes));   // the next evening
 }
 
 // ---------------------------------------------------------------- when it shows

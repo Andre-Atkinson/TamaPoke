@@ -10,6 +10,16 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **A plush toy and warm milk.** The Play button now opens a small strip, like the food
+  menu: the Poké Ball for a minigame, as before, or the plush toy. With the plush the
+  creature hops about for a moment: a little happiness (+10, two plays an hour) with no game
+  and no cost. Awake, the moon button opens a strip too: lights out, as before, or warm
+  milk, then lights out. The milk cheers it a little and adds a little weight (less than
+  candy), and until it next wakes its sleep brings energy back a little faster. Now and then
+  in the evening, before quiet hours, it asks for warm milk in a speech bubble. Asleep, the
+  moon button still wakes it at once. A long press on a strip's item (or the food menu's)
+  no longer opens the release dialog.
+
 - **Standby clock.** Plugged in and left alone, the screen shows a dim clock with the
   date and a picture of the weather now on black, and the battery charging, instead of
   going dark: when the screen would turn off, or at 90 s with screen-off set to *Never*.

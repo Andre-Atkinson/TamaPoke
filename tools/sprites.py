@@ -495,6 +495,47 @@ def icon_candy():
     return g.rows()
 
 
+def icon_milk():
+    # leche caliente (#13, la tira de la luna): una taza blanca con una lunita y una
+    # estrella, y vapor
+    return [
+        "................",
+        "....s...s.......",
+        ".....s...s......",
+        "....s...s.......",
+        "..kkkkkkkkk.....",
+        "..kyyyyyyyk.....",
+        "..kwwwwwwskkk...",
+        "..kwwYYwwsk.sk..",
+        "..kwYYwwYsk..k..",
+        "..kwYYwwwsk..k..",
+        "..kwYYwwwsk..k..",
+        "..kwwYYwwsk.sk..",
+        "..kwwwwwwskkk...",
+        "..ksssssssk.....",
+        "...kkkkkkk......",
+        "................",
+    ]
+
+
+def icon_plush():
+    # peluche (#13, la tira de Play): un osito marron
+    g = G(16)
+    g.disk(8, 12, 4.6, 3.4, 'c', 'C')    # cuerpo
+    g.disk(3.6, 10.6, 1.7, 1.7, 'c')     # bracitos
+    g.disk(12.4, 10.6, 1.7, 1.7, 'c', 'C')
+    g.disk(8, 6.6, 4.6, 4.2, 'c', 'C')   # cabeza
+    g.disk(4, 2.8, 1.9, 1.9, 'c')        # orejas
+    g.disk(12, 2.8, 1.9, 1.9, 'c', 'C')
+    g.outline()
+    g.px(4, 3, 'y'); g.px(12, 3, 'y')    # dentro de las orejas
+    g.rect(7, 7, 9, 8, 'y')              # hocico
+    g.px(8, 7, 'k')                      # nariz
+    g.px(6, 5, 'k'); g.px(10, 5, 'k')    # ojos
+    g.rect(7, 12, 9, 13, 'y')            # barriga
+    return g.rows()
+
+
 def icon_clean():
     g = G(16)
     g.disk(7, 10, 4.6, 4.4, 'b', 'B')
@@ -588,6 +629,8 @@ SPRITES = {
     "ICON_BERRY_B": icon_berry_blue(),
     "ICON_BERRY_G": icon_berry_green(),
     "ICON_CANDY": icon_candy(),
+    "ICON_MILK": icon_milk(),
+    "ICON_PLUSH": icon_plush(),
     "ICON_ROTTEN": icon_rotten(),
     "ICON_BUSH": icon_bush(),
     "ICON_NOTE": icon_note(),

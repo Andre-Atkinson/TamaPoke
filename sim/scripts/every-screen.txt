@@ -43,9 +43,10 @@ shot 09-release-dialog
 tap 298 278
 wait 1s
 
-# every minigame: the bag deals each one once in four plays. Untouched, each ends on
+# every minigame (the Play strip's Poke Ball, #13): the bag deals each one once in four plays. Untouched, each ends on
 # its own (a dropped ball, or 15 s idle) and shows its result for 4 s.
 tap 202 404
+tap 169 320
 wait 1700ms
 shot 10-game-1
 wait 3s
@@ -54,6 +55,7 @@ wait 12s
 shot 12-game-1-end
 wait 6s
 tap 202 404
+tap 169 320
 wait 1700ms
 shot 13-game-2
 wait 3s
@@ -62,6 +64,7 @@ wait 12s
 shot 15-game-2-end
 wait 6s
 tap 202 404
+tap 169 320
 wait 1700ms
 shot 16-game-3
 wait 3s
@@ -70,6 +73,7 @@ wait 12s
 shot 18-game-3-end
 wait 6s
 tap 202 404
+tap 169 320
 wait 1700ms
 shot 19-game-4
 wait 3s

@@ -71,7 +71,9 @@ extern bool trainingCaptureReady;  // the training capture task started
 extern PmdMon evoPmd;          // the form before an evolution, during its flash
 extern PetReact petReact;      // the pet's reaction to a gesture (touchgesture.h)
 extern Btn buttons[4];         // the four care buttons along the bottom arc
-extern uint32_t feedMenuUntil;  // the food picker is open until this millis()
+extern uint32_t menuUntil;      // the care strip (food, Play or moon; caremenu.h, #13) is open until this millis()
+extern uint8_t menuKind;        // ...and which one (MENU_*)
+int menuLeftNow();              // the open strip's left edge (menuLeft() with its button)
 extern uint32_t confirmUntil;   // the "release?" dialog is open until this millis()
 extern uint8_t choiceKind;      // the choice dialog: 0 none, 1 evolve, 2 farewell
 extern uint32_t choiceUntil;    // the choice dialog closes by itself at this millis()

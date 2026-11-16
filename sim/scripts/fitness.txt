@@ -34,6 +34,7 @@ wait 1s
 # gained (Pet::exerciseOver) and the banner names the first; under the result, it would wait
 train 0 10 30
 tap 202 404
+tap 169 320  # the Play strip's Poke Ball (#13)
 wait 18s
 shot game-result
 wait 3s
@@ -100,5 +101,6 @@ shot medals-night
 tap 233 420
 wait 1s
 tap 202 404
+tap 169 320
 wait 22s
 shot game-result-night

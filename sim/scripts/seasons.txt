@@ -82,6 +82,7 @@ serial TIME 1794564000
 tap 60 200
 wait 1s
 tap 264 404
+tap 231 320  # the moon strip's lights out (#13)
 wait 1s
 shot sky-6-asleep
 tap 264 404

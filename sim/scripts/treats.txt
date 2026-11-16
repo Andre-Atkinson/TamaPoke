@@ -1,0 +1,107 @@
+# Treats and toys (#13, caremenu.h): the Play strip (the Poke Ball and the plush) and the moon
+# strip (lights out, and warm milk then lights out), by day and in the evening; the plush
+# with joy, and past its hourly cap (no heart); the warm milk's drink with its mug, then the
+# pet asleep; the moon waking a sleeping pet with no strip; the milk hint; a tap off a strip
+# and a strip's own timeout closing it; and a long press on a strip item, which must not open
+# the release dialog (the strips reach into the pet's zone).
+# A manual check: run it in each language on both boards and look at the shots and the serial
+# log ("toy: joy +10", "toy: joy +0 (hourly cap)", "milk: drinking", "milk: lights out");
+# nothing compares them automatically.
+#   tools/sim.sh --board 175c --lang pt --script treats --out shots/pt/
+# Coordinates: the Play button is at (202, 404) and its strip's items centre on (169, 320)
+# and (235, 320); the moon button is at (264, 404) and its items on (231, 320) and (297, 320).
+# The steps mean the same on both boards: each shot comes within seconds of a tap, before
+# either board dims the screen.
+clock 2026-11-16 10:00
+battery 80
+
+# new game: pick Charmander, hatch
+wait 1s
+tap 233 220
+wait 1s
+serial HATCH
+wait 2s
+
+# the Play strip, over its button
+tap 202 404
+wait 300ms
+shot 01-play-strip-day
+
+# the plush: the pet hops beside it as it is tossed, with a heart
+tap 235 320
+wait 400ms
+shot 02-toy-day
+wait 500ms
+shot 03-toy-day-toss
+wait 3s
+# the second play in the hour gives joy too; the third plays for no joy and no heart
+tap 202 404
+tap 235 320
+wait 3s
+tap 202 404
+tap 235 320
+wait 400ms
+shot 04-toy-past-the-cap
+wait 3s
+
+# a tap off the strip only closes it
+tap 202 404
+tap 400 200
+wait 300ms
+shot 05-tap-off-closes
+
+# the moon strip; untouched, it closes by itself after 6 s
+tap 264 404
+wait 300ms
+shot 06-moon-strip-day
+wait 6500ms
+shot 07-moon-strip-timed-out
+
+# a long press on a strip item (inside the pet's zone, y < 310) is not a long press on the
+# pet: no release dialog, and the strip times out under the finger (the lift does nothing)
+tap 264 404
+hold 297 300 3500ms 08-long-press-on-the-strip
+wait 3s
+
+# warm milk: a heart and the mug as it drinks, then lights out
+tap 264 404
+tap 297 320
+wait 600ms
+shot 09-milk-drinking-day
+wait 3s
+shot 10-milk-asleep
+# asleep, the moon wakes it at once: no strip
+tap 264 404
+wait 500ms
+shot 11-moon-wakes-no-strip
+wait 2s
+
+# the evening (19:30): the milk hint, the strips by night
+serial TIME 1794857400
+wait 1s
+tap 60 200
+say milk
+wait 300ms
+shot 12-milk-hint-evening
+tap 202 404
+wait 300ms
+shot 13-play-strip-evening
+tap 235 320
+wait 400ms
+shot 14-toy-evening
+wait 3s
+tap 264 404
+wait 300ms
+shot 15-moon-strip-evening
+tap 297 320
+wait 600ms
+shot 16-milk-drinking-evening
+wait 3s
+shot 17-milk-asleep-evening
+# woken, then the plain lights out
+tap 264 404
+wait 1s
+tap 264 404
+tap 231 320
+wait 1s
+shot 18-lights-out-evening
