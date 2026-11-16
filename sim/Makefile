@@ -108,6 +108,12 @@ $(BUILD)/gfx/%.o: $(GFX)/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -w -c -o $@ $<
 
+# every object depends on this Makefile, so dropping -funsigned-char (or any other flag) rebuilds
+# everything and the static_assert in boot.cpp fires; the list is the objects of both
+# programs (CORE_OBJS, main.o, WIN_OBJS). It only adds a prerequisite: each object keeps its
+# recipe, and its $< is still its .cpp.
+$(CORE_OBJS) $(BUILD)/sim/main.o $(WIN_OBJS): Makefile
+
 clean:
 	rm -rf build
 

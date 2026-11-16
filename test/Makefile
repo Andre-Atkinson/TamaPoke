@@ -5,6 +5,12 @@ CXX      ?= g++
 CXXFLAGS ?= -std=c++17 -O1 -g -Wall -Wextra -Wno-unused-parameter \
             -fno-omit-frame-pointer
 LDFLAGS  ?=
+# -funsigned-char: char is unsigned on the ESP32-S3 (Xtensa) and signed on the Mac
+# (Apple arm64, x86), so without it a byte >= 0x80 (the PT accents) would behave
+# differently here than on the board. It stays out of CXXFLAGS so that a CXXFLAGS
+# given on the command line or in the environment keeps it; both recipes below
+# use it, and host.char_is_unsigned_like_the_esp32s3 fails if it is ever dropped.
+HOSTFLAGS := -funsigned-char
 SRC_DIR  := ..
 BUILD    := build
 BIN      := $(BUILD)/tamapoke_tests
@@ -20,9 +26,9 @@ all: run
 # header-only edit rebuilds
 HEADERS := $(wildcard $(SRC_DIR)/*.h) $(wildcard $(SRC_DIR)/sim/*.h)
 
-$(BIN): $(SOURCES) framework.h $(HEADERS) $(wildcard shim/*.h)
+$(BIN): $(SOURCES) framework.h $(HEADERS) $(wildcard shim/*.h) Makefile
 	@mkdir -p $(BUILD)
-	$(CXX) $(CXXFLAGS) -I shim -o $@ $(SOURCES) $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(HOSTFLAGS) -I shim -o $@ $(SOURCES) $(LDFLAGS)
 
 run: $(BIN)
 	@./$(BIN) $(FILTER)
@@ -32,7 +38,7 @@ asan: CXXFLAGS += -fsanitize=address,undefined -fno-sanitize-recover=all
 asan: BIN := $(BUILD)/tamapoke_tests_asan
 asan:
 	@mkdir -p $(BUILD)
-	$(CXX) $(CXXFLAGS) -I shim -o $(BUILD)/tamapoke_tests_asan $(SOURCES) $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(HOSTFLAGS) -I shim -o $(BUILD)/tamapoke_tests_asan $(SOURCES) $(LDFLAGS)
 	@./$(BUILD)/tamapoke_tests_asan $(FILTER)
 
 clean:
