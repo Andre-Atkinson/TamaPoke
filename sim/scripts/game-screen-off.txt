@@ -8,12 +8,15 @@
 # (shots/serial.log) has one "Play:" line per game, in this order (the scores and speeds
 # differ from run to run: the games' dice follow the time and the board):
 #   Play: song untouched (screen off)           1. nobody touched it: nothing paid
-#   Play: peek score=7 speed=+1 (screen off)    2. played: paid its score so far
+#   Play: peek score=6 speed=+1 (screen off)    2. played: paid its score so far
 #   Play: keepy score=0 speed=+0                3. ran to its end: paid there, once; PWR on
 #                                                  its result screen adds no line
 #   Play: catch score=0 speed=+0 (screen off)   4. the pocket lock (one tap: played, so paid)
-#   Play: peek score=11 speed=+2 (screen off)   5. the speed ribbon (shot 15: its banner)
+#   Play: peek score=14 speed=+3 (screen off)   5. the speed ribbon (shot 15: its banner)
 #   Play: song score=0 speed=+0 (screen off)    6. the battery runs out mid-game
+# What must hold on every run: line 1 says "untouched"; lines 2, 4, 5 and 6 end in "(screen
+# off)"; line 3 does not (shot 08 is the keepy's result screen, paid at its end), and no
+# line comes between 3 and 4; line 5 has speed=+1 or more (+1 completes the ribbon in shot 15).
 # Each section names its game with the simulator's "game" step, so the bag's dice don't
 # decide which comes. The Play button is at (202, 404) and its strip's Poke Ball at
 # (169, 320) (#13); a game shows its title card for 1.2 s, then plays. In Peekaboo a tap on
@@ -50,30 +53,30 @@ tap 202 404
 tap 169 320
 wait 1700ms
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 shot 04-game-playing
 press pwr
 shot 05-game-pwr-off
@@ -95,7 +98,7 @@ tap 202 404
 tap 169 320
 wait 1700ms
 tap 40 233
-wait 10s
+wait 11s
 shot 08-keepy-result
 press pwr
 shot 09-result-pwr-off
@@ -123,7 +126,8 @@ wait 1s
 shot 12-game-unlocked
 
 # 5. A ribbon a game ended by PWR completes (#69, #94): speed set to 29 (the speed ribbon's
-# goal is 30), Peekaboo played for about 20 s, PWR. The ribbon is gained at the press (its
+# goal is 30), Peekaboo played for about 25 s (a margin over the +1 the ribbon needs; it
+# still ends by PWR, before its 20th pop-up), PWR. The ribbon is gained at the press (its
 # chime) and its banner waits in the dark: 6 s later, longer than the banner's 4 s, PWR back
 # on shows it on the creature's screen.
 train 0 0 29
@@ -132,45 +136,55 @@ tap 202 404
 tap 169 320
 wait 1700ms
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
 tap 150 190
-tap 233 300
 tap 316 190
-tap 366 300
 tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
 shot 13-ribbon-game
 press pwr
 shot 14-ribbon-pwr-off
