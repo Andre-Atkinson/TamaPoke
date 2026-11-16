@@ -124,6 +124,8 @@ python3 tools/board.py status             # HEALTH + STATS
 python3 tools/board.py save               # write pending pet changes to flash now
 python3 tools/board.py cmd OWNER Name     # the player's name in the speech bubbles (OWNER alone clears it)
 python3 tools/board.py cmd 'OWNER?'       # show the stored name
+python3 tools/board.py cmd BDAY 3 14     # the player's birthday, month then day (BDAY 0 0 clears it)
+python3 tools/board.py cmd 'BDAY?'       # show the stored birthday and today's special day
 ```
 
 - **The pet's save** is the whole NVS partition (20 KB at `0x9000`): the pet,
@@ -165,6 +167,12 @@ python3 tools/board.py cmd 'OWNER?'       # show the stored name
   an `owner not set: ...` line when the name is refused (over 12 characters, a
   character the fonts cannot draw, or no letter in it, as in `OWNER ?` or `OWNER 123`;
   the stored name is then unchanged).
+- **The player's birthday** (`BDAY <month> <day>`, #26) is NVS key `bday` in the same
+  namespace (month × 100 + day), so app-only updates and backups keep it too, and `WIPE`
+  erases it. The reply is `bday=<month> <day> today=<day> birthday=<0|1>` (`bday=none`
+  when none is set); a day the month does not have (`BDAY 2 30`) gets `ERR usage: ...`
+  and changes nothing. `today=none` while the clock is not set: set it first
+  (`board.py clock`) to check what the creature thinks today is.
 - `board.py` uses only the Python standard library (no venv needed) and
   needs the serial port to itself: close any serial monitor first.
 

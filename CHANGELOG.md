@@ -78,6 +78,23 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   a new save key (`owner`), checked on load; nothing else in the save changes. Idea
   from Mu-Muu/TamaPoke, re-implemented offline.
 
+- **Special days.** On a holiday the scene is decorated and the creature greets the
+  player by name in a speech bubble ("Merry Christmas, <name>!", or just "Merry
+  Christmas!" with no name): a Christmas tree with lights all December, with a little
+  snow even in the southern summer, and the greeting on 25 December; soft fireworks on
+  New Year's Day; floating hearts on Valentine's Day; eggs in the grass on Easter Sunday,
+  worked out for each year; a friendly pumpkin on Halloween, with a purple night sky, a
+  full moon and a few bats after dark; and balloons on the player's birthday, beside that
+  day's own decorations. The greeting takes the place of the next speech bubble, at most
+  3 a day and at least 30 minutes apart, never in quiet hours; the birthday's wins over a
+  holiday's. The day follows the clock from midnight to midnight; nothing shows while the
+  clock is not set after a power-off, or during an ending, and care and rewards are
+  unchanged. EN and PT. The birthday is set from a computer with the new serial command
+  `BDAY <month> <day>` (`BDAY 0 0` clears it, `BDAY?` shows it and today's day); 29
+  February shows on 28 February in other years. It is a new save key (`bday`), checked on
+  load; nothing else in the save changes. Idea from Mu-Muu/TamaPoke, re-implemented
+  offline.
+
 - **Touch gestures on the creature.** Besides a tap (a pat, at once as before):
   a double tap makes it hop; stroking back and forth over it pats it about once
   a second while you go on; six quick taps in a row tickle it into giggles, and
