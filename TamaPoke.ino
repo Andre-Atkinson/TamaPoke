@@ -210,11 +210,11 @@ static bool touchNeedsRelease = false;
 // Both boards: syncPanelPower() sleeps the CO5300 on screen-off on either one.
 bool panelAsleep = false;
 static uint8_t panelBrightness = 255;  // ultimo brillo enviado al panel (255 = forzar el primero)
-#if BOARD_AMOLED_175C
+// A short note over whatever is on screen (#61): on the 1.75C the BOOT button's sound toggle
+// and the pocket lock; on both boards the stat card's "the pet is asleep" (#89).
 static char controlToast[48] = "";
 static uint32_t controlToastUntil = 0;
 static bool controlToastVisible = false;
-#endif
 
 bool screenIsLocked() {
 #if BOARD_AMOLED_175C
@@ -224,7 +224,6 @@ bool screenIsLocked() {
 #endif
 }
 
-#if BOARD_AMOLED_175C
 void showControlToast(const char *text, uint32_t duration) {
   if (screenIsLocked()) return;  // sync/pet/serial feedback cannot wake a pocketed device
   snprintf(controlToast, sizeof(controlToast), "%s", text);
@@ -235,7 +234,8 @@ void showControlToast(const char *text, uint32_t duration) {
   wakeUI();
 }
 
-// Every renderer flushes through this so hints work on settings/gallery too.
+// Every renderer flushes through this so the toasts (and the 1.75C's lock hint) show on
+// settings/gallery too.
 void flushUI() {
 #if BOARD_AMOLED_175C
   if (screenLock.blank(millis())) return;  // no QSPI frames after the lock hint
@@ -255,10 +255,6 @@ void flushUI() {
   screenLock.frameShown(millis());
 #endif
 }
-#else
-// Original board: no overlays, the flush is exactly the old one.
-void flushUI() { gfx->flush(); }
-#endif
 
 #if BOARD_AMOLED_175C
 // BOOT double / long press. Free in the board port; a build with time sync
@@ -347,6 +343,7 @@ void pollPwrButton() {
     screenOffByPwr = screenOff;
     attnShowUntil = 0;  // PWR wins over a call's window
     if (!screenOff) wakeUI();
+    else swallowGesture = true;  // a finger already on the glass does nothing as it lifts
   }
 #else
   // Keep the original board's PEK short-press behaviour unchanged.
@@ -359,9 +356,15 @@ void pollPwrButton() {
       screenOffByPwr = screenOff;
       attnShowUntil = 0;  // PWR wins over a call's window
       if (!screenOff) wakeUI();
+      else swallowGesture = true;  // a finger already on the glass does nothing as it lifts
     }
   }
 #endif
+  // An exercise never goes on with the screen dark (#88). It can't time out (autoScreenOff,
+  // power.h), so PWR off and the pocket lock, both above, are what darken it: either ends it
+  // here, in the pass of the press (on the 1.75C before handleTouch() reads the glass),
+  // keeping what was done, and the screen comes back on to the creature.
+  if (trainOpen && (screenOff || screenIsLocked())) exerciseScreenOff();
 }
 
 static void runPanelProgram(const PanelStep *s, int n) {
@@ -607,13 +610,14 @@ void bedClockSet(uint32_t set) {
 // aplica en cuanto se cierran. Si el bicho no puede (huevo, ceremonia, eleccion de
 // inicial) pet.autoSleep/autoWake no hacen nada y el evento se descarta.
 // El minijuego, el ejercicio, el teclado y el reloj no tienen caducidad con la pantalla
-// apagada (el juego y el ejercicio solo avanzan y terminan al dibujarse): solo bloquean
-// mientras la pantalla esta encendida y sin bloquear. Si se quedaron abiertos y el
-// panel se apago (PWR o bloqueo de bolsillo) el horario se aplica igual: ni renombrar
-// (solo toca el nick) ni ajustar la hora (el siguiente muestreo trata el salto como un
-// borde mas) dependen de pet.sleeping, y al dormir el juego y el ejercicio se abandonan sin
-// premio (bedApply). El bano se compara con timeLeft, no en bruto: bathUntil solo se
-// pone a 0 en drawBath(), que no corre con la pantalla apagada.
+// apagada (el juego solo avanza y termina al dibujarse): solo bloquean mientras la
+// pantalla esta encendida y sin bloquear. Si se quedaron abiertos y el panel se apago
+// (PWR o bloqueo de bolsillo) el horario se aplica igual: ni renombrar (solo toca el nick)
+// ni ajustar la hora (el siguiente muestreo trata el salto como un borde mas) dependen de
+// pet.sleeping, y al dormir el juego se abandona sin premio (bedApply). An exercise is
+// never left open on a dark screen: PWR and the lock end it as they darken it (#88).
+// El bano se compara con timeLeft, no en bruto: bathUntil solo se pone a 0 en drawBath(),
+// que no corre con la pantalla apagada.
 //
 // careBusy() is the part that does not depend on the screen: bedBusy() and the attention
 // calls (attnLoop) both wait while it holds, and the pet gestures are off (petGestureGate).
@@ -645,14 +649,15 @@ static ClockPromptHold clockPromptHold() {
 
 // Warm milk, then lights out (#13): the pet goes to bed once the drink is over, as a bedtime
 // event does (bedApply): not while a minigame, an exercise, a dialog, a strip, the bath or
-// another meal is on (bedBusy(); the drink itself is eating), and a game or an exercise left
-// open on a dark screen is abandoned without a prize. Silent, like bedtime's. Before
+// another meal is on (bedBusy(); the drink itself is eating). A game left open on a dark
+// screen is abandoned without a prize, and an exercise (which the screen going dark already
+// ended, #88) ends keeping what was done, as at bedtime. Silent, like bedtime's. Before
 // bedApply(), so a bedtime event pending at the same moment has the last word.
 static void milkApply() {
   if (!milkLightsOut || bedBusy()) return;
   milkLightsOut = false;
   gameOpen = false;
-  if (trainOpen) leaveTraining();
+  exerciseScreenOff();
   if (pet.autoSleep()) Serial.println("milk: lights out");
 }
 
@@ -661,12 +666,12 @@ void bedApply() {
   BedEvent ev = bedPending;
   bedPending = BED_NONE;
   if (ev == BED_SLEEP) {
-    // Un juego o un ejercicio abiertos aqui solo pueden estar a oscuras (bedBusy): se
-    // abandonan sin premio, como un juego al mantener su boton de salir. playGame(),
-    // trainStrength() y trainStamina() se pagan al terminar (que ya no llegara) y no miran
-    // pet.sleeping.
+    // Un juego abierto aqui solo puede estar a oscuras (bedBusy): se abandona sin premio,
+    // como al mantener su boton de salir. playGame() se paga al terminar (que ya no llegara)
+    // y no mira pet.sleeping. An exercise is never open here: the screen going dark ended it
+    // (pollPwrButton, #88). Were one open, it would end the same way, keeping what was done.
     gameOpen = false;
-    if (trainOpen) leaveTraining();
+    exerciseScreenOff();
     pet.autoSleep();  // sin sonido: es de noche
   } else if (pet.autoWake()) {
     audioSetSleeping(false);  // el amplificador se enciende antes de encolar el sonido
@@ -786,9 +791,10 @@ void loop() {
   pet.quietHours = quiet;
   pet.update(now);
   // a minigame or an exercise (ExerciseScreen, pet.h): banners wait under it, and the medals
-  // its exercise completed come as it closes, after its result (#69, #76, #78)
+  // its exercise completed come as it closes, after its result (#69, #76, #78); one that the
+  // screen going dark closed keeps them waiting until the screen is back on (#88)
   static ExerciseScreen exerciseScreen;
-  exerciseScreen.update(gameOpen || trainOpen, pet);
+  exerciseScreen.update(gameOpen || trainOpen, pet, screenOff || screenIsLocked());
 
   // el amplificador sigue al estado de sueno (la llamada sale sola si no cambia).
   // Aqui cubre todas las vias: el boton de luz, el sueno nocturno y el que llega
@@ -901,6 +907,7 @@ void loop() {
   // bateria al limite seguro (sin USB): se guarda la partida y se apaga el PMU antes de que la
   // celda baje mas; el RTC conserva la hora
   if (batShouldShutdown() && !usbPresent()) {
+    exerciseScreenOff();  // the pet keeps what an exercise did so far, as with PWR (#88)
     pet.flushSave();
     panel->setBrightness(0);
     batPowerOff();
@@ -1611,6 +1618,13 @@ static void menuChoose(uint8_t kind, uint8_t item) {
   }
 }
 
+// TRAIN tapped while the pet sleeps (#89): the stat card stays open, back on its Fitness
+// page, and a toast says why for 2 s. No sound: it's asleep.
+static void trainAsleepNote() {
+  Serial.println("TRAIN: asleep");
+  showControlToast(T(S_TRAIN_ASLEEP), 2000);
+}
+
 void onTap(int16_t x, int16_t y) {
   // Serial.printf("TOUCH %d %d\n", x, y);  // diagnostico (silenciado: satura el log)
   if (pet.awaitingStarter()) {  // primera partida: elegir inicial
@@ -1646,12 +1660,16 @@ void onTap(int16_t x, int16_t y) {
     else if (cardPage == 1 && trainPick) {  // the exercise choice (#78)
       uint8_t kind = trainPickAt(x, y);
       trainPick = false;           // elsewhere: back to the stats
-      if (kind != EX_NONE) {
+      if (kind != EX_NONE && pet.sleeping) {
+        trainAsleepNote();         // it fell asleep while the choice was up (bedtime)
+      } else if (kind != EX_NONE) {
         cardOpen = false;
         startExercise(kind);
       }
     } else if (cardPage == 1 && y >= 300 && y <= 340 && x >= 96 && x <= 370) {
-      trainPick = true;            // the TRAIN button: choose an exercise
+      // the TRAIN button: choose an exercise; asleep, the card stays and says why (#89)
+      if (pet.sleeping) trainAsleepNote();
+      else trainPick = true;
     } else if (cardPage == CARD_PAGE_CARE && careTap(x, y)) {
       // ritmo / hora de dormir: la ficha sigue abierta (careTap ya guardo y repinta)
     } else {
@@ -1807,14 +1825,12 @@ uint32_t lastScreenKey = 0;
 
 // Dibuja un frame y devuelve true si lo ha volcado al panel.
 bool render() {
-#if BOARD_AMOLED_175C
   if (controlToastVisible || screenIsLocked()) {
     screenKeyValid = false;
     galleryDirty = true;
     // Also invalidate on the first frame after expiry to erase the overlay.
     if ((int32_t)(controlToastUntil - millis()) <= 0) controlToastVisible = false;
   }
-#endif
   // la ficha es de un bicho vivo: con huevo o ceremonia no hay nada que mostrar (un
   // BYE/RUN por serie la deja abierta; renderCardProfile leeria DEX_TBL[-1] y, ya
   // elegido el huevo nuevo, el boton Huevos se podria cambiar con el huevo a la vista)

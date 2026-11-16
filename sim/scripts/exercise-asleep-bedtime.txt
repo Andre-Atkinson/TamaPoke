@@ -1,0 +1,50 @@
+# The pet falls asleep at bedtime while the stat card's exercise choice is up (#89): choosing
+# an exercise then keeps the card open on its Fitness page with the "it's sleeping" note,
+# instead of closing it and doing nothing. The serial log shows "TRAIN: asleep". For both
+# boards and both languages; leave out --clock, which would replace the clock below:
+#   tools/sim.sh --board 175c --lang en --script exercise-asleep-bedtime --out shots/
+#   tools/sim.sh --board 175 --lang pt --script exercise-asleep-bedtime --out shots/
+# Timing: the loop reads the clock about every 30 s from boot (bedtime acts on those reads),
+# so with the clock at 20:59:15 the read at ~30 s sees 20:59:45 and the one at ~60 s sees
+# 21:00:15, which puts the pet to sleep. The choice is open from ~16 s; PWR off and on at
+# ~50 s keeps the screen lit (the 1.75C turns it off after 60 s untouched and dims it at
+# 30 s, and a tap on a dimmed screen only wakes it).
+clock 2026-11-16 20:59:15
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# the card's Care page: bedtime 21:00-07:00 (one tap on its button)
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+tap 233 208
+shot 60-bedtime-21
+
+# back to Fitness, TRAIN: the choice
+swipe right
+swipe right
+swipe right
+tap 233 320
+shot 61-choice
+
+# the screen kept lit across 21:00; the pet falls asleep with the choice up
+wait 34s
+press pwr
+wait 1s
+press pwr
+wait 12s
+shot 62-choice-asleep
+
+# PUNCH: the card stays, back on Fitness, with the note; then the note goes
+tap 233 140
+shot 63-asleep-note
+wait 2500ms
+shot 64-after-note

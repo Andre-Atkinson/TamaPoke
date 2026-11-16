@@ -578,12 +578,12 @@ TEST(i18n, the_clock_cancel_hint_fits_the_round_edge) {
   gLang = LANG_DEFAULT;
 }
 
-// The 1.75C toasts (#61): size 2 in a 380 px box (flushUI), kept a letter (12 px) clear of
-// each end: at most 356 px, 29 letters.
+// The toasts (#61; the stat card's asleep note on both boards, #89): size 2 in a 380 px box
+// (flushUI), kept a letter (12 px) clear of each end: at most 356 px, 29 letters.
 TEST(i18n, the_toasts_fit_their_box) {
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;
-    for (StrId id : {S_TOAST_SOUND_ON, S_TOAST_MUTED, S_TOAST_LOCKED, S_TOAST_UNLOCKED})
+    for (StrId id : {S_TOAST_SOUND_ON, S_TOAST_MUTED, S_TOAST_LOCKED, S_TOAST_UNLOCKED, S_TRAIN_ASLEEP})
       CHECK_MSG(strlen(T(id)) * 12 <= 380 - 2 * 12, std::string("too wide: ") + T(id));
   }
   gLang = LANG_DEFAULT;
