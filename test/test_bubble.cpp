@@ -468,6 +468,13 @@ TEST(Bubble, a_greeting_says_the_day_with_the_name_or_without) {
   sayLine(say, sizeof say, BUB_VALENTINE, "");
   CHECK_STREQ(say, "Feliz Dia dos Namorados!");
   gLang = LANG_DEFAULT;
+  // only a string with the name is used as a format (a plain one is copied as it is)
+  CHECK(bubbleTakesName(BUB_CHRISTMAS, true));
+  CHECK(!bubbleTakesName(BUB_CHRISTMAS, false));
+  CHECK(!bubbleTakesName(BUB_BIRTHDAY, false));
+  CHECK(bubbleTakesName(BUB_LOVE_NAME, false));
+  CHECK(!bubbleTakesName(BUB_LOVE, true));
+  CHECK(!bubbleTakesName(BUB_HI, true));
   CHECK_EQ((int)BUB_GREET_FIRST + GREET_BIRTHDAY - GREET_CHRISTMAS, (int)BUB_BIRTHDAY);
   CHECK_EQ((int)BUB_BIRTHDAY + 1, (int)BUB_LINES);
 }
