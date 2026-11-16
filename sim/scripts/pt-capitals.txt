@@ -1,9 +1,9 @@
 # The Portuguese accented capitals (#85): every upper-case string that uses one of the
 # capitals ptglyphs.h draws (A' A~ E' I' O' O^ O~), and two names for the player in mixed
 # case, which also show the four no UI string uses (A` A^ E^ U').
-# By day (10:00): all of it. By night (22:00, shots 13-18): the card pages, the status
-# line, the release dialog and the 12-rep hold result, the only screens here whose ink
-# or colours change with the night. The banners (MEDALHA!, OTIMO!) and the clock prompt
+# By day (10:00): all of it. By night (22:00, shots 13-18): the main screen's status line
+# and release dialog and the 12-rep hold result, whose ink and colours change with the
+# night, and the card pages, which keep their day colours (shot as a check). The banners (MEDALHA!, OTIMO!) and the clock prompt
 # (QUE HORAS SAO?) are not shot at night: they are drawn in fixed colours (UI_BAR_WARN
 # and UI_INK in drawCelebration, UI_BG_DAY and UI_INK in renderClock), the same day and
 # night. The name bubbles are shot by day only: their text is dark on white, day or night
@@ -127,7 +127,7 @@ shot 17-release-night
 tap 298 278
 wait 520ms
 # the hold, 12 reps, at night: 12 REPETICOES in the night ink, FOLEGO +n in the night
-# stamina colour. 22:00 it is still, a minute of taps at most since the clock was set.
+# stamina colour. Still 22:00: the clock was set less than a minute of taps ago.
 train 0 9 0
 swipe up
 swipe left
