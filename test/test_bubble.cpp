@@ -699,6 +699,16 @@ TEST(Bubble, a_nature_says_only_its_own_lines_one_time_in_five) {
           else CHECK_MSG(c == 0, std::string(BUBBLE_KEYS[bubbleNatureLine(other, i)]) + " from " + NATURE_KEYS[own]);
         }
       CHECK_EQ(n[BUB_LOVE_NAME], 6000);  // the player's name keeps its share
+      // right after one of its lines: never that one again, another of its own instead
+      int k[BUB_LINES] = {};
+      for (uint32_t r = 0; r < 30000; r++) {
+        BubbleIn in = calm(true, h, true, bubbleNatureLine(own, 1));
+        in.nature = (uint8_t)(nat == NAT_COUNT + 1 ? 200 : nat);
+        k[bubblePick(in, r)]++;
+      }
+      CHECK_EQ(k[bubbleNatureLine(own, 1)], 0);
+      CHECK_EQ(natureCount(k), 6000);
+      CHECK_EQ(k[bubbleNatureLine(own, 0)] + k[bubbleNatureLine(own, 2)], 6000);
     }
   }
 }
