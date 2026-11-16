@@ -138,7 +138,7 @@ class BubbleTimer {
 #define BUBBLE_W_MIN 48   // the tail's 14 px base needs a straight stretch between the corners
 // Inside the round panel at BUBBLE_Y_MIN with a 6 px margin, corners included: x 37..429.
 // That is the narrowest the panel gets where the box can be: lower down (to y 356, and the
-// tail stops at BUBBLE_TIP_LOW 262) it is wider. A wider box would reach outside the
+// tail stops at BUBBLE_TIP_LOW 250) it is wider. A wider box would reach outside the
 // circle (test_bubble.cpp checks the corners).
 #define BUBBLE_X_MIN 37
 #define BUBBLE_X_MAX 429  // exclusive right edge

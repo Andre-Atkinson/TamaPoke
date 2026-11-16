@@ -360,7 +360,8 @@ TEST(Attention, bubble_stays_on_the_round_screen_and_clear_of_the_text_and_butto
         CHECK(insideRound(b.x + b.w, tipY, 8));
         CHECK(b.y >= 108);
         CHECK(!button || tipY < 167);
-        CHECK(tipY <= 262);  // over the lowest head (y 266), well above the bars (y 312)
+        CHECK(tipY <= 250);  // BUBBLE_TIP_LOW
+        CHECK(b.y + b.h < 244);  // above the poops (drawn from y 244, up to x 192)
       }
 }
 
@@ -370,10 +371,26 @@ TEST(Attention, bubble_tail_points_down_at_the_head_and_follows_it) {
   CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 211);
   b = attnBubbleAt(300, 209, false);  // a 6 px hop lifts it too
   CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 205);
+  b = attnBubbleAt(300, 262, false);  // the lowest awake head (Spearow IDLE): over it, not down at the poops
+  CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 250);
+  b = attnBubbleAt(300, 254, false);  // the lowest head that still gets the usual 4 px gap
+  CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 250);
   b = attnBubbleAt(300, 304, false);  // no head found: not down at the bars
-  CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 262);
+  CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 250);
   b = attnBubbleAt(300, 120, false);  // a head up in the header: the box stops under the status line
   CHECK_EQ(b.y, ATTN_BUBBLE_Y_MIN);
+}
+
+// The poops are drawn from y 244, from x 36 to 192 at most: a box beside a low head, which
+// starts at x 186, must end above them whatever the head.
+TEST(Attention, bubble_ends_above_the_poops_for_every_head_height) {
+  for (int headTop = 0; headTop <= 340; headTop++)
+    for (int button = 0; button < 2; button++)
+      for (int petX = 150; petX <= 325; petX += 5) {
+        AttnBubble b = attnBubbleAt(petX, headTop, button);
+        CHECK_MSG(b.y + b.h < 244, "box bottom " + std::to_string(b.y + b.h) + " at head " +
+                                       std::to_string(headTop) + " pet " + std::to_string(petX));
+      }
 }
 
 TEST(Attention, bubble_stays_above_a_button_over_the_pet) {

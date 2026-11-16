@@ -174,13 +174,17 @@ inline AttnAction attnDecide(const AttnScene &s) {
 // How low a bubble's tail reaches (#73), for the "!" bubble below and the speech bubble
 // (bubble.h): just over the top of the pet's head as drawn this frame (headTop: scene.cpp's
 // petHeadTop(), the same top the emotes sit by, idleEmoteAt), so a bubble rises and falls
-// with a hop as they do. Never lower than over the lowest head (a lying Snorlax, top at
-// y 266). While the evolve, farewell or run-away button is drawn over the pet (`button`:
-// from y 172, and 167 at the evolve button's biggest pulse, EVO_BTN_Y 172 - 5) the tail
-// stays above it, as both bubbles did before #73. Each bubble also keeps its box under the
-// status line (its own Y_MIN), which can leave the tail over a tall pet's head.
+// with a hop as they do. Never lower than BUBBLE_TIP_LOW: a box on the pet's right starts
+// at x 186 and the poops are drawn at y 244 and below, from x 36 to 192 (3 at most, 64 px
+// wide, 46 apart; drawPoops), so both boxes end above y 244. A low head (the lowest awake
+// one in the 151 PMD species is Spearow's IDLE, top at y 262; a lying Snorlax is at y 266)
+// then has the tail end over it rather than touching it. While the evolve, farewell or
+// run-away button is drawn over the pet (`button`: from y 172, and 167 at the evolve
+// button's biggest pulse, EVO_BTN_Y 172 - 5) the tail stays above it, as both bubbles did
+// before #73. Each bubble also keeps its box under the status line (its own Y_MIN), which
+// can leave the tail over a tall pet's head.
 #define BUBBLE_TIP_GAP 4       // from the tail's tip down to the top of the head
-#define BUBBLE_TIP_LOW 262     // the lowest tip: over the lowest head, well above the bars (y 312)
+#define BUBBLE_TIP_LOW 250     // the lowest tip: the speech box ends at 242 and the "!" box at 240, above the poops (y 244)
 #define BUBBLE_TIP_BUTTON 166  // the lowest tip with a button over the pet
 
 inline int bubbleTipY(int headTop, bool button) {

@@ -288,8 +288,9 @@ static bool boxInside(const BubbleBox &b, double margin) {
 }
 
 // Heads to try (#73): over the header (a hop of the tallest), the tallest (169), Charmander
-// (215), the lowest (a lying Snorlax, 266), and nothing found (the ground line, 304).
-static const int HEADS[] = { 60, 120, 169, 215, 266, 304, 330 };
+// (215), the lowest awake (Spearow IDLE, 262), a lying Snorlax (266), and nothing found (the
+// ground line, 304).
+static const int HEADS[] = { 60, 120, 169, 215, 254, 262, 266, 304, 330 };
 
 TEST(Bubble, the_box_stays_inside_the_round_panel_clear_of_header_and_buttons) {
   for (int button = 0; button < 2; button++)
@@ -299,7 +300,7 @@ TEST(Bubble, the_box_stays_inside_the_round_panel_clear_of_header_and_buttons) {
           for (int textW = 4; textW <= bubbleTextMax(badge); textW += 4)
             for (int petX = 150; petX <= 325; petX += 5) {
               BubbleBox b = bubbleBoxAt(petX, headTop, textW, lines, badge, button);
-              bool ok = boxInside(b, 6) && b.y >= 108 && (!button || b.tipY < 167) && b.tipY <= 262 &&
+              bool ok = boxInside(b, 6) && b.y >= 108 && (!button || b.tipY < 167) && b.tipY <= 250 && b.y + b.h < 244 &&
                         b.w == (textW + 2 * BUBBLE_PAD_X > BUBBLE_W_MIN ? textW + 2 * BUBBLE_PAD_X : BUBBLE_W_MIN) &&
                         (!badge || b.x >= 76 + 24 + 6) && b.tailX0 >= b.x + BUBBLE_RADIUS &&
                         b.tailX1 <= b.x + b.w - BUBBLE_RADIUS && b.tailX1 - b.tailX0 == 14 && b.tipX >= b.x &&
@@ -311,7 +312,8 @@ TEST(Bubble, the_box_stays_inside_the_round_panel_clear_of_header_and_buttons) {
               CHECK_MSG(boxInside(b, 6), "outside the panel: " + at);
               CHECK_MSG(b.y >= 108, "over the status line: " + at);
               CHECK_MSG(!button || b.tipY < 167, "into the evolve button: " + at);  // EVO_BTN_Y 172 - 5 at its biggest pulse
-              CHECK_MSG(b.tipY <= 262, "below the lowest head, near the bars: " + at);
+              CHECK_MSG(b.tipY <= 250, "tail below BUBBLE_TIP_LOW: " + at);
+              CHECK_MSG(b.y + b.h < 244, "over the poops: " + at);  // drawPoops: from y 244, up to x 192
               CHECK_MSG(b.w == (textW + 2 * BUBBLE_PAD_X > BUBBLE_W_MIN ? textW + 2 * BUBBLE_PAD_X : BUBBLE_W_MIN),
                         "text clipped: " + at);
               CHECK_MSG(!badge || b.x >= 76 + 24 + 6, "over the clock badge: " + at);
@@ -333,12 +335,27 @@ TEST(Bubble, the_tail_points_down_at_the_head_and_follows_it) {
   CHECK_EQ(bubbleBoxAt(200, 209, 84, 1, false, false).tipY, 205);  // a 6 px hop lifts it too
   CHECK_EQ(bubbleBoxAt(200, 215, 160, 2, false, false).tipY, 211);  // two lines: the box grows upward
   CHECK_EQ(bubbleBoxAt(200, 169, 84, 1, false, false).tipY, 165);  // the tallest pet
-  CHECK_EQ(bubbleBoxAt(200, 266, 84, 1, false, false).tipY, 262);  // the lowest
-  CHECK_EQ(bubbleBoxAt(200, 304, 84, 1, false, false).tipY, 262);  // no head found: not down at the bars
+  CHECK_EQ(bubbleBoxAt(200, 254, 84, 1, false, false).tipY, 250);  // the lowest that still gets the 4 px gap
+  CHECK_EQ(bubbleBoxAt(200, 262, 84, 1, false, false).tipY, 250);  // the lowest awake head (Spearow IDLE): stops over the poops
+  CHECK_EQ(bubbleBoxAt(200, 266, 84, 1, false, false).tipY, 250);  // a lying Snorlax
+  CHECK_EQ(bubbleBoxAt(200, 304, 84, 1, false, false).tipY, 250);  // no head found: not down at the bars
   // a head up in the header: the box stops under the status line, its tail over the head
   b = bubbleBoxAt(200, 120, 84, 1, false, false);
   CHECK_EQ(b.y, BUBBLE_Y_MIN);
   CHECK_EQ(b.tipY, BUBBLE_Y_MIN + 28 + BUBBLE_TAIL);
+}
+
+// The poops are drawn from y 244, from x 36 to 192 at most: a box beside a low head, which
+// starts at x 186, must end above them whatever the head (every height, as it can be any).
+TEST(Bubble, the_box_ends_above_the_poops_for_every_head_height) {
+  for (int headTop = 0; headTop <= 340; headTop++)
+    for (int button = 0; button < 2; button++)
+      for (int lines = 1; lines <= 2; lines++)
+        for (int petX = 150; petX <= 325; petX += 5) {
+          BubbleBox b = bubbleBoxAt(petX, headTop, 84, lines, false, button);
+          CHECK_MSG(b.y + b.h < 244, "box bottom " + std::to_string(b.y + b.h) + " at head " +
+                                         std::to_string(headTop) + " pet " + std::to_string(petX));
+        }
 }
 
 TEST(Bubble, with_a_button_over_the_pet_it_stays_above_the_button) {

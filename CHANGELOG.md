@@ -237,7 +237,7 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   pinned high up under the status line, far above a small creature. Now their tails
   point just over its head, and they rise and fall with its hops as the little
   thought bubbles do. With the evolve, farewell or run-away button over the creature
-  they stay above the button.
+  they stay above the button, and they are not drawn over the poops or while it huffs.
 
 - **The sun and the moon no longer sit on the name** (#70). They moved right of the sky,
   below the name and the status line, and the stars moved out from behind the status
