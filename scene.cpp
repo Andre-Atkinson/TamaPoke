@@ -31,6 +31,7 @@ static void overlayMouth(const Species &sp, int x, int y, int s, bool open);
 static void drawBar(int x, int y, const char *label, uint8_t val);
 static int followLean(uint32_t now);
 static bool heartShown(uint32_t now);
+static bool huffing(uint32_t now);
 static void drawHuffPuff(int x, int y, uint32_t now);
 
 PetBeh beh;
@@ -1143,7 +1144,8 @@ void drawAttnBubble() {
   uint8_t need = attnShown(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene));
   if (need >= ATTN_NEEDS || bubbleShowing()) return;
   if (pet.sleeping || pet.eating() || pet.showHeart() || pet.evolving() || timeLeft(bathUntil) || pet.showMedal() ||
-      pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil)))
+      pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil)) ||
+      huffing(millis()))  // the puffs of the huff go by the head, where the bubble is (#73)
     return;
   AttnBubble b = attnBubbleAt(pmd.loaded ? (int)beh.x : CX, petHeadTop(), petButtonShown());
   uint16_t ink = inkColor();
@@ -1262,6 +1264,7 @@ static int followLean(uint32_t now) {
 }
 
 static bool huffing(uint32_t now) { return reacting(now) && petReact.kind == REACT_HUFF; }
+bool petHuffing() { return huffing(millis()); }
 
 // The heart of the pat before the huff (the 11th tap) is not drawn while the pet turns away.
 // Only the drawing skips it: pet.showHeart() is untouched for its other uses.

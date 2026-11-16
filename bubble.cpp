@@ -89,7 +89,7 @@ void bubbleSayNow(uint8_t line) {
 bool bubbleShowing() { return bubbleTimer.showing(); }
 
 void drawSpeechBubble() {
-  if (!bubbleTimer.showing() || bubbleLine >= BUB_LINES) return;
+  if (!bubbleTimer.showing() || bubbleLine >= BUB_LINES || petHuffing()) return;  // the huff's puffs go by the head (#73)
   int lines = bubbleBreak < 0 ? 1 : 2;
   BubbleBox b = bubbleBoxAt(pmd.loaded ? (int)beh.x : CX, petHeadTop(), bubbleW1 > bubbleW2 ? bubbleW1 : bubbleW2,
                             lines, badgeShowing(), petButtonShown());
