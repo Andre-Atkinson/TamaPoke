@@ -69,6 +69,13 @@ static const ExpectedFmt EXPECTED[] = {
   { S_FAREWELL_BTN,    "%s" },
   { S_RUNAWAY_BTN,     "%s" },
   { S_SAY_LOVE_FMT,    "%s" },  // the player's name (bubble.cpp)
+  // the special days' greetings with the player's name (bubble.cpp, #26)
+  { S_SAY_CHRISTMAS_FMT, "%s" },
+  { S_SAY_NEW_YEAR_FMT, "%s" },
+  { S_SAY_VALENTINE_FMT, "%s" },
+  { S_SAY_EASTER_FMT,   "%s" },
+  { S_SAY_HALLOWEEN_FMT, "%s" },
+  { S_SAY_BIRTHDAY_FMT, "%s" },
   { S_DATE_FMT,        "%s,%u,%s" },  // weekday, day, month (formatDate(), i18n.cpp)
 };
 static const int NUM_EXPECTED = (int)(sizeof(EXPECTED) / sizeof(EXPECTED[0]));

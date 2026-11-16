@@ -35,7 +35,7 @@ WARN     := -Wall -Wextra -Wno-unused-parameter
 # el firmware tal cual (rtcbat.cpp y audio.cpp los sustituyen rtcbat_sim.cpp y el audio
 # mudo de test/shim/shim.cpp)
 FW_SRCS  := pet.cpp i18n.cpp sdmon.cpp screenlock.cpp bootbutton.cpp trainingcapture.cpp trainingtouch.cpp \
-            serialcmd.cpp uitext.cpp scene.cpp gameui.cpp screens.cpp idlelife.cpp bubble.cpp owner.cpp
+            serialcmd.cpp uitext.cpp scene.cpp gameui.cpp screens.cpp idlelife.cpp bubble.cpp owner.cpp holiday.cpp
 # the fake board and the helpers both programs use (tamapoke_sim adds main.cpp)
 COMMON_SRCS := simhw.cpp simfs.cpp rtcbat_sim.cpp script.cpp png.cpp boot.cpp
 SIM_SRCS := main.cpp $(COMMON_SRCS)
