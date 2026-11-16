@@ -70,6 +70,14 @@ While **awake**, per minute:
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
 - 🍬 **Candy:** +10 FOOD, +12 JOY, but **+12 weight** (fattening).
 - ⚽ **Play / minigames:** +JOY, −ENE; a random one of four short games (keepy-uppy, Berry Catch, Peekaboo, Berry Song). Each trains **SPEED** and burns weight, and keeps its own best score.
+- 🧸 **Plush toy** (the Play button's strip): it hops about with its plush, +10 JOY and a heart
+  (+15 for a playful creature), no minigame, so no SPEED and no cost. Two plays an hour give joy;
+  after that (or with JOY already full) it still plays, for no joy, so the games stay the main fun.
+- 🥛 **Warm milk** (the moon button's strip): it drinks, +5 JOY and a heart, **+4 weight**
+  (less than candy), then lights out. Until it next wakes, its sleep brings energy back
+  **+2/min** faster (8 a minute, 10 for a lazy one). Now and then in the evening, before
+  quiet hours, it asks for it ("Sleepy... warm milk?"), twice an evening at most and not
+  once it has had its milk.
 - 🥊 **Training** (the *Train* button on the stat card): two calm exercises, each up to
   12 punches or reps worth 1.5 points (+18 a session at most; its nature can add a quarter),
   and each tires it like a game:
@@ -97,7 +105,7 @@ While **awake**, per minute:
   short pause (a quarter of a second) on the creature makes it walk after your
   finger instead of opening the Pokédex. To open the Pokédex, swipe without
   pausing, or start the swipe off the creature.
-- 🌙 **Sleep:** rest — ENE **+6/min**, needs drain ~**4× slower** with floors
+- 🌙 **Sleep** (lights out on the moon button's strip): rest — ENE **+6/min**, needs drain ~**4× slower** with floors
   (FOOD 30 / JOY 35 / HYG 45). No poops, no slip-ups, can't run away while asleep.
 - 🛏️ **Bedtime** (stat card, *Care* page; off by default): pick 21:00–07:00,
   22:00–07:00 or 23:00–08:00 and the creature falls asleep by itself when the
@@ -139,7 +147,8 @@ While **awake**, per minute:
 - 💬 **Speech bubbles:** now and then the creature says something in a bubble above
   it, for about 4.5 s. A need comes first (only a special day's greeting, below, comes
   before it), the same one (below 25) as the "!" bubble and the status line: "I'm
-  hungry!", "I need a bath!", "I'm tired...", "I'm bored...". Otherwise
+  hungry!", "I need a bath!", "I'm tired...", "I'm bored...". In the evening, now and then,
+  "Sleepy... warm milk?" (see warm milk above). Otherwise
   "Good morning!" (6:00–9:59) or "Look at the stars!" (20:00–5:59) when the clock is set, a
   friendly line ("Hi there!", "I'm happy!", "Pat me!") or "I love you, <name>!". The name
   is the player's, set once from a computer with the serial command `OWNER <name>`
@@ -402,10 +411,15 @@ If one bottoms out it counts as a *slip-up*.
 **Buttons (bottom arc, icons):**
 - 🍎 **Feed** → food menu: 3 berries (each species has a hidden favourite that
   gives a bonus) and a candy (+happiness but it fattens; weight makes it sluggish).
-- ⚽ **Play** → a random minigame (trains SPEED). Hold the button at the top for 1 s to leave.
-- 🌙 **Light** → sleep/wake (recovers energy, dims the screen). While asleep,
-  needs decay much slower (rest).
+- ⚽ **Play** → a strip with the **Poké Ball** (a random minigame, trains SPEED; hold the
+  button at the top for 1 s to leave) and the **plush toy** (a little happiness, no game).
+- 🌙 **Light** → awake: a strip with **lights out** and **warm milk, then lights out**
+  (sleep recovers energy and dims the screen; while asleep, needs decay much slower).
+  Asleep: wakes it at once.
 - 🫧 **Bath** → a foam scene that cleans up the poops.
+
+The food menu and the two strips close when you choose, when you tap anywhere else, or by
+themselves after 6 s.
 
 **Touch gestures:**
 - Tap the creature = pet it (+happiness, bond).
@@ -600,7 +614,8 @@ set after a power cut.
 - `weather.h` — the place of each day, its made-up weather, the date and the season, from the clock (#60); `scene.cpp` draws them
 - `skylayout.h` — where the header, the sun, the moon and the stars sit on the round screen (#70)
 - `standby.h` — when the standby clock replaces screen-off on USB, and its burn-in steps (#60); `scene.cpp` draws it
-- `bubble.h` / `bubble.cpp` — the speech bubbles: which line, when, and where it goes on the round screen (#23)
+- `bubble.h` / `bubble.cpp` — the speech bubbles: which line, when, and where it goes on the round screen (#23); the warm-milk hint (#13)
+- `caremenu.h` — the care strips the Food, Play and moon buttons open: where they sit and which item a tap lands on (#13)
 - `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the font can draw, and its NVS key
 - `holiday.h` / `holiday.cpp` — the special days (#26): Easter and the other dates, the player's birthday (`BDAY <month> <day>`) and its NVS key, and how often the greeting comes; `scene.cpp` draws the decorations
 - `gameui.h` / `gameui.cpp` — the minigames' screens and the calm exercises' (the rhythm punch and the stamina hold, #78; their rules are in `minigames.h` and `exercise.h`)

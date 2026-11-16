@@ -266,7 +266,7 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       c.a = -1;
       for (int i = 0; n == 2 && i < BUB_LINES; i++)
         if (w[1] == BUBBLE_KEYS[i]) c.a = i;
-      if (c.a < 0) return fail("usage: say hungry|bath|tired|bored|morning|stars|hi|happy|pat|love-name|love|"
+      if (c.a < 0) return fail("usage: say hungry|bath|tired|bored|morning|stars|milk|hi|happy|pat|love-name|love|"
                               "christmas|newyear|valentine|easter|halloween|birthday");
       c.op = OP_SAY;
     } else if (op == "nature") {

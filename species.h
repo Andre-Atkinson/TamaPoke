@@ -529,6 +529,44 @@ inline const char* const SPR_ICON_CANDY[16] = {  // 16x16
   "................",
 };
 
+inline const char* const SPR_ICON_MILK[16] = {  // 16x16
+  "................",
+  "....s...s.......",
+  ".....s...s......",
+  "....s...s.......",
+  "..kkkkkkkkk.....",
+  "..kyyyyyyyk.....",
+  "..kwwwwwwskkk...",
+  "..kwwYYwwsk.sk..",
+  "..kwYYwwYsk..k..",
+  "..kwYYwwwsk..k..",
+  "..kwYYwwwsk..k..",
+  "..kwwYYwwsk.sk..",
+  "..kwwwwwwskkk...",
+  "..ksssssssk.....",
+  "...kkkkkkk......",
+  "................",
+};
+
+inline const char* const SPR_ICON_PLUSH[16] = {  // 16x16
+  "................",
+  "....k.......k...",
+  "...kck.....kck..",
+  "...kyckkkkkcyk..",
+  "...kccccccccck..",
+  "....kckccckck...",
+  "....kccccccck...",
+  "....kccykycck...",
+  "....kccyyycCk...",
+  "....kcccccCCk...",
+  "...kcccCCCCcck..",
+  "..kccccccccccck.",
+  "...kcccyyyccCk..",
+  "....kccyyycCk...",
+  ".....kccccCk....",
+  "......kkkkk.....",
+};
+
 inline const char* const SPR_ICON_ROTTEN[16] = {  // 16x16
   "................",
   "..s.............",

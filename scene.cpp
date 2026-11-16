@@ -4,6 +4,7 @@
 #include "attention.h"
 #include "blit.h"
 #include "bubble.h"
+#include "caremenu.h"
 #include "clockprompt.h"
 #include "dex.h"
 #include "holiday.h"
@@ -34,6 +35,7 @@ static int followLean(uint32_t now);
 static bool heartShown(uint32_t now);
 static bool huffing(uint32_t now);
 static void drawHuffPuff(int x, int y, uint32_t now);
+static void drawTreatBy(int petX, int groundY);
 
 PetBeh beh;
 static uint32_t walkLast = 0;  // instante del ultimo paso del paseo (0 = ninguno aun)
@@ -1072,12 +1074,14 @@ void drawPet() {
   }
 
   PetMood m = pet.mood();
-  if (m == MOOD_HAPPY && (millis() / 500) % 2) y -= 6;  // saltito
+  if (pet.playingToy()) y += idleHopDy(pet.toyElapsed());       // hops by its plush (#13)
+  else if (m == MOOD_HAPPY && (millis() / 500) % 2) y -= 6;  // saltito
   reactOffset(millis(), false, x, y);  // gestures (#21): no actions to play here
   x += followLean(millis());
   headNow.top = (int16_t)y;
 
   drawMap(sp.sprite, SPRITE_H, x, y, s, false);
+  drawTreatBy(x + 16 * s, PET_CY + 16 * s);  // the plush or the mug (#13), on its ground
 
   // expresiones superpuestas usando las anclas de la especie
   bool blink = (millis() % 3500 < 300);
@@ -1241,6 +1245,10 @@ static void drawPetPMD() {
     act = PMD_EAT;
     beh.t0 = 0;
     t0 = 0;
+  } else if (pet.playingToy()) {  // the plush (#13): hops beside it, IDLE bounced like every hop
+    act = PMD_IDLE;
+    dy = idleHopDy(pet.toyElapsed());
+    walkLast = 0;  // a walk under way pauses
   } else if (reacting(now)) {  // a gesture's reaction (#21) shows even on a sad pet
     act = reactAct(petReact.kind);
     t0 = petReact.t0;
@@ -1298,6 +1306,7 @@ static void drawPetPMD() {
   drawPmdAct(act, (int)beh.x + dx, PET_GROUND + dy, now - t0, loop || act == PMD_IDLE, false, 5);
   headNow = { true, act, (int16_t)dy, 0 };
   drawHuffPuff((int)beh.x + petReact.away * 56, PET_GROUND - 120, now);
+  drawTreatBy((int)beh.x, PET_GROUND);  // the plush or the mug (#13)
 
   if (heartShown(now)) drawMap(SPR_HEART, 32, (int)beh.x + 50, PET_GROUND - 190, 2, false);
   // the ball and an emote (#22); the head's height only when an emote is drawn
@@ -1315,7 +1324,8 @@ static void drawPetSD() {
   if (pet.evolving()) {
     sil = (millis() / 300) % 2;
   } else {
-    if (pet.mood() == MOOD_HAPPY && (millis() / 500) % 2) y -= 6;  // saltito
+    if (pet.playingToy()) y += idleHopDy(pet.toyElapsed());                // hops by its plush (#13)
+    else if (pet.mood() == MOOD_HAPPY && (millis() / 500) % 2) y -= 6;  // saltito
     reactOffset(millis(), false, x, y);  // gestures (#21): no actions to play here
     x += followLean(millis());
     headNow.top = (int16_t)y;
@@ -1330,6 +1340,7 @@ static void drawPetSD() {
             [&](int c0, int len, int k) { gfx->fillRect(x + c0 * s, y + r * s, len * s, s, sil ? INK_K : mon.pal[k]); });
   }
 
+  if (!sil) drawTreatBy(x + w / 2, PET_CY + h / 2);  // the plush or the mug (#13), at its feet
   // emotes en vez de expresiones (los sprites importados no tienen anclas)
   drawHuffPuff(x + w / 2 + petReact.away * (w / 2), y + h / 3, millis());
   if (heartShown(millis())) drawMap(SPR_HEART, 32, x + w - 30, y - 50, 2, false);
@@ -1369,8 +1380,9 @@ void drawAttnBubble() {
   static const char *const *const ICONS[ATTN_NEEDS] = { SPR_ICON_FOOD, SPR_ICON_CLEAN, SPR_ICON_LIGHT, SPR_ICON_PLAY };
   uint8_t need = attnShown(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene));
   if (need >= ATTN_NEEDS || bubbleShowing()) return;
-  if (pet.sleeping || pet.eating() || pet.showHeart() || pet.evolving() || timeLeft(bathUntil) || pet.showMedal() ||
-      pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil)) ||
+  if (pet.sleeping || pet.eating() || pet.playingToy() || pet.showHeart() || pet.evolving() || timeLeft(bathUntil) ||
+      pet.showMedal() || pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(menuUntil) ||
+      (choiceKind && timeLeft(choiceUntil)) ||
       huffing(millis()))  // the puffs of the huff go by the head, where the bubble is (#73)
     return;
   AttnBubble b = attnBubbleAt(pmd.loaded ? (int)beh.x : CX, petHeadTop(), petButtonShown());
@@ -1427,6 +1439,32 @@ static void drawBar(int x, int y, const char *label, uint8_t val) {
   gfx->fillRoundRect(bx, y, bw, bh, 4, UI_TRACK);
   int fw = (bw - 4) * val / 100;
   if (fw > 0) gfx->fillRoundRect(bx + 2, y + 2, fw, bh - 4, 3, fill);
+}
+
+// The care strip that is open (caremenu.h, #13), its left edge at `left` (menuLeftNow()):
+// a white box with each item's 16x16 icon at x3.
+void drawCareMenu(int left) {
+  static const char *const *const FOOD[FOOD_ITEMS] = { SPR_ICON_FOOD, SPR_ICON_BERRY_B, SPR_ICON_BERRY_G, SPR_ICON_CANDY };
+  static const char *const *const PLAY[PLAY_ITEMS] = { SPR_ICON_PLAY, SPR_ICON_PLUSH };
+  static const char *const *const MOON[MOON_ITEMS] = { SPR_ICON_LIGHT, SPR_ICON_MILK };
+  const char *const *const *icons = menuKind == MENU_PLAY ? PLAY : menuKind == MENU_MOON ? MOON : FOOD;
+  uint8_t n = icons == FOOD ? (uint8_t)FOOD_ITEMS : menuItems(menuKind);
+  gfx->fillRoundRect(left, MENU_Y, n * MENU_ITEM_W, MENU_H, MENU_RADIUS, UI_WHITE);
+  gfx->drawRoundRect(left, MENU_Y, n * MENU_ITEM_W, MENU_H, MENU_RADIUS, inkColor());
+  for (uint8_t i = 0; i < n; i++) drawMap(icons[i], 16, left + i * MENU_ITEM_W + MENU_ICON_IN, MENU_ICON_Y, 3, false);
+}
+
+// The treat beside the pet (#13), on the ground (groundY) on the side toward the screen's
+// centre: the plush it plays with, tossed up as the pet lands from each hop, or the mug of
+// warm milk while it drinks.
+static void drawTreatBy(int petX, int groundY) {
+  int side = petX <= CX ? 1 : -1;
+  if (pet.playingToy()) {
+    int dy = idleHopDy(pet.toyElapsed() + IDLE_HOP_MS / 2) * 3 / 2;
+    drawMap(SPR_ICON_PLUSH, 16, petX + side * 72 - 24, groundY - 48 + dy, 3, false);
+  } else if (pet.drinkingMilk()) {
+    drawMap(SPR_ICON_MILK, 16, petX + side * 64 - 24, groundY - 48, 3, false);
+  }
 }
 
 void drawButtons() {

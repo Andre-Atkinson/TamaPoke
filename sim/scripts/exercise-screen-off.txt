@@ -78,8 +78,10 @@ wait 1s
 shot 48-punch-unlocked
 
 # TRAIN while it sleeps (the light button): the card stays on its Fitness page with a note,
-# which goes after 2 s; the light button again wakes it
+# which goes after 2 s; the light button again wakes it. Awake, the light button opens its strip
+# (#13): its lights out
 tap 264 404
+tap 231 320
 wait 1s
 swipe up
 swipe left

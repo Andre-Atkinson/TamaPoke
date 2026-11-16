@@ -1,7 +1,9 @@
 // Main-screen touch resolution and the pet gestures (#21): touchgesture.h, driven with
-// synthetic touch traces sampled every 20 ms like handleTouch() polls the CST9217.
+// synthetic touch traces sampled every 20 ms like handleTouch() polls the CST9217. At the
+// end, where a tap lands on the care strips (#13): caremenu.h.
 #include "framework.h"
 #include "../touchgesture.h"
+#include "../caremenu.h"  // the care strips (#13)
 #include <vector>
 
 using TG = TouchGesture;
@@ -581,4 +583,69 @@ TEST(TouchGesture, every_gate_turns_the_gestures_off) {
     g.*f = true;
     CHECK(!petGesturesLive(g));
   }
+}
+
+// ---------------------------------------------------------------- the care strips (#13)
+// caremenu.h: where each strip sits and which item a tap lands on. The buttons' centres
+// are buttons[] in TamaPoke.ino: food (140, 390), Play (202, 404), moon (264, 404).
+
+TEST(caremenu, the_food_strip_stays_where_it_was_with_its_four_items) {
+  int left = menuLeft(MENU_FOOD, 140);
+  CHECK_EQ(left, 101);
+  CHECK_EQ(menuW(MENU_FOOD), 264);
+  CHECK_EQ(menuItemAt(MENU_FOOD, left, 101, 288), (int)FOOD_RED);
+  CHECK_EQ(menuItemAt(MENU_FOOD, left, 166, 320), (int)FOOD_RED);
+  CHECK_EQ(menuItemAt(MENU_FOOD, left, 167, 320), (int)FOOD_BLUE);
+  CHECK_EQ(menuItemAt(MENU_FOOD, left, 240, 320), (int)FOOD_GREEN);
+  CHECK_EQ(menuItemAt(MENU_FOOD, left, 364, 351), (int)FOOD_CANDY);
+  // its right and bottom edges are outside: x 365 used to give a fifth item, "berry 4"
+  CHECK_EQ(menuItemAt(MENU_FOOD, left, 365, 320), -1);
+  CHECK_EQ(menuItemAt(MENU_FOOD, left, 233, 352), -1);
+  CHECK_EQ(menuItemAt(MENU_FOOD, left, 233, 287), -1);
+  CHECK_EQ(menuItemAt(MENU_FOOD, left, 100, 320), -1);
+}
+
+TEST(caremenu, the_play_and_moon_strips_sit_over_their_buttons) {
+  int play = menuLeft(MENU_PLAY, 202), moon = menuLeft(MENU_MOON, 264);
+  CHECK_EQ(play + menuW(MENU_PLAY) / 2, 202);
+  CHECK_EQ(moon + menuW(MENU_MOON) / 2, 264);
+  CHECK_EQ(menuItemAt(MENU_PLAY, play, 169, 320), (int)PLAY_BALL);
+  CHECK_EQ(menuItemAt(MENU_PLAY, play, 235, 320), (int)PLAY_PLUSH);
+  CHECK_EQ(menuItemAt(MENU_PLAY, play, 201, 320), (int)PLAY_BALL);
+  CHECK_EQ(menuItemAt(MENU_PLAY, play, 202, 320), (int)PLAY_PLUSH);
+  CHECK_EQ(menuItemAt(MENU_PLAY, play, 268, 320), -1);
+  CHECK_EQ(menuItemAt(MENU_PLAY, play, 135, 320), -1);
+  CHECK_EQ(menuItemAt(MENU_MOON, moon, 231, 320), (int)MOON_LIGHTS);
+  CHECK_EQ(menuItemAt(MENU_MOON, moon, 297, 320), (int)MOON_MILK);
+  CHECK_EQ(menuItemAt(MENU_MOON, moon, 330, 320), -1);
+  CHECK_EQ(menuItemAt(MENU_MOON, moon, 197, 320), -1);
+  // the buttons themselves are off every strip: a second tap on the button only closes it
+  for (uint8_t k = 0; k < MENU_KINDS; k++) {
+    int left = menuLeft(k, k == MENU_FOOD ? 140 : k == MENU_PLAY ? 202 : 264);
+    CHECK_EQ(menuItemAt(k, left, 140, 390), -1);
+    CHECK_EQ(menuItemAt(k, left, 202, 404), -1);
+    CHECK_EQ(menuItemAt(k, left, 264, 404), -1);
+    CHECK_EQ(menuItemAt(k, left, 326, 390), -1);
+  }
+}
+
+TEST(caremenu, every_strip_fits_the_round_screen_above_the_buttons) {
+  for (uint8_t k = 0; k < MENU_KINDS; k++) {
+    int left = menuLeft(k, k == MENU_FOOD ? 140 : k == MENU_PLAY ? 202 : 264);
+    int right = left + menuW(k) - 1, bottom = MENU_Y + MENU_H - 1;
+    for (int x : { left, right })
+      for (int y : { MENU_Y, bottom }) {
+        int dx = x - 233, dy = y - 233;
+        CHECK_MSG(dx * dx + dy * dy < 225 * 225, "strip corner outside the panel");  // 8 px margin
+      }
+    CHECK(bottom < 390 - 26);  // above the top of every button (BTN_HALF 26)
+    CHECK(menuItemAt(k, left, left, MENU_Y) == 0);
+    CHECK(menuItemAt(k, left, right, bottom) == (int)menuItems(k) - 1);
+  }
+}
+
+TEST(caremenu, an_unknown_strip_has_no_items) {
+  CHECK_EQ((int)menuItems(MENU_KINDS), 0);
+  CHECK_EQ(menuItemAt(MENU_KINDS, 101, 150, 320), -1);
+  CHECK_EQ(menuItemAt(255, 101, 150, 320), -1);
 }

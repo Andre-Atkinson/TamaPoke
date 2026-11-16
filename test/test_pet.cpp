@@ -181,6 +181,226 @@ TEST(feed, dormido_o_huevo_no_come) {
   CHECK_EQ(e.fullness, (uint8_t)40);
 }
 
+// ---------------------------------------------------------------- treats and toys (#13)
+// The plush toy and warm milk (TOY_* and MILK_* in pet.h; the numbers are the owner's).
+
+TEST(treats, the_plush_gives_a_little_joy_and_a_heart_and_nothing_else) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 60, 50, 40, 70);
+  uint8_t spe = p.trSpe, bond = p.bond;
+  CHECK_EQ(p.playToy(), (uint8_t)TOY_JOY);
+  CHECK_EQ(p.joy, (uint8_t)(50 + TOY_JOY));
+  CHECK(p.playingToy());
+  CHECK(p.showHeart());
+  CHECK_EQ(p.bond, (uint8_t)(bond + 1));
+  // no minigame: no speed, and it costs no energy or food and burns no weight
+  CHECK_EQ(p.trSpe, spe);
+  CHECK_EQ(p.energy, (uint8_t)40);
+  CHECK_EQ(p.fullness, (uint8_t)60);
+  CHECK_EQ(p.hygiene, (uint8_t)70);
+  CHECK(!p.eating());
+  mockAdvanceMillis(TOY_ANIM_MS - 1);
+  CHECK(p.playingToy());
+  CHECK_EQ(p.toyElapsed(), (uint32_t)(TOY_ANIM_MS - 1));
+  mockAdvanceMillis(1);
+  CHECK(!p.playingToy());
+  CHECK_EQ(p.toyElapsed(), (uint32_t)0);
+  setStats(p, 60, 95, 40, 70);
+  CHECK_EQ(p.playToy(), (uint8_t)5);  // up to 100: it returns what really went in
+  CHECK_EQ(p.joy, (uint8_t)100);
+  p.toggleLight();  // put to bed mid-play: the play stops (no plush tossed beside a sleeper)
+  CHECK(!p.playingToy());
+}
+
+TEST(treats, the_plush_gives_joy_twice_an_hour_then_plays_for_none) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 60, 20, 40, 70);
+  CHECK_EQ(p.playToy(), (uint8_t)TOY_JOY);  // the hour starts here
+  mockAdvanceMillis(30UL * 60 * 1000);
+  CHECK_EQ(p.playToy(), (uint8_t)TOY_JOY);
+  mockAdvanceMillis(29UL * 60 * 1000);      // 59 min after the first
+  CHECK_EQ(p.playToy(), (uint8_t)0);
+  CHECK_EQ(p.joy, (uint8_t)(20 + 2 * TOY_JOY));
+  CHECK_MSG(p.playingToy(), "past the cap it still plays with it");
+  CHECK_MSG(!p.showHeart(), "past the cap: no heart");
+  mockAdvanceMillis(59UL * 1000);           // 59 min 59 s
+  CHECK_EQ(p.playToy(), (uint8_t)0);
+  mockAdvanceMillis(1000);                  // the hour since the first is over
+  CHECK_EQ(p.playToy(), (uint8_t)TOY_JOY);
+  CHECK(p.showHeart());
+  mockAdvanceMillis(10UL * 60 * 1000);
+  CHECK_EQ(p.playToy(), (uint8_t)TOY_JOY);  // a new hour, from that play
+  CHECK_EQ(p.playToy(), (uint8_t)0);
+}
+
+TEST(treats, a_play_at_full_joy_gives_nothing_and_spends_none_of_the_hours_plays) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 60, 100, 40, 70);
+  CHECK_EQ(p.playToy(), (uint8_t)0);
+  CHECK_MSG(p.playingToy(), "at full joy it still plays with it");
+  CHECK_MSG(!p.showHeart(), "no joy given: no heart");
+  CHECK_EQ(p.joy, (uint8_t)100);
+  mockAdvanceMillis(TOY_ANIM_MS);
+  setStats(p, 60, 20, 40, 70);  // the joy drops: the hour's two plays that give joy are all still there
+  CHECK_EQ(p.playToy(), (uint8_t)TOY_JOY);
+  CHECK_EQ(p.playToy(), (uint8_t)TOY_JOY);
+  CHECK_EQ(p.playToy(), (uint8_t)0);
+}
+
+TEST(treats, a_playful_pet_enjoys_the_plush_more) {
+  Pet p;
+  makePet(p, 4);
+  p.nature = NAT_PLAYFUL;
+  setStats(p, 60, 20, 40, 70);
+  CHECK_EQ(p.playToy(), (uint8_t)(TOY_JOY + NAT_PLAY_JOY_EXTRA));
+}
+
+TEST(treats, no_plush_or_milk_asleep_as_an_egg_or_in_a_ceremony) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 60, 50, 40, 70);
+  p.toggleLight();  // asleep
+  CHECK_EQ(p.playToy(), (uint8_t)0);
+  CHECK(!p.playingToy());
+  CHECK(!p.giveMilk());
+  CHECK(!p.eating());
+  CHECK(!p.milkNight());
+  CHECK_EQ(p.joy, (uint8_t)50);
+  CHECK_EQ(p.weight, (uint8_t)0);
+  p.toggleLight();
+  p.startFarewell();
+  uint8_t joy = p.joy;
+  CHECK_EQ(p.playToy(), (uint8_t)0);
+  CHECK(!p.playingToy());
+  CHECK(!p.giveMilk());
+  CHECK(!p.milkNight());
+  CHECK_EQ(p.joy, joy);
+
+  Pet e;
+  mockNvsReset();
+  mockSetMillis(0);
+  e.begin();
+  e.chooseStarter(4);  // an egg
+  uint8_t ej = e.joy;
+  CHECK_EQ(e.playToy(), (uint8_t)0);
+  CHECK(!e.playingToy());
+  CHECK(!e.giveMilk());
+  CHECK(!e.milkNight());
+  CHECK_EQ(e.joy, ej);
+}
+
+TEST(treats, warm_milk_settles_it_happily_and_adds_less_weight_than_candy) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 60, 50, 40, 70);
+  uint8_t bond = p.bond;
+  CHECK(p.giveMilk());
+  CHECK_EQ(p.joy, (uint8_t)(50 + MILK_JOY));
+  CHECK_EQ(p.weight, (uint8_t)MILK_WEIGHT);
+  CHECK(MILK_WEIGHT < 12);  // candy's weight (feed.chuche_engorda)
+  CHECK(p.showHeart());
+  CHECK(p.eating());
+  CHECK(p.drinkingMilk());
+  CHECK(p.milkNight());
+  CHECK_MSG(!p.sleeping, "the sketch puts it to bed once the drink is over");
+  CHECK_EQ(p.bond, (uint8_t)(bond + 1));
+  CHECK_EQ(p.fullness, (uint8_t)60);  // not a meal
+  CHECK_EQ(p.energy, (uint8_t)40);
+  mockAdvanceMillis(EAT_ANIM_MS);
+  CHECK(!p.eating());
+  CHECK(!p.drinkingMilk());
+  // put to bed mid-drink (lights out from the moon strip): no mug beside a sleeper
+  CHECK(p.giveMilk());
+  CHECK(p.drinkingMilk());
+  p.toggleLight();
+  CHECK(!p.drinkingMilk());
+}
+
+TEST(treats, the_plush_and_the_milk_count_as_the_days_care) {
+  Pet p;
+  makePet(p, 4);
+  p.lastSeenEpoch = 100u * 86400 + 10 * 3600;  // a known day, so the care can be seen
+  uint16_t streak = p.streak;
+  p.playToy();
+  CHECK_EQ(p.streak, (uint16_t)(streak + 1));
+  CHECK_EQ(p.lastCareDay, (uint32_t)100);
+  p.lastSeenEpoch = 101u * 86400 + 20 * 3600;  // the next evening
+  p.giveMilk();
+  CHECK_EQ(p.streak, (uint16_t)(streak + 2));
+  CHECK_EQ(p.lastCareDay, (uint32_t)101);
+}
+
+// "a little more energy that night": +MILK_SLEEP_ENERGY a minute asleep after the milk, on
+// top of the nature's rate, until the pet wakes (by hand or by bedtime)
+TEST(treats, asleep_after_warm_milk_energy_comes_back_faster_until_it_wakes) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 90, 90, 20, 90);
+  CHECK(p.giveMilk());
+  mockAdvanceMillis(EAT_ANIM_MS);
+  CHECK(p.autoSleep());  // the sketch's lights out (milkApply)
+  advance(p, 1);
+  CHECK_EQ(p.energy, (uint8_t)(20 + 6 + MILK_SLEEP_ENERGY));
+  advance(p, 1);
+  CHECK_EQ(p.energy, (uint8_t)(20 + 2 * (6 + MILK_SLEEP_ENERGY)));
+  // woken by hand: that night is over, and going back to bed without milk is a plain sleep
+  p.toggleLight();
+  CHECK(!p.milkNight());
+  p.energy = 20;
+  p.toggleLight();
+  advance(p, 1);
+  CHECK_EQ(p.energy, (uint8_t)26);
+  // woken by bedtime ends it too
+  p.toggleLight();
+  CHECK(p.giveMilk());
+  CHECK(p.autoSleep());
+  CHECK(p.autoWake());
+  CHECK(!p.milkNight());
+  // a sleep with no milk at all is the plain one
+  Pet q;
+  makePet(q, 4);
+  setStats(q, 90, 90, 20, 90);
+  q.toggleLight();
+  advance(q, 1);
+  CHECK_EQ(q.energy, (uint8_t)26);
+}
+
+TEST(treats, the_milk_bonus_adds_to_a_lazy_pets_sleep) {
+  Pet p;
+  makePet(p, 4);
+  p.nature = NAT_LAZY;
+  setStats(p, 90, 90, 20, 90);
+  CHECK(p.giveMilk());
+  CHECK(p.autoSleep());
+  advance(p, 1);
+  CHECK_EQ(p.energy, (uint8_t)(20 + NAT_SLEEP_ENERGY + MILK_SLEEP_ENERGY));
+}
+
+// `milked` is RAM only, and syncClock() runs only from setup(), after a restart: so the milk
+// bonus never reaches the powered-off catch-up. A restart in the night drops it (the pet stays
+// asleep and its catch-up restores energy at the plain rate); a new egg drops it too.
+TEST(treats, a_restart_drops_the_milk_bonus_and_a_new_egg_does_too) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 90, 90, 20, 90);
+  CHECK(p.giveMilk());
+  CHECK(p.autoSleep());
+  p.setClock(1000u * 86400);  // saves, with its time reference
+  CHECK(p.milkNight());
+  Pet q;  // the restart: same NVS, a new Pet
+  q.begin();
+  CHECK_MSG(!q.milkNight(), "the milk is not in the save: a restart drops the bonus");
+  CHECK_MSG(q.sleeping, "it is still asleep after the restart");
+  CHECK_EQ(q.energy, (uint8_t)20);
+  q.syncClock(1000u * 86400 + 2 * 60);  // two minutes powered off
+  CHECK_EQ(q.energy, (uint8_t)(20 + 2 * 6));  // the plain rate for an easygoing pet
+  p.newEgg();
+  CHECK(!p.milkNight());
+}
+
 // ---------------------------------------------------------------- tick
 TEST(tick, despierto_baja_comida_2_y_energia_1_por_minuto) {
   Pet p;

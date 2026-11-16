@@ -52,7 +52,9 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Listen...", "Your turn!",
     // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
     "I'm hungry!", "I need a bath!", "I'm tired...", "I'm bored...",
-    "Good morning!", "Look at the stars!", "Hi there!", "I'm happy!", "Pat me!",
+    "Good morning!", "Look at the stars!",
+    "Sleepy... warm milk?",  // the warm-milk hint (#13)
+    "Hi there!", "I'm happy!", "Pat me!",
     "I love you, %s!", "I love you!",
     // the special days' greetings (#26)
     "Merry Christmas, %s!", "Merry Christmas!", "Happy New Year, %s!", "Happy New Year!",
@@ -114,7 +116,9 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Ouve...", "A tua vez!",
     // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
     "Tenho fome!", "Preciso de um banho!", "Estou com sono...", "Que t\202dio...",
-    "Bom dia!", "Olha as estrelas!", "Ol\240!", "Estou feliz!", "Faz-me festinhas!",
+    "Bom dia!", "Olha as estrelas!",
+    "Sono... leite quentinho?",  // the warm-milk hint (#13)
+    "Ol\240!", "Estou feliz!", "Faz-me festinhas!",
     "Adoro-te, %s!", "Adoro-te!",
     // the special days' greetings (#26)
     "Feliz Natal, %s!", "Feliz Natal!", "Feliz Ano Novo, %s!", "Feliz Ano Novo!",

@@ -39,6 +39,7 @@
 #include "clockprompt.h"
 #include "attention.h"
 #include "bubble.h"
+#include "caremenu.h"
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "exercise.h"
@@ -121,7 +122,12 @@ bool standby = false;         // the standby clock is up (standby.h, #60): plugg
 // watchdog or ESP.restart like the 1.75C soft clock does, and power loss clears both.
 RTC_NOINIT_ATTR ClockStaleMark clockStaleMark;
 
-uint32_t feedMenuUntil = 0;   // selector de comida abierto hasta este millis
+// The care strip that is open (caremenu.h, #13): which one, and until when (0 = none). The
+// food, Play and moon buttons open theirs.
+uint32_t menuUntil = 0;
+uint8_t menuKind = MENU_FOOD;
+// Warm milk (#13): the pet goes to bed once the drink is over (milkApply)
+bool milkLightsOut = false;
 
 // las 9 especies con sprite propio en flash (respaldo sin SD): dex -> indice
 int flashIdxForDex(int16_t dex) {
@@ -192,6 +198,7 @@ uint8_t choiceKind = 0;     // dialogo de decision: 0 ninguno, 1 evolucion, 2 de
 uint32_t choiceUntil = 0;   // se cierra solo a este millis
 TouchGesture touchG;        // gesto en curso y gestos sobre el bicho (touchgesture.h)
 bool holdFired = false;
+static bool stripAtDown = false;  // a care strip was open when this touch began (handleTouch's long press)
 
 // BOOT controls and small overlay; all UI/pet changes stay on the loop task.
 #if BOARD_AMOLED_175C
@@ -615,9 +622,11 @@ void bedClockSet(uint32_t set) {
 //
 // careBusy() is the part that does not depend on the screen: bedBusy() and the attention
 // calls (attnLoop) both wait while it holds, and the pet gestures are off (petGestureGate).
+// A care strip (menuUntil: food, Play or moon, #13) is a dialog; drinking warm milk is
+// eating, and a play with the plush (#13) waits like a meal.
 static bool careBusy() {
-  return timeLeft(bathUntil) || pet.evolving() || pet.eating() || timeLeft(confirmUntil) || timeLeft(feedMenuUntil) ||
-         (choiceKind && timeLeft(choiceUntil));
+  return timeLeft(bathUntil) || pet.evolving() || pet.eating() || pet.playingToy() || timeLeft(confirmUntil) ||
+         timeLeft(menuUntil) || (choiceKind && timeLeft(choiceUntil));
 }
 
 static bool bedBusy() {
@@ -634,9 +643,36 @@ static ClockPromptHold clockPromptHold() {
   h.choosing = pet.awaitingStarter() || pet.awaitingEgg();
   h.ceremony = pet.ceremony != CER_NONE;
   h.evolving = pet.evolving();
-  h.dialog = timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
+  h.dialog = timeLeft(confirmUntil) || timeLeft(menuUntil) || (choiceKind && timeLeft(choiceUntil));
   h.otherScreen = galleryOpen || gameOpen || trainOpen || kbOpen || clockOpen || cardOpen;
   return h;
+}
+
+// Lights out now, for bedtime's event (bedApply) and for the warm milk (milkApply). Only
+// called with bedBusy() false, so a game still open here is on a dark screen: it is abandoned
+// without a prize, as on holding its exit button; playGame() pays out when it finishes (which
+// no longer comes) and doesn't look at pet.sleeping. An exercise is never open here: the
+// screen going dark ended it (pollPwrButton, #88). Were one open, it would end the same way,
+// keeping what was done. Silent (sin sonido: es de noche). True when the pet went to bed.
+static bool lightsOutNow() {
+  gameOpen = false;
+  exerciseScreenOff();
+  return pet.autoSleep();
+}
+
+// Warm milk, then lights out (#13): the pet goes to bed once the drink is over, as a bedtime
+// event does (bedApply): not while a minigame, an exercise, a dialog, a strip, the bath or
+// another meal is on (bedBusy(); the drink itself is eating), so a minigame started during
+// the drink defers the lights-out until it ends, as bedtime's would. Before bedApply(), so a
+// bedtime event pending at the same moment has the last word.
+// Waking clears `milked` (toggleLight, autoWake), so a pet woken since its milk (lights out
+// from the moon strip during the drink, then the moon again) is not put back to bed against
+// that last tap: the pending lights-out is dropped.
+static void milkApply() {
+  if (milkLightsOut && !pet.milkNight()) milkLightsOut = false;
+  if (!milkLightsOut || bedBusy()) return;
+  milkLightsOut = false;
+  if (lightsOutNow()) Serial.println("milk: lights out");
 }
 
 void bedApply() {
@@ -644,13 +680,7 @@ void bedApply() {
   BedEvent ev = bedPending;
   bedPending = BED_NONE;
   if (ev == BED_SLEEP) {
-    // Un juego abierto aqui solo puede estar a oscuras (bedBusy): se abandona sin premio,
-    // como al mantener su boton de salir. playGame() se paga al terminar (que ya no llegara)
-    // y no mira pet.sleeping. An exercise is never open here: the screen going dark ended it
-    // (pollPwrButton, #88). Were one open, it would end the same way, keeping what was done.
-    gameOpen = false;
-    exerciseScreenOff();
-    pet.autoSleep();  // sin sonido: es de noche
+    lightsOutNow();  // see there: an open game is abandoned, an open exercise ends as it was
   } else if (pet.autoWake()) {
     audioSetSleeping(false);  // el amplificador se enciende antes de encolar el sonido
     sfxPlay(SFX_HEART);       // un solo sonido suave (sfxPlay calla si el sonido esta apagado)
@@ -912,6 +942,7 @@ void loop() {
     uint32_t e = rtcEpoch();
     if (e) { pet.lastSeenEpoch = e; bedSample(e); }
   }
+  milkApply();
   bedApply();
 
   // Clock reseeded after a power-off: the clock screen opens by itself once, as soon as
@@ -1467,14 +1498,19 @@ void handleTouch() {
   // (touchgesture.h, host-tested): a stroke or a hold-then-drag never ends as anything else.
   if (pressed && !wasPressed) {  // empieza el gesto
     holdFired = false;
+    stripAtDown = timeLeft(menuUntil) != 0;
     swallowGesture = (dimStage > 0) || screenOff;  // si estaba a oscuras, solo despierta
     screenOff = false;
     wakeUI();
     touchG.down(millis(), x, y, onPetBody(x, y) && petGesturesLive(petGestureGate()));
   } else if (pressed) {  // sigue apoyado
-    // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar
+    // pulsacion larga sin moverse sobre el bicho -> dialogo de soltar. A care strip (#13) reaches
+    // into the pet zone and its items are not the pet: a touch that began on an open strip is
+    // never a long press, even once the strip's own timeout has closed it under the finger
+    // (stripAtDown is taken at touch-down, not re-read on every poll).
     bool longOk = !holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen &&
-                  inPetZone(touchG.x0, touchG.y0) && !pet.isEgg() && !confirmUntil && !pet.ceremony;
+                  inPetZone(touchG.x0, touchG.y0) && !pet.isEgg() && !confirmUntil && !stripAtDown &&
+                  !pet.ceremony;
     TouchAct a = touchG.held(millis(), x, y, longOk);
     if (a == TOUCH_LONG_PRESS) {
       confirmUntil = millis() + 10000;
@@ -1506,8 +1542,8 @@ void onSwipeV(int dir) {
     return;
   }
   if (dir > 0) {                    // deslizar abajo: ajustar hora
-    if (!confirmUntil && !feedMenuUntil) openClock();
-  } else if (!pet.isEgg() && !confirmUntil && !feedMenuUntil) {
+    if (!confirmUntil && !menuUntil) openClock();
+  } else if (!pet.isEgg() && !confirmUntil && !menuUntil) {
     cardOpen = true;                // deslizar arriba: ficha
     cardPage = 0;
     trainPick = false;
@@ -1549,6 +1585,48 @@ void onSwipe(int dir) {
   if (np != galleryPage) {
     galleryPage = np;
     galleryDirty = true;
+  }
+}
+
+// ---------- the care strips (caremenu.h, #13) ----------
+static void openMenu(uint8_t kind) {
+  menuKind = kind;
+  menuUntil = millis() + MENU_MS;
+}
+
+// the open strip's left edge: the two-item strips sit over their own button (Play, moon)
+int menuLeftNow() {
+  return menuLeft(menuKind, buttons[menuKind == MENU_PLAY ? 1 : menuKind == MENU_MOON ? 2 : 0].cx);
+}
+
+// An item chosen on a strip (the strip has closed). The strips only open with the pet awake,
+// and bedtime waits while one is open, but each choice still checks (a serial command can
+// change the pet meanwhile).
+static void menuChoose(uint8_t kind, uint8_t item) {
+  if (kind == MENU_FOOD) {
+    if (item == FOOD_CANDY) pet.feedCandy();
+    else pet.feedBerry(item);
+    sfxPlay(SFX_EAT);
+  } else if (kind == MENU_PLAY) {
+    if (item == PLAY_BALL) {
+      sfxPlay(SFX_TAP);
+      startGame();  // the next minigame, as the Play button always did
+    } else {
+      uint8_t joy = pet.playToy();
+      if (!pet.playingToy()) return;
+      sfxPlay(joy ? SFX_HEART : SFX_PLAY);
+      Serial.printf("toy: joy +%u%s\n", (unsigned)joy, joy ? "" : " (joy full or hourly cap)");
+    }
+  } else if (kind == MENU_MOON) {
+    if (item == MOON_LIGHTS) {
+      sfxPlay(SFX_TAP);
+      if (!pet.sleeping) pet.toggleLight();
+    } else if (pet.giveMilk()) {
+      sfxPlay(SFX_EAT);
+      milkLightsOut = true;  // milkApply(): lights out once the drink is over
+      bubbleMilkGiven();     // no more hints for it tonight
+      Serial.println("milk: drinking");
+    }
   }
 }
 
@@ -1632,14 +1710,10 @@ void onTap(int16_t x, int16_t y) {
     confirmUntil = 0;
     return;
   }
-  if (feedMenuUntil) {       // selector de comida
-    if (timeLeft(feedMenuUntil) && y >= 288 && y <= 352 && x >= 101 && x <= 365) {
-      int item = (x - 101) / 66;
-      if (item == 3) pet.feedCandy();
-      else pet.feedBerry(item);
-      sfxPlay(SFX_EAT);
-    }
-    feedMenuUntil = 0;
+  if (menuUntil) {  // a care strip (caremenu.h): one of its items, or anywhere else closes it
+    int item = timeLeft(menuUntil) ? menuItemAt(menuKind, menuLeftNow(), x, y) : -1;
+    menuUntil = 0;
+    if (item >= 0) menuChoose(menuKind, (uint8_t)item);
     return;
   }
   if (clockPrompt.asking(bedEdge.stale()) && clockBadgeHit(x, y)) {  // reloj sin poner
@@ -1670,11 +1744,12 @@ void onTap(int16_t x, int16_t y) {
       Serial.printf("BTN %d\n", i);
       sfxPlay(SFX_TAP);
       if (i == 0) {
-        if (!pet.sleeping) feedMenuUntil = millis() + 6000;
+        if (!pet.sleeping) openMenu(MENU_FOOD);
       } else if (i == 1) {
-        startGame();
+        if (!pet.sleeping) openMenu(MENU_PLAY);  // asleep it does nothing, as always
       } else if (i == 2) {
-        pet.toggleLight();
+        if (pet.sleeping) pet.toggleLight();  // asleep: wakes it at once, with no strip
+        else openMenu(MENU_MOON);
       } else {
         startBath();
       }
@@ -1893,18 +1968,10 @@ bool render() {
     printT("Zz");
   }
 
-  // selector de comida
-  if (feedMenuUntil) {
-    if (!timeLeft(feedMenuUntil)) {
-      feedMenuUntil = 0;
-    } else {
-      gfx->fillRoundRect(101, 288, 264, 64, 14, UI_WHITE);
-      gfx->drawRoundRect(101, 288, 264, 64, 14, inkColor());
-      drawMap(SPR_ICON_FOOD, 16, 110, 296, 3, false);
-      drawMap(SPR_ICON_BERRY_B, 16, 176, 296, 3, false);
-      drawMap(SPR_ICON_BERRY_G, 16, 242, 296, 3, false);
-      drawMap(SPR_ICON_CANDY, 16, 308, 296, 3, false);
-    }
+  // the care strip that is open (food, Play or moon, #13)
+  if (menuUntil) {
+    if (!timeLeft(menuUntil)) menuUntil = 0;
+    else drawCareMenu(menuLeftNow());
   }
 
   // dialogo "soltar?" (pulsacion larga sobre el bicho)

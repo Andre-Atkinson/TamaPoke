@@ -6,9 +6,10 @@
 //  - bubblePick(): which line. A special day's greeting that is due comes first (#26,
 //    holiday.h). Then a low need always wins, with the same need and threshold
 //    as the "!" bubble, the status line and the attention call (attnShown, ATTN_LOW), so
-//    the four never disagree. Otherwise, at random, a morning or night line (only with a
-//    clock that is set and not stale), a friendly line, or "I love you" (with the
-//    player's name when one is set, owner.h).
+//    the four never disagree. Then, in the evening, now and then a hint at warm milk (#13,
+//    MilkHint). Otherwise, at random, a morning or night line (only with a clock that is set
+//    and not stale), a friendly line, or "I love you" (with the player's name when one is
+//    set, owner.h).
 //  - bubbleChoose(): bubblePick() plus the greeting's rules (a few a day, never in quiet hours).
 //  - BubbleTimer: when. A bubble is due 1-2 min after the last one started. It waits
 //    until the pet screen has been free and awake for BUBBLE_SETTLE_MS, then shows for
@@ -28,6 +29,7 @@
 enum BubbleLine : uint8_t {
   BUB_HUNGRY = 0, BUB_BATH, BUB_TIRED, BUB_BORED,  // = BUB_HUNGRY + AttnNeed
   BUB_MORNING, BUB_STARS,
+  BUB_MILK,                                        // "Sleepy... warm milk?" (#13, MilkHint)
   BUB_HI, BUB_HAPPY, BUB_PAT,                      // the friendly lines
   BUB_LOVE_NAME,                                   // "I love you, %s!" (a name is set)
   BUB_LOVE,                                        // "I love you!" (no name)
@@ -53,7 +55,7 @@ constexpr bool bubbleTakesName(uint8_t line, bool named) {
 #define BUB_FRIENDLY 3
 // each line's name in the serial log ("say hungry") and in the simulator's "say" step
 inline const char *const BUBBLE_KEYS[BUB_LINES] = {
-  "hungry", "bath", "tired", "bored", "morning", "stars", "hi", "happy", "pat", "love-name", "love",
+  "hungry", "bath", "tired", "bored", "morning", "stars", "milk", "hi", "happy", "pat", "love-name", "love",
   "christmas", "newyear", "valentine", "easter", "halloween", "birthday",
 };
 
@@ -78,18 +80,21 @@ struct BubbleIn {
   bool named;       // the player's name is set
   uint8_t last;     // the previous line, or BUB_NONE
   uint8_t greet = BUB_NONE;  // a special day's greeting that is due (HolidayGreeter, holiday.h), or BUB_NONE
+  bool milkHint = false;  // the warm-milk hint is due (MilkHint::due, #13)
 };
 
 // r: any random number. A special day's greeting that is due comes first, even before a
 // need: it is rare (holiday.h) and the need's "!" bubble is back as soon as it ends.
-// Then a low need. Otherwise r % 100 picks the kind (about 30% a time line when one
-// applies, 50% friendly, 20% love; 80% friendly when no time line applies) and r / 100
-// which friendly line. A need repeats while it lasts; any other line is not said twice in
-// a row.
+// Then a low need, then the warm-milk hint when it is due (#13). Otherwise r % 100 picks the
+// kind (about 30% a time line when one applies, 50% friendly, 20% love; 80% friendly when no
+// time line applies) and r / 100 which friendly line. A need repeats while it lasts; any
+// other line is not said twice in a row (the milk hint either, even MILK_HINT_GAP_S apart:
+// then it waits for the next bubble, and is only counted once said).
 inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
   if (in.greet >= BUB_GREET_FIRST && in.greet < BUB_LINES) return in.greet;
   uint8_t need = attnShown(in.needs);
   if (need < ATTN_NEEDS) return (uint8_t)(BUB_HUNGRY + need);
+  if (in.milkHint && in.last != BUB_MILK) return BUB_MILK;
   uint32_t p = r % 100;
   uint8_t friendly = (uint8_t)(BUB_HI + (r / 100) % BUB_FRIENDLY);
   uint8_t line;
@@ -103,6 +108,54 @@ inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
   if (line == friendly) return (uint8_t)(BUB_HI + (friendly - BUB_HI + 1) % BUB_FRIENDLY);
   return friendly;
 }
+
+// The warm-milk hint (#13): now and then in the evening the pet asks for warm milk, which the
+// moon button's strip gives. The evening runs from MILK_HINT_FROM until quiet hours begin
+// (attnQuietAt: the bedtime window, or 22:00 with bedtime off; every window runs past
+// midnight, so an evening never does), so never in quiet hours, and never asleep: no bubble
+// shows then. At most MILK_HINT_MAX an evening, MILK_HINT_GAP_S apart, and none once the pet
+// had its milk that evening. Each bubble that comes due in the evening is the hint 1 time in
+// MILK_HINT_ODDS (a low need still comes first). Counted in RAM by the evening's local date:
+// a restart may hint again.
+#define MILK_HINT_FROM 19          // 19:00
+#define MILK_HINT_MAX 2
+#define MILK_HINT_GAP_S (45UL * 60)
+#define MILK_HINT_ODDS 3
+
+struct MilkHint {
+  // May the bubble that is due now be the hint? `clock`: the local epoch from a clock that is
+  // set and not stale, 0 otherwise (no hint); `quiet`: quiet hours now. rnd() gives a random
+  // number; it is only called when everything else allows the hint, so outside the evening
+  // the random sequence the rest of the game sees doesn't move.
+  template <typename Rnd>
+  bool due(uint32_t clock, bool quiet, Rnd rnd) {
+    if (!evening(clock) || quiet) return false;
+    roll(clock);
+    if (count_ >= MILK_HINT_MAX || (count_ && clock - lastAt_ < MILK_HINT_GAP_S)) return false;
+    return rnd() % MILK_HINT_ODDS == 0;
+  }
+  void said(uint32_t clock) {  // the hint was shown
+    roll(clock);
+    count_++;
+    lastAt_ = clock;
+  }
+  void milkGiven(uint32_t clock) {  // the pet had its milk: no more hints this evening
+    if (!evening(clock)) return;    // a nap's milk earlier in the day doesn't count
+    roll(clock);
+    count_ = MILK_HINT_MAX;
+  }
+
+ private:
+  uint32_t night_ = 0;  // the evening counted, as its local date (epoch / 86400)
+  uint8_t count_ = 0;   // hints said that evening (MILK_HINT_MAX once the milk was given)
+  uint32_t lastAt_ = 0; // when the last one was said (epoch)
+  static bool evening(uint32_t clock) { return clock && (clock / 3600) % 24 >= MILK_HINT_FROM; }
+  void roll(uint32_t clock) {
+    if (clock / 86400 == night_) return;
+    night_ = clock / 86400;
+    count_ = 0;
+  }
+};
 
 // The line for a bubble that starts now: bubblePick() with a special day's greeting that is
 // due (HolidayGreeter `g`: `clock` the scene's trusted clock or 0, `quiet` quiet hours now,
@@ -269,6 +322,7 @@ inline BubbleBox bubbleBoxAt(int petX, int headTop, int textW, int lines, bool b
 // before render(); free: the sketch's bubbleFree()
 void bubbleLoop(uint32_t now, bool free);
 bool bubbleShowing();                      // a bubble is up: the "!" bubble steps aside (drawAttnBubble)
+void bubbleMilkGiven();                    // the pet had warm milk (#13): no more hints tonight
 void drawSpeechBubble();                   // render(), on the pet screen, after the "!" bubble
 #if HOST_SIM
 void bubbleSayNow(uint8_t line);           // the simulator's "say" step (sim/script.h)

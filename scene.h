@@ -93,6 +93,7 @@ bool petHuffing();
 void drawAttnBubble();
 void drawBars();
 void drawButtons();
+void drawCareMenu(int left);  // the open care strip (caremenu.h, #13), its left edge at `left`
 const char *eggMsg();
 const char *statusMsg();
 void drawMap(const char *const *map, int n, int x, int y, int s, bool silhouette);

@@ -26,6 +26,7 @@ static_assert((int)BUB_GREET_FIRST + (int)GREET_BIRTHDAY - (int)GREET_CHRISTMAS 
 
 static BubbleTimer bubbleTimer;
 static HolidayGreeter greeter;  // how many greetings today, and when the last (holiday.h, #26)
+static MilkHint milkHint;  // the warm-milk hint's count this evening (#13)
 static uint8_t bubbleLine = BUB_NONE;  // the line showing, or the last one said
 // The line in the active font's encoding. Two lines are split at a space, which becomes
 // the first line's terminator: line 2 starts at bubbleText + bubbleBreak + 1.
@@ -34,6 +35,10 @@ static int bubbleBreak = -1;  // -1: one line
 static uint16_t bubbleW1 = 0, bubbleW2 = 0;  // each line's width in px
 
 static bool badgeShowing() { return clockPrompt.asking(bedEdge.stale()); }
+
+// The local epoch the milk hint goes by (#13): the scene's clock (weather.h), 0 when it is not
+// set or is stale. The loop refreshes lastSeenEpoch every 30 s: no I2C read here.
+static uint32_t trustedClock() { return sceneEpoch(pet.lastSeenEpoch, bedEdge.stale()); }
 
 // Width of the first `len` bytes of s at size 2.
 static int measure(const char *s, int len) {
@@ -74,16 +79,18 @@ void bubbleLoop(uint32_t now, bool free) {
   in.named = ownerName()[0] != 0;
   in.last = bubbleLine;
   // a special day's greeting (#26): the scene's clock (0 while it is not trusted), as the
-  // decorations; never in quiet hours
+  // decorations; never in quiet hours. The warm-milk hint (#13) goes by the same clock.
   uint32_t clock = sceneEpoch(e, bedEdge.stale());
+  bool quiet = attnQuietAt(pet.bedPreset, e, bedEdge.stale());
+  in.milkHint = milkHint.due(clock, quiet, [] { return (uint32_t)random(0x7FFFFFFF); });
   // (a greeting is counted before compose(): test_bubble.cpp proves every one can be laid out)
-  uint8_t line = bubbleChoose(in, (uint32_t)random(0x7FFFFFFF), greeter, clock,
-                              attnQuietAt(pet.bedPreset, e, bedEdge.stale()), holidayNow().greet);
+  uint8_t line = bubbleChoose(in, (uint32_t)random(0x7FFFFFFF), greeter, clock, quiet, holidayNow().greet);
   if (!compose(line)) {
     bubbleTimer.cancel();
     Serial.printf("say %s: too wide\n", BUBBLE_KEYS[line]);
     return;
   }
+  if (line == BUB_MILK) milkHint.said(clock);
   bubbleLine = line;
   Serial.printf("say %s\n", BUBBLE_KEYS[line]);
 }
@@ -100,6 +107,8 @@ void bubbleSayNow(uint8_t line) {
 #endif
 
 bool bubbleShowing() { return bubbleTimer.showing(); }
+
+void bubbleMilkGiven() { milkHint.milkGiven(trustedClock()); }
 
 void drawSpeechBubble() {
   if (!bubbleTimer.showing() || bubbleLine >= BUB_LINES || petHuffing()) return;  // the huff's puffs go by the head (#73)

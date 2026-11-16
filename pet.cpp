@@ -44,6 +44,7 @@ void Pet::newEgg() {
   careMistakes = 0;
   mistakeCooldown = 0;
   sleeping = false;
+  milked = false;  // a new pet has had no milk (#13)
   save();
 }
 
@@ -141,7 +142,7 @@ void Pet::tick() {
   // cero, sin descuidos ni escapadas). despierto: comida -2/min, hig/joy -1/min.
   // El peso aun se quema; la racha de buen cuidado (goodTicks) queda en pausa.
   if (sleeping) {
-    energy = clamp100(energy + sleepEnergy());  // lazy (#25): 8
+    energy = clamp100(energy + sleepEnergy());  // 6; lazy (#25) 8; after warm milk (#13) 2 more
     if (weight > 0 && ageMinutes % 3 == 0) weight--;
     if (ageMinutes % 2 == 0) {                 // ~4x mas lento que despierto
       fullness = dropTo(fullness, 1, 30);
@@ -664,6 +665,42 @@ void Pet::feedCandy() {
   save();
 }
 
+// The plush toy (#13, TOY_* in pet.h). No save of its own, like a pat: the periodic one keeps
+// the joy (registerCare() saves the day's first care).
+uint8_t Pet::playToy() {
+  if (ceremony != CER_NONE || isEgg() || sleeping) return 0;
+  uint32_t now = millis();
+  toyUntil = now + TOY_ANIM_MS;
+  if (toyJoys && now - toyFrom >= TOY_WINDOW_MS) toyJoys = 0;  // that hour is over
+  uint8_t before = joy;
+  if (joy < 100 && toyJoys < TOY_PER_HOUR) {  // joy already full gives nothing: no slot, no heart
+    if (!toyJoys) toyFrom = now;  // the hour starts at its first play that gives joy
+    toyJoys++;
+    joy = clamp100(joy + TOY_JOY + playJoyExtra());
+    heartUntil = now + HEART_MS;
+  }
+  addBond(1);
+  registerCare();
+  return joy - before;
+}
+
+// Warm milk (#13, MILK_* in pet.h): the drink shows as eating (the mug while drinkingMilk()),
+// and the sketch puts the pet to bed once it is over. `milked` lasts until the pet wakes
+// (toggleLight, autoWake) or a new egg comes.
+bool Pet::giveMilk() {
+  if (ceremony != CER_NONE || isEgg() || sleeping) return false;
+  uint32_t now = millis();
+  joy = clamp100(joy + MILK_JOY);
+  weight = clamp100(weight + MILK_WEIGHT);  // a little, less than candy
+  heartUntil = now + HEART_MS;
+  eatUntil = milkUntil = now + EAT_ANIM_MS;
+  milked = true;
+  addBond(1);
+  registerCare();
+  save();
+  return true;
+}
+
 // Fin de un minijuego de Play. Cada juego guarda su record con la puntuacion que
 // ve el jugador; la recompensa sale de la normalizada (gamecore.h), asi que una
 // buena partida paga lo mismo sea cual sea el juego que toco.
@@ -765,6 +802,7 @@ void Pet::toggleLight() {
   if (ceremony != CER_NONE) return;
   if (isEgg()) return;
   sleeping = !sleeping;
+  if (!sleeping) milked = false;  // awake: the night after the milk is over (#13)
   save();
 }
 
@@ -780,6 +818,7 @@ bool Pet::autoSleep() {
 bool Pet::autoWake() {
   if (ceremony != CER_NONE || starterPick || isEgg() || !sleeping) return false;
   sleeping = false;
+  milked = false;  // the night after the milk is over (#13)
   save();
   return true;
 }

@@ -27,6 +27,29 @@
 // Over this weight the status line says "chubby" (statusMsg) and the idle planner (#22) has
 // the pet rest more and play less. Weight is 0-100.
 #define PET_CHUBBY_WEIGHT 60
+// Treats and toys (#13; the numbers are the owner's, 2026-11-16). Both are always there, with
+// nothing to unlock and no daily limit, and both count as the day's care and +1 bond.
+//  - The plush toy (the Play strip): a little happiness without a minigame, so no speed
+//    training and no cost in energy, food or weight. TOY_JOY a play (a playful pet gets
+//    NAT_PLAY_JOY_EXTRA more, as from every play) and a heart, for TOY_PER_HOUR plays an
+//    hour; past them, or with joy already full, the pet still plays with it, for no joy and no
+//    heart (and a play with joy full spends none of the hour's plays), so it doesn't
+//    replace the games (a game at par gives about +35 joy). The hour starts at the first
+//    play that gives joy, and lives in RAM like the idle perks' (idleplan.h): a restart gives
+//    a fresh hour, and the save is untouched.
+//  - Warm milk (the moon strip, "milk, then lights out"): the pet settles happily (MILK_JOY
+//    and a heart), and it adds a little weight (MILK_WEIGHT; candy adds 12). It drinks for
+//    EAT_ANIM_MS, then the sketch puts it to bed. Asleep after the milk, energy comes back
+//    MILK_SLEEP_ENERGY a minute more than the nature's rate (6, lazy 8) until it next wakes,
+//    by hand or by bedtime. RAM only: a restart in the night drops it, which shows nowhere,
+//    since any sleep fills energy within a quarter of an hour.
+#define TOY_JOY 10
+#define TOY_PER_HOUR 2
+#define TOY_WINDOW_MS 3600000UL
+#define TOY_ANIM_MS 2800UL
+#define MILK_JOY 5
+#define MILK_WEIGHT 4
+#define MILK_SLEEP_ENERGY 2
 
 // ritmo de cuidado (ajuste "Care", NVS "pace"): normal o relajado (las necesidades
 // bajan a la mitad de velocidad mientras esta despierto)
@@ -161,6 +184,23 @@ public:
   void feed();              // baya roja (compatibilidad)
   void feedBerry(uint8_t color);  // 0 roja, 1 azul, 2 verde
   void feedCandy();
+  // The plush toy (#13, TOY_* above): the pet plays with it for TOY_ANIM_MS (playingToy()).
+  // Returns the joy it gave: 0 once this hour's plays have given theirs, or with joy already
+  // full, and then no heart and no play of the hour spent either (0 = nothing given, nothing
+  // spent). As an egg, asleep or in a ceremony nothing happens at all (no play either). Put
+  // to bed mid-play, it stops.
+  uint8_t playToy();
+  bool playingToy() const { return !sleeping && timeLeft(toyUntil) > 0; }
+  uint32_t toyElapsed() const {  // ms into the play (0 when none), for its animation
+    uint32_t left = timeLeft(toyUntil);
+    return left ? TOY_ANIM_MS - left : 0;
+  }
+  // Warm milk (#13, MILK_* above): it drinks (eating() and drinkingMilk(), EAT_ANIM_MS), and
+  // its next sleep, until it wakes, restores more energy (milkNight()). The sketch puts it to
+  // bed once the drink is over. False, and nothing given, as an egg, asleep or in a ceremony.
+  bool giveMilk();
+  bool drinkingMilk() const { return !sleeping && timeLeft(milkUntil) > 0; }  // put to bed mid-drink, its mug goes
+  bool milkNight() const { return milked; }
   bool lovesBerry(uint8_t color) const {
     return !isEgg() && (speciesId % 3) == color;  // gusto oculto por especie
   }
@@ -314,6 +354,11 @@ private:
   Preferences prefs;
   uint32_t lastTick = 0;
   uint32_t eatUntil = 0;
+  uint32_t milkUntil = 0;   // drinking warm milk (#13): its mug shows until this millis()
+  uint32_t toyUntil = 0;    // playing with the plush (#13) until this millis()
+  uint8_t toyJoys = 0;      // plays that gave joy in this hour (TOY_PER_HOUR; RAM only)
+  uint32_t toyFrom = 0;     // when this hour started (the first play that gave joy)
+  bool milked = false;      // had warm milk: its sleep restores more until it wakes (#13; RAM only)
   uint32_t heartUntil = 0;
   uint32_t evolveUntil = 0;
   int16_t eggTarget = 1;       // dex oculto que saldra del huevo
@@ -351,7 +396,8 @@ private:
     return nature == nat && natureDrainMinute(ageMinutes, pace == PACE_RELAXED) ? 1 : 0;
   }
   uint8_t playJoyExtra() const { return nature == NAT_PLAYFUL ? NAT_PLAY_JOY_EXTRA : 0; }
-  uint8_t sleepEnergy() const { return nature == NAT_LAZY ? NAT_SLEEP_ENERGY : 6; }  // per minute asleep
+  // per minute asleep: the nature's rate, and more after warm milk (#13)
+  uint8_t sleepEnergy() const { return (nature == NAT_LAZY ? NAT_SLEEP_ENERGY : 6) + (milked ? MILK_SLEEP_ENERGY : 0); }
   void selfCare();   // one need back up to half while charging (#24), from tick()
   void hatch();
   void registerSpecies(int16_t dex);

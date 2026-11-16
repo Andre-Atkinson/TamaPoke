@@ -126,8 +126,9 @@ say hungry
 wait 300ms
 shot 19-night-hungry
 
-# asleep (the light button): no bubble; the same button wakes it
+# asleep (the light button's strip, #13: lights out): no bubble; the same button wakes it
 tap 265 397
+tap 231 320
 wait 2s
 say hi
 wait 300ms

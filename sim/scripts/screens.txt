@@ -63,9 +63,12 @@ tap 323 380
 tap 387 380
 swipe up
 
-# play button: a random minigame (1.2 s title card, then the game); holding the
-# "Hold to exit" chip at the top for 1 s leaves it
+# play button: its strip (#13), the Poke Ball and the plush; the ball deals a random
+# minigame (1.2 s title card, then the game); holding the "Hold to exit" chip at the top
+# for 1 s leaves it
 tap 202 404
+shot 14a-play-strip
+tap 169 320
 wait 1700ms
 shot 14-minigame
 hold 233 40 1200ms
@@ -87,8 +90,11 @@ wait 16s
 shot 16-training-result
 wait 4s
 
-# light button: the pet sleeps (night scene), a second tap wakes it
+# light button: its strip (#13), lights out and warm milk; lights out and the pet sleeps
+# (night scene); asleep, a second tap on the button wakes it with no strip
 tap 264 404
+shot 16a-moon-strip
+tap 231 320
 wait 1s
 shot 17-sleeping
 tap 264 404
