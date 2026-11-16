@@ -1099,17 +1099,17 @@ class TestSketchWarnings(unittest.TestCase):
             with self.subTest(n=n):
                 r = self.run_script(self.log(n))
                 self.assertEqual(r.returncode, 0, r.stderr)
-                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline 19')
+                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline 18')
 
     def test_more_than_the_baseline_fails(self):
-        for n, baseline, rc in ((19, None, 0), (20, None, 1), (21, '21', 0), (22, '21', 1), (1, '0', 1)):
+        for n, baseline, rc in ((18, None, 0), (19, None, 1), (21, '21', 0), (22, '21', 1), (1, '0', 1)):
             with self.subTest(n=n, baseline=baseline):
                 env = {'WARN_BASELINE': baseline} if baseline is not None else {}
                 r = self.run_script(self.log(n), **env)
                 self.assertEqual(r.returncode, rc, r.stdout + r.stderr)
-                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline {baseline or 19}')
+                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline {baseline or 18}')
                 if rc:
-                    self.assertIn(f'+{n - int(baseline or 19)} NEW', r.stderr)
+                    self.assertIn(f'+{n - int(baseline or 18)} NEW', r.stderr)
 
     def test_bad_input_is_an_error_not_a_pass(self):
         for args, env in (((os.path.join(self.tmp, 'missing.log'),), {}),
@@ -1508,11 +1508,11 @@ class TestBuildCache(FakeArduinoCliCase):
 
     def test_the_gate_fails_on_sketch_warnings_over_the_baseline(self):
         root = self.gate_root()
-        for n, env, green in ((19, {}, True), (20, {}, False), (21, {'WARN_BASELINE': '21'}, True)):
+        for n, env, green in ((18, {}, True), (19, {}, False), (21, {'WARN_BASELINE': '21'}, True)):
             with self.subTest(n=n, env=env):
                 self.fresh()
                 r = self.gate(root, FAKE_WARNINGS=str(n), **env)
-                base = env.get('WARN_BASELINE', '19')
+                base = env.get('WARN_BASELINE', '18')
                 self.assertEqual(r.returncode == 0, green, r.stdout + r.stderr)
                 for label in ('1.75C', '1.75'):
                     self.assertIn(f'{label}: {n} sketch warning(s), baseline {base}', r.stdout)

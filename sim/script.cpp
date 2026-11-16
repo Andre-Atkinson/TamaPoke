@@ -130,6 +130,14 @@ static bool onOff(const std::string &s, int32_t &v) {
   return false;
 }
 
+// a shot's file name: letters, digits, '-', '_' and '.'
+static bool shotName(const std::string &s) {
+  if (s.empty()) return false;
+  for (char ch : s)
+    if (!isalnum((unsigned char)ch) && ch != '-' && ch != '_' && ch != '.') return false;
+  return true;
+}
+
 static bool isPrep(SimOp op) {
   return op == OP_LANG || op == OP_CLOCK || op == OP_BATTERY || op == OP_USB || op == OP_CHARGING ||
          op == OP_PMU;
@@ -198,8 +206,13 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
         return fail("usage: tap X Y (0-465)");
       c.op = OP_TAP;
     } else if (op == "hold") {
-      if (n != 4 || !toInt(w[1], c.a, 0, 465) || !toInt(w[2], c.b, 0, 465) || !simParseDuration(w[3], c.ms))
-        return fail("usage: hold X Y DURATION");
+      if ((n != 4 && n != 5) || !toInt(w[1], c.a, 0, 465) || !toInt(w[2], c.b, 0, 465) ||
+          !simParseDuration(w[3], c.ms))
+        return fail("usage: hold X Y DURATION [SHOT]");
+      if (n == 5) {  // a shot at the end of the hold, the finger still down
+        if (!shotName(w[4])) return fail("shot names use letters, digits, '-', '_' and '.' only");
+        c.text = w[4];
+      }
       c.op = OP_HOLD;
     } else if (op == "swipe") {
       c.op = OP_SWIPE;
@@ -267,9 +280,7 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       c.op = OP_TRAIN;
     } else if (op == "shot") {
       if (n != 2) return fail("usage: shot NAME");
-      for (char ch : w[1])
-        if (!isalnum((unsigned char)ch) && ch != '-' && ch != '_' && ch != '.')
-          return fail("shot names use letters, digits, '-', '_' and '.' only");
+      if (!shotName(w[1])) return fail("shot names use letters, digits, '-', '_' and '.' only");
       c.op = OP_SHOT;
       c.text = w[1];
     } else {

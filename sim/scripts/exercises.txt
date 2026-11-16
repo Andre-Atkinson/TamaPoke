@@ -1,0 +1,59 @@
+# The calm exercises (#78): the stat card's TRAIN button and the choice it opens, the
+# rhythm punch (three punches on the beat) and the stamina hold (a pause, then all 12
+# reps), each with its result. For both boards, both languages, by day and by night:
+#   tools/sim.sh --board 175c --lang en --script exercises --out shots/
+#   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script exercises --out shots/
+# Timing: a tap is 80 ms down then 400 ms settling (sim/main.cpp), and an exercise starts
+# when the tap that chose it lifts. The punch's windows are 400-1100 ms into each 1.5 s
+# swing (exercise.h).
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# the card's second page, its TRAIN button, the choice, and a tap off the buttons: back
+swipe up
+swipe left
+shot 20-stats
+tap 233 320
+shot 21-pick
+tap 233 330
+shot 22-pick-back
+tap 233 320
+
+# the punch: about 400 ms in when the tap settles, the bag swinging in
+tap 233 140
+shot 23-punch-start
+wait 300ms
+shot 24-punch-now
+# ~700 ms: inside the first window. The shot is taken with the finger still down.
+hold 233 240 150ms 25-punch-hit
+# ~1.25 s; the second window is 1.9-2.6 s, the third 3.4-4.1 s
+wait 700ms
+tap 233 240
+wait 1s
+tap 233 240
+shot 26-punch-mid
+# the session is 18 s: the result, then back to the pet
+wait 15s
+shot 27-punch-result
+wait 4s
+shot 28-after-punch
+
+# the hold: untouched, held (a rep and a bit, shot with the finger down), lifted (paused),
+# then held to the end of the 12 reps
+swipe up
+swipe left
+tap 233 320
+tap 233 240
+shot 30-hold-start
+hold 233 270 2200ms 31-hold-held
+shot 32-hold-paused
+hold 233 270 17s
+shot 33-hold-result
+wait 4s
+shot 34-after-hold

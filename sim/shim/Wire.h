@@ -1,5 +1,5 @@
 // Simulador: bus I2C falso. Solo contesta el CST9217 (0x5A) mientras esta despierto,
-// con el informe crudo de 0xD0 que decodeTrainingReport() espera (saco de la 1.75C).
+// con el informe crudo de 0xD0 que decodeTrainingReport() espera (los ejercicios de la 1.75C).
 // El resto de direcciones (QMI8658, ES8311, AXP2101, PCF85063) no responden: sus
 // drivers estan sustituidos por piezas falsas que no pasan por aqui.
 #pragma once

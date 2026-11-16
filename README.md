@@ -26,7 +26,7 @@ Running on hardware. Implemented: the 151 + shinies animated from microSD, full
 life cycle (egg by rarity → evolution → farewell/release/runaway, each gated
 behind a decision dialog), bred-Pokédex with gallery, fitness training (strength, stamina,
 speed) with ribbons, retention hooks (streak / bond / medals / name), biome + real-time
-backgrounds, four minigames, training bag, animated bath, RTC with offline
+backgrounds, four minigames, two calm exercises, animated bath, RTC with offline
 progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
 **sound (ES8311)**, **English and European Portuguese UI (English default)**, **starter choice on
 first run**, and a one-click **web installer**.
@@ -70,7 +70,14 @@ While **awake**, per minute:
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
 - 🍬 **Candy:** +10 FOOD, +12 JOY, but **+12 weight** (fattening).
 - ⚽ **Play / minigames:** +JOY, −ENE; a random one of four short games (keepy-uppy, Berry Catch, Peekaboo, Berry Song). Each trains **SPEED** and burns weight, and keeps its own best score.
-- 🥊 **Training bag:** trains **STRENGTH** (~4 hits = 1 pt, cap +18/session), tires it.
+- 🥊 **Training** (the *Train* button on the stat card): two calm exercises, each up to
+  12 punches or reps worth 1.5 points (+18 a session at most; its nature can add a quarter),
+  and each tires it like a game:
+  - **Punch** trains **STRENGTH**: tap as the swinging bag reaches the creature (it lights
+    up). Off-beat taps do nothing and cost nothing.
+  - **Hold** trains **STAMINA**: keep a finger on the screen while it does reps; lifting
+    only pauses it.
+  Leaving early keeps what was earned.
 - 🫧 **Bath:** clears poops, HYG → 100.
 - 👆 **Pet it:** tap it for +5 JOY + bond. It also knows a few touches, and each
   one counts as a single pat (the daily bond limit is shared with everything else):
@@ -96,7 +103,7 @@ While **awake**, per minute:
   Only those two moments act, so if you wake it at night it stays awake until the
   next bedtime, and if you put it to bed early it still wakes in the morning.
   It waits until a minigame, dialog, bath or evolution is finished; a minigame or
-  the training bag left open with the screen off is abandoned (no prize) at bedtime. Eggs, farewell
+  an exercise left open with the screen off is abandoned (no prize) at bedtime. Eggs, farewell
   scenes, the starter pick and the egg choice are skipped. It follows the clock you set (swipe
   down): after a full power-off the 1.75C clock can be wrong until you set it, so
   after a power-off bedtime stays paused until the clock is set (clock screen, which
@@ -172,7 +179,7 @@ While **awake**, per minute:
     time the clock hasn't been set since a power-off): no chirp and no light.
   - No calls while it sleeps, as an egg, while choosing a starter or an egg, or during
     a farewell or a run-away.
-    A call waits while a minigame, the training bag, a dialog, the card, gallery,
+    A call waits while a minigame, an exercise, a dialog, the card, gallery,
     clock or keyboard is open on a lit screen, and comes once you are back.
 - 🐾 **A life of its own:** left alone on a lit screen, the creature keeps itself busy.
   Every few seconds it picks something to do: stand, look around, stroll, rest a
@@ -275,10 +282,10 @@ first page, under the berry and age):
 - **Pokédex:** raising a species registers it; **151 + shinies** to complete.
 
 ### Fitness
-Training points 0–100 for **strength** (the bag), **stamina** (steady care: every
-need at 40+) and **speed** (the Play minigames), shown on the card's Fitness page
-with a ribbon at each goal. They show in the pet's idle life (looks only). Its
-nature trains one of them a little faster (see **Nature**).
+Training points 0–100 for **strength** (the rhythm punch), **stamina** (steady care:
+every need at 40+, and the stamina hold) and **speed** (the Play minigames), shown on the
+card's Fitness page with a ribbon at each goal. They show in the pet's idle life (looks
+only). Its nature trains one of them a little faster (see **Nature**).
 
 ## Hardware
 
@@ -386,7 +393,7 @@ If one bottoms out it counts as a *slip-up*.
 - Horizontal swipe = open the **Pokédex / gallery**.
 - Vertical swipe up = open the **stat card** (5 pages: Profile / Fitness / Medals /
   Progress / Care; swipe between them; tap the name on Profile to rename; on Fitness the
-  "Train strength" button opens the bag; on Care two big buttons cycle the pace
+  "Train" button offers the punch and the hold; on Care two big buttons cycle the pace
   Normal ↔ Relaxed and the bedtime Off → 21–07 → 22–07 → 23–08).
 - Swipe down = **set the clock** and the **settings**. The first row is sound, brightness and
   language. Under it, each pill shows an icon and a number: the touch lock (a padlock and the
@@ -448,7 +455,7 @@ Pokédex number (persisted in NVS).
 
 Each creature trains three stats, from 0 to 100 points each, which start again
 with every new pet:
-- **Strength** ← the training bag: a point per 4 hits, at most 18 a session.
+- **Strength** ← the rhythm punch: 1.5 points a punch, at most 18 a session.
 - **Stamina** ← steady care: a point for every 30 awake minutes with every need
   at 40 or more. The minutes add up (a minute under 40 just doesn't count), survive
   a restart, and don't count while the pet sleeps or self-care keeps it on the
@@ -456,12 +463,13 @@ with every new pet:
   brings it back), so a pet that is put to bed for a while when it's tired builds
   stamina far faster: looked after hourly with such naps, the stamina ribbon comes
   in about a day and a half; never napped, it takes a week or more.
+  The stamina hold adds a faster way: 1.5 points a rep, at most 18 a session.
 - **Speed** ← the Play minigames: a fifth of the game's score (3 for a game at par).
 
 The stat card's **Fitness** page shows the three bars, what trains each, a ribbon
 at each goal, and the weight (which goes up with candy and burns off with exercise).
-Each Play minigame's result shows the speed it trained (**SPEED +3**), as the bag
-shows its strength. Reaching **30** strength, **10** stamina or **30** speed earns
+Each Play minigame's result shows the speed it trained (**SPEED +3**), as the
+punch shows its strength and the hold its stamina. Reaching **30** strength, **10** stamina or **30** speed earns
 that stat's **ribbon** (Medals page). Training also shows in the creature's own
 life, as looks only: a strong pet kicks its ball further, a fast one strolls and
 chases the ball up to 30 % faster, and one with stamina hops a little longer when
@@ -478,7 +486,7 @@ The serial `STATS` line still prints ATK/DEF/SPD, the gen-1 base × **genes**
 - **Bond** (the creature's): rises slowly with care and petting, drops with slip-ups.
 - **Medals** for the individual (level, berry, streak, bond, final form, fit, and
   the strength, stamina and speed ribbons) + a global counter. Medals page of the
-  stat card. A medal or streak banner earned while a minigame or the bag is on screen
+  stat card. A medal or streak banner earned while a minigame or an exercise is on screen
   waits for it to close.
 - **Name**: touch keyboard; the nickname rules the header and the card.
 
@@ -575,7 +583,7 @@ set after a power cut.
 - `standby.h` — when the standby clock replaces screen-off on USB, and its burn-in steps (#60); `scene.cpp` draws it
 - `bubble.h` / `bubble.cpp` — the speech bubbles: which line, when, and where it goes on the round screen (#23)
 - `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the font can draw, and its NVS key
-- `gameui.h` / `gameui.cpp` — the minigames' screens and the strength-training sack (their logic is in `minigames.h`)
+- `gameui.h` / `gameui.cpp` — the minigames' screens and the calm exercises' (the rhythm punch and the stamina hold, #78; their rules are in `minigames.h` and `exercise.h`)
 - `screens.h` / `screens.cpp` — the other screens: starter and egg choice, the pet card's pages, clock and settings, the nickname keyboard, the Pokédex gallery
 - `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
 - `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)

@@ -194,11 +194,11 @@ work against LittleFS.
 | `rtcbat.cpp` / `rtcbat.h` | 1.75C only: no PCF85063 probe, software clock, BLDO1 and the original panel rail left alone, DCDC5 off. Both boards: PKEY short-press IRQ read from `INTSTS2`, 4 s AXP power-off kept, charge current from `board.h` (`CHARGE_CURRENT_*`: 300 mA on the 1.75C, 400 mA on the original, the owner's choice: upstream never programmed the charge current and left the chip default). The charger block is written on both boards, so the original 1.75 also gets new VBUS 900 mA, ITERM 125 mA, CHGLED type A (reg `0x69`) and button-cell charging off; none of that is verified on an original 1.75. |
 | `screenlock.cpp` / `screenlock.h` | **New.** PWR triple-press detector and lock state (pure logic, compile-time and host tests). |
 | `bootbutton.cpp` / `bootbutton.h` | **New.** BOOT single/double/long gesture detector (pure logic, tests). |
-| `trainingtouch.*` / `trainingcapture.*` | **New.** 1.75C strength-training tap policy, CST9217 report decoder and the capture worker. |
+| `trainingtouch.*` / `trainingcapture.*` | **New.** 1.75C training touch policy (taps, the stamina hold, the exit hold), CST9217 report decoder and the capture worker. |
 | `i18n.cpp` / `i18n.h` | The 1.75C's strings: `S_HOLD_EXIT`, and the BOOT and lock toasts (`S_TOAST_*`, #61), in both languages. |
 | `TamaPoke.ino` | 1.75C-only lock, BOOT, overlay and training paths; boot banner prints `BOARD_NAME`. |
 | `serialcmd.cpp` | The 1.75C-only serial commands `LOCK?` and `TRAINTRACE` (the serial console moved here from `TamaPoke.ino`, #41). |
-| `gameui.cpp` | The 1.75C-only training capture in the strength-training sack: its start check, the capture frame and the hold-to-exit chip (the minigame screens moved here from `TamaPoke.ino`, #41). |
+| `gameui.cpp` | The 1.75C-only training capture in the exercises (#78): its start check, the capture frame and the hold-to-exit chip (the minigame screens moved here from `TamaPoke.ino`, #41). |
 | `tools/build_175c.sh` | **New.** 1.75C build (flag + partition table), also used by CI. |
 | `tools/flash_175c.sh` | **New.** esptool wrapper; table and offsets from `boards/175c/partitions.csv`. |
 | `tools/build_spritefs.sh` | **New.** Builds `storage.littlefs.bin` from the normal pack. |
@@ -252,10 +252,10 @@ bits [3:2] = 00, set with `setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S)`).
 `LOCK?` over serial prints e.g. `LOCK locked=1 panel_sleep=1` (read-only).
 `HEALTH` adds `locked=` on the 1.75C.
 
-## Strength training (1.75C)
+## Training (1.75C)
 
-On the original layout, any touch with y < 72 (an invisible strip, no button)
-quit training, so fast taps near the top often ended the session. Taps that
+On the original layout (before #78), any touch with y < 72 (an invisible strip, no
+button) quit training, so fast taps near the top often ended the session. Taps that
 started and ended while a frame was being drawn were also lost.
 
 On the 1.75C:
@@ -264,23 +264,31 @@ On the 1.75C:
   old top strip.
 - You leave with a visible **Hold to exit** button at x 153–312, y 384–431. Hold
   it for **1 s**; its fill shows progress. Quick taps on it neither quit nor
-  score. The 10 s session and 3.5 s result screen are unchanged.
+  score. Since #78 leaving ends the session and pays for what was done; the
+  result screen stays 3.5 s.
 - `trainingcapture` keeps polling the CST9217 at the usual **20 ms** while the
   frame is drawn and flushed (that part of the frame does no I2C), and queues
   timestamped hits. An RAII guard joins the worker before the frame returns, so
-  nothing else races it on `Wire`. Hits are scored by capture time, so a tap
-  just before the deadline still counts.
+  nothing else races it on `Wire`. Taps are judged by capture time: the rhythm
+  punch (#78) checks each one against its swing's window at the moment it was
+  captured, so drawing a frame never moves a tap out of its window.
+- The stamina hold (#78) reads `TrainingTouch::holding()`: the finger of a hit
+  that is still reporting. A touch that began on the exit chip never holds, a
+  hold that slides onto the chip never exits, a stream that stops for more than
+  100 ms pauses it, and its release is never a tap.
 - Empty/ACK reports count as "no contact", as with SensorLib's `getPoint()`,
   and the first active finger is picked the same way SensorLib does. A no-contact
   sample is needed before the next hit, so a held finger scores once.
 - If the worker can't be created, training won't start and says so.
 
-On hardware this went from about 48 to **57 taps** in a session with no
-noticeable lag. `TRAINTRACE ON` / `OFF` / `?` prints raw CST9217 reports
+On hardware the old tap-as-fast-as-you-can bag went from about 48 to **57
+taps** in a session with no noticeable lag. The rhythm punch and the stamina
+hold (#78) have not been tried on the panel yet. `TRAINTRACE ON` / `OFF` / `?` prints raw CST9217 reports
 (`TRAINRAW ...`) for diagnosis; it's off by default and not saved.
 
-The original board keeps its existing touch polling, training layout and
-y < 72 exit; the worker and trace commands are compiled out.
+The original board keeps its touch polling. Its exit is a tap on the top strip
+(y < 42, `TRAIN_EXIT_STRIP_H` in `gameui.h`) under a "tap: back" label, and since
+#78 it pays for what was done; the worker and trace commands are compiled out.
 
 ## Tests
 

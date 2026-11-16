@@ -20,7 +20,7 @@ struct TrainingEvent {
   uint32_t at;
 };
 
-// Only the loop owns the UI/pet. During the I2C-free part of renderSack(),
+// Only the loop owns the UI/pet. During the I2C-free part of renderExercise(),
 // this worker samples touch and queues actions while QSPI drawing/flush blocks.
 // endDraw() joins it BEFORE the loop can use Wire, the driver, or the policy.
 // No cross-task Wire/RX-buffer sharing; no I2C or game logic in the touch ISR.
@@ -38,6 +38,7 @@ class TrainingCapture {
   bool down() const { return touch_.down(); }
   bool waitingRelease() const { return touch_.waitingRelease(); }
   uint32_t exitHeldMs(uint32_t now) const { return touch_.exitHeldMs(now); }
+  bool holding(uint32_t now) const { return touch_.holding(now); }  // the stamina hold (#78)
   uint32_t dropped() const { return dropped_; }  // read only after endDraw()
   class Frame {
    public:

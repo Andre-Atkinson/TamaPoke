@@ -41,6 +41,10 @@
 #include "bubble.h"
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
+#include "exercise.h"
+// An untouched hold ends itself after IDLE_END_MS: the screen must not dim before that.
+// (The punch session is longer, so renderExercise() keeps it awake itself.)
+static_assert(StaminaHold::IDLE_END_MS <= POWER_GAME_AWAKE_MS, "an idle hold ends before the game's keep-awake does");
 #include "trainingcapture.h"
 #include "app.h"
 #include "gameui.h"
@@ -280,7 +284,7 @@ static void pwrToggleLock() {
   // Discard both a partly-entered BOOT gesture and a finger already on the glass.
   bootButton.begin(digitalRead(BOOT_BUTTON_PIN) == LOW, millis());
   wasPressed = false;
-  trainingCapture.reset(true);  // discard hits/exit holds across a lock transition
+  trainingCapture.reset(true);  // discard taps, holds and exit holds across a lock transition
   trainingNeedsRelease = false;
   holdStart = 0;
   holdFired = false;
@@ -590,16 +594,16 @@ void bedClockSet(uint32_t set) {
   bedSample(now);
 }
 
-// Con un minijuego, el saco, un dialogo, el teclado, el reloj, el bano, comer o la
+// Con un minijuego, un ejercicio, un dialogo, el teclado, el reloj, el bano, comer o la
 // animacion de evolucion abiertos NO se interrumpe: el evento queda pendiente y se
 // aplica en cuanto se cierran. Si el bicho no puede (huevo, ceremonia, eleccion de
 // inicial) pet.autoSleep/autoWake no hacen nada y el evento se descarta.
-// El minijuego, el saco, el teclado y el reloj no tienen caducidad con la pantalla
-// apagada (el juego y el saco solo avanzan y terminan al dibujarse): solo bloquean
+// El minijuego, el ejercicio, el teclado y el reloj no tienen caducidad con la pantalla
+// apagada (el juego y el ejercicio solo avanzan y terminan al dibujarse): solo bloquean
 // mientras la pantalla esta encendida y sin bloquear. Si se quedaron abiertos y el
 // panel se apago (PWR o bloqueo de bolsillo) el horario se aplica igual: ni renombrar
 // (solo toca el nick) ni ajustar la hora (el siguiente muestreo trata el salto como un
-// borde mas) dependen de pet.sleeping, y al dormir el juego y el saco se abandonan sin
+// borde mas) dependen de pet.sleeping, y al dormir el juego y el ejercicio se abandonan sin
 // premio (bedApply). El bano se compara con timeLeft, no en bruto: bathUntil solo se
 // pone a 0 en drawBath(), que no corre con la pantalla apagada.
 //
@@ -612,7 +616,7 @@ static bool careBusy() {
 
 static bool bedBusy() {
   bool dark = screenOff || screenIsLocked();
-  return (!dark && (gameOpen || sackOpen || kbOpen || clockOpen)) || careBusy();
+  return (!dark && (gameOpen || trainOpen || kbOpen || clockOpen)) || careBusy();
 }
 
 // What holds back the clock screen that opens by itself after a reseed (clockprompt.h):
@@ -625,7 +629,7 @@ static ClockPromptHold clockPromptHold() {
   h.ceremony = pet.ceremony != CER_NONE;
   h.evolving = pet.evolving();
   h.dialog = timeLeft(confirmUntil) || timeLeft(feedMenuUntil) || (choiceKind && timeLeft(choiceUntil));
-  h.otherScreen = galleryOpen || gameOpen || sackOpen || kbOpen || clockOpen || cardOpen;
+  h.otherScreen = galleryOpen || gameOpen || trainOpen || kbOpen || clockOpen || cardOpen;
   return h;
 }
 
@@ -634,17 +638,12 @@ void bedApply() {
   BedEvent ev = bedPending;
   bedPending = BED_NONE;
   if (ev == BED_SLEEP) {
-    // Un juego o el saco abiertos aqui solo pueden estar a oscuras (bedBusy): se abandonan
-    // sin premio, como al mantener su boton de salir. playGame() y trainStrength() se pagan al
-    // terminar la partida (que ya no llegara) y no miran pet.sleeping.
+    // Un juego o un ejercicio abiertos aqui solo pueden estar a oscuras (bedBusy): se
+    // abandonan sin premio, como un juego al mantener su boton de salir. playGame(),
+    // trainStrength() y trainStamina() se pagan al terminar (que ya no llegara) y no miran
+    // pet.sleeping.
     gameOpen = false;
-    if (sackOpen) {
-#if BOARD_AMOLED_175C
-      leaveSack();
-#else
-      sackOpen = false;
-#endif
-    }
+    if (trainOpen) leaveTraining();
     pet.autoSleep();  // sin sonido: es de noche
   } else if (pet.autoWake()) {
     audioSetSleeping(false);  // el amplificador se enciende antes de encolar el sonido
@@ -703,7 +702,7 @@ void attnLoop(uint32_t now) {
 
   AttnScene s;
   s.busy = careBusy();
-  s.playing = gameOpen || sackOpen;
+  s.playing = gameOpen || trainOpen;
   s.browsing = kbOpen || clockOpen || galleryOpen || cardOpen;
   s.screen = attnScreen(screenIsLocked(), screenOff, screenOffByPwr, dimStageNow(powerCtx(now)) == DIM_OFF);
   s.quiet = quietNow();
@@ -763,10 +762,10 @@ void loop() {
   bool quiet = quietNow();
   pet.quietHours = quiet;
   pet.update(now);
-  // a minigame or the bag (ExerciseScreen, pet.h): banners wait under it, and the medals its
-  // exercise completed come as it closes (#69, #76)
+  // a minigame or an exercise (ExerciseScreen, pet.h): banners wait under it, and the medals
+  // its exercise completed come as it closes, after its result (#69, #76, #78)
   static ExerciseScreen exerciseScreen;
-  exerciseScreen.update(gameOpen || sackOpen, pet);
+  exerciseScreen.update(gameOpen || trainOpen, pet);
 
   // el amplificador sigue al estado de sueno (la llamada sale sola si no cambia).
   // Aqui cubre todas las vias: el boton de luz, el sueno nocturno y el que llega
@@ -962,7 +961,7 @@ void loop() {
   }
 
   // Ritmo de dibujo (power.h): 10 fps con el bicho en uso, menos cuanto mas rato sin tocar,
-  // 85 ms en juego/saco (margen seguro para que el redibujado no pise el envio DMA del frame
+  // 85 ms en juego/ejercicio (margen seguro para que el redibujado no pise el envio DMA del frame
   // anterior: a 40-65 ms solapaba y causaba flashes negros).
   // Con la pantalla apagada no se dibuja: a brillo 0 no se ve nada, pero el redibujado y el
   // flush DMA del framebuffer del lienzo seguian corriendo a 10 fps, y medido son 70 ms de
@@ -978,8 +977,8 @@ void loop() {
     lastRender = now;
     drewFrame = render();
 #if BOARD_AMOLED_175C
-    // renderSack's capture worker has joined: only the loop changes hits/UI.
-    if (sackOpen && !screenIsLocked()) drainTrainingTouch();
+    // renderExercise's capture worker has joined: only the loop changes taps/UI.
+    if (trainOpen && !screenIsLocked()) drainTrainingTouch();
 #endif
   }
   // cede la CPU en los pases que no dibujan: sin esto el loop gira a pleno rendimiento
@@ -1008,7 +1007,7 @@ PowerCtx powerCtx(uint32_t now) {
   c.screenOff = c.screenOff || screenLock.blank(now);
 #endif
   c.sleeping = pet.sleeping;
-  c.gameOpen = gameOpen || sackOpen;
+  c.gameOpen = gameOpen || trainOpen;
   c.usb = usbPresent();
   c.charging = batCharging();
   c.batPct = batPercent();
@@ -1031,7 +1030,7 @@ static StandbyIn standbyIn(uint32_t now) {
   s.petAwake = !pet.sleeping && !pet.ceremony && !pet.evolving() && !pet.awaitingStarter() && !pet.awaitingEgg();
   s.pwrOff = screenOff && screenOffByPwr;  // a timed-out screen may light up with the clock
   s.locked = screenIsLocked();
-  s.gameOpen = gameOpen || sackOpen;
+  s.gameOpen = gameOpen || trainOpen;
   s.idleMs = idleSince(now, lastInteract);
   s.offMs = powerOffMs;
   return s;
@@ -1187,34 +1186,38 @@ void drainTrainingTrace() {
   }
 }
 
-void leaveSack() {
-  bool held = trainingCapture.down();
-  sackOpen = false;
-  trainingCapture.reset(held);
-  wasPressed = false;
-  trainingNeedsRelease = held;
-  touchNeedsRelease = held;  // never leak an exit hold into the pet/menus
-  gTouchIrq = true;
-}
-
 void drainTrainingTouch() {
   drainTrainingTrace();
   TrainingEvent event;
   while (trainingCapture.next(event)) {
     wakeUI();
-    if (event.action == TrainingTouch::EXIT && !sackOverUntil &&
-        trainingBeforeDeadline(sackUntil, event.at)) { leaveSack(); return; }
-    // Use capture time, not render/drain time: don't lose a last-moment tap,
-    // or credit a tap that happened after the ten-second deadline.
-    if (event.action == TrainingTouch::HIT && !sackOverUntil &&
-        trainingBeforeDeadline(sackUntil, event.at)) {
-      ++sackHits;
-      sackShake = 16;
+    if (event.action == TrainingTouch::EXIT) {
+      if (exerciseExit()) return;  // closed (nothing done): leaveTraining() reset the capture
+      continue;
     }
+    // Capture time, not render/drain time: a tap is judged on when it happened
+    // (RhythmPunch::tap), so drawing a frame never moves it out of its window.
+    if (event.action == TrainingTouch::HIT) exerciseTap(event.at);
   }
   wasPressed = trainingCapture.down();
 }
 #endif
+
+void leaveTraining() {
+  trainOpen = false;
+  // The rest of a contact still on the glass does nothing: on the 1.75 the generic path
+  // sees it as a held finger whose gesture is swallowed until it lifts.
+  holdFired = true;
+  swallowGesture = true;
+#if BOARD_AMOLED_175C
+  bool held = trainingCapture.down();
+  trainingCapture.reset(held);
+  wasPressed = false;
+  trainingNeedsRelease = held;
+  touchNeedsRelease = held;  // never leak an exit hold or a stamina hold into the pet/menus
+  gTouchIrq = true;
+#endif
+}
 
 // ---------- gestos sobre el bicho (#21, touchgesture.h) ----------
 
@@ -1232,7 +1235,7 @@ static PetGestureGate petGestureGate() {
   // render() only zeroes them when it draws (it does not while the screen is off)
   g.bathing = timeLeft(bathUntil);
   g.choosing = pet.awaitingStarter() || pet.awaitingEgg();
-  g.otherScreen = galleryOpen || cardOpen || kbOpen || clockOpen || gameOpen || sackOpen;
+  g.otherScreen = galleryOpen || cardOpen || kbOpen || clockOpen || gameOpen || trainOpen;
   // careBusy() covers the timed dialogs (and the bath, evolution and a meal again), so a
   // dialog it learns later turns the gestures off too
   g.dialog = careBusy();
@@ -1377,7 +1380,7 @@ void handleTouch() {
     }
     return;
   }
-  if (sackOpen) {
+  if (trainOpen) {
     trainingCapture.poll();  // legacy 20 ms; also serviced during QSPI rendering
     if (!trainingCapture.waitingRelease()) touchNeedsRelease = false;
     drainTrainingTouch();
@@ -1421,13 +1424,26 @@ void handleTouch() {
 #endif
 
 #if !BOARD_AMOLED_175C
-  // Original board: retain its existing touch/exit policy.
-  if (sackOpen) {
+  // Original board: its exit, a tap on the top strip (y < TRAIN_EXIT_STRIP_H, marked by the
+  // "tap: back" label), which now ends the session and pays for what was done (#78).
+  // Anywhere else a touch-down is a punch's tap and the finger that stays is the stamina
+  // hold; a release is never a tap.
+  if (trainOpen) {
+    static bool counts = false;  // this contact didn't start on the top strip
     if (pressed && !wasPressed) {
       wakeUI();
-      if (y < 72) sackOpen = false;  // tocar arriba = abandonar
-      else sackTap();
+      counts = y >= TRAIN_EXIT_STRIP_H;
+      if (!counts) {
+        exerciseHeld(false);
+        if (exerciseExit()) {  // closed: leaveTraining() swallows the rest of this touch
+          wasPressed = pressed;
+          return;
+        }
+      } else {
+        exerciseTap(millis());
+      }
     }
+    exerciseHeld(pressed && counts);
     wasPressed = pressed;
     return;
   }
@@ -1475,7 +1491,7 @@ void handleTouch() {
 // deslizar vertical: abre/cierra la ficha del bicho
 void onSwipeV(int dir) {
   if (pet.awaitingStarter() || pet.awaitingEgg()) return;  // bloqueado mientras elige inicial o huevo
-  if (gameOpen || galleryOpen || kbOpen || sackOpen || pet.ceremony) return;
+  if (gameOpen || galleryOpen || kbOpen || trainOpen || pet.ceremony) return;
   if (clockOpen) { clockOpen = false; return; }
   if (cardOpen) {
     if (dir < 0) cardOpen = false;  // arriba cierra la ficha
@@ -1486,6 +1502,7 @@ void onSwipeV(int dir) {
   } else if (!pet.isEgg() && !confirmUntil && !feedMenuUntil) {
     cardOpen = true;                // deslizar arriba: ficha
     cardPage = 0;
+    trainPick = false;
   }
 }
 
@@ -1496,6 +1513,7 @@ void onSwipe(int dir) {
   if (cardOpen) {  // dentro de la ficha: cambiar entre las 5 paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
     cardPage = p < 0 ? 0 : (p > CARD_LAST_PAGE ? CARD_LAST_PAGE : p);
+    trainPick = false;  // the exercise choice goes back to the stats
     return;
   }
   if (!galleryOpen) {
@@ -1558,9 +1576,15 @@ void onTap(int16_t x, int16_t y) {
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
     if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
-    else if (cardPage == 1 && y >= 300 && y <= 340 && x >= 96 && x <= 370) {
-      cardOpen = false;            // boton ENTRENAR FUERZA
-      startSack();
+    else if (cardPage == 1 && trainPick) {  // the exercise choice (#78)
+      uint8_t kind = trainPickAt(x, y);
+      trainPick = false;           // elsewhere: back to the stats
+      if (kind != EX_NONE) {
+        cardOpen = false;
+        startExercise(kind);
+      }
+    } else if (cardPage == 1 && y >= 300 && y <= 340 && x >= 96 && x <= 370) {
+      trainPick = true;            // the TRAIN button: choose an exercise
     } else if (cardPage == CARD_PAGE_CARE && careTap(x, y)) {
       // ritmo / hora de dormir: la ficha sigue abierta (careTap ya guardo y repinta)
     } else {
@@ -1655,7 +1679,7 @@ void onTap(int16_t x, int16_t y) {
 static bool staticScreen() {
   if (standbyShown(millis())) return true;  // redrawn when its minute, weather or battery changes
   if (pet.awaitingStarter() || pet.awaitingEgg()) return true;
-  if (galleryOpen || gameOpen || sackOpen) return false;  // la galeria gestiona su propio repintado
+  if (galleryOpen || gameOpen || trainOpen) return false;  // la galeria gestiona su propio repintado
   if (kbOpen || clockOpen) return true;
   return cardOpen && cardPage != 0;  // la pagina 0 tiene el retrato animado
 }
@@ -1675,6 +1699,7 @@ static uint32_t screenKey() {
     return h;
   }
   h = mixKey(h, pet.awaitingStarter() ? 1 : pet.awaitingEgg() ? 100 : kbOpen ? 2 : clockOpen ? 3 : 4 + cardPage);
+  h = mixKey(h, cardOpen && trainPick);  // the stat card's exercise choice (#78)
   h = mixKey(h, sdEpoch);
   if (pet.awaitingStarter()) {
     // nada mas: la pantalla del inicial no cambia hasta elegir
@@ -1705,7 +1730,7 @@ static uint32_t screenKey() {
                         (uint32_t)pet.trAtk, (uint32_t)pet.trDef, (uint32_t)pet.trSpe, (uint32_t)pet.geneAtk,
                         (uint32_t)pet.geneDef, (uint32_t)pet.geneSpe, (uint32_t)pet.careMistakes,
                         (uint32_t)pet.fullness, (uint32_t)pet.joy, (uint32_t)pet.energy, (uint32_t)pet.hygiene,
-                        (uint32_t)pet.berryKnown, (uint32_t)pet.strHi, (uint32_t)gLang,
+                        (uint32_t)pet.berryKnown, (uint32_t)pet.punchHi, (uint32_t)gLang,
                         (uint32_t)pet.gameHi, (uint32_t)pet.catchHi, (uint32_t)pet.peekHi, (uint32_t)pet.songHi,
                         (uint32_t)pet.pace, (uint32_t)pet.bedPreset, (uint32_t)pet.eggPickMode })
       h = mixKey(h, v);
@@ -1759,8 +1784,8 @@ bool render() {
     renderGame();
     return true;
   }
-  if (sackOpen) {
-    renderSack();
+  if (trainOpen) {
+    renderExercise();
     return true;
   }
   if (kbOpen) {
