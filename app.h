@@ -95,9 +95,8 @@ int flashIdxForDex(int16_t dex);   // the flash sprite of a dex number, -1 = non
 PowerCtx powerCtx(uint32_t now);
 bool screenIsLocked();
 bool petSceneFree();  // the pet awake on the lit main screen with nothing over it (TamaPoke.ino)
-#if BOARD_AMOLED_175C
+// a toast over the screen for `duration` ms (TamaPoke.ino; on the original 1.75 too, #89)
 void showControlToast(const char *text, uint32_t duration = 1200);
-#endif
 void flushUI();   // every renderer sends its frame through this
 void wakeUI();
 // Closes the training screen with nothing more paid, and makes the rest of a contact

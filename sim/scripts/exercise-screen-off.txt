@@ -1,0 +1,145 @@
+# The exercises when the screen goes dark (#88), and TRAIN while the pet sleeps (#89). For
+# both boards, both languages, by day and by night:
+#   tools/sim.sh --board 175c --lang en --script exercise-screen-off --out shots/
+#   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script exercise-screen-off --out shots/
+# PWR (and on the 1.75C the pocket lock, three presses) ends an exercise at once and pays for
+# what was done, with no result screen; the screen comes back on to the creature. The serial
+# log (shots/serial.log) has one line per ending, "Training: punch count=2 gain=3 ... (screen
+# off)", "Training: hold count=1 gain=1 ... (screen off)", "Training: punch count=1 gain=1 ...
+# (screen off)", and "TRAIN: asleep" for the note. The last section presses PWR on the result
+# screen of a finished punch: that ending prints the normal "Training: punch count=2 gain=3"
+# line once, and no "(screen off)" line (it was paid at the end of the session, not again).
+# Then a ribbon finished by a session that PWR ends: its banner waits in the dark and shows
+# when the screen is back on (shot 56). Last, the battery runs out mid-punch: the punch is
+# paid ("Training: punch count=1 gain=1 ... (screen off)") before the PMU powers the board
+# off, and the simulator stops there.
+# Timing as in exercises.txt: a tap is 80 ms down then 400 ms settling, an exercise starts
+# when the tap that chose it lifts, and the punch's windows are 400-1100 ms into each 1.5 s
+# swing (exercise.h).
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# the punch: two punches on the beat, then PWR: dark at once, the session paid
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+wait 800ms
+tap 233 240
+shot 40-punch-two
+press pwr
+shot 41-punch-pwr-off
+wait 5s
+# PWR again: the creature, not the exercise (no result screen, nothing resumed)
+press pwr
+wait 1s
+shot 42-punch-pwr-on
+# the Fitness page: strength +3 (two punches)
+swipe up
+swipe left
+shot 43-fitness-after-punch
+
+# the hold: a rep and a bit, lifted, then PWR: one rep paid
+tap 233 320
+tap 233 240
+hold 233 270 2200ms 44-hold-held
+press pwr
+shot 45-hold-pwr-off
+wait 5s
+press pwr
+wait 1s
+shot 46-hold-pwr-on
+
+# the pocket lock (three presses): on the 1.75C the lock hint, then dark, and three more
+# presses unlock. The 1.75 has no lock: it reads PWR every 250 ms, so quick presses merge
+# and each three toggle the screen once or twice. Either way the first dark ends the punch
+# with its one punch paid; a tap on nothing then wakes a screen the 1.75 left dark (on a
+# lit one it does nothing).
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+press pwr 3
+shot 47-punch-locked
+wait 3s
+press pwr 3
+tap 40 233
+wait 1s
+shot 48-punch-unlocked
+
+# TRAIN while it sleeps (the light button): the card stays on its Fitness page with a note,
+# which goes after 2 s; the light button again wakes it
+tap 264 404
+wait 1s
+swipe up
+swipe left
+tap 233 320
+shot 49-train-asleep-note
+wait 2500ms
+shot 50-train-asleep-after
+swipe up
+tap 264 404
+wait 1s
+shot 51-awake-again
+
+# PWR on the RESULT screen: the session ran to its end and was paid there (one "Training:
+# punch count=2 gain=3" line, no "(screen off)"), so PWR only closes the result and pays
+# nothing again. Dark at the press, the creature when the screen comes back on, and the
+# Fitness page shows strength 7 (3 + 1 from the sections above + this punch's 3, paid once;
+# 10 would be a second payment).
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+wait 800ms
+tap 233 240
+wait 17s
+shot 52-punch-result-before-pwr
+press pwr
+shot 53-result-pwr-off
+wait 2s
+press pwr
+wait 1s
+shot 54-result-pwr-on
+swipe up
+swipe left
+shot 55-fitness-after-result-pwr
+
+# A ribbon a session ended by PWR completes (#69, #88): strength set to 28 (the ribbon's goal
+# is 30), two punches (+3), PWR. The ribbon is gained at the press (its chime) and its banner
+# waits in the dark: 6 s later, longer than the banner's 4 s, PWR back on shows it. The card
+# is still open on its Fitness page from the section above.
+train 28 1 0
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+wait 800ms
+tap 233 240
+press pwr
+wait 6s
+press pwr
+wait 500ms
+shot 56-ribbon-banner-after-pwr
+
+# The battery runs out mid-punch (0 %, no USB): the punch is paid before the power-off.
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+battery 0
+wait 2s

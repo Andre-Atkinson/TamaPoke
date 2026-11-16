@@ -3771,6 +3771,66 @@ TEST(exercise, holding_starts_no_banner) {
   CHECK(!p.showMilestone());
 }
 
+// #88: an exercise that the screen going dark ended closes on a dark screen. The ribbon it
+// completed is gained at once, and its banner waits until the screen is back on, then shows
+// its whole time on the creature's screen.
+TEST(exercise, a_screen_closed_dark_keeps_its_banner_until_the_screen_is_back) {
+  Pet p;
+  makePet(p, 4);
+  p.trAtk = RIBBON_STR - 3;
+  ExerciseScreen screen;
+  screen.update(true, p, false);
+  p.trainStrength(2);  // +3: the ribbon's goal; then PWR ends the session
+  screen.update(false, p, true);
+  CHECK_MSG(p.hasMedal(MED_STR), "gained as the screen closes");
+  for (int i = 0; i < 600; i++) {  // a minute in the dark, a pass every 100 ms
+    mockAdvanceMillis(100);
+    screen.update(false, p, true);
+  }
+  CHECK_MSG(p.showMedal(), "the banner waited for the screen");
+  screen.update(false, p, false);  // PWR: the screen is back on
+  mockAdvanceMillis(MEDAL_BANNER_MS - 100);
+  screen.update(false, p, false);
+  CHECK_MSG(p.showMedal(), "all of its time on the creature's screen");
+  mockAdvanceMillis(200);
+  screen.update(false, p, false);
+  CHECK_MSG(!p.showMedal(), "and no longer");
+}
+
+// Only a screen that closed dark holds: one that closed lit lets its banner run out even if
+// the screen goes dark later, and once back on, a later dark spell holds nothing again.
+TEST(exercise, only_a_screen_that_closed_dark_holds_until_it_is_back) {
+  Pet p;
+  makePet(p, 4);
+  p.trAtk = RIBBON_STR - 3;
+  ExerciseScreen lit;
+  lit.update(true, p, false);
+  p.trainStrength(2);
+  lit.update(false, p, false);  // closed lit: the banner starts now
+  CHECK(p.showMedal());
+  mockAdvanceMillis(100);
+  for (int i = 0; i < 50; i++) {  // the screen goes dark afterwards
+    mockAdvanceMillis(100);
+    lit.update(false, p, true);
+  }
+  CHECK_MSG(!p.showMedal(), "a screen closed lit holds nothing in the dark");
+
+  Pet q;
+  makePet(q, 4);
+  q.trAtk = RIBBON_STR - 3;
+  ExerciseScreen dark;
+  dark.update(true, q, false);
+  q.trainStrength(2);
+  dark.update(false, q, true);  // closed dark: held
+  dark.update(false, q, false);  // back on: released
+  mockAdvanceMillis(100);
+  for (int i = 0; i < 50; i++) {  // dark again: the hold is over
+    mockAdvanceMillis(100);
+    dark.update(false, q, true);
+  }
+  CHECK_MSG(!q.showMedal(), "the screen back on ended the hold");
+}
+
 // ---------------------------------------------------------------- idle perks (#22)
 // A finished doze or ball game: a little energy or joy (capped per hour by idleplan.h's
 // IdlePerks). Never lowers a stat, and is not the player's care.
