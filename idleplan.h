@@ -97,7 +97,10 @@ enum IdleEmote : uint8_t {
 #define IDLE_SEEK_X IDLE_WALK_MIN  // the food button (x 140) is at the walk's left end
 // A tidy pet's strolls while there are poops (#86): the poops lie at the bottom left
 // (drawPoops, scene.cpp: x 36..192 for three), so it keeps to the right part of its range.
-#define IDLE_TIDY_WALK_MIN 230
+// This is where its centre stops: at rest, all but 2 of the 151 sprites (Dugtrio, Moltres:
+// 80 px) reach at most 66 px left of their centre (the IDLE frames at pmdScale(), measured on
+// tools/sdcard/mons, 2026-11-17), so they stand clear of even the third poop.
+#define IDLE_TIDY_WALK_MIN 260
 
 // The nature's weights (#86), added to the full repertoire's (idleWeights)
 #define IDLE_PLAYFUL_BALL 6  // ball 6 -> 12

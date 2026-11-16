@@ -314,12 +314,12 @@ first page, under the berry and age):
   | Easygoing | "I'm easygoing!", "Life is good!", "No rush, no worries!" | — |
   | Greedy | "I'm a bit greedy!", "Berries are the best!", "Dreaming of berries..." | goes to the food button from FOOD under 50 (others: 40) |
   | Playful | "I'm playful!", "Catch me if you can!", "I love games!" | plays ball and hops more |
-  | Tidy | "I'm tidy!", "Neat and clean!", "A place for everything!" | with poops on the ground, strolls on the right, clear of them, and looks about more |
+  | Tidy | "I'm tidy!", "Neat and clean!", "A place for everything!" | with poops on the ground, strolls on the right (from x 260), clear of them, and looks about more |
   | Lazy | "I'm a little lazy!", "So comfy here...", "Nice and slow..." | stands and rests more, walks and hops less |
 
-  Looks only: what it does left alone changes no stat, and the doze's and the ball game's
-  perks and their hourly limit are the same for every nature; once the screen dims every
-  nature just strolls, gestures or stands, as before.
+  Looks only: these lines and habits change no drain, perk or hourly limit. A playful one's
+  extra ball games can only bring the usual +3 JOY a little more often, never past +6 an hour.
+  Once the screen dims every nature just strolls, gestures or stands, as before.
 
 ### Bonds, streaks, medals, Pokédex
 - **Streak** (player-wide, survives across pets): first care each real day; milestones

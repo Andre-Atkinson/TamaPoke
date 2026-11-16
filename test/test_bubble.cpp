@@ -779,6 +779,25 @@ TEST(Bubble, the_hatch_line_is_due_from_a_hatch_seen_until_its_line_is_said) {
   CHECK(!h.due());
   CHECK(h.watch(false));
   CHECK(h.due());
+  // everyPass(), what bubbleLoop() calls: the hatch pass forgets the previous pet's last line,
+  // so a new tidy pet after a tidy one that last said "I'm tidy!" still says it first
+  HatchLine p;
+  const uint8_t tidy = bubbleNatureLine(NAT_TIDY, 0);
+  uint8_t last = tidy;
+  p.everyPass(false, last);  // no egg seen: kept
+  CHECK_EQ(last, tidy);
+  p.everyPass(true, last);  // an egg: kept (nothing shows over an egg)
+  CHECK_EQ(last, tidy);
+  p.everyPass(false, last);  // it hatched: forgotten
+  CHECK_EQ(last, (uint8_t)BUB_NONE);
+  CHECK(p.due());
+  BubbleIn in = calm(true, 13, true, last);
+  in.nature = NAT_TIDY;
+  HolidayGreeter g;
+  CHECK_EQ(bubbleChoose(in, 7, g, p, 0, false, GREET_NONE), tidy);
+  last = BUB_HI;
+  p.everyPass(false, last);  // later passes keep what was said
+  CHECK_EQ(last, (uint8_t)BUB_HI);
 }
 
 // bubbleChoose() with a HatchLine is what bubbleLoop() runs (bubble.cpp is not compiled by the

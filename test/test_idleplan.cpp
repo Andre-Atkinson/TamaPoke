@@ -399,8 +399,9 @@ TEST(IdleNature, a_tidy_pet_strolls_clear_of_the_poops_and_looks_about) {
     hi = x > hi ? x : hi;
   }
   CHECK(lo < IDLE_TIDY_WALK_MIN - 40 && hi > IDLE_WALK_MAX - 10);
-  static_assert(IDLE_TIDY_WALK_MIN > 192 && IDLE_TIDY_WALK_MIN < IDLE_WALK_MAX - 60,
-                "clear of the third poop's right edge (drawPoops), with room left to stroll");
+  static_assert(IDLE_TIDY_WALK_MIN - 66 > 192 && IDLE_TIDY_WALK_MIN < IDLE_WALK_MAX - 60,
+                "standing at its left end, all but the 2 widest sprites (66 px left of centre at most) clear the "
+                "third poop's right edge (drawPoops: x 192), with room left to stroll");
   for (uint8_t poops = 1; poops <= 3; poops++) {
     IdleIn in = natured(base, NAT_TIDY, poops);
     W w = weights(in);

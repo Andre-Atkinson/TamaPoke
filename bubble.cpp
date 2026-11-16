@@ -77,7 +77,7 @@ static bool compose(uint8_t line) {
 }
 
 void bubbleLoop(uint32_t now, bool free) {
-  if (hatchLine.watch(pet.isEgg())) bubbleLine = BUB_NONE;  // a new pet has said nothing yet
+  hatchLine.everyPass(pet.isEgg(), bubbleLine);  // a new pet has said nothing yet (#86)
   if (!bubbleTimer.update(now, free, [] { return (uint32_t)random(BUBBLE_GAP_SPAN_MS); })) return;
   BubbleIn in;
   in.needs = attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene);

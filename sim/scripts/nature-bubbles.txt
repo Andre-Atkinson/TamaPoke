@@ -93,10 +93,10 @@ wait 300ms
 shot 19-night-greedy-3
 
 # back to 10:00. A tidy pet with poops on the ground: its strolls keep to the right part of its
-# range (x 230 and on), clear of them ("poops N", simulator only). A tap on empty sky (x 400)
+# range (x 260 and on), clear of them ("poops N", simulator only). A tap on empty sky (x 400)
 # keeps the screen lit; "idle walk" starts a stroll, and the shot catches it on its way or
 # already there. Then without poops: its stroll may go anywhere again (the pet stands where
-# the last one ended, so 22 may or may not show it left of x 230).
+# the last one ended, so 22 may or may not show it left of x 260).
 serial TIME 1794564000
 nature tidy
 poops 3

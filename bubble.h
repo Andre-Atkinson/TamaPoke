@@ -192,7 +192,7 @@ struct MilkHint {
 };
 
 // The line after a hatch (#86): due from the first pass that sees a hatched pet after an
-// egg until its nature's first line is said (BubbleIn::hatchLine). watch() runs on every
+// egg until its nature's first line is said (BubbleIn::hatchLine). everyPass() runs on every
 // loop pass, free screen or not: an egg is never free (petSceneFree), so the pet is always
 // seen as an egg first. In RAM: an egg that hatches while the board is off (Pet::syncClock)
 // is never seen, and its pet names its nature only when that line comes up by chance, as
@@ -210,6 +210,13 @@ struct HatchLine {
     egg_ = false;
     due_ = true;
     return true;
+  }
+  // What bubbleLoop() calls on every pass: watch(), and on the pass the pet is first seen
+  // hatched it forgets `last` (the last line said, BubbleIn::last), which was the previous
+  // pet's. Otherwise a new pet whose naming line was the previous pet's last line would wait
+  // a bubble for it.
+  void everyPass(bool egg, uint8_t &last) {
+    if (watch(egg)) last = BUB_NONE;
   }
   bool due() const { return due_; }
   // a bubble showed `line`: the nature's first line, by the hatch or by chance, ends it
