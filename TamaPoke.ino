@@ -1421,8 +1421,9 @@ void handleTouch() {
 
 #if !BOARD_AMOLED_175C
   // Original board: its exit, a tap on the top strip (y < TRAIN_EXIT_STRIP_H, marked by the
-  // "tap: back" label), which now ends the session and pays for what was done (#78). Anywhere else a touch-down is a punch's tap
-  // and the finger that stays is the stamina hold; a release is never a tap.
+  // "tap: back" label), which now ends the session and pays for what was done (#78).
+  // Anywhere else a touch-down is a punch's tap and the finger that stays is the stamina
+  // hold; a release is never a tap.
   if (trainOpen) {
     static bool counts = false;  // this contact didn't start on the top strip
     if (pressed && !wasPressed) {
