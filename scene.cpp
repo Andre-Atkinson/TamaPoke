@@ -6,6 +6,7 @@
 #include "bubble.h"
 #include "clockprompt.h"
 #include "dex.h"
+#include "holiday.h"
 #include "i18n.h"
 #include "idlelife.h"
 #include "idleplan.h"
@@ -108,6 +109,13 @@ WxNow sceneWeatherNow() {
 uint8_t sceneSeason() { return sceneSeasonOf(pet.ceremony, sceneForceSeason, sceneClock()); }
 
 bool sceneStarsOut() { return wxStarsOut(sceneWeather()); }
+
+// Today's special day (holiday.h, #26) on the scene's clock: nothing without a trusted clock,
+// and nothing during a farewell or a run-away, which keep their own look.
+HolidayToday holidayNow() {
+  if (pet.ceremony) return HolidayToday();
+  return holidayAt(sceneClock(), birthday());
+}
 
 // The place for this frame: a new day's place (or a new pet's home) is taken up only while
 // nobody is looking, or when the pet turns into an egg (SceneLatch), so the pet is never
@@ -289,14 +297,224 @@ static void drawSeasonFx(uint32_t now, uint8_t fx, bool night) {
   }
 }
 
+// ---------- the special days (holiday.h, #26) ----------
+// Drawn with primitives over the scene and behind the pet: the parts that stand (the tree,
+// the pumpkins, the eggs, the balloons) on every frame, dimmed or not; what moves only at
+// the full frame rate, like the rain (wxParticlesLive). The hearts and the fireworks stand
+// still while the screen is dimmed, so the day still shows; the tree's lights stop
+// twinkling; the snow and the bats are left out. At night the decorations darken with the
+// scene, except what glows: the tree's lights and star, and the pumpkin's face.
+
+#define HOL_DUSK C565(0x16, 0x1c, 0x30)  // what the night scene darkens toward (the seasons')
+
+// Christmas, all December: a small tree on the right, below the sun and the moon, with
+// coloured lights (they twinkle at the full frame rate) and a star.
+#define XMAS_TREE_X 420
+static void drawXmasTree(uint32_t now, bool night, bool live) {
+  const int x = XMAS_TREE_X;
+  uint16_t green = C565(0x2a, 0x7a, 0x44), trunk = C565(0x6e, 0x4a, 0x2c);
+  if (night) {
+    green = lerp565(green, HOL_DUSK, 8, 16);
+    trunk = lerp565(trunk, HOL_DUSK, 8, 16);
+  }
+  gfx->fillRect(x - 5, 284, 10, 14, trunk);
+  gfx->fillTriangle(x, 222, x - 32, 288, x + 32, 288, green);
+  gfx->fillTriangle(x, 200, x - 26, 248, x + 26, 248, green);
+  gfx->fillTriangle(x, 180, x - 19, 214, x + 19, 214, green);
+  uint16_t star = C565(0xff, 0xd8, 0x40);
+  gfx->fillTriangle(x, 167, x - 7, 179, x + 7, 179, star);
+  gfx->fillTriangle(x, 183, x - 7, 171, x + 7, 171, star);
+  static const int8_t LIGHTS[9][2] = { { -8, 26 }, { 7, 20 }, { -14, 58 }, { 3, 48 }, { 16, 62 },
+                                       { -22, 100 }, { -6, 82 }, { 10, 96 }, { 24, 102 } };  // from (x, 180)
+  static const uint16_t COLS[4] = { C565(0xff, 0x44, 0x44), C565(0xff, 0xd0, 0x40), C565(0x58, 0xa8, 0xff),
+                                    C565(0xff, 0xff, 0xff) };
+  for (int i = 0; i < 9; i++) {
+    bool dim = live && (now / 500 + i * 7) % 5 == 0;  // one in five rests at a time
+    uint16_t c = dim ? lerp565(COLS[i % 4], green, 10, 16) : COLS[i % 4];
+    gfx->fillCircle(x + LIGHTS[i][0], 180 + LIGHTS[i][1], 3, c);
+  }
+}
+
+// The birthday: three balloons on the left, on strings tied to a little parcel. They sway
+// gently at the full frame rate.
+static void drawBalloons(uint32_t now, bool night, bool live) {
+  static const int16_t AT[3][2] = { { 50, 204 }, { 84, 192 }, { 70, 226 } };
+  static const uint16_t COLS[3] = { C565(0xf0, 0x48, 0x48), C565(0xf8, 0xc8, 0x30), C565(0x38, 0xb0, 0xc8) };
+  const int ax = 66, ay = 290;  // where the strings are tied
+  uint16_t string = night ? C565(0x8a, 0x90, 0xa0) : C565(0x5a, 0x5a, 0x64);
+  for (int i = 0; i < 3; i++) {
+    int x = AT[i][0] + (live ? sway(now, 4000 + i * 700, i * 900, 3) : 0), y = AT[i][1];
+    gfx->drawLine(x, y + 19, ax, ay, string);
+  }
+  for (int i = 0; i < 3; i++) {
+    int x = AT[i][0] + (live ? sway(now, 4000 + i * 700, i * 900, 3) : 0), y = AT[i][1];
+    uint16_t c = night ? lerp565(COLS[i], HOL_DUSK, 6, 16) : COLS[i];
+    gfx->fillEllipse(x, y, 12, 15, c);
+    gfx->fillTriangle(x, y + 14, x - 3, y + 19, x + 3, y + 19, c);  // the knot
+    gfx->fillEllipse(x - 4, y - 6, 3, 4, lerp565(c, UI_WHITE, 9, 16));  // a shine
+  }
+  uint16_t box = night ? lerp565(C565(0xc8, 0x70, 0xd8), HOL_DUSK, 6, 16) : C565(0xc8, 0x70, 0xd8);
+  gfx->fillRect(ax - 7, ay - 2, 14, 11, box);
+  gfx->fillRect(ax - 1, ay - 2, 3, 11, night ? lerp565(UI_WHITE, HOL_DUSK, 6, 16) : UI_WHITE);  // its ribbon
+}
+
+// Halloween: a friendly pumpkin with a smile (it glows at night) and a small one beside it,
+// on the right.
+static void drawPumpkins(bool night) {
+  uint16_t body = C565(0xf0, 0x8a, 0x24), lobe = C565(0xf8, 0xa0, 0x38), stem = C565(0x5a, 0x7a, 0x2c);
+  uint16_t face = night ? C565(0xff, 0xd8, 0x50) : C565(0x4a, 0x24, 0x10);
+  if (night) {
+    body = lerp565(body, HOL_DUSK, 6, 16);
+    lobe = lerp565(lobe, HOL_DUSK, 6, 16);
+    stem = lerp565(stem, HOL_DUSK, 6, 16);
+  }
+  const int x = 404, y = 282;
+  gfx->fillRect(x - 3, y - 22, 6, 9, stem);
+  gfx->fillEllipse(x - 12, y, 13, 15, body);
+  gfx->fillEllipse(x + 12, y, 13, 15, body);
+  gfx->fillEllipse(x, y, 14, 17, lobe);
+  gfx->fillTriangle(x - 8, y - 7, x - 12, y - 1, x - 4, y - 1, face);  // the eyes
+  gfx->fillTriangle(x + 8, y - 7, x + 4, y - 1, x + 12, y - 1, face);
+  gfx->fillRect(x - 8, y + 7, 16, 3, face);  // the smile
+  gfx->fillRect(x - 11, y + 4, 4, 3, face);
+  gfx->fillRect(x + 7, y + 4, 4, 3, face);
+  const int sx = 440, sy = 296;  // the small one
+  gfx->fillRect(sx - 2, sy - 13, 4, 6, stem);
+  gfx->fillEllipse(sx - 5, sy, 7, 9, body);
+  gfx->fillEllipse(sx + 5, sy, 7, 9, body);
+  gfx->fillEllipse(sx, sy, 7, 10, lobe);
+}
+
+// Halloween's bats, at night under a sky that shows the moon: three small ones flapping
+// slowly across.
+static void drawBats(uint32_t now) {
+  uint16_t c = C565(0x12, 0x0a, 0x1a);
+  for (int i = 0; i < 3; i++) {
+    int x = (int)((i * 170 + now / 45) % 560) - 40;
+    int y = 156 + i * 22 + sway(now, 2600 + i * 500, i * 800, 8);
+    bool up = ((now / 180) + i) % 2;
+    gfx->fillCircle(x, y, 3, c);
+    if (up) {
+      gfx->fillTriangle(x - 2, y, x - 12, y - 6, x - 8, y + 2, c);
+      gfx->fillTriangle(x + 2, y, x + 12, y - 6, x + 8, y + 2, c);
+    } else {
+      gfx->fillTriangle(x - 2, y, x - 12, y + 5, x - 7, y - 2, c);
+      gfx->fillTriangle(x + 2, y, x + 12, y + 5, x + 7, y - 2, c);
+    }
+  }
+}
+
+// Easter Sunday: painted eggs in the grass.
+static void drawEasterEggs(bool night) {
+  static const int16_t AT[6][2] = { { 104, 298 }, { 168, 266 }, { 300, 294 }, { 348, 262 }, { 392, 292 }, { 436, 268 } };
+  static const uint16_t BASE[6] = { C565(0xf6, 0xa8, 0xc8), C565(0xf8, 0xe0, 0x70), C565(0xc4, 0xa8, 0xf0),
+                                    C565(0x9c, 0xe4, 0xb8), C565(0x98, 0xd0, 0xf8), C565(0xf8, 0xbc, 0x90) };
+  static const uint16_t BAND[6] = { UI_WHITE, C565(0x58, 0x90, 0xe0), C565(0xf8, 0xe0, 0x70),
+                                    C565(0xf6, 0x8c, 0xb8), UI_WHITE, C565(0xb0, 0x88, 0xe8) };
+  for (int i = 0; i < 6; i++) {
+    int x = AT[i][0], y = AT[i][1];
+    uint16_t b = BASE[i], d = BAND[i];
+    if (night) {
+      b = lerp565(b, HOL_DUSK, 8, 16);
+      d = lerp565(d, HOL_DUSK, 8, 16);
+    }
+    gfx->fillEllipse(x, y, 9, 11, b);
+    gfx->fillRect(x - 8, y - 3, 17, 4, d);  // a band, inside the egg's outline
+    gfx->fillRect(x - 4, y + 4, 3, 3, d);   // and two dots
+    gfx->fillRect(x + 2, y + 4, 3, 3, d);
+  }
+}
+
+// a small heart centred on (x, y), `r` the radius of its two lobes
+static void drawHeartShape(int x, int y, int r, uint16_t c) {
+  gfx->fillCircle(x - r + 1, y, r, c);
+  gfx->fillCircle(x + r - 1, y, r, c);
+  gfx->fillTriangle(x - 2 * r + 1, y + 1, x + 2 * r - 1, y + 1, x, y + 2 * r + 1, c);
+}
+
+// Valentine's Day: hearts floating up through the sky, below the header. While the screen is
+// dimmed they stand where they would be at t = 0.
+static void drawHearts(uint32_t now, bool night, bool live) {
+  static const uint16_t COLS[3] = { C565(0xf0, 0x50, 0x78), C565(0xff, 0x8a, 0xb0), C565(0xe0, 0x30, 0x50) };
+  uint32_t t = live ? now : 0;
+  for (int i = 0; i < 8; i++) {
+    int y = 296 - (int)((t / 50 + i * 41) % 172);  // 20 px a second, from the grass to y 124
+    int x = 40 + (i * 53) % 390 + sway(t, 3000 + i * 400, i * 600, 10);
+    uint16_t c = night ? lerp565(COLS[i % 3], HOL_DUSK, 4, 16) : COLS[i % 3];
+    drawHeartShape(x, y, i % 2 ? 4 : 5, c);
+  }
+}
+
+// New Year: soft fireworks, a rocket rising and then a ring of short streaks spreading out,
+// three at a time, between the header and the horizon and clear of the sun and the moon.
+// Nothing flashes. Deeper colours by day, light ones at night. While the screen is dimmed,
+// three bursts stand still.
+#define FW_PERIOD_MS 3600
+#define FW_RISE_MS 700
+#define FW_BURST_MS 1600
+static void drawFireworks(uint32_t now, bool night, bool live) {
+  static const int8_t DIR[12][2] = { { 64, 0 }, { 55, 32 }, { 32, 55 }, { 0, 64 }, { -32, 55 }, { -55, 32 },
+                                     { -64, 0 }, { -55, -32 }, { -32, -55 }, { 0, -64 }, { 32, -55 }, { 55, -32 } };
+  static const uint16_t DAY[4] = { C565(0xe8, 0x30, 0x70), C565(0x8c, 0x48, 0xe0), C565(0x10, 0x9c, 0x90),
+                                   C565(0xf0, 0x7c, 0x10) };
+  static const uint16_t NIGHT[4] = { C565(0xff, 0xd8, 0x60), C565(0xff, 0x7a, 0xc8), C565(0x60, 0xe0, 0xd0),
+                                     C565(0xd8, 0xe0, 0xff) };
+  for (int i = 0; i < 3; i++) {
+    uint32_t at = live ? now + (uint32_t)i * (FW_PERIOD_MS / 3) : FW_RISE_MS + FW_BURST_MS / 2;
+    uint32_t ph = at % FW_PERIOD_MS, n = live ? at / FW_PERIOD_MS : (uint32_t)i;
+    uint32_t r = sceneHash(n * 3 + i);
+    int x = 110 + (int)(r % 220), y = 150 + (int)((r >> 8) % 31);
+    if (!live) {  // the standing three, spread across the sky
+      x = 120 + i * 100;
+      y = 152 + (i % 2) * 22;
+    }
+    uint16_t c = (night ? NIGHT : DAY)[(r >> 16) % 4];
+    if (ph < FW_RISE_MS) {  // the rocket
+      int ry = HORIZON - (int)((HORIZON - y) * ph / FW_RISE_MS);
+      gfx->fillRect(x - 1, ry, 3, 6, c);
+    } else if (ph < FW_RISE_MS + FW_BURST_MS) {  // the streaks: out to 8..36 px, 9 px long
+      int t = (int)(ph - FW_RISE_MS), rad = 8 + t * 28 / FW_BURST_MS, in = rad > 9 ? rad - 9 : 0;
+      for (auto &d : DIR) {
+        int x0 = x + d[0] * in / 64, y0 = y + d[1] * in / 64, x1 = x + d[0] * rad / 64, y1 = y + d[1] * rad / 64;
+        gfx->drawLine(x0, y0, x1, y1, c);  // 2 px wide: a 1 px line is a hair on the panel
+        gfx->drawLine(x0 + 1, y0, x1 + 1, y1, c);
+      }
+    }
+  }
+}
+
+// Everything the day brings (holidayNow()): over the landscape and the fog, behind the pet.
+static void drawHoliday(uint32_t now, const HolidayToday &hol, bool night, bool live, const WxNow &wx) {
+  switch (hol.day) {
+    case HOL_DECEMBER:
+    case HOL_CHRISTMAS:
+      drawXmasTree(now, night, live);
+      // a little snow, even in the southern summer, when the weather brings none of its own
+      if (live && !wxDrops(wx) && !wxFlakes(wx)) drawSnow(now, 10, night);
+      break;
+    case HOL_NEW_YEAR: drawFireworks(now, night, live); break;
+    case HOL_VALENTINE: drawHearts(now, night, live); break;
+    case HOL_EASTER: drawEasterEggs(night); break;
+    case HOL_HALLOWEEN:
+      drawPumpkins(night);
+      if (live && night && wxSunOut(wx)) drawBats(now);
+      break;
+    default: break;
+  }
+  if (hol.birthday) drawBalloons(now, night, live);
+}
+
 void drawScene(uint32_t now, bool night) {
   uint8_t biome = scenePlaceForFrame(now);
   WxNow wx = sceneWeather();
   uint8_t grey = wxGrey(wx), fog = wxFog(wx);
   bool live = wxParticlesLive(frameIntervalMs(powerCtx(now)));
   int h = sceneHour();
+  HolidayToday hol = holidayNow();  // the special day's decorations (#26)
+  bool halloweenNight = night && hol.day == HOL_HALLOWEEN;  // a gently spooky purple sky and a full moon
   uint16_t top, bot;
-  if (night)            { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
+  if (halloweenNight)   { top = C565(0x1c, 0x0e, 0x2e); bot = C565(0x46, 0x24, 0x52); }
+  else if (night)       { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
   else if (h < 8)       { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }  // amanecer
   else if (h < 18)      { top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }  // dia
   else                  { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }  // atardecer
@@ -318,7 +536,9 @@ void drawScene(uint32_t now, bool night) {
   // sol o luna (sin estrellas ni astros bajo un cielo cubierto), below the header (#70)
   bool sunOut = wxSunOut(wx);
   if (night) {
-    if (sunOut) {
+    if (sunOut && halloweenNight) {  // Halloween: a full, pale orange moon
+      gfx->fillCircle(SKY_MOON_X, SKY_MOON_Y, SKY_MOON_R, C565(0xf6, 0xd2, 0x8c));
+    } else if (sunOut) {
       gfx->fillCircle(SKY_MOON_X, SKY_MOON_Y, SKY_MOON_R, C565(0xe8, 0xee, 0xf5));
       // creciente: the sky's own colour at that height bites the moon
       gfx->fillCircle(SKY_MOON_X + 10, SKY_MOON_Y - 6, SKY_MOON_R - 2, lerp565(top, bot, SKY_MOON_Y - 6, HORIZON));
@@ -399,6 +619,7 @@ void drawScene(uint32_t now, bool night) {
     gfx->fillEllipse(58, 286, 30, 5, pud);
     gfx->fillEllipse(410, 296, 24, 4, pud);
   }
+  drawHoliday(now, hol, night, live, wx);  // in front of the fog: the decorations stand close by
   if (!live) return;  // dimmed or slow frames: no falling rain or snow (they would step)
   drawSeasonFx(now, seasonFx(season, biome, night, wx), night);
   uint8_t drops = wxDrops(wx), flakes = wxFlakes(wx);

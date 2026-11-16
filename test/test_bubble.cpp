@@ -2,6 +2,7 @@
 // goes on the round screen, and that every line fits in every language. Pure logic.
 #include "framework.h"
 #include "../bubble.h"
+#include "../holiday.h"
 #include "../i18n.h"
 #include "../owner.h"
 #include <math.h>
@@ -25,7 +26,7 @@ TEST(Bubble, the_lines_follow_the_needs_and_the_strings) {
   CHECK_EQ((int)BUB_HUNGRY + ATTN_HYGIENE, (int)BUB_BATH);
   CHECK_EQ((int)BUB_HUNGRY + ATTN_ENERGY, (int)BUB_TIRED);
   CHECK_EQ((int)BUB_HUNGRY + ATTN_JOY, (int)BUB_BORED);
-  CHECK_EQ((int)S_SAY_HUNGRY + BUB_LINES - 1, (int)S_SAY_LOVE);
+  CHECK_EQ((int)S_SAY_HUNGRY + BUB_LOVE, (int)S_SAY_LOVE);
   CHECK_EQ((int)S_SAY_HUNGRY + BUB_LOVE_NAME, (int)S_SAY_LOVE_FMT);
   CHECK_EQ((int)S_SAY_HUNGRY + BUB_STARS, (int)S_SAY_STARS);
   CHECK_EQ((int)S_SAY_HUNGRY + BUB_PAT, (int)S_SAY_PAT);
@@ -394,22 +395,34 @@ static const char *LANG_ID[LANG_COUNT] = { "EN", "PT" };
 // ptglyphs.h have the same 6 px cell.
 static int widthIn(int len) { return len * 12; }
 
+// What bubble.cpp's compose() writes for `line` (bubbleStrOffset and bubbleTakesName),
+// with `name` set or "" for none.
+static void sayLine(char *say, size_t n, int line, const char *name) {
+  const char *fmt = T((StrId)(S_SAY_HUNGRY + bubbleStrOffset((uint8_t)line, name[0] != 0)));
+  if (bubbleTakesName((uint8_t)line, name[0] != 0)) snprintf(say, n, fmt, name);
+  else snprintf(say, n, "%s", fmt);
+}
+
 TEST(Bubble, every_line_fits_two_lines_in_every_language_with_the_longest_name) {
-  // the longest name in the font's encoding: one byte per character, no space to wrap at
+  // the longest name in the font's encoding: one byte per character, no space to wrap at;
+  // and no name (the greetings then say only the day)
   char name[OWNER_NAME_MAX + 1];
   memset(name, 'W', OWNER_NAME_MAX);
   name[OWNER_NAME_MAX] = 0;
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;
     for (int line = 0; line < BUB_LINES; line++) {
-      char say[48];
-      if (line == BUB_LOVE_NAME) snprintf(say, sizeof say, T(S_SAY_LOVE_FMT), name);
-      else snprintf(say, sizeof say, "%s", T((StrId)(S_SAY_HUNGRY + line)));
-      CHECK_MSG(say[0], std::string("empty: ") + BUBBLE_KEYS[line] + " in " + LANG_ID[lang]);
-      for (int badge = 0; badge < 2; badge++) {
-        int br = bubbleSplit(say, (int)strlen(say), bubbleTextMax(badge),
-                             [](const char *, int len) { return widthIn(len); });
-        CHECK_MSG(br != -2, std::string("does not fit: ") + say + " in " + LANG_ID[lang] + (badge ? " (badge)" : ""));
+      for (const char *nm : { (const char *)name, "" }) {
+        if (line == BUB_LOVE_NAME && !nm[0]) continue;  // only picked with a name
+        char say[48];
+        sayLine(say, sizeof say, line, nm);
+        CHECK_MSG(say[0], std::string("empty: ") + BUBBLE_KEYS[line] + " in " + LANG_ID[lang]);
+        CHECK_MSG(!strchr(say, '%'), std::string("unformatted: ") + say);
+        for (int badge = 0; badge < 2; badge++) {
+          int br = bubbleSplit(say, (int)strlen(say), bubbleTextMax(badge),
+                               [](const char *, int len) { return widthIn(len); });
+          CHECK_MSG(br != -2, std::string("does not fit: ") + say + " in " + LANG_ID[lang] + (badge ? " (badge)" : ""));
+        }
       }
     }
   }
@@ -417,16 +430,58 @@ TEST(Bubble, every_line_fits_two_lines_in_every_language_with_the_longest_name) 
 }
 
 TEST(Bubble, the_need_lines_and_most_others_fit_on_one_line) {
-  // two lines are kept for the love line with a long name: everything else is one line,
-  // even beside the clock badge
+  // two lines are kept for the lines that carry a long name: everything else is one line,
+  // even beside the clock badge (a greeting without a name included)
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;
     for (int line = 0; line < BUB_LINES; line++) {
       if (line == BUB_LOVE_NAME) continue;
-      const char *s = T((StrId)(S_SAY_HUNGRY + line));
+      char s[48];
+      sayLine(s, sizeof s, line, "");
       CHECK_MSG(widthIn((int)strlen(s)) <= bubbleTextMax(true), std::string("two lines: ") + s);
     }
   }
   gLang = LANG_DEFAULT;
+}
+
+// ---------------------------------------------------------------- the special days (#26)
+TEST(Bubble, a_greeting_says_the_day_with_the_name_or_without) {
+  gLang = LANG_EN;
+  char say[48];
+  sayLine(say, sizeof say, BUB_CHRISTMAS, "Sam");
+  CHECK_STREQ(say, "Merry Christmas, Sam!");
+  sayLine(say, sizeof say, BUB_CHRISTMAS, "");
+  CHECK_STREQ(say, "Merry Christmas!");
+  sayLine(say, sizeof say, BUB_BIRTHDAY, "Sam");
+  CHECK_STREQ(say, "Happy birthday, Sam!");
+  sayLine(say, sizeof say, BUB_BIRTHDAY, "");
+  CHECK_STREQ(say, "Happy birthday!");
+  sayLine(say, sizeof say, BUB_NEW_YEAR, "Sam");
+  CHECK_STREQ(say, "Happy New Year, Sam!");
+  sayLine(say, sizeof say, BUB_HALLOWEEN, "");
+  CHECK_STREQ(say, "Happy Halloween!");
+  sayLine(say, sizeof say, BUB_LOVE, "Sam");  // the plain love line never takes the name
+  CHECK_STREQ(say, "I love you!");
+  gLang = LANG_PT;
+  sayLine(say, sizeof say, BUB_EASTER, "Sam");
+  CHECK_STREQ(say, "Feliz P\240scoa, Sam!");
+  sayLine(say, sizeof say, BUB_VALENTINE, "");
+  CHECK_STREQ(say, "Feliz Dia dos Namorados!");
+  gLang = LANG_DEFAULT;
+  CHECK_EQ((int)BUB_GREET_FIRST + GREET_BIRTHDAY - GREET_CHRISTMAS, (int)BUB_BIRTHDAY);
+  CHECK_EQ((int)BUB_BIRTHDAY + 1, (int)BUB_LINES);
+}
+
+TEST(Bubble, a_due_greeting_comes_first_even_before_a_need) {
+  BubbleIn in = calm(true, 9, true, BUB_HI);
+  in.needs = attnLevels(5, 80, 80, 80);  // hungry
+  in.greet = BUB_CHRISTMAS;
+  for (uint32_t r = 0; r < 300; r++) CHECK_EQ(bubblePick(in, r), (uint8_t)BUB_CHRISTMAS);
+  in.last = BUB_CHRISTMAS;  // even right after the same greeting (HolidayGreeter spaces them)
+  CHECK_EQ(bubblePick(in, 7), (uint8_t)BUB_CHRISTMAS);
+  in.greet = BUB_NONE;  // none due: the need, as before
+  CHECK_EQ(bubblePick(in, 7), (uint8_t)BUB_HUNGRY);
+  in.greet = BUB_LOVE;  // not a greeting line: ignored
+  CHECK_EQ(bubblePick(in, 7), (uint8_t)BUB_HUNGRY);
 }
 

@@ -51,6 +51,7 @@ static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright unt
 #include "serialcmd.h"
 #include "uitext.h"
 #include "owner.h"
+#include "holiday.h"
 #include <Preferences.h>
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
@@ -427,6 +428,7 @@ void setup() {
   Serial.printf("TamaPoke fw v%s (%s)\n", FW_VERSION, BOARD_NAME);
   loadLang();  // saved language; English when none or not EN/PT (i18n.h)
   ownerLoad();  // the player's name for the speech bubbles (owner.h), if the owner set one
+  birthdayLoad();  // the player's birthday for the special days (holiday.h, #26), if set
   Wire.begin(IIC_SDA, IIC_SCL);
 #if BOARD_AMOLED_175C
   // QMI8658 is on VCC3V3 and is not used by this firmware. CTRL7=0 disables its sensors; the

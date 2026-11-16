@@ -1,0 +1,181 @@
+# Holidays and the birthday (#26, holiday.h): every special day's decorations by day and by
+# night, with the greeting coming by itself (the player's name, and no name); the birthday
+# (alone, beside the Christmas tree, and 29 Feb on 28 Feb in a year without one); Christmas
+# in the rain and at the beach; and the cases with no decorations or no greeting: no trusted
+# clock, quiet hours, an ordinary day, a farewell.
+# A manual check: run it in each language on both boards and look at the shots and the
+# "say ..." lines in the serial log; nothing compares them automatically.
+#   tools/sim.sh --board 175c --lang pt --script holidays --out shots/pt/
+# TIME moves the clock to each day (the decorations follow the clock at once). SCENE keeps
+# the pet in the meadow in clear weather, so the shots compare. The greeting takes the place
+# of the next bubble that comes: PWR turns the screen off (it is on: just touched), two
+# minutes pass so a bubble is due, PWR turns it on again, and 3 s later the bubble comes.
+# The steps mean the same on both boards (PWR is only pressed with the screen just touched).
+# The name and the birthdays are placeholders.
+clock none
+battery 80
+
+# new game with no time: pick Charmander, skip the clock screen (the badge stays), hatch.
+# RTCSET puts the clock on Christmas morning without setting it: still asking, so no tree
+# and no greeting (the first bubble comes by itself, an ordinary line)
+wait 1s
+tap 233 220
+wait 1s
+swipe up
+serial HATCH
+serial OWNER Sam
+serial RTCSET 1798192800
+serial SCENE meadow clear auto
+wait 5s
+shot 01-no-clock-no-decorations
+serial BDAY?
+
+# Christmas Day, the clock set: the tree, its lights and a little snow, and the greeting
+serial TIME 1798192800
+press pwr
+wait 2m
+press pwr
+wait 3500ms
+shot 02-christmas-day-greeting
+serial BDAY?
+press pwr
+serial TIME 1798232400
+wait 2m
+press pwr
+wait 3500ms
+shot 03-christmas-night-greeting
+# 23:00 is quiet hours (bedtime off: 22:00-07:00): the tree stays up, the bubble is an
+# ordinary line
+press pwr
+serial TIME 1798239600
+wait 2m
+press pwr
+wait 3500ms
+shot 04-christmas-quiet-hours-no-greeting
+# in the rain the weather's own drops fall, not the festive snow; and the tree at the beach
+serial TIME 1798192800
+serial SCENE meadow rain auto
+wait 1s
+shot 05-christmas-rain
+serial SCENE beach clear auto
+wait 1s
+shot 06-christmas-beach
+serial SCENE meadow clear auto
+# no name: the greeting says only the day
+serial OWNER
+say christmas
+wait 300ms
+shot 07-christmas-no-name
+serial OWNER Sam
+
+# New Year: soft fireworks
+press pwr
+serial TIME 1798797600
+wait 2m
+press pwr
+wait 3500ms
+shot 08-newyear-day-greeting
+press pwr
+serial TIME 1798837200
+wait 2m
+press pwr
+wait 3500ms
+shot 09-newyear-night-greeting
+
+# Valentine's Day: hearts floating up
+press pwr
+serial TIME 1802599200
+wait 2m
+press pwr
+wait 3500ms
+shot 10-valentine-day-greeting
+press pwr
+serial TIME 1802638800
+wait 2m
+press pwr
+wait 3500ms
+shot 11-valentine-night-greeting
+
+# Easter Sunday 2027 (28 March): eggs in the grass
+press pwr
+serial TIME 1806228000
+wait 2m
+press pwr
+wait 3500ms
+shot 12-easter-day-greeting
+press pwr
+serial TIME 1806267600
+wait 2m
+press pwr
+wait 3500ms
+shot 13-easter-night-greeting
+
+# Halloween: a friendly pumpkin; at night a purple sky, a full orange moon and bats
+press pwr
+serial TIME 1824976800
+wait 2m
+press pwr
+wait 3500ms
+shot 14-halloween-day-greeting
+press pwr
+serial TIME 1825016400
+wait 2m
+press pwr
+wait 3500ms
+shot 15-halloween-night-greeting
+wait 5s
+shot 16-halloween-night-bats
+
+# the birthday: balloons and its own greeting
+serial BDAY 6 15
+press pwr
+serial TIME 1813053600
+wait 2m
+press pwr
+wait 3500ms
+shot 17-birthday-day-greeting
+press pwr
+serial TIME 1813093200
+wait 2m
+press pwr
+wait 3500ms
+shot 18-birthday-night-greeting
+# a birthday in December: the balloons beside the tree, and the birthday's greeting
+serial BDAY 12 10
+press pwr
+serial TIME 1796896800
+wait 2m
+press pwr
+wait 3500ms
+shot 19-birthday-in-december
+serial BDAY?
+# 29 February: on 28 February 2027 (no 29th that year), not on 28 February 2028
+serial BDAY 2 29
+press pwr
+serial TIME 1803808800
+wait 2m
+press pwr
+wait 3500ms
+shot 20-birthday-29feb-on-28feb-2027
+serial BDAY?
+serial TIME 1835344800
+wait 1s
+shot 21-no-birthday-28feb-2028
+serial BDAY?
+serial TIME 1835431200
+wait 1s
+shot 22-birthday-29feb-2028
+serial BDAY?
+# BDAY refuses a day the month does not have; BDAY 0 0 clears it
+serial BDAY 2 30
+serial BDAY 0 0
+serial BDAY?
+wait 1s
+shot 23-birthday-cleared
+
+# a farewell keeps its own look: no tree on Christmas Day
+serial TIME 1798192800
+wait 1s
+serial BYE
+wait 2s
+shot 24-farewell-no-decorations

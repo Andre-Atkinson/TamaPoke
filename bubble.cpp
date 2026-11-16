@@ -4,6 +4,7 @@
 #include "app.h"
 #include "attention.h"
 #include "bubble.h"
+#include "holiday.h"
 #include "i18n.h"
 #include "owner.h"
 #include "scene.h"
@@ -12,8 +13,19 @@
 static_assert((int)S_SAY_HUNGRY + (int)BUB_LOVE_NAME == (int)S_SAY_LOVE_FMT &&
                   (int)S_SAY_HUNGRY + (int)BUB_LOVE == (int)S_SAY_LOVE,
               "the S_SAY_* strings follow BubbleLine");
+// each greeting has two strings, with the name and without, in BubbleLine order (#26):
+// bubbleStrOffset() finds them
+static_assert((int)S_SAY_HUNGRY + bubbleStrOffset(BUB_CHRISTMAS, true) == (int)S_SAY_CHRISTMAS_FMT &&
+                  (int)S_SAY_HUNGRY + bubbleStrOffset(BUB_CHRISTMAS, false) == (int)S_SAY_CHRISTMAS &&
+                  (int)S_SAY_HUNGRY + bubbleStrOffset(BUB_BIRTHDAY, true) == (int)S_SAY_BIRTHDAY_FMT &&
+                  (int)S_SAY_HUNGRY + bubbleStrOffset(BUB_BIRTHDAY, false) == (int)S_SAY_BIRTHDAY,
+              "the greeting strings follow BubbleLine");
+static_assert((int)BUB_GREET_FIRST + (int)GREET_BIRTHDAY - (int)GREET_CHRISTMAS == (int)BUB_BIRTHDAY &&
+                  (int)BUB_BIRTHDAY + 1 == (int)BUB_LINES,
+              "the greeting lines follow Greet");
 
 static BubbleTimer bubbleTimer;
+static HolidayGreeter greeter;  // how many greetings today, and when the last (holiday.h, #26)
 static uint8_t bubbleLine = BUB_NONE;  // the line showing, or the last one said
 // The line in the active font's encoding. Two lines are split at a space, which becomes
 // the first line's terminator: line 2 starts at bubbleText + bubbleBreak + 1.
@@ -35,13 +47,12 @@ static int measure(const char *s, int len) {
 // Makes the text of `line` and lays it out; false if it does not fit in two lines.
 static bool compose(uint8_t line) {
   char say[48];
-  if (line == BUB_LOVE_NAME) {
-    char name[OWNER_NAME_MAX + 1];
-    ownerNameForScreen(name, sizeof name);
-    snprintf(say, sizeof(say), T(S_SAY_LOVE_FMT), name);
-  } else {
-    snprintf(say, sizeof say, "%s", T((StrId)(S_SAY_HUNGRY + line)));
-  }
+  char name[OWNER_NAME_MAX + 1];
+  ownerNameForScreen(name, sizeof name);
+  // "I love you, <name>!" and a greeting with the name when one is set (bubbleTakesName)
+  const char *fmt = T((StrId)(S_SAY_HUNGRY + bubbleStrOffset(line, name[0] != 0)));
+  if (bubbleTakesName(line, name[0] != 0)) snprintf(say, sizeof say, fmt, name);
+  else snprintf(say, sizeof say, "%s", fmt);
   setSize(2);
   int n = (int)strlen(say);
   int br = bubbleSplit(say, n, bubbleTextMax(badgeShowing()), measure);
@@ -65,12 +76,19 @@ void bubbleLoop(uint32_t now, bool free) {
   in.starsOut = sceneStarsOut();   // ...and not under cloud, rain, snow or fog (#60)
   in.named = ownerName()[0] != 0;
   in.last = bubbleLine;
+  // a special day's greeting (#26): the scene's clock (0 while it is not trusted), as the
+  // decorations; never in quiet hours
+  uint32_t clock = sceneEpoch(e, bedEdge.stale());
+  uint8_t greet = holidayNow().greet;
+  if (greeter.due(clock, attnQuietAt(pet.bedPreset, e, bedEdge.stale()), greet))
+    in.greet = (uint8_t)(BUB_GREET_FIRST + greet - GREET_CHRISTMAS);
   uint8_t line = bubblePick(in, (uint32_t)random(0x7FFFFFFF));
   if (!compose(line)) {
     bubbleTimer.cancel();
     Serial.printf("say %s: too wide\n", BUBBLE_KEYS[line]);
     return;
   }
+  if (line == in.greet) greeter.said(clock);
   bubbleLine = line;
   Serial.printf("say %s\n", BUBBLE_KEYS[line]);
 }

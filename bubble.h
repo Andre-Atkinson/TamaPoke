@@ -3,7 +3,8 @@
 // scene.ino), rewritten here without their network features.
 //
 // Pure logic (no hardware, no clock reads), tested on the PC (test/test_bubble.cpp):
-//  - bubblePick(): which line. A low need always wins, with the same need and threshold
+//  - bubblePick(): which line. A special day's greeting that is due comes first (#26,
+//    holiday.h). Then a low need always wins, with the same need and threshold
 //    as the "!" bubble, the status line and the attention call (attnShown, ATTN_LOW), so
 //    the four never disagree. Otherwise, at random, a morning or night line (only with a
 //    clock that is set and not stale), a friendly line, or "I love you" (with the
@@ -27,13 +28,30 @@ enum BubbleLine : uint8_t {
   BUB_HI, BUB_HAPPY, BUB_PAT,                      // the friendly lines
   BUB_LOVE_NAME,                                   // "I love you, %s!" (a name is set)
   BUB_LOVE,                                        // "I love you!" (no name)
+  // the greetings of the special days (#26, holiday.h), in Greet order: "Merry Christmas,
+  // <name>!" (or without the name when none is set)
+  BUB_CHRISTMAS, BUB_NEW_YEAR, BUB_VALENTINE, BUB_EASTER, BUB_HALLOWEEN, BUB_BIRTHDAY,
   BUB_LINES
 };
+#define BUB_GREET_FIRST BUB_CHRISTMAS  // = BUB_GREET_FIRST + Greet - GREET_CHRISTMAS
+
+// The string a line says, as its offset from S_SAY_HUNGRY in i18n.h (bubble.cpp checks the
+// order): one string a line up to BUB_LOVE, then two for each greeting, with the player's
+// name and without (S_SAY_CHRISTMAS_FMT, S_SAY_CHRISTMAS...).
+constexpr int bubbleStrOffset(uint8_t line, bool named) {
+  if (line >= BUB_GREET_FIRST && line < BUB_LINES) return BUB_GREET_FIRST + 2 * (line - BUB_GREET_FIRST) + (named ? 0 : 1);
+  return line;
+}
+// Does that string take the name (a "%s")? The love line as picked, a greeting when a name is set.
+constexpr bool bubbleTakesName(uint8_t line, bool named) {
+  return line == BUB_LOVE_NAME || (named && line >= BUB_GREET_FIRST && line < BUB_LINES);
+}
 #define BUB_NONE 0xFF
 #define BUB_FRIENDLY 3
 // each line's name in the serial log ("say hungry") and in the simulator's "say" step
 inline const char *const BUBBLE_KEYS[BUB_LINES] = {
   "hungry", "bath", "tired", "bored", "morning", "stars", "hi", "happy", "pat", "love-name", "love",
+  "christmas", "newyear", "valentine", "easter", "halloween", "birthday",
 };
 
 #define BUBBLE_SHOW_MS 4500UL      // how long one stays up
@@ -56,12 +74,17 @@ struct BubbleIn {
   bool starsOut = true;  // the night sky shows its stars (sceneStarsOut(), weather.h, #60)
   bool named;       // the player's name is set
   uint8_t last;     // the previous line, or BUB_NONE
+  uint8_t greet = BUB_NONE;  // a special day's greeting that is due (HolidayGreeter, holiday.h), or BUB_NONE
 };
 
-// r: any random number. r % 100 picks the kind (about 30% a time line when one applies,
-// 50% friendly, 20% love; 80% friendly when no time line applies) and r / 100 which
-// friendly line. A need repeats while it lasts; any other line is not said twice in a row.
+// r: any random number. A special day's greeting that is due comes first, even before a
+// need: it is rare (holiday.h) and the need's "!" bubble is back as soon as it ends.
+// Then a low need. Otherwise r % 100 picks the kind (about 30% a time line when one
+// applies, 50% friendly, 20% love; 80% friendly when no time line applies) and r / 100
+// which friendly line. A need repeats while it lasts; any other line is not said twice in
+// a row.
 inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
+  if (in.greet >= BUB_GREET_FIRST && in.greet < BUB_LINES) return in.greet;
   uint8_t need = attnShown(in.needs);
   if (need < ATTN_NEEDS) return (uint8_t)(BUB_HUNGRY + need);
   uint32_t p = r % 100;
