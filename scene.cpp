@@ -954,20 +954,12 @@ static uint8_t pmdScale(const PmdMon &m, const PmdAct &a, uint8_t maxS) {
 
 // How far above the ground the top of action actId of the main sprite is drawn, in px: its
 // first frame's highest opaque row (the idle emotes and the bubbles sit by the head, #22,
-// #73). Scanned on each call, so only petHeadTop() calls it, on a frame that draws one.
+// #73). The row is found once, when the sprite loads (PmdAct::top).
 static int pmdHeight(uint8_t actId, uint8_t maxS) {
   const PmdAct &a = pmd.acts[actId];
   if (!a.frames) return 0;
-  int top = 0;
-  while (top < a.h) {
-    const uint8_t *row = a.data + top * a.w;
-    bool any = false;
-    for (int c = 0; c < a.w && !any; c++) any = row[c] != 0xFF;
-    if (any) break;
-    top++;
-  }
   int base = a.base ? a.base : a.h;
-  return base > top ? (base - top) * pmdScale(pmd, a, maxS) : 0;
+  return base > a.top ? (base - a.top) * pmdScale(pmd, a, maxS) : 0;
 }
 
 int petHeadTop() {
