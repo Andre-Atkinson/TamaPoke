@@ -1925,6 +1925,13 @@ class TestBoardPy(unittest.TestCase):
         self.assertIsNone(code)
         self.assertEqual(len(out.splitlines()), 4)
 
+    def test_batlog_that_got_lines_but_no_battery_diary_is_not_called_cut_short(self):
+        # a heartbeat and nothing else: not a diary at all, so say what happened, not "cut short"
+        _, _, _, code = self.run_batlog(b'HEALTH up=1s\r\n', timeout=1)
+        self.assertIsInstance(code, str)
+        self.assertIn('no DONE', code)
+        self.assertNotIn('cut short', code)
+
     def test_batlog_on_a_firmware_without_the_diary(self):
         _, _, _, code = self.run_batlog(b'', timeout=1)
         self.assertIsInstance(code, str)

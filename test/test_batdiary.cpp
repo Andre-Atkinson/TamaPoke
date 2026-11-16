@@ -707,7 +707,7 @@ TEST(BatLogNvs, a_cutoff_after_a_clear_is_logged_again) {
   batLogCutoff(20000 + MIN_MS, T0);  // the diary is empty: this cutoff is the first row of it
   std::vector<BatRow> rows = rowsInRam();
   CHECK_EQ(rows.size(), (size_t)1);
-  CHECK_EQ(rows[0].kind, (uint8_t)BL_CUTOFF);
+  if (rows.size() == 1) CHECK_EQ(rows[0].kind, (uint8_t)BL_CUTOFF);
 }
 
 TEST(BatLogNvs, a_namespace_that_will_not_open_is_not_retried_every_pass) {
