@@ -1502,11 +1502,11 @@ class TestBuildCache(FakeArduinoCliCase):
 
     def test_the_gate_fails_on_sketch_warnings_over_the_baseline(self):
         root = self.gate_root()
-        for n, env, green in ((19, {}, True), (20, {}, False), (21, {'WARN_BASELINE': '21'}, True)):
+        for n, env, green in ((18, {}, True), (19, {}, False), (21, {'WARN_BASELINE': '21'}, True)):
             with self.subTest(n=n, env=env):
                 self.fresh()
                 r = self.gate(root, FAKE_WARNINGS=str(n), **env)
-                base = env.get('WARN_BASELINE', '19')
+                base = env.get('WARN_BASELINE', '18')
                 self.assertEqual(r.returncode == 0, green, r.stdout + r.stderr)
                 for label in ('1.75C', '1.75'):
                     self.assertIn(f'{label}: {n} sketch warning(s), baseline {base}', r.stdout)
