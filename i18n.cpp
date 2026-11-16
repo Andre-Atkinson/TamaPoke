@@ -142,7 +142,7 @@ void formatDate(char *buf, size_t n, uint8_t weekday, uint8_t day, uint8_t month
 }
 static_assert(S_NAT_LAZY - S_NAT_EASYGOING == NAT_LAZY - NAT_EASYGOING && NAT_LAZY + 1 == NAT_COUNT,
               "the nature names follow NAT_* (nature.h)");
-const char *natureName(uint8_t n) { return T((StrId)(S_NAT_EASYGOING + (n < NAT_COUNT ? n : NAT_EASYGOING))); }
+const char *natureName(uint8_t n) { return T((StrId)(S_NAT_EASYGOING + (n < NAT_COUNT ? n : (uint8_t)NAT_EASYGOING))); }
 const char *medalName(int i)  { return MED_NAME[gLang][i]; }
 const char *medalDesc(int i)  { return MED_DSC[gLang][i]; }
 

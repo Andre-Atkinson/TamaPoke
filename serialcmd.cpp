@@ -187,7 +187,7 @@ void handleSerial() {
                   pet.weight, pet.atkStat(), pet.defStat(), pet.speStat(),
                   pet.geneAtk, pet.geneDef, pet.geneSpe,
                   pet.trAtk, pet.trDef, pet.trSpe, pet.berryKnown,
-                  NATURE_KEYS[pet.nature < NAT_COUNT ? pet.nature : NAT_EASYGOING]);
+                  NATURE_KEYS[pet.nature < NAT_COUNT ? pet.nature : (uint8_t)NAT_EASYGOING]);
     Serial.printf("shiny=%d streak=%u/%u bond=%u medals=0x%X(%u) nick=%s\n",
                   pet.shiny, pet.streak, pet.bestStreak, pet.bond, pet.medals,
                   pet.totalMedals, pet.nick);
