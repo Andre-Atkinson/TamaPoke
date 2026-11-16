@@ -134,8 +134,9 @@ While **awake**, per minute:
   level 5 (no slip-ups, weight 0), and slip-ups don't delay its evolution. The "ready to evolve"
   chime sounds at most once per level for each form, because the needs keep coming back over 40.
 - 💬 **Speech bubbles:** now and then the creature says something in a bubble above
-  it, for about 4.5 s. A need comes first, the same one (below 25) as the "!" bubble and
-  the status line: "I'm hungry!", "I need a bath!", "I'm tired...", "I'm bored...". Otherwise
+  it, for about 4.5 s. A need comes first (only a special day's greeting, below, comes
+  before it), the same one (below 25) as the "!" bubble and the status line: "I'm
+  hungry!", "I need a bath!", "I'm tired...", "I'm bored...". Otherwise
   "Good morning!" (6:00–9:59) or "Look at the stars!" (20:00–5:59) when the clock is set, a
   friendly line ("Hi there!", "I'm happy!", "Pat me!") or "I love you, <name>!". The name
   is the player's, set once from a computer with the serial command `OWNER <name>`
