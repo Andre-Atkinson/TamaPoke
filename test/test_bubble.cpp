@@ -288,7 +288,7 @@ static bool boxInside(const BubbleBox &b, double margin) {
 }
 
 // Heads to try (#73): over the header (a hop of the tallest), the tallest (169), Charmander
-// (215), the lowest awake (Spearow IDLE, 262), a lying Snorlax (266), and nothing found (the
+// (215), the lowest awake (Fearow IDLE, 262), a lying Snorlax (266), and nothing found (the
 // ground line, 304).
 static const int HEADS[] = { 60, 120, 169, 215, 254, 262, 266, 304, 330 };
 
@@ -336,7 +336,7 @@ TEST(Bubble, the_tail_points_down_at_the_head_and_follows_it) {
   CHECK_EQ(bubbleBoxAt(200, 215, 160, 2, false, false).tipY, 211);  // two lines: the box grows upward
   CHECK_EQ(bubbleBoxAt(200, 169, 84, 1, false, false).tipY, 165);  // the tallest pet
   CHECK_EQ(bubbleBoxAt(200, 254, 84, 1, false, false).tipY, 250);  // the lowest that still gets the 4 px gap
-  CHECK_EQ(bubbleBoxAt(200, 262, 84, 1, false, false).tipY, 250);  // the lowest awake head (Spearow IDLE): stops over the poops
+  CHECK_EQ(bubbleBoxAt(200, 262, 84, 1, false, false).tipY, 250);  // the lowest awake head (Fearow IDLE): stops over the poops
   CHECK_EQ(bubbleBoxAt(200, 266, 84, 1, false, false).tipY, 250);  // a lying Snorlax
   CHECK_EQ(bubbleBoxAt(200, 304, 84, 1, false, false).tipY, 250);  // no head found: not down at the bars
   // a head up in the header: the box stops under the status line, its tail over the head

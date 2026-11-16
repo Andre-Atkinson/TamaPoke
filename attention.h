@@ -177,7 +177,7 @@ inline AttnAction attnDecide(const AttnScene &s) {
 // with a hop as they do. Never lower than BUBBLE_TIP_LOW: a box on the pet's right starts
 // at x 186 and the poops are drawn at y 244 and below, from x 36 to 192 (3 at most, 64 px
 // wide, 46 apart; drawPoops), so both boxes end above y 244. A low head (the lowest awake
-// one in the 151 PMD species is Spearow's IDLE, top at y 262; a lying Snorlax is at y 266)
+// one in the 151 PMD species is Fearow's IDLE, top at y 262; a lying Snorlax is at y 266)
 // then has the tail end over it rather than touching it. While the evolve, farewell or
 // run-away button is drawn over the pet (`button`: from y 172, and 167 at the evolve
 // button's biggest pulse, EVO_BTN_Y 172 - 5) the tail stays above it, as both bubbles did

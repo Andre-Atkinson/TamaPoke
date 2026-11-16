@@ -371,7 +371,7 @@ TEST(Attention, bubble_tail_points_down_at_the_head_and_follows_it) {
   CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 211);
   b = attnBubbleAt(300, 209, false);  // a 6 px hop lifts it too
   CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 205);
-  b = attnBubbleAt(300, 262, false);  // the lowest awake head (Spearow IDLE): over it, not down at the poops
+  b = attnBubbleAt(300, 262, false);  // the lowest awake head (Fearow IDLE): over it, not down at the poops
   CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 250);
   b = attnBubbleAt(300, 254, false);  // the lowest head that still gets the usual 4 px gap
   CHECK_EQ(b.y + b.h + ATTN_BUBBLE_TAIL, 250);

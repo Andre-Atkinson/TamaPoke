@@ -793,9 +793,9 @@ static void drawEvolveFX(uint32_t now) {
 }
 
 // Where drawPet() put the top of the pet's head this frame (#73), for petHeadTop(). On the
-// PMD path the action and hop it drew (the height is scanned only when asked); on the
-// others the sprite's top edge. Nothing drawn (evolving, no sprite): top 0, which keeps the
-// bubbles at their highest, under the status line.
+// PMD path the action and hop it drew (its height comes from PmdAct::top, read only when
+// asked); on the others the sprite's top edge. Nothing drawn (evolving, no sprite): top 0,
+// which keeps the bubbles at their highest, under the status line.
 static struct {
   bool pmd;
   uint8_t act;

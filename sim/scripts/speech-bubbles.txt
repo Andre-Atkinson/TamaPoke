@@ -2,9 +2,9 @@
 # night, beside the clock badge, the need line in place of the "!" bubble, and the cases
 # where no bubble may show (a heart or banner, a menu open, asleep, an attention call
 # lighting the screen, dimmed or off).
-# The bubbles point at the pet's head as drawn (#73): shots 23b..23f put them over a short
-# pet (Charmander), a tall one (Venusaur, Gyarados) and a low one (Spearow, with the poops
-# beside it); 20c..20d with the evolve button up; 26..27 with the huff playing.
+# The bubbles point at the pet's head as drawn (#73): Charmander (most shots) is short; 20c..20d
+# with the evolve button up; 20e by the lowest awake head (Fearow); 23b..23c by a tall one
+# (Venusaur); 26..27 with the huff playing.
 # A manual check: run it in each language on both boards and look at the shots and the
 # "say ..." lines in the serial log; nothing compares them automatically.
 #   tools/sim.sh --board 175c --lang pt --script speech-bubbles --out shots/pt/
@@ -136,7 +136,7 @@ tap 265 397
 wait 2s
 
 # #73: with the evolve button up (LVL 30 with every need above 40) the bubble stays above the
-# button, its tail not into it. Then back to level 1 (LVL 0). This section and 23b..23f come
+# button, its tail not into it. Then back to level 1 (LVL 0). This section, 20e and 23b..23c come
 # before the shots that follow them, which they move a little (the poops come by chance).
 serial LVL 30
 wait 1s
@@ -147,6 +147,17 @@ say love
 wait 300ms
 shot 20d-bubble-above-evolve-button-2
 serial LVL 0
+wait 1s
+
+# #73: the lowest awake head. Fearow, happy (every need still above 40), stands in its IDLE
+# pose with its head top at y 262, the lowest of any awake pet: the tail stops at y 250, over
+# it, and the box ends above y 244, where the poops are drawn (any there now come by chance).
+serial SPEC 22
+wait 1s
+say pat
+wait 300ms
+shot 20e-speech-low-fearow
+serial SPEC 4
 wait 1s
 
 # a need below 25 by itself. PWR turns the screen off (it is on: just touched), so the call
@@ -163,26 +174,15 @@ shot 22-need-in-words
 wait 5s
 shot 23-exclamation-again
 
-# #73: the same bubbles by other heads. The "!" is still up (the need is still low), so each
-# species shows it, and a speech bubble in its place for a moment. Venusaur and Gyarados are
-# tall (the box stops under the status line, its tail over the head), Spearow's head is the
-# lowest of any awake pet (the box ends above the poops, y 244), Charmander (the shots above)
-# is short.
+# #73: the same bubbles by a tall head. The "!" is still up (the need is still low), and a
+# speech bubble takes its place for a moment. Venusaur, sad, is in its HURT pose with its
+# head top at y 149: both boxes stop under the status line, their tails over the head.
 serial SPEC 3
 wait 1s
 shot 23b-exclamation-tall-venusaur
 say hungry
 wait 300ms
 shot 23c-speech-tall-venusaur
-serial SPEC 130
-wait 1s
-shot 23d-exclamation-tall-gyarados
-serial SPEC 21
-wait 1s
-shot 23e-exclamation-low-spearow-poops
-say hungry
-wait 300ms
-shot 23f-speech-low-spearow-poops
 serial SPEC 4
 wait 1s
 
@@ -216,8 +216,9 @@ shot 27-huff-no-speech-bubble
 # 1.75 brightens its dimmed screen, the 1.75C peeks with the screen still off). No bubble in
 # it, even one a "say" starts. The HEALTH line stamps the time to compare with "call food"
 # (the shot must be less than 15 s after it; a change earlier in this script can move it).
-# (138 s after shot 23 in all, counting the 13 s that 23b..27 take)
-wait 130s
+# (138 s after shot 23 in all, as before #73: 23b..27 take about 10 s, the sixteen taps
+# 480 ms apart)
+wait 128s
 serial HEALTH
 say hi
 wait 300ms
