@@ -1355,7 +1355,7 @@ TEST(save, out_of_range_training_weight_and_medals_are_clamped) {
     raw.putUChar("tdef", 101);
     raw.putUChar("tspe", 255);
     raw.putUChar("wgt", 180);
-    raw.putUShort("tdefm", 5000);
+    raw.putUShort("tdefm", STAMINA_CARE_MIN * GOOD_STEP);  // one past the last valid count
     raw.putUShort("medal", 0xFFFF);
     raw.end();
   }

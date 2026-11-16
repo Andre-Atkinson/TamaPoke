@@ -167,9 +167,12 @@ void Pet::tick() {
   // at 40 or more counts, in total; a minute under 40 only doesn't count. Self-care's minutes
   // on the charger are not the player's care. (Between the food/hygiene drain and the joy
   // drain, as always: lowestStat() includes joy, and moving it would change the rhythm.)
-  if (lowestStat() >= 40 && !selfCareOn && ++goodTicks >= STAMINA_CARE_MIN) {
-    goodTicks = 0;
-    if (trDef < 100) trDef++;
+  if (lowestStat() >= 40 && !selfCareOn) {
+    goodTicks += GOOD_STEP;
+    if (goodTicks >= STAMINA_CARE_MIN * GOOD_STEP) {
+      goodTicks = 0;
+      if (trDef < 100) trDef++;
+    }
   }
 
   if (drain) drainJoy();
@@ -919,7 +922,7 @@ void Pet::load() {
   trAtk = clamp100(trAtk);  // training points are 0-100: the bars, the ribbons and idle life read them
   trDef = clamp100(trDef);
   trSpe = clamp100(trSpe);
-  if (goodTicks >= STAMINA_CARE_MIN) goodTicks = 0;
+  if (goodTicks >= STAMINA_CARE_MIN * GOOD_STEP) goodTicks = 0;
   if (lastEnd > CER_RELEASE) lastEnd = CER_NONE;
   if (pace >= PACE_COUNT) pace = PACE_NORMAL;
   if (bedPreset >= BED_PRESETS) bedPreset = 0;

@@ -79,9 +79,12 @@ enum : uint16_t {
 // Steady care builds stamina (#76): every awake minute with all four needs at 40 or more
 // counts, in total (a minute under 40 pauses the count, it never resets it), and each
 // STAMINA_CARE_MIN of them is +1 trDef. A minute self-care holds up on the charger (#24) is
-// not the player's care and doesn't count. The count is saved (NVS "tdefm") so a restart
-// keeps it. Until #76 it was 720 minutes in a row, kept in RAM only.
+// not the player's care and doesn't count. The count (goodTicks) is GOOD_STEP a good minute,
+// so a per-minute bonus (#25's tidy nature: 5 instead of 4) stays exact without changing what
+// the saved count means; it is saved as is (NVS "tdefm", 0 to STAMINA_CARE_MIN * GOOD_STEP - 1)
+// so a restart keeps it. Until #76 it was 720 minutes in a row, kept in RAM only.
 #define STAMINA_CARE_MIN 30
+#define GOOD_STEP 4
 // The medals the minute tick can gain by itself, with nobody there: the age levels, "fit"
 // (the weight burns off by the minute, at level 5 or more), the stamina ribbon (steady care
 // counts by the minute) and a strength or speed ribbon that a save from before #76 already
@@ -305,7 +308,7 @@ private:
   bool eggPick = false;         // esperando que elija uno de los tres huevos (NVS "ecpk")
   int16_t eggCand[EGG_CHOICES] = { 0, 0, 0 };  // candidatos (NVS "ec0".."ec2")
   uint8_t neglectTicks = 0;
-  uint16_t goodTicks = 0;  // steady-care minutes towards the next stamina point (NVS "tdefm", #76)
+  uint16_t goodTicks = 0;  // steady care towards the next stamina point, GOOD_STEP a minute (NVS "tdefm", #76)
   uint32_t ceremonyUntil = 0;
   uint8_t bondToday = 0;       // tope diario de subida de vinculo
   uint32_t medalUntil = 0;     // celebracion de medalla en pantalla
