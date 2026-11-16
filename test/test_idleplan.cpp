@@ -434,6 +434,19 @@ TEST(IdleTraining, strength_kicks_further_and_the_ball_stays_in_range) {
       }
     }
   }
+  // kicked from one end towards the other, even the hardest kick stops short of it
+  for (int end = 0; end < 2; end++) {
+    IdleBall b;
+    b.x = end ? (float)IDLE_BALL_MAX : (float)IDLE_BALL_MIN;
+    float pet = end ? b.x + IDLE_BALL_REACH : b.x - IDLE_BALL_REACH;
+    idleBallKick(b, pet, IDLE_BALL_KICK_SPAN - 1, 100);
+    bool hit = false;
+    for (int f = 0; f < 400 && b.vx != 0.0f; f++) {
+      idleBallRoll(b, 0.04f);
+      if (b.x <= (float)IDLE_BALL_MIN || b.x >= (float)IDLE_BALL_MAX) hit = true;
+    }
+    CHECK_MSG(!hit, std::string("the hardest kick from the ") + (end ? "right" : "left") + " end reaches the other");
+  }
 }
 
 // Speed quickens the stroll and the chase after the ball, by IDLE_SPEED_BONUS % at 100.

@@ -3049,10 +3049,12 @@ TEST(quietalerts, an_older_pets_ribbon_noticed_by_the_tick_is_silent_in_quiet_ho
   Pet p;
   awakeWithSound(p);
   p.trAtk = 50;
+  p.trSpe = 50;
   p.quietHours = true;
   uint32_t n = mockSfxCount();
   advance(p, 1);
   CHECK(p.hasMedal(MED_STR));
+  CHECK(p.hasMedal(MED_SPD));
   CHECK_EQ(mockSfxCount(), n);
 }
 

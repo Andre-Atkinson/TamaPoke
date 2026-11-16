@@ -41,7 +41,7 @@ enum StrId : uint8_t {
   S_RELEASE_FMT, S_YES, S_NO,
   // minijuego y saco
   S_HITS_FMT, S_STR_GAIN_FMT, S_NEW_RECORD, S_RECORD_FMT, S_HIT_FAST,
-  S_SPD_GAIN_FMT,  // the Play minigame result's speed gain (#76), as the bag's S_STR_GAIN_FMT
+  S_SPD_GAIN_FMT,  // the Play minigame result's speed gain (#76), as the bag shows its strength
   S_SCORE_FMT, S_GREAT_JOY, S_PLUS_JOY,
   // reloj / ajustes
   S_SET_TIME, S_HOUR, S_MIN, S_CLOCK_CANCEL,
