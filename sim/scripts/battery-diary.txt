@@ -1,0 +1,61 @@
+# The battery diary (#14, batdiary.h): a row at boot, every hour, when USB comes or goes and
+# at the low-battery power-off, with the screen-on and light-sleep minutes since the previous
+# row. Nothing changes on screen: the BATLOG blocks in serial.log, and the power-off line at the
+# end, are the check.
+#   tools/sim.sh --script battery-diary --out shots/battery-diary
+#   tools/sim.sh --board 175 --script battery-diary --out shots/battery-diary-175
+# On the 1.75C the screen goes off after a minute untouched, so an hour on battery shows about
+# 1 screen-on minute and 59 asleep. The original 1.75 keeps its screen on (Never) and only
+# light-sleeps once it is almost off, after 5 minutes: about 60 on and 50 asleep.
+# unsaved=0 in a dump means the new rows reached the NVS copy (written in the pet's autosave
+# moments: screen dimmed or off, the pocket lock blank, or the pet asleep).
+
+battery 90
+clock 2026-11-13 10:00
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+shot pet
+
+# the boot row, stamped with the clock's time
+serial BATLOG?
+
+# an hour on battery, untouched: the hourly row
+battery 84
+wait 1h
+serial BATLOG?
+
+# plugged in ten minutes later: the plug row, charging
+wait 10m
+usb on
+charging on
+battery 70
+wait 1m
+serial BATLOG?
+
+# the charger finishes: the next hourly row reads full
+charging off
+battery 100
+wait 1h
+serial BATLOG?
+
+# unplugged: the unplug row
+usb off
+wait 2m
+serial BATLOG?
+
+# a new diary: empty, and the next row comes an hour after the clear (no boot row)
+serial BATLOG CLEAR
+wait 1h
+serial BATLOG?
+shot end
+
+# the battery runs flat: the power-off row is saved at once ("battery diary: power-off row
+# saved" in serial.log). The simulator stops at the power-off, as the board does.
+battery 0
+wait 1m

@@ -10,6 +10,14 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Battery diary.** To measure how long a charge really lasts, the board keeps a diary of
+  its battery: a row every hour, and one at start-up, when USB is plugged in or pulled out,
+  and when a flat battery turns it off, with the time, the battery level and voltage, whether
+  it was charging, and how many minutes the screen was lit and the board asleep in between.
+  The last four days or so are kept, even through a flat battery. Read it from a computer
+  with `python3 tools/board.py batlog` (a CSV file); `BATLOG CLEAR` starts a new one. Nothing
+  changes on screen, and the creature's save is not touched.
+
 - **A plush toy and warm milk.** The Play button now opens a small strip, like the food
   menu: the Poké Ball for a minigame, as before, or the plush toy. With the plush the
   creature hops about for a moment: a little happiness (+10, two plays an hour) with no game

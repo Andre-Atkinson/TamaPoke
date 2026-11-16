@@ -33,7 +33,10 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
 - **The pet's save is sacred.** NVS namespace `tamapoke` holds it. New keys
   are fine; changing what an existing key means needs a migration and a test.
   Values loaded from NVS must be range-checked before use, in `Pet::load()`
-  and every other reader of the namespace.
+  and every other reader of the namespace. The battery diary (#14) keeps its
+  rows in a namespace of its own, `batlog` (`batdiary.cpp`): not the pet's
+  save, but its reader range-checks everything too, and a change to its row
+  layout or ring size bumps `BATLOG_FMT` instead of reinterpreting old rows.
 - **Both boards must build.** The default build is the original 1.75; ours is
   the 1.75C (`-DBOARD_AMOLED_175C=1`). Keep board-specific code behind
   `#if BOARD_AMOLED_175C`, and compile both before a PR.
@@ -54,14 +57,19 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
   NVS), `OWNER <name>` (writes the player's name to NVS; `OWNER` alone clears
   it), `BDAY <month> <day>` (writes the player's birthday to NVS; `BDAY 0 0`
   clears it), `SCENE <place|auto> [weather|auto] [season|auto]` (forces the scene's
-  place, weather and season in RAM only; a restart or `SCENE auto` clears it), `PUT`.
+  place, weather and season in RAM only; a restart or `SCENE auto` clears it),
+  `BATLOG CLEAR` (erases the battery diary, NVS namespace `batlog`; not the
+  pet), `PUT`.
   Read-only: `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`,
   `CARE?` (prints `pace bed inbed stale egg picking`), `OWNER?`, `BDAY?`
   (prints `bday today birthday`), `SCENE?`
-  (prints `place today home wx prev mix season clock particles standby`), `LS`, `SDINFO`, `LOCK?`,
+  (prints `place today home wx prev mix season clock particles standby`),
+  `BATLOG?` (prints `BATLOG rows cap unsaved period_min`, a CSV header and
+  the diary's rows), `LS`, `SDINFO`, `LOCK?`,
   `TRAINTRACE?`. `LOCK?` and `TRAINTRACE` exist on the 1.75C only. These
   scripts send state-changing commands: `tools/board.py` (`clock` sends
-  `TIME <epoch>`, `save` sends `SAVE`, `cmd` sends anything),
+  `TIME <epoch>`, `save` sends `SAVE`, `cmd` sends anything; `status` and
+  `batlog` send only read-only ones),
   `tools/pet_save.sh` (`backup` and `restore` send `SAVE`),
   `tools/update_175c.sh` (runs both of those, so sends `SAVE` and
   `TIME <epoch>`) and `tools/send_sd.py` (`PUT`). The owner's request to run

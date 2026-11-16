@@ -671,6 +671,15 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
 - **Battery reads over I2C** every 10 s instead of 2 s when the screen is off or almost off.
 - The pet walks by real time, so lower frame rates do not slow it down.
 
+**Battery diary (#14).** To measure how long a charge really lasts, the firmware keeps a diary
+(`batdiary.h`): a row every hour, and one at boot, when USB is plugged in or pulled out, and at
+the low-battery power-off, with the time, the battery level and voltage, the charge state, and
+how many minutes the screen was lit and the CPU in light sleep since the previous row. The
+newest 96 rows (about four days) are kept in flash in their own NVS namespace, written in the
+same quiet moments as the pet's autosave (the screen dimmed or off, the pocket lock blank, or the
+pet asleep), so they survive a flat battery. `python3 tools/board.py batlog`
+prints them as CSV; `PORTING.md` (*Measuring battery life*) has the steps of a battery test.
+
 ## Serial console (115200, debug)
 
 `STATS` (full state) · `SPEC <dex>` (change species) · `LVL <n>` · `HATCH` ·
@@ -690,7 +699,10 @@ is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on scree
 volcano mountain snow`, the weather, `clear cloudy rain storm snow fog`, and the season,
 `spring summer autumn winter none`, in RAM only: `SCENE auto` or a restart gives them back
 to the clock) · `SCENE?` (read-only: `place today home wx prev mix season clock particles standby`,
-`*` after a forced value) · `LS` / `PUT` (SD files). `tools/board.py`
+`*` after a forced value) · `BATLOG?` (read-only: the battery diary, a `BATLOG rows= cap=
+unsaved= period_min=` line, a CSV header and the rows; `tools/board.py batlog` turns it into
+a CSV file) · `BATLOG CLEAR` (starts a new battery diary; the pet is not touched) ·
+`LS` / `PUT` (SD files). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.

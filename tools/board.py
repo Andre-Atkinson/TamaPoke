@@ -7,6 +7,7 @@ Linux; the board's USB port must not be open in another program.
   python3 tools/board.py clock            # set the board clock to this computer's local time
   python3 tools/board.py save             # write any pending pet changes to flash now
   python3 tools/board.py status           # HEALTH + STATS
+  python3 tools/board.py batlog > run.csv # the battery diary as CSV (#14; read-only, BATLOG?)
   python3 tools/board.py cmd TIME         # any console command; prints the reply up to DONE
   python3 tools/board.py cmd OWNER Name   # the player's name for the speech bubbles (#23)
   python3 tools/board.py cmd BDAY 3 14    # the player's birthday, month then day (#26; BDAY 0 0 clears it)
@@ -21,6 +22,7 @@ with TZ unset.)
 """
 import argparse
 import calendar
+import csv
 import glob
 import os
 import select
@@ -50,6 +52,14 @@ def local_wallclock_epoch(now=None):
 
 class NoReply(TimeoutError):
     """The board printed nothing at all (an unknown command, or not TamaPoke)."""
+
+
+class NoDone(TimeoutError):
+    """A reply that started but never ended with DONE; `lines` is what arrived."""
+
+    def __init__(self, message, lines):
+        super().__init__(message)
+        self.lines = lines
 
 
 class Console:
@@ -107,7 +117,7 @@ class Console:
                 return lines
         if not lines:
             raise NoReply(f'no reply to {line!r} within {timeout:.0f} s (unknown command?)')
-        raise TimeoutError(f'no DONE after {line!r} within {timeout:.0f} s; got {lines!r}')
+        raise NoDone(f'no DONE after {line!r} within {timeout:.0f} s; got {lines!r}', lines)
 
 
 def parse_rtc(lines):
@@ -121,6 +131,79 @@ def parse_rtc(lines):
     return None
 
 
+# The battery diary (#14, batdiary.h): BATLOG? answers a "BATLOG rows=<n> cap=<n> unsaved=<n>
+# period_min=<n>" line, this header and one row per line, oldest first.
+BATLOG_HEADER = 'epoch,event,pct,mv,usb,chg,on_min,sleep_min'
+BATLOG_CSV = ('time', 'event', 'battery_pct', 'battery_mv', 'state', 'screen_on_min', 'asleep_min')
+BATLOG_EVENTS = ('hour', 'boot', 'unplug', 'plug', 'cutoff')
+# The times the board's clock takes (clockprompt.h: [2025-01-01, 2100-01-01)); a row's time is
+# one of them, to the minute, or 0 (no time).
+CLOCK_EPOCH_MIN, CLOCK_EPOCH_END = 1735689600, 4102444800
+BATLOG_TIMEOUT = 10  # s: the dump is about 4 KB, and the reply may follow a ~1 s NVS write
+
+
+class BatlogError(ValueError):
+    """A BATLOG? reply that is not the whole diary."""
+
+
+def parse_batlog(lines):
+    """The rows of a BATLOG? reply (dicts, oldest first) and its first line's fields.
+
+    Lines before the BATLOG line (a heartbeat that came first) are skipped. A reply cut
+    short (fewer rows than it announces), one with a row whose fields are out of the range
+    the firmware writes (bytes lost inside a line on the way), or one that is not a diary
+    raises BatlogError."""
+    start = next((i for i, t in enumerate(lines) if t.startswith('BATLOG ')), None)
+    if start is None:
+        raise BatlogError(f'no BATLOG line in the reply: {lines!r}')
+    info = dict(f.split('=', 1) for f in lines[start].split()[1:] if '=' in f)
+    if start + 1 >= len(lines) or lines[start + 1] != BATLOG_HEADER:
+        raise BatlogError('the reply has no battery diary header')
+    rows = []
+    for text in lines[start + 2:]:
+        f = text.split(',')
+        try:
+            if len(f) != 8:
+                raise ValueError
+            epoch, pct, mv, usb, chg, on, asleep = (int(f[0]), int(f[2]), int(f[3]), int(f[4]),
+                                                    int(f[5]), int(f[6]), int(f[7]))
+        except ValueError:
+            raise BatlogError(f'not a diary row: {text!r}') from None
+        if not batlog_row_in_range(epoch, f[1], pct, mv, usb, chg, on, asleep):
+            raise BatlogError(f'a row came through damaged: {text!r}; try again')
+        rows.append({'epoch': epoch, 'event': f[1], 'pct': pct, 'mv': mv, 'usb': usb == 1,
+                     'charging': chg == 1, 'on_min': on, 'asleep_min': asleep})
+    want = info.get('rows', '')
+    if not want.isdigit() or int(want) != len(rows):
+        raise BatlogError(f'the dump was cut short: got {len(rows)} of {want or "?"} rows; try again')
+    return rows, info
+
+
+def batlog_row_in_range(epoch, event, pct, mv, usb, chg, on, asleep):
+    """True for the values batRowUnpack() lets through (batdiary.h), as batLogFormatRow() prints them."""
+    when_ok = epoch == 0 or (CLOCK_EPOCH_MIN <= epoch < CLOCK_EPOCH_END and (epoch - CLOCK_EPOCH_MIN) % 60 == 0)
+    return (when_ok and event in BATLOG_EVENTS and -1 <= pct <= 100 and 0 <= mv <= 5000
+            and usb in (0, 1) and chg in (0, 1) and 0 <= on <= 60 and 0 <= asleep <= 60)
+
+
+def batlog_state(row):
+    """discharging, charging, full (on USB, the charger done) or 'no battery'."""
+    if row['pct'] < 0:
+        return 'no battery'
+    if row['usb']:
+        return 'charging' if row['charging'] else 'full'
+    return 'discharging'
+
+
+def batlog_csv_row(row):
+    """A diary row as the CSV columns in BATLOG_CSV. The board keeps local wall-clock time as
+    if it were UTC (see the top of this file), so gmtime gives the board's own date and time;
+    an empty time is a row written while the board's clock was not set."""
+    when = time.strftime('%Y-%m-%d %H:%M', time.gmtime(row['epoch'])) if row['epoch'] else ''
+    return [when, row['event'], row['pct'] if row['pct'] >= 0 else '', row['mv'] or '',
+            batlog_state(row), row['on_min'], row['asleep_min']]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--port')
@@ -128,6 +211,7 @@ def main(argv=None):
     sub.add_parser('clock', help="set the board clock to this computer's local time")
     sub.add_parser('save', help='write pending pet changes to flash now')
     sub.add_parser('status', help='print HEALTH and STATS')
+    sub.add_parser('batlog', help='print the battery diary as CSV (read-only)')
     c = sub.add_parser('cmd', help='send any console command')
     c.add_argument('line', nargs='+')
     args = ap.parse_args(argv)
@@ -136,6 +220,8 @@ def main(argv=None):
         run(args)
     except NoReply as e:
         sys.exit(f'board.py: {e}')
+    except BatlogError as e:
+        sys.exit(f'board.py: battery diary: {e}')
     except (TimeoutError, OSError, termios.error) as e:
         sys.exit(f'board.py: {e}. Is the board plugged in, awake, and the port free '
                  '(not open in another program)?')
@@ -165,6 +251,30 @@ def run(args):
         elif args.what == 'save':
             for text in con.command('SAVE'):
                 print(text)
+        elif args.what == 'batlog':
+            try:
+                reply = con.command('BATLOG?', timeout=BATLOG_TIMEOUT)
+            except NoDone as e:
+                # The firmware stops the dump when the host stops taking bytes, and the DONE
+                # after it is lost with them: a reply with the BATLOG line is a dump cut short
+                # (parse_batlog says so), or a whole one whose DONE alone was lost.
+                if not any(t.startswith('BATLOG ') for t in e.lines):
+                    raise
+                reply = e.lines
+            except NoReply:
+                raise NoReply('no reply to BATLOG?: try again; if it keeps happening, the firmware '
+                              'on the board is older than the battery diary (#14): update it') from None
+            rows, info = parse_batlog(reply)
+            out = csv.writer(sys.stdout, lineterminator='\n')
+            out.writerow(BATLOG_CSV)
+            for row in rows:
+                out.writerow(batlog_csv_row(row))
+            note = f'{len(rows)} rows (the board keeps the newest {info.get("cap", "?")})'
+            if info.get('unsaved', '0') != '0':
+                note += (f'; the newest {info["unsaved"]} are not in flash yet (they are written '
+                         "in the pet's quiet moments: the screen dimmed or off, or the pet asleep) "
+                         'and a power-off now would lose them')
+            print(note, file=sys.stderr)
         elif args.what == 'status':
             for cmd in ('HEALTH', 'STATS'):
                 for text in con.command(cmd):

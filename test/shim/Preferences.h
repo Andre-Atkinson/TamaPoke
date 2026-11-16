@@ -21,6 +21,7 @@ public:
   size_t putUShort(const char *k, uint16_t v);
   size_t putInt(const char *k, int32_t v);
   size_t putUInt(const char *k, uint32_t v);
+  size_t putULong64(const char *k, uint64_t v);
   size_t putBytes(const char *k, const void *v, size_t len);
   size_t putString(const char *k, const char *v);
 
@@ -31,6 +32,7 @@ public:
   uint16_t getUShort(const char *k, uint16_t def = 0);
   int32_t getInt(const char *k, int32_t def = 0);
   uint32_t getUInt(const char *k, uint32_t def = 0);
+  uint64_t getULong64(const char *k, uint64_t def = 0);
   size_t getBytes(const char *k, void *buf, size_t maxLen);
   size_t getString(const char *k, char *buf, size_t maxLen);
 
@@ -45,3 +47,9 @@ void mockNvsReset();
 // while on, every write and remove fails as a full or broken NVS would (returns 0 / false)
 void mockNvsFailWrites(bool fail);
 size_t mockNvsKeyCount(const char *ns);
+// writes (put, remove, clear) that reached the store since the last mockNvsReset()
+size_t mockNvsWrites();
+// while on, Preferences::begin() fails (nvs_open failing: a namespace that cannot be opened)
+void mockNvsFailBegin(bool fail);
+// the next `ok` writes succeed, then every write fails (as mockNvsFailWrites(true)); -1 = off
+void mockNvsFailAfter(long ok);
