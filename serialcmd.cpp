@@ -22,7 +22,7 @@
 static void printBday() {
   Birthday b = birthday();
   HolidayToday t = holidayNow();
-  if (b.month) Serial.printf("bday=%u %u", b.month, b.day);
+  if (b.month) Serial.printf("bday=%u %u", (unsigned)b.month, (unsigned)b.day);
   else Serial.print("bday=none");
   Serial.printf(" today=%s birthday=%d\n", HOLIDAY_KEYS[t.day < HOLIDAYS ? t.day : 0], t.birthday ? 1 : 0);
 }
