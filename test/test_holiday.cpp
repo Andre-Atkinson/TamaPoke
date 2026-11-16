@@ -251,7 +251,8 @@ TEST(Holiday, bday_sets_queries_and_clears) {
 TEST(Holiday, bday_refuses_anything_but_a_real_date) {
   const char *BAD[] = { "BDAY",     "BDAY 12",   "BDAY 13 1",  "BDAY 2 30", "BDAY 4 31", "BDAY 0 5",
                         "BDAY 5 0", "BDAY 1 2 3", "BDAY 123 1", "BDAY 1 123", "BDAY 1 2x", "BDAY -1 2",
-                        "BDAY 1,2", "BDAY 1-2",  "BDAY x y",   "BDAY 1  ",  "BDAY 0 0 0" };
+                        "BDAY 1,2", "BDAY 1-2",  "BDAY x y",   "BDAY 1  ",  "BDAY 0 0 0",
+                        "BDAY 001 1", "BDAY 1 001", "BDAY 99999999999 1", "BDAY 1 99999999999" };
   for (const char *line : BAD) {
     Birthday b = bd(9, 9);
     CHECK_MSG(bdayParse(line, b) == BDAY_CMD_BAD, line);
@@ -338,6 +339,8 @@ TEST(Holiday, the_first_look_on_the_day_gets_the_greeting) {
   CHECK(!g.due(e, true, GREET_CHRISTMAS));  // quiet hours
   CHECK(!g.due(0, false, GREET_CHRISTMAS));  // no trusted clock
   CHECK(!g.due(e, false, GREETS));  // out of range
+  g.said(e);
+  CHECK(!g.due(0, false, GREET_CHRISTMAS));  // the clock lost after a greeting: still none
 }
 
 TEST(Holiday, at_most_three_a_day_30_min_apart) {

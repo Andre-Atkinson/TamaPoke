@@ -26,11 +26,16 @@ serial HATCH
 serial OWNER Sam
 serial RTCSET 1798192800
 serial SCENE meadow clear auto
-wait 5s
+# past the loop's 30 s clock refresh, so the creature's time is Christmas Day too (BDAY?
+# still says today=none); a tap keeps the screen awake
+wait 20s
+tap 60 200
+wait 15s
 shot 01-no-clock-no-decorations
 serial BDAY?
 
 # Christmas Day, the clock set: the tree, its lights and a little snow, and the greeting
+# (three a day at most, 30 min apart: 10:00, 10:40, 21:00; at 21:40 an ordinary line)
 serial TIME 1798192800
 press pwr
 wait 2m
@@ -39,19 +44,23 @@ wait 3500ms
 shot 02-christmas-day-greeting
 serial BDAY?
 press pwr
+serial TIME 1798195200
+wait 2m
+press pwr
+wait 3500ms
+shot 02b-christmas-second-greeting
+press pwr
 serial TIME 1798232400
 wait 2m
 press pwr
 wait 3500ms
 shot 03-christmas-night-greeting
-# 23:00 is quiet hours (bedtime off: 22:00-07:00): the tree stays up, the bubble is an
-# ordinary line
 press pwr
-serial TIME 1798239600
+serial TIME 1798234800
 wait 2m
 press pwr
 wait 3500ms
-shot 04-christmas-quiet-hours-no-greeting
+shot 03b-christmas-fourth-look-ordinary-line
 # in the rain the weather's own drops fall, not the festive snow; and the tree at the beach
 serial TIME 1798192800
 serial SCENE meadow rain auto
@@ -95,6 +104,14 @@ wait 2m
 press pwr
 wait 3500ms
 shot 11-valentine-night-greeting
+# 23:00 is quiet hours (bedtime off: 22:00-07:00): the hearts stay, the bubble is an
+# ordinary line though a greeting is left for the day
+press pwr
+serial TIME 1802646000
+wait 2m
+press pwr
+wait 3500ms
+shot 11b-valentine-quiet-hours-no-greeting
 
 # Easter Sunday 2027 (28 March): eggs in the grass
 press pwr
@@ -179,3 +196,4 @@ wait 1s
 serial BYE
 wait 2s
 shot 24-farewell-no-decorations
+serial BDAY?
