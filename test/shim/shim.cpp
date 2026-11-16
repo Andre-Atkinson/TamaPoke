@@ -74,8 +74,13 @@ size_t mockSerialWriteCalls() { return gSerialCalls.size(); }
 uint32_t mockSerialWriteTimeout(size_t call) { return call < gSerialCalls.size() ? gSerialCalls[call].timeout : 0; }
 bool mockSerialWriteShort(size_t call) { return call < gSerialCalls.size() && gSerialCalls[call].shortWrite; }
 
+static long gConnectedCalls = -1;
+void mockSerialConnectedFor(long calls) { gConnectedCalls = calls; }
+bool MockSerial::isConnected() { return gConnectedCalls != 0; }
+
 // Like HWCDC::write(): stops at the first byte the host does not take and reports how many it did.
 size_t MockSerial::write(const uint8_t *buf, size_t n) {
+  if (gConnectedCalls > 0) gConnectedCalls--;
   size_t k = 0;
   while (k < n && write(buf[k]) == 1) k++;
   gTxRefused += n - k - (k < n ? 1 : 0);  // the first refused byte was counted by write(uint8_t)

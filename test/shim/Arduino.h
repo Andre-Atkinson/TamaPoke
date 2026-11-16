@@ -45,6 +45,7 @@ public:
   void setTimeout(unsigned long) {}
   size_t write(uint8_t c) override;
   size_t write(const uint8_t *buf, size_t n) override;  // one call, as HWCDC::write(): logged
+  static bool isConnected();  // HWCDC::isConnected(): the USB link is up (mockSerialConnectedFor)
   using Print::write;
   int available();
   int read();
@@ -70,6 +71,9 @@ void mockSerialLogClear();
 size_t mockSerialWriteCalls();
 uint32_t mockSerialWriteTimeout(size_t call);   // setTxTimeoutMs() in force at that call
 bool mockSerialWriteShort(size_t call);         // the host did not take all of that call's bytes
+// The link reads as connected (Serial.isConnected()) for the next `calls` write(buf, n) calls,
+// then as dropped, as HWCDC's flaps; -1 = always connected.
+void mockSerialConnectedFor(long calls);
 
 // ---- utilidades ------------------------------------------------------------
 template <class T> static inline T min(T a, T b) { return a < b ? a : b; }

@@ -238,7 +238,8 @@ light-sleeps (the serial port has to stay up), so `asleep_min` is 0 there.
   most a minute.
 - `python3 tools/board.py cmd 'BATLOG?'` shows the raw dump (an epoch, `-1`
   for no reading). `board.py batlog` checks it got every row the board
-  announced and says so if the dump was cut short.
+  announced, each with its fields in range, and asks you to try again if the
+  dump was cut short or a row came through damaged.
 
 ## Sprite storage trade-off
 

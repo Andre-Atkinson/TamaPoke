@@ -1842,6 +1842,33 @@ class TestBoardPy(unittest.TestCase):
             with self.subTest(lines=lines[:3]), self.assertRaises(self.board.BatlogError):
                 self.board.parse_batlog(lines)
 
+    def test_parse_batlog_refuses_a_row_damaged_on_the_way(self):
+        # HWCDC drops bytes when its link flaps (#97 review R2-2): a row that lost bytes inside
+        # it still has 8 integer fields, so each field is checked against what the firmware writes
+        good = '1794564000,hour,84,4056,0,0,5,50'
+        cases = {
+            'epoch not a minute': '1794564030,hour,84,4056,0,0,5,50',
+            'epoch before 2025': '17945640,hour,84,4056,0,0,5,50',
+            'epoch from 2100 on': '4102444800,hour,84,4056,0,0,5,50',
+            'unknown event': '1794564000,our,84,4056,0,0,5,50',
+            'pct over 100': '1794564000,hour,184,4056,0,0,5,50',
+            'pct under -1': '1794564000,hour,-4,4056,0,0,5,50',
+            'mv over 5000': '1794564000,hour,84,40560,0,0,5,50',
+            'usb not 0/1': '1794564000,hour,84,4056,10,0,5,50',
+            'chg not 0/1': '1794564000,hour,84,4056,0,2,5,50',
+            'on over 60': '1794564000,hour,84,4056,0,0,65,50',
+            'asleep over 60': '1794564000,hour,84,4056,0,0,5,500',
+        }
+        head = ['BATLOG rows=1 cap=96 unsaved=0 period_min=60', self.BATLOG_REPLY[1]]
+        rows, _ = self.board.parse_batlog(head + [good])
+        self.assertEqual(len(rows), 1)
+        rows, _ = self.board.parse_batlog(head + ['0,cutoff,-1,0,1,1,60,60'])  # every limit itself
+        self.assertEqual(rows[0]['event'], 'cutoff')
+        for why, text in cases.items():
+            with self.subTest(why), self.assertRaises(self.board.BatlogError) as cm:
+                self.board.parse_batlog(head + [text])
+            self.assertIn('damaged', str(cm.exception))
+
     def test_batlog_rows_become_the_csv_columns(self):
         row = lambda **kw: {'epoch': 1794564000, 'event': 'hour', 'pct': 84, 'mv': 4056, 'usb': False,
                             'charging': False, 'on_min': 5, 'asleep_min': 50, **kw}
@@ -1936,6 +1963,7 @@ class TestBoardPy(unittest.TestCase):
         _, _, _, code = self.run_batlog(b'', timeout=1)
         self.assertIsInstance(code, str)
         self.assertIn('older than the battery diary', code)
+        self.assertIn('try again', code)
 
 
 SIM = os.path.join(ROOT, 'sim')

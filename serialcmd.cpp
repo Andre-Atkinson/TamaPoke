@@ -155,12 +155,10 @@ void handleSerial() {
                   pet.eggPickMode, pet.awaitingEgg() ? 1 : 0);
     Serial.println("DONE");
   } else if (line == "BATLOG?") {  // read-only: the battery diary as CSV (batdiary.h, #14)
-    batLogPrint();
-    Serial.println("DONE");
+    batLogPrint();  // ends with DONE, sent under the dump's own transmit wait
   } else if (line == "BATLOG CLEAR") {  // erases only the diary's own namespace, not the pet
     if (!batLogClear(millis())) Serial.println("ERR battery diary not cleared: the flash write failed");
-    batLogPrint();  // what is kept now
-    Serial.println("DONE");
+    batLogPrint();  // what is kept now, ending with DONE
   } else if (line == "SCENE?") {  // read-only: the place and the weather (weather.h, #60)
     printScene();
     Serial.println("DONE");

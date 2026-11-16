@@ -135,6 +135,10 @@ def parse_rtc(lines):
 # period_min=<n>" line, this header and one row per line, oldest first.
 BATLOG_HEADER = 'epoch,event,pct,mv,usb,chg,on_min,sleep_min'
 BATLOG_CSV = ('time', 'event', 'battery_pct', 'battery_mv', 'state', 'screen_on_min', 'asleep_min')
+BATLOG_EVENTS = ('hour', 'boot', 'unplug', 'plug', 'cutoff')
+# The times the board's clock takes (clockprompt.h: [2025-01-01, 2100-01-01)); a row's time is
+# one of them, to the minute, or 0 (no time).
+CLOCK_EPOCH_MIN, CLOCK_EPOCH_END = 1735689600, 4102444800
 BATLOG_TIMEOUT = 10  # s: the dump is about 4 KB, and the reply may follow a ~1 s NVS write
 
 
@@ -146,7 +150,9 @@ def parse_batlog(lines):
     """The rows of a BATLOG? reply (dicts, oldest first) and its first line's fields.
 
     Lines before the BATLOG line (a heartbeat that came first) are skipped. A reply cut
-    short (fewer rows than it announces) or one that is not a diary raises BatlogError."""
+    short (fewer rows than it announces), one with a row whose fields are out of the range
+    the firmware writes (bytes lost inside a line on the way), or one that is not a diary
+    raises BatlogError."""
     start = next((i for i, t in enumerate(lines) if t.startswith('BATLOG ')), None)
     if start is None:
         raise BatlogError(f'no BATLOG line in the reply: {lines!r}')
@@ -163,12 +169,21 @@ def parse_batlog(lines):
                                                     int(f[5]), int(f[6]), int(f[7]))
         except ValueError:
             raise BatlogError(f'not a diary row: {text!r}') from None
+        if not batlog_row_in_range(epoch, f[1], pct, mv, usb, chg, on, asleep):
+            raise BatlogError(f'a row came through damaged: {text!r}; try again')
         rows.append({'epoch': epoch, 'event': f[1], 'pct': pct, 'mv': mv, 'usb': usb == 1,
                      'charging': chg == 1, 'on_min': on, 'asleep_min': asleep})
     want = info.get('rows', '')
     if not want.isdigit() or int(want) != len(rows):
         raise BatlogError(f'the dump was cut short: got {len(rows)} of {want or "?"} rows; try again')
     return rows, info
+
+
+def batlog_row_in_range(epoch, event, pct, mv, usb, chg, on, asleep):
+    """True for the values batRowUnpack() lets through (batdiary.h), as batLogFormatRow() prints them."""
+    when_ok = epoch == 0 or (CLOCK_EPOCH_MIN <= epoch < CLOCK_EPOCH_END and (epoch - CLOCK_EPOCH_MIN) % 60 == 0)
+    return (when_ok and event in BATLOG_EVENTS and -1 <= pct <= 100 and 0 <= mv <= 5000
+            and usb in (0, 1) and chg in (0, 1) and 0 <= on <= 60 and 0 <= asleep <= 60)
 
 
 def batlog_state(row):
@@ -247,8 +262,8 @@ def run(args):
                     raise
                 reply = e.lines
             except NoReply:
-                raise NoReply('no reply to BATLOG?: the firmware on the board is older than the '
-                              'battery diary (#14); update it first') from None
+                raise NoReply('no reply to BATLOG?: try again; if it keeps happening, the firmware '
+                              'on the board is older than the battery diary (#14): update it') from None
             rows, info = parse_batlog(reply)
             out = csv.writer(sys.stdout, lineterminator='\n')
             out.writerow(BATLOG_CSV)

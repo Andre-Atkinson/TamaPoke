@@ -152,14 +152,14 @@ TEST(BatDiary, a_dump_row_is_the_csv_board_py_reads) {
   none.usb = true;
   batLogFormatRow(line, sizeof line, none);
   CHECK_STREQ(line, "0,boot,-1,0,1,0,0,0");
-  BatRow wide;  // the widest row fits the dump's 64-byte line
+  BatRow wide;  // the widest row fits the 77 characters a dump line has before its "\r\n"
   wide.minute = BATLOG_MINUTE_MAX;
   wide.kind = BL_UNPLUG;
   wide.pct = 100;
   wide.mv = BATLOG_MV_MAX;
   wide.usb = wide.charging = true;
   wide.onMin = wide.sleepMin = BATLOG_MIN_MAX;
-  CHECK(batLogFormatRow(line, sizeof line, wide) < (int)sizeof line);
+  CHECK(batLogFormatRow(line, sizeof line, wide) <= 77);
   CHECK_STREQ(BATLOG_CSV_HEADER, "epoch,event,pct,mv,usb,chg,on_min,sleep_min");
 }
 
@@ -452,7 +452,7 @@ TEST(BatLogNvs, a_diary_of_another_format_is_not_read_and_is_erased_at_the_next_
   putRaw16("fmt", (uint16_t)(BATLOG_FMT + 1));
   putRaw16("n", 3);
   for (int i = 0; i < 3; i++) {
-    char k[6];
+    char k[8];
     snprintf(k, sizeof k, "r%d", i);
     putRaw64(k, rowNo(i));
   }
@@ -497,7 +497,7 @@ TEST(BatLogNvs, a_corrupt_row_is_skipped_and_the_others_are_kept) {
   CHECK_EQ(dump.find("BATLOG rows=3 "), (size_t)0);
   size_t lines = 0;
   for (char c : dump) lines += c == '\n';
-  CHECK_EQ(lines, (size_t)5);
+  CHECK_EQ(lines, (size_t)6);  // the BATLOG line, the header, three rows, DONE
 }
 
 TEST(BatLogNvs, a_failed_write_keeps_the_rows_and_waits_for_the_next_row) {
@@ -619,7 +619,8 @@ TEST(BatLogNvs, the_dump_lists_the_rows_oldest_first) {
               "epoch,event,pct,mv,usb,chg,on_min,sleep_min\r\n"
               "0,boot,90,4110,0,0,0,0\r\n"
               "1794564000,hour,84,4056,0,0,5,50\r\n"
-              "1794567600,hour,79,4011,0,0,0,0\r\n");
+              "1794567600,hour,79,4011,0,0,0,0\r\n"
+              "DONE\r\n");
 }
 
 // The dump is about 4 KB, more than the USB transmit buffer: it waits for the host while it
@@ -632,7 +633,7 @@ TEST(BatLogNvs, each_dump_line_is_one_write_with_the_dumps_own_transmit_wait) {
   mockSerialLogClear();
   batLogPrint();
   size_t calls = mockSerialWriteCalls();
-  CHECK_EQ(calls, (size_t)5);  // the BATLOG line, the header and three rows: one call each
+  CHECK_EQ(calls, (size_t)6);  // the BATLOG line, the header, three rows and DONE: one call each
   for (size_t i = 0; i < calls; i++) {
     CHECK_EQ(mockSerialWriteTimeout(i), (uint32_t)BATLOG_TX_WAIT_MS);
     CHECK(!mockSerialWriteShort(i));
@@ -693,8 +694,9 @@ TEST(BatLogNvs, the_dump_stops_at_the_first_write_the_host_does_not_take) {
   // a cut exactly between two lines: the next line's write is the short one
   CHECK_EQ(dumpCallsWithRoom(lineStart(dump, 3), shortCalls), (size_t)4);
   CHECK_EQ(shortCalls, (size_t)1);
-  // a host reading takes the 2 lines and the 40 rows, one call each
-  CHECK_EQ(dumpCallsWithRoom(-1, shortCalls), (size_t)42);
+  // a host reading takes the 2 lines, the 40 rows and DONE, one call each; a dump that stopped
+  // (above) never sends its DONE
+  CHECK_EQ(dumpCallsWithRoom(-1, shortCalls), (size_t)43);
   CHECK_EQ(shortCalls, (size_t)0);
 }
 
@@ -723,4 +725,42 @@ TEST(BatLogNvs, a_namespace_that_will_not_open_is_not_retried_every_pass) {
   CHECK(batLogSaveDue());
   CHECK(batLogSave());
   CHECK_EQ(rowsAfterReboot().size(), (size_t)2);
+}
+
+// A row whose slot write failed stays unsaved: the next save writes it with the newer ones, so
+// nothing is missing after a restart (#97 review R2-1).
+TEST(BatLogNvs, a_row_whose_write_failed_is_written_with_the_next_ones) {
+  FreshBoard board;
+  poll(10000, T0);
+  CHECK(batLogSave());
+  poll(10000 + HOUR_MS, T0 + 3600);
+  mockNvsFailWrites(true);  // the slot write fails (the namespace is already set up)
+  CHECK(!batLogSave());
+  mockNvsFailWrites(false);
+  CHECK_EQ(batLogRing().unsaved, (uint8_t)1);
+  poll(10000 + 2 * HOUR_MS, T0 + 7200);
+  CHECK(batLogSave());
+  std::vector<BatRow> after = rowsAfterReboot();
+  CHECK_EQ(after.size(), (size_t)3);
+  if (after.size() == 3) CHECK_EQ(batLogEpoch(after[1].minute), T0 + 3600);
+}
+
+// HWCDC's link can read as not connected for a moment (its SOF check flaps); its write() then
+// drops the oldest queued bytes and still reports the line sent. The dump stops there instead,
+// with no DONE, and board.py reports it cut short (#97 review R2-2).
+TEST(BatLogNvs, the_dump_stops_when_the_link_drops) {
+  FreshBoard board;
+  for (uint32_t h = 0; h < 10; h++) poll(10000 + h * HOUR_MS, T0 + h * 3600);
+  Serial.setTxTimeoutMs(SERIAL_TX_TIMEOUT_MS);
+  mockSerialLogClear();
+  mockSerialConnectedFor(4);  // the BATLOG line, the header, two rows, then the link drops
+  batLogPrint();
+  mockSerialConnectedFor(-1);
+  CHECK_EQ(mockSerialWriteCalls(), (size_t)4);
+  CHECK_EQ(mockSerialTxTimeout(), (uint32_t)SERIAL_TX_TIMEOUT_MS);
+  mockSerialLogClear();
+  mockSerialConnectedFor(0);  // dropped before the dump: nothing is written at all
+  batLogPrint();
+  mockSerialConnectedFor(-1);
+  CHECK_EQ(mockSerialWriteCalls(), (size_t)0);
 }

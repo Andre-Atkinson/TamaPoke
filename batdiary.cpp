@@ -20,7 +20,8 @@ static uint8_t lastKind = BL_NONE; // the newest row's kind since boot or BATLOG
 
 const BatRing &batLogRing() { return ring; }
 
-static void slotKey(char (&k)[6], uint16_t slot) { snprintf(k, sizeof k, "r%u", (unsigned)slot); }
+// "r0".."r95"; room for any uint16_t, so no compiler can see a truncation (-Wformat-truncation)
+static void slotKey(char (&k)[8], uint16_t slot) { snprintf(k, sizeof k, "r%u", (unsigned)slot); }
 
 // Every value is checked: a "fmt" of another layout or ring size, or an "n" out of range,
 // starts a new diary (the old one is erased at the next save); a slot that does not unpack
@@ -43,7 +44,7 @@ void batLogLoad() {
     ring.n = n;
     for (uint16_t i = 0; i < ring.filled(); i++) {
       uint16_t s = ring.slotOf(i);
-      char k[6];
+      char k[8];
       slotKey(k, s);
       uint64_t v = p.getULong64(k, 0);
       BatRow r;
@@ -99,7 +100,7 @@ bool batLogSave() {
   }
   while (ok && ring.unsaved) {
     uint16_t s = ring.unsavedSlot(0);
-    char k[6];
+    char k[8];
     slotKey(k, s);
     ok = p.putULong64(k, ring.slot[s]) == sizeof(uint64_t);
     if (ok) ring.unsaved--;
@@ -142,17 +143,23 @@ bool batLogClear(uint32_t now) {
 
 // The dump is up to about 4 KB and the USB serial's transmit buffer holds 256 bytes; with the
 // console's 0 ms timeout (SERIAL_TX_TIMEOUT_MS) the rest would be dropped. While it prints, the
-// transmit timeout is BATLOG_TX_WAIT_MS (batdiary.h), so a host that reads gets every line. A
-// host that has stopped reading costs one write call, which HWCDC retries up to
+// transmit timeout is BATLOG_TX_WAIT_MS (batdiary.h), so the lines wait for a host that reads.
+// A host that has stopped reading costs one write call, which HWCDC retries up to
 // BATLOG_TX_RETRIES times: at most BATLOG_STALL_MAX_MS (100 ms) with the loop frozen. Each line
-// goes out as one write call (its own "\r\n") and the first one that comes back short ends the
-// dump. tools/board.py checks that it got every row the first line announces.
-// One line in one write call: `len` characters are in line[], which has room for "\r\n".
+// goes out as one write call (its own "\r\n"), and the first one that comes back short ends the
+// dump. So does a link that reads as not connected: HWCDC's write() then makes room by dropping
+// the oldest queued bytes and still reports the whole line sent. The dump ends with DONE, sent
+// under the same wait, only when every line went; a dump that stopped has none. Lines can
+// still be lost on the way, so tools/board.py checks that it got every row the first line
+// announces and that each row's fields are in range.
+// One line in one write call: `len` characters are in line[], which keeps room for "\r\n"
+// (snprintf's NUL is overwritten, never sent).
 static bool batLogPutLine(char (&line)[80], int len) {
   if (len < 0) len = 0;
-  if (len > (int)sizeof line - 2) len = (int)sizeof line - 2;
+  if (len > (int)sizeof line - 3) len = (int)sizeof line - 3;  // what a truncated snprintf wrote
   line[len++] = '\r';
   line[len++] = '\n';
+  if (!Serial.isConnected()) return false;
   return Serial.write((const uint8_t *)line, (size_t)len) == (size_t)len;
 }
 
@@ -176,5 +183,6 @@ void batLogPrint() {
     n = batLogFormatRow(line, sizeof line - 2, r);
     sent = batLogPutLine(line, n);
   }
+  if (sent) batLogPutLine(line, snprintf(line, sizeof line - 2, "DONE"));
   Serial.setTxTimeoutMs(SERIAL_TX_TIMEOUT_MS);
 }

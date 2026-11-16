@@ -248,5 +248,5 @@ void batLogCutoff(uint32_t now, uint32_t epoch);  // the power-off row (one in a
 void batLogScreenOn(uint32_t ms);   // the screen was lit for this long
 void batLogAsleep(uint32_t ms);     // the CPU was in light sleep for this long
 bool batLogClear(uint32_t now);     // BATLOG CLEAR: erases the namespace and the RAM copy
-void batLogPrint();                 // BATLOG?: the dump on Serial (without DONE)
+void batLogPrint();                 // BATLOG?: the dump on Serial, ending with DONE (none if it stopped)
 const BatRing &batLogRing();        // for the tests
