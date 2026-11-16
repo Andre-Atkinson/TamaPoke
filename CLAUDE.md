@@ -269,9 +269,10 @@ that session can file their issues before it merges. A small fix is settled
 with the owner before READY; it does not wait there for an answer. Use a
 merge commit, or squash when the branch has WIP commits, and say which in the
 merge commit message. Design decisions, flashing the board, and anything else
-the hard rules reserve for the owner still need the owner's say. Subagents never merge, and nobody submits an approving review.
-Once a session's work is merged and nothing is pending, the session that
-started it (or the owner) archives it.
+the hard rules reserve for the owner still need the owner's say. Subagents
+never merge, and nobody submits an approving review. Once a session's work is
+merged and nothing is pending, the session that started it (or the owner)
+archives it.
 
 Mutation evidence for round-1 fixes and for the main session's post-round-2
 fixes goes in the PR body (`gh pr edit`), not only in a comment.
