@@ -5,7 +5,7 @@
 # and a strip's own timeout closing it; and a long press on a strip item, which must not open
 # the release dialog (the strips reach into the pet's zone).
 # A manual check: run it in each language on both boards and look at the shots and the serial
-# log ("toy: joy +10", "toy: joy +0 (hourly cap)", "milk: drinking", "milk: lights out");
+# log ("toy: joy +10", "toy: joy +0 (joy full or hourly cap)", "milk: drinking", "milk: lights out");
 # nothing compares them automatically.
 #   tools/sim.sh --board 175c --lang pt --script treats --out shots/pt/
 # Coordinates: the Play button is at (202, 404) and its strip's items centre on (169, 320)

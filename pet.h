@@ -187,8 +187,8 @@ public:
   // The plush toy (#13, TOY_* above): the pet plays with it for TOY_ANIM_MS (playingToy()).
   // Returns the joy it gave: 0 once this hour's plays have given theirs, or with joy already
   // full, and then no heart and no play of the hour spent either (0 = nothing given, nothing
-  // spent). As an egg, asleep or
-  // in a ceremony nothing happens at all (no play either). Put to bed mid-play, it stops.
+  // spent). As an egg, asleep or in a ceremony nothing happens at all (no play either). Put
+  // to bed mid-play, it stops.
   uint8_t playToy();
   bool playingToy() const { return !sleeping && timeLeft(toyUntil) > 0; }
   uint32_t toyElapsed() const {  // ms into the play (0 when none), for its animation

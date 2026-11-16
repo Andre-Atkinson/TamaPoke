@@ -198,7 +198,7 @@ uint8_t choiceKind = 0;     // dialogo de decision: 0 ninguno, 1 evolucion, 2 de
 uint32_t choiceUntil = 0;   // se cierra solo a este millis
 TouchGesture touchG;        // gesto en curso y gestos sobre el bicho (touchgesture.h)
 bool holdFired = false;
-bool stripAtDown = false;  // a care strip was open when this touch began (handleTouch's long press)
+static bool stripAtDown = false;  // a care strip was open when this touch began (handleTouch's long press)
 
 // BOOT controls and small overlay; all UI/pet changes stay on the loop task.
 #if BOARD_AMOLED_175C
