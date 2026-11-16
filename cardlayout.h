@@ -47,7 +47,7 @@ inline int fitRowY(uint8_t stat) { return FIT_ROW_Y + stat * FIT_ROW_H; }
 // ---------------------------------------------------------------- Medals page
 // The 8 care medals in a 2x4 grid (bits 0-7), then the 3 training ribbons in one row
 // (bits 8-10), then the Play minigames' records. A row's tiles follow the round edge.
-#define MEDAL_TITLE_Y 40   // size 3
+#define MEDAL_TITLE_Y 44   // size 3
 #define MEDAL_CARE 8       // the grid's tiles
 #define MEDAL_RIBBONS 3    // the ribbon row's tiles
 #define MEDAL_ROW_Y 74

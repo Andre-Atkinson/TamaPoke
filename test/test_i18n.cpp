@@ -268,6 +268,19 @@ TEST(i18n, the_fitness_page_texts_fit) {
   gLang = LANG_DEFAULT;
 }
 
+// The Medals page header at a full count ("MEDALHAS 11/11" is the widest) at size 3, with
+// 4 px to spare each side of the disc (at y 40 it started on the rim).
+TEST(i18n, the_medals_header_fits_at_a_full_count) {
+  int room = 2 * cardHalfWidth(MEDAL_TITLE_Y, MEDAL_TITLE_Y + 21, 4, 1000);
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    char head[32];
+    snprintf(head, sizeof(head), T(S_MEDALS_FMT), (unsigned)MED_COUNT, (unsigned)MED_COUNT);
+    CHECK_MSG((int)strlen(head) * 18 <= room, std::string("medals header too wide: ") + head);
+  }
+  gLang = LANG_DEFAULT;
+}
+
 // ---------- the `lang` key (#61) ----------
 // The stored byte keeps the old eight-language enum's codes: 1 is English, 5 is
 // Portuguese, anything else loads as English (i18n.h). Each case below is one the

@@ -3085,6 +3085,22 @@ TEST(quietalerts, a_ribbon_earned_by_exercise_sounds_in_quiet_hours) {
   CHECK_EQ(mockSfxCount(), n + 1);
 }
 
+// Bedtime closes a game and puts the pet to sleep in one pass (bedApply: autoSleep()): the
+// ribbon its exercise completed is gained without SFX_MEDAL, as checkMedals() plays nothing
+// while the pet sleeps.
+TEST(quietalerts, a_ribbon_gained_as_bedtime_closes_the_game_is_silent) {
+  Pet p;
+  awakeWithSound(p);
+  p.trSpe = RIBBON_SPD - 3;
+  p.quietHours = true;
+  p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);  // +3: at the goal
+  CHECK(p.autoSleep());
+  uint32_t n = mockSfxCount();
+  p.exerciseOver();
+  CHECK_EQ(mockSfxCount(), n);
+  CHECK_MSG(p.hasMedal(MED_SPD), "gained silently");
+}
+
 // ---------------------------------------------------------------- the exercise screen (#69, #76)
 // exerciseOver(): as a minigame or the bag closes, the medals its exercise completed.
 TEST(exercise, the_end_of_the_screen_gains_what_the_exercise_completed) {
@@ -3159,6 +3175,11 @@ TEST(exercise, the_screen_closing_gains_the_ribbon_once) {
   uint16_t total = p.totalMedals;
   screen.update(false, p);
   CHECK_EQ(p.totalMedals, total);
+  // a second pass of the closed screen must not call exerciseOver() again: the exercise is
+  // still flagged (no tick ran), so a goal reached meanwhile would be gained early
+  p.trAtk = RIBBON_STR;
+  screen.update(false, p);
+  CHECK_MSG(!p.hasMedal(MED_STR), "exerciseOver() ran on a second closed pass");
 }
 
 // Holding never starts a banner that wasn't showing
