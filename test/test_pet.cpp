@@ -1535,12 +1535,13 @@ TEST(nature, playful_trains_speed_25_percent_more) {
     Pet p;
     makePet(p, 4);
     p.nature = n;
-    p.playGame(GAME_KEEPY, 5);  // normalised 5: 1 point
+    // playGame() returns the speed gained (#76): the boosted gain, what really went in
+    CHECK_EQ(p.playGame(GAME_KEEPY, 5), (uint8_t)(bonus ? 2 : 1));  // normalised 5: 1 point
     CHECK_EQ(p.trSpe, (uint8_t)(bonus ? 2 : 1));
-    p.playGame(GAME_KEEPY, 30);  // normalised 30 (the cap): 6 points
+    CHECK_EQ(p.playGame(GAME_KEEPY, 30), (uint8_t)(bonus ? 8 : 6));  // normalised 30 (the cap): 6
     CHECK_EQ(p.trSpe, (uint8_t)(bonus ? 10 : 7));
     p.trSpe = 97;
-    p.playGame(GAME_KEEPY, 30);
+    CHECK_EQ(p.playGame(GAME_KEEPY, 30), (uint8_t)3);
     CHECK_EQ(p.trSpe, (uint8_t)100);
     CHECK_EQ(p.trAtk, (uint8_t)0);
     CHECK_EQ(p.trDef, (uint8_t)0);
