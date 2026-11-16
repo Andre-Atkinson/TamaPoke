@@ -25,10 +25,11 @@
 //  - acute and grave: one pixel above a top corner of a 6-row letter (rows 1-6), where its
 //    top row has no ink, so it reads as a mark rather than a bump (U' has it right of centre,
 //    off the stem; E' has a 4-column E, like the font's E-acute, so the corner is free)
-//  - circumflex: a two-row hat (a peak, then its two shoulders) on a 5-row A or E (rows 2-6),
-//    which keep their capital shape at 5 rows, as the font's own E-acute does. A one-pixel
-//    hat on a 6-row A was one pixel from the plain A, and faint on the E. O^ is a full-height
-//    O whose top is the peak
+//  - circumflex: a two-row hat (a peak, then its two shoulders) on a flat-topped 5-row A or E
+//    (rows 2-6), which keep their capital shape at 5 rows, as the classic font's 5-row E-acute
+//    did. The flat top keeps the hat apart from the letter: a one-pixel hat on a 6-row A was
+//    one pixel from the plain A and faint on the E, and on a round-topped A the hat merged into
+//    the peak the plain A already has. O^ is a full-height O whose top is the peak
 //  - tilde: a flat bar over a 6-row letter, in the shape of the bar the font draws over its
 //    own N-tilde; that N has a blank row under the bar and these do not, the cell has no room
 // C-cedilla stays the font's: its C is 6 rows from the top, the cedilla below, a capital already.
@@ -56,7 +57,7 @@ inline constexpr PtGlyph PT_GLYPHS[] = {
   {0xF5, {".##.#.", "#..#..", "......", ".###..", "#...#.", "#...#.", ".###..", "......"}},  // o~
   {0xC1, {"....#.", ".###..", "#...#.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A'
   {0xC0, {"#.....", ".###..", "#...#.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A`
-  {0xC2, {"..#...", ".#.#..", ".###..", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A^
+  {0xC2, {"..#...", ".#.#..", "#####.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A^
   {0xC3, {"#####.", ".###..", "#...#.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A~
   {0xCA, {"..#...", ".#.#..", "#####.", "#.....", "####..", "#.....", "#####.", "......"}},  // E^
   {0xCD, {"....#.", ".###..", "..#...", "..#...", "..#...", "..#...", ".###..", "......"}},  // I'
