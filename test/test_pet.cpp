@@ -235,6 +235,21 @@ TEST(treats, the_plush_gives_joy_twice_an_hour_then_plays_for_none) {
   CHECK_EQ(p.playToy(), (uint8_t)0);
 }
 
+TEST(treats, a_play_at_full_joy_gives_nothing_and_spends_none_of_the_hours_plays) {
+  Pet p;
+  makePet(p, 4);
+  setStats(p, 60, 100, 40, 70);
+  CHECK_EQ(p.playToy(), (uint8_t)0);
+  CHECK_MSG(p.playingToy(), "at full joy it still plays with it");
+  CHECK_MSG(!p.showHeart(), "no joy given: no heart");
+  CHECK_EQ(p.joy, (uint8_t)100);
+  mockAdvanceMillis(TOY_ANIM_MS);
+  setStats(p, 60, 20, 40, 70);  // the joy drops: the hour's two plays that give joy are all still there
+  CHECK_EQ(p.playToy(), (uint8_t)TOY_JOY);
+  CHECK_EQ(p.playToy(), (uint8_t)TOY_JOY);
+  CHECK_EQ(p.playToy(), (uint8_t)0);
+}
+
 TEST(treats, a_playful_pet_enjoys_the_plush_more) {
   Pet p;
   makePet(p, 4);
@@ -359,15 +374,24 @@ TEST(treats, the_milk_bonus_adds_to_a_lazy_pets_sleep) {
   CHECK_EQ(p.energy, (uint8_t)(20 + NAT_SLEEP_ENERGY + MILK_SLEEP_ENERGY));
 }
 
-TEST(treats, the_milk_night_counts_in_the_powered_off_catch_up_and_ends_with_a_new_egg) {
+// `milked` is RAM only, and syncClock() runs only from setup(), after a restart: so the milk
+// bonus never reaches the powered-off catch-up. A restart in the night drops it (the pet stays
+// asleep and its catch-up restores energy at the plain rate); a new egg drops it too.
+TEST(treats, a_restart_drops_the_milk_bonus_and_a_new_egg_does_too) {
   Pet p;
   makePet(p, 4);
   setStats(p, 90, 90, 20, 90);
   CHECK(p.giveMilk());
   CHECK(p.autoSleep());
-  p.setClock(1000u * 86400);
-  p.syncClock(1000u * 86400 + 2 * 60);  // two minutes applied at once (the clock was set)
-  CHECK_EQ(p.energy, (uint8_t)(20 + 2 * (6 + MILK_SLEEP_ENERGY)));
+  p.setClock(1000u * 86400);  // saves, with its time reference
+  CHECK(p.milkNight());
+  Pet q;  // the restart: same NVS, a new Pet
+  q.begin();
+  CHECK_MSG(!q.milkNight(), "the milk is not in the save: a restart drops the bonus");
+  CHECK_MSG(q.sleeping, "it is still asleep after the restart");
+  CHECK_EQ(q.energy, (uint8_t)20);
+  q.syncClock(1000u * 86400 + 2 * 60);  // two minutes powered off
+  CHECK_EQ(q.energy, (uint8_t)(20 + 2 * 6));  // the plain rate for an easygoing pet
   p.newEgg();
   CHECK(!p.milkNight());
 }

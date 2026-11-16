@@ -32,7 +32,8 @@
 //  - The plush toy (the Play strip): a little happiness without a minigame, so no speed
 //    training and no cost in energy, food or weight. TOY_JOY a play (a playful pet gets
 //    NAT_PLAY_JOY_EXTRA more, as from every play) and a heart, for TOY_PER_HOUR plays an
-//    hour; past them the pet still plays with it, for no joy and no heart, so it doesn't
+//    hour; past them, or with joy already full, the pet still plays with it, for no joy and no
+//    heart (and a play with joy full spends none of the hour's plays), so it doesn't
 //    replace the games (a game at par gives about +35 joy). The hour starts at the first
 //    play that gives joy, and lives in RAM like the idle perks' (idleplan.h): a restart gives
 //    a fresh hour, and the save is untouched.
@@ -184,7 +185,9 @@ public:
   void feedBerry(uint8_t color);  // 0 roja, 1 azul, 2 verde
   void feedCandy();
   // The plush toy (#13, TOY_* above): the pet plays with it for TOY_ANIM_MS (playingToy()).
-  // Returns the joy it gave, 0 once this hour's plays have given theirs. As an egg, asleep or
+  // Returns the joy it gave: 0 once this hour's plays have given theirs, or with joy already
+  // full, and then no heart and no play of the hour spent either (0 = nothing given, nothing
+  // spent). As an egg, asleep or
   // in a ceremony nothing happens at all (no play either). Put to bed mid-play, it stops.
   uint8_t playToy();
   bool playingToy() const { return !sleeping && timeLeft(toyUntil) > 0; }

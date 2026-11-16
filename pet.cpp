@@ -673,7 +673,7 @@ uint8_t Pet::playToy() {
   toyUntil = now + TOY_ANIM_MS;
   if (toyJoys && now - toyFrom >= TOY_WINDOW_MS) toyJoys = 0;  // that hour is over
   uint8_t before = joy;
-  if (toyJoys < TOY_PER_HOUR) {
+  if (joy < 100 && toyJoys < TOY_PER_HOUR) {  // joy already full gives nothing: no slot, no heart
     if (!toyJoys) toyFrom = now;  // the hour starts at its first play that gives joy
     toyJoys++;
     joy = clamp100(joy + TOY_JOY + playJoyExtra());

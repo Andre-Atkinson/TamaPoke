@@ -72,7 +72,7 @@ While **awake**, per minute:
 - ⚽ **Play / minigames:** +JOY, −ENE; a random one of four short games (keepy-uppy, Berry Catch, Peekaboo, Berry Song). Each trains **SPEED** and burns weight, and keeps its own best score.
 - 🧸 **Plush toy** (the Play button's strip): it hops about with its plush, +10 JOY and a heart
   (+15 for a playful creature), no minigame, so no SPEED and no cost. Two plays an hour give joy;
-  after that it still plays, for no joy, so the games stay the main fun.
+  after that (or with JOY already full) it still plays, for no joy, so the games stay the main fun.
 - 🥛 **Warm milk** (the moon button's strip): it drinks, +5 JOY and a heart, **+4 weight**
   (less than candy), then lights out. Until it next wakes, its sleep brings energy back
   **+2/min** faster (8 a minute, 10 for a lazy one). Now and then in the evening, before

@@ -11,7 +11,7 @@
 # Coordinates: the Play button is at (202, 404) and its strip's items centre on (169, 320)
 # and (235, 320); the moon button is at (264, 404) and its items on (231, 320) and (297, 320).
 # The steps mean the same on both boards: each shot comes within seconds of a tap, before
-# either board dims the screen.
+# either board dims the screen. The last shot is a milk, lights out, wake sequence (see there).
 clock 2026-11-16 10:00
 battery 80
 
@@ -58,9 +58,10 @@ wait 6500ms
 shot 07-moon-strip-timed-out
 
 # a long press on a strip item (inside the pet's zone, y < 310) is not a long press on the
-# pet: no release dialog, and the strip times out under the finger (the lift does nothing)
+# pet: no release dialog, even after the strip times out under the finger (it has about 5.5 s
+# left when the finger lands, and the hold lasts 7 s; the lift does nothing)
 tap 264 404
-hold 297 300 3500ms 08-long-press-on-the-strip
+hold 297 300 7000ms 08-long-press-on-the-strip
 wait 3s
 
 # warm milk: a heart and the mug as it drinks, then lights out
@@ -105,3 +106,16 @@ tap 264 404
 tap 231 320
 wait 1s
 shot 18-lights-out-evening
+
+# warm milk, lights out from the strip during the drink, then the moon again (woken): the
+# pet stays awake when the drink ends (milk: lights out must not be logged after "milk:
+# drinking"; the three taps after the milk land 480 ms apart, inside the 2.5 s drink)
+tap 264 404
+wait 1s
+tap 264 404
+tap 297 320
+tap 264 404
+tap 231 320
+tap 264 404
+wait 3s
+shot 19-milk-lights-out-then-woken-stays-awake
