@@ -443,10 +443,10 @@ struct EvoChime {
 // under it waits (Pet::holdBanners); on the pass it has closed, the medals its exercise
 // completed are gained (Pet::exerciseOver), so a training ribbon's banner shows as the
 // creature's screen comes back.
-// `dark`: the screen is off or locked. An exercise that the screen going dark ended (#88)
-// closes on a dark screen: its medals are gained at once (their sound comes with the
-// player's press, as any medal the player's action earns), and the banners wait until the
-// screen is back on, so the creature's screen still shows them.
+// `dark`: the screen is off or locked. A minigame or an exercise that the screen going dark
+// ended (#88, #94) closes on a dark screen: its medals are gained at once (their sound comes
+// with the player's press, as any medal the player's action earns), and the banners wait
+// until the screen is back on, so the creature's screen still shows them.
 struct ExerciseScreen {
   bool wasOpen = false;
   bool closedDark = false;  // closed while dark, and the screen hasn't been back on since

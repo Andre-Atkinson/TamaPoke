@@ -1085,3 +1085,82 @@ TEST(minigames, una_partida_sin_tocar_tras_otra_jugada_tampoco_puntua) {
   }
   CHECK(caughtAlone);
 }
+
+// ---------------------------------------------------------------- the screen goes dark (#94)
+// PWR or the 1.75C's pocket lock with a game open (MiniGames::endDark): the game ends at once
+// and keeps its score; the sketch pays it with Pet::playGame when endDark() says so.
+
+TEST(minigames, a_touched_game_the_screen_turns_off_ends_now_and_pays_its_score) {
+  bool scored = false;
+  for (uint32_t seed = 1; seed <= 20 && !scored; seed++) {
+    MiniGames m;
+    uint32_t now = 0;
+    m.rng.seedWith(seed);
+    m.begin(GAME_CATCH, now, 0, false);
+    playUntil(m, now);
+    m.touch(true, 233, 350, now);  // one tap in place: the pet catches on its own after it
+    m.touch(false, 233, 350, now + 20);
+    for (int i = 0; i < 120 && !m.over(); i++) m.frame(now += 85);  // ~10 s of the 30
+    if (m.over() || m.catcher.result() == 0) continue;
+    scored = true;
+    uint16_t before = m.score();
+    CHECK(m.endDark());              // paid: the score so far
+    CHECK(m.over());                 // and the game is over now, not left running
+    CHECK_EQ(m.score(), before);     // with the score it had
+    CHECK(!m.endDark());             // a second dark end pays nothing again
+    m.frame(now += 85);
+    CHECK_EQ(m.score(), before);     // nothing moves on after it
+  }
+  CHECK_MSG(scored, "no seed caught a berry in the first 10 s");
+}
+
+TEST(minigames, a_touched_game_scoring_0_still_pays_when_the_screen_turns_off) {
+  MiniGames m;
+  uint32_t now = 0;
+  m.begin(GAME_KEEPY, now, 0, false);
+  playUntil(m, now);
+  m.touch(true, 20, 233, now);  // far from the ball: a miss, but the player played
+  m.touch(false, 20, 233, now + 20);
+  m.frame(now += 85);
+  CHECK(m.played);
+  CHECK_EQ(m.score(), (uint16_t)0);
+  CHECK(m.endDark());  // as its own end pays a 0 (playGame(g, 0))
+  CHECK(m.over());
+}
+
+TEST(minigames, an_untouched_game_the_screen_turns_off_pays_nothing) {
+  MiniGames title;  // on its title card
+  title.begin(GAME_KEEPY, 0, 0, false);
+  CHECK(!title.endDark());
+  CHECK(title.over());
+
+  bool caughtAlone = false;  // in play, never touched: the pet's own catches don't count
+  for (uint32_t seed = 1; seed <= 20 && !caughtAlone; seed++) {
+    MiniGames m;
+    uint32_t now = 0;
+    m.rng.seedWith(seed);
+    m.begin(GAME_CATCH, now, 0, false);
+    playUntil(m, now);
+    for (int i = 0; i < 120 && !m.over(); i++) m.frame(now += 85);
+    if (m.over() || m.catcher.result() == 0) continue;
+    caughtAlone = true;
+    CHECK(!m.endDark());
+    CHECK(m.over());
+  }
+  CHECK_MSG(caughtAlone, "no seed had the pet catch a berry alone in 10 s");
+}
+
+TEST(minigames, a_game_already_over_is_not_paid_again_when_the_screen_turns_off) {
+  MiniGames m;  // played to its end: the sketch paid it then (finishGame) and shows the result
+  uint32_t now = 0;
+  m.rng.seedWith(3);
+  m.begin(GAME_CATCH, now, 0, false);
+  playUntil(m, now);
+  m.touch(true, 233, 350, now);
+  m.touch(false, 233, 350, now + 20);
+  runToEnd(m, now);
+  CHECK(m.over());
+  CHECK(m.played);
+  CHECK(!m.endDark());
+  CHECK(m.over());
+}

@@ -95,14 +95,43 @@ static void gameSounds() {
   else if ((e & GEV_GOOD) && games.game() != GAME_SONG) sfxPlay(games.game() == GAME_CATCH ? SFX_EAT : SFX_PLAY);
 }
 
+// each game's name in the serial log, in the order of GameId
+static const char *const GAME_LOG_NAME[GAME_COUNT] = { "keepy", "catch", "peek", "song" };
+
 // fin de la partida (el juego acabo o nadie lo toco en 15 s): record y recompensa
 static void finishGame() {
   uint8_t g = games.game();
   gameShownScore = games.score();
   gameNewHi = gameShownScore > pet.gameBest(g);
   gameSpeedGain = pet.playGame(g, gameShownScore);
+  Serial.printf("Play: %s score=%u speed=+%u\n", GAME_LOG_NAME[g], gameShownScore, gameSpeedGain);
   if (!games.won()) sfxPlay(gameNewHi && gameShownScore > 0 ? SFX_MEDAL : SFX_LEVEL);
   gameOverUntil = millis() + 4000;
+}
+
+// The screen went dark with a minigame open (#94; MiniGames::endDark). The game ends here
+// and the pet gets what its score so far earns, as the game's own end pays (Pet::playGame:
+// joy, speed, the energy and food it costs, the weight it burns, bond and the day's care),
+// but with no result screen to draw and no sound, and the game's screen closes: no 240 MHz
+// with the screen off, and the screen comes back on to the creature. A game nobody touched
+// pays nothing; the result screen only closes (paid at its end). A finger still on the glass
+// does nothing as it lifts, as after the exit chip.
+static void gameScreenOff() {
+  if (!gameOpen) return;
+  if (!games.over()) {  // over: on its result screen, paid by finishGame()
+    uint8_t g = games.game();
+    if (games.endDark()) {
+      uint16_t score = games.score();
+      uint8_t gain = pet.playGame(g, score);
+      Serial.printf("Play: %s score=%u speed=+%u (screen off)\n", GAME_LOG_NAME[g], score, gain);
+    } else {
+      Serial.printf("Play: %s untouched (screen off)\n", GAME_LOG_NAME[g]);
+    }
+  }
+  gameOpen = false;
+  gameOverUntil = 0;
+  holdFired = true;
+  swallowGesture = true;
 }
 
 // ---------- the calm exercises (#78): the rhythm punch and the stamina hold ----------
@@ -176,10 +205,15 @@ static void finishExercise(uint32_t now) {
 // was done, as the exit does, but with no result screen to draw and no sound to go with it,
 // and the training screen closes: no 240 MHz and no touch capture with the screen off, and
 // the screen comes back on to the creature. The result screen only closes (paid already).
-void exerciseScreenOff() {
+static void exerciseScreenOff() {
   if (!trainOpen) return;
   if (!trainOverUntil) payExercise(" (screen off)");
   leaveTraining();
+}
+
+void playScreenOff() {
+  gameScreenOff();
+  exerciseScreenOff();
 }
 
 void exerciseTap(uint32_t at) {

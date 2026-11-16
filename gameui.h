@@ -29,11 +29,13 @@ void exerciseTap(uint32_t at);
 // The exit while training: ends the session and pays for what was done (nothing on the
 // result screen). True when the training screen has closed.
 bool exerciseExit();
-// The screen went dark with an exercise open (#88: PWR and the pocket lock, from
-// pollPwrButton; the battery shutdown; bedApply, which can't meet one any more): ends the
-// session at once and pays for what was done, as the exit does, with no result screen and
-// no sound, and closes the training screen. Nothing if none is open.
-void exerciseScreenOff();
+// The screen went dark with a minigame or an exercise open (#88, #94: PWR and the pocket
+// lock, from pollPwrButton; the battery shutdown; bedtime's lights out, which can't meet one
+// any more): ends it at once and pays for what was done so far, as its own end does (a
+// minigame: Pet::playGame with its score, nothing if nobody touched it; an exercise: as its
+// exit), with no result screen and no sound, and closes its screen. A result screen only
+// closes (paid at its end). Nothing if neither is open.
+void playScreenOff();
 #if !BOARD_AMOLED_175C
 // The 1.75's exit: a touch-down above this y (the top strip) leaves. The exercise screens
 // draw "tap: back" inside it, so it is no longer invisible, and end it above the hint.

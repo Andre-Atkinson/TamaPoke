@@ -361,11 +361,12 @@ void pollPwrButton() {
     }
   }
 #endif
-  // An exercise never goes on with the screen dark (#88). It can't time out (autoScreenOff,
-  // power.h), so PWR off and the pocket lock, both above, are what darken it: either ends it
-  // here, in the pass of the press (on the 1.75C before handleTouch() reads the glass),
-  // keeping what was done, and the screen comes back on to the creature.
-  if (trainOpen && (screenOff || screenIsLocked())) exerciseScreenOff();
+  // A minigame or an exercise never goes on with the screen dark (#88, #94): no 240 MHz in a
+  // pocket. Neither can time out (autoScreenOff, power.h), so PWR off and the pocket lock,
+  // both above, are what darken one: either ends it here, in the pass of the press (on the
+  // 1.75C before handleTouch() reads the glass), keeping what was done, and the screen comes
+  // back on to the creature.
+  if ((gameOpen || trainOpen) && (screenOff || screenIsLocked())) playScreenOff();
 }
 
 static void runPanelProgram(const PanelStep *s, int n) {
@@ -649,14 +650,13 @@ static ClockPromptHold clockPromptHold() {
 }
 
 // Lights out now, for bedtime's event (bedApply) and for the warm milk (milkApply). Only
-// called with bedBusy() false, so a game still open here is on a dark screen: it is abandoned
-// without a prize, as on holding its exit button; playGame() pays out when it finishes (which
-// no longer comes) and doesn't look at pet.sleeping. An exercise is never open here: the
-// screen going dark ended it (pollPwrButton, #88). Were one open, it would end the same way,
-// keeping what was done. Silent (sin sonido: es de noche). True when the pet went to bed.
+// called with bedBusy() false, so a minigame or an exercise open here would be on a dark
+// screen, and none is: the screen going dark ended it (pollPwrButton, #88, #94). Were one
+// open, it would end the same way, keeping what was done (no longer abandoned without a
+// prize), before the pet goes to bed. Silent (sin sonido: es de noche). True when the pet
+// went to bed.
 static bool lightsOutNow() {
-  gameOpen = false;
-  exerciseScreenOff();
+  playScreenOff();
   return pet.autoSleep();
 }
 
@@ -800,7 +800,7 @@ void loop() {
   pet.update(now);
   // a minigame or an exercise (ExerciseScreen, pet.h): banners wait under it, and the medals
   // its exercise completed come as it closes, after its result (#69, #76, #78); one that the
-  // screen going dark closed keeps them waiting until the screen is back on (#88)
+  // screen going dark closed keeps them waiting until the screen is back on (#88, #94)
   static ExerciseScreen exerciseScreen;
   exerciseScreen.update(gameOpen || trainOpen, pet, screenOff || screenIsLocked());
 
@@ -915,7 +915,7 @@ void loop() {
   // bateria al limite seguro (sin USB): se guarda la partida y se apaga el PMU antes de que la
   // celda baje mas; el RTC conserva la hora
   if (batShouldShutdown() && !usbPresent()) {
-    exerciseScreenOff();  // the pet keeps what an exercise did so far, as with PWR (#88)
+    playScreenOff();  // the pet keeps what a minigame or an exercise did so far, as with PWR (#88, #94)
     pet.flushSave();
     panel->setBrightness(0);
     batPowerOff();
