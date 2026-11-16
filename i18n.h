@@ -46,6 +46,7 @@ enum StrId : uint8_t {
   S_REPS_FMT, S_STA_GAIN_FMT, S_HOLD_HINT, S_HOLD_KEEP,
   S_ONE_PUNCH, S_ONE_REP,  // the results' singular: "1 PUNCH", "1 REP"
   S_TRAIN, S_EX_TITLE, S_EX_PUNCH, S_EX_STR, S_EX_HOLD, S_EX_STA,
+  S_TRAIN_ASLEEP,  // the toast when TRAIN is tapped while the pet sleeps (#89)
   S_SPD_GAIN_FMT,  // the Play minigame result's speed gain (#76), as the punch shows its strength
   S_SCORE_FMT, S_GREAT_JOY, S_PLUS_JOY,
   // reloj / ajustes

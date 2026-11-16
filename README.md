@@ -85,7 +85,9 @@ While **awake**, per minute:
     up). Off-beat taps do nothing and cost nothing.
   - **Hold** trains **STAMINA**: keep a finger on the screen while it does reps; lifting
     only pauses it.
-  Leaving early keeps what was earned.
+  Leaving early keeps what was earned, and so does turning the screen off (PWR, or the
+  1.75C's pocket lock): the session ends at once and the screen comes back on to the
+  creature. While it sleeps, *Train* just says so and the card stays open.
 - 🫧 **Bath:** clears poops, HYG → 100.
 - 👆 **Pet it:** tap it for +5 JOY + bond. It also knows a few touches, and each
   one counts as a single pat (the daily bond limit is shared with everything else):
@@ -110,8 +112,9 @@ While **awake**, per minute:
   window starts (silently) and wakes when it ends (one soft chime if sound is on).
   Only those two moments act, so if you wake it at night it stays awake until the
   next bedtime, and if you put it to bed early it still wakes in the morning.
-  It waits until a minigame, dialog, bath or evolution is finished; a minigame or
-  an exercise left open with the screen off is abandoned (no prize) at bedtime. Eggs, farewell
+  It waits until a minigame, dialog, bath or evolution is finished; a minigame left
+  open with the screen off is abandoned (no prize) at bedtime (an exercise never is:
+  turning the screen off ends it, keeping what was earned). Eggs, farewell
   scenes, the starter pick and the egg choice are skipped. It follows the clock you set (swipe
   down): after a full power-off the 1.75C clock can be wrong until you set it, so
   after a power-off bedtime stays paused until the clock is set (clock screen, which
