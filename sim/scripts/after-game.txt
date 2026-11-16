@@ -1,0 +1,67 @@
+# The screens after care that earns several things at once and after a minigame or an
+# exercise (#82, #83, #84). It sets no clock: run it by day and by night, in each language.
+#   tools/sim.sh --clock "2026-11-16 10:00" --lang en --script after-game --out shots/
+#   tools/sim.sh --clock "2026-11-16 21:00" --lang pt --script after-game --out shots/
+battery 64
+
+# new game: pick Charmander, hatch the egg; a clear sky, so the night has its stars
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial SCENE auto clear auto
+
+# two days of care: a 2-day streak, nothing to celebrate yet
+serial CAREDAY
+serial CAREDAY
+wait 6s
+
+# level 10, no weight and no mistakes, the stamina goal reached: the third day's first care
+# brings the 3-day milestone and three medals (level 10, IN SHAPE, the stamina ribbon). The
+# milestone first, for its whole 4.5 s, then each medal for its 4 s, lowest first (#82, #83).
+serial LVL 10
+train 0 10 27
+serial CAREDAY
+wait 300ms
+shot banner-1-streak
+wait 4500ms
+shot banner-2-lv10
+wait 4s
+shot banner-3-in-shape
+wait 4s
+shot banner-4-stamina
+wait 4s
+shot banner-5-none
+
+# a Play minigame: its title card and its result have no stars at night, and while it is
+# played the stars keep out of the HUD at the top (#84)
+game catch
+tap 202 404
+tap 169 320  # the Play strip's Poke Ball (#13)
+wait 300ms
+shot game-title
+wait 3s
+shot game-play
+wait 15s
+shot game-result
+wait 6s
+
+# the rhythm punch (#78), two punches on the beat: +3 strength reaches the ribbon. Its
+# result has no stars at night either, and the ribbon's banner waits for it to close (#69).
+train 28 10 27
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 300ms
+shot punch-play
+tap 233 240
+wait 750ms
+tap 233 240
+wait 16s
+shot punch-result
+wait 3500ms
+shot punch-ribbon-banner
+wait 5s

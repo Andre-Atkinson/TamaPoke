@@ -6,6 +6,7 @@
 #include "../bedtime.h"
 #include "../audio.h"  // SFX_*, audioSetEnabled/audioSetSleeping (the shim's, muted)
 #include "../exercise.h"  // EX_COUNT, EX_GAIN_CAP (#78)
+#include "../i18n.h"  // bannerLines, medalName (#82)
 #include <string.h>
 
 // ---------------------------------------------------------------- helpers
@@ -1332,9 +1333,178 @@ TEST(ribbons, each_ribbon_comes_at_its_threshold) {
     advance(p, 1);
     CHECK_MSG(p.hasMedal(R[k].medal), where + ": at the goal");
     CHECK_MSG(p.medals == R[k].medal, where + ": that ribbon only");
-    CHECK_MSG(p.showMedal() && p.newMedal == R[k].medal, where + ": its banner");
+    CHECK_MSG(p.showMedal() && (1u << p.bannerShown()) == R[k].medal, where + ": its banner");
     CHECK_MSG(p.totalMedals == 1, where + ": counted once");
   }
+}
+
+// ---------------------------------------------------------------- celebration banners (#82, #83)
+static int8_t bitOf(uint16_t medal) {
+  int8_t i = 0;
+  while (!(medal & 1)) {
+    medal >>= 1;
+    i++;
+  }
+  return i;
+}
+
+// The banner on screen is `b` from now for its whole `ms`, not a moment less: checks its first
+// and its last millisecond, and leaves the clock at its end.
+static void expectBanner(Pet &p, int8_t b, uint32_t ms, const std::string &what) {
+  CHECK_MSG(p.bannerShown() == b, what + ": on screen (got " + std::to_string(p.bannerShown()) + ")");
+  mockAdvanceMillis(ms - 1);
+  CHECK_MSG(p.bannerShown() == b, what + ": its whole time (got " + std::to_string(p.bannerShown()) + ")");
+  mockAdvanceMillis(1);
+}
+
+// four medals on one tick: level 10, IN SHAPE (no weight, level 5 or more, no mistakes) and the
+// stamina and speed ribbons
+static void fourMedalsOnOneTick(Pet &p) {
+  makePet(p, 4);
+  p.ageMinutes = 9 * MINUTES_PER_LEVEL - 1;
+  p.trDef = RIBBON_STA;
+  p.trSpe = RIBBON_SPD;
+  advance(p, 1);
+}
+
+// #82: an older pet can gain several medals on one minute tick. Each gets a banner of its own,
+// for its whole time, lowest bit first, and the last one ends like a single banner did.
+TEST(banners, several_medals_on_one_tick_each_get_their_own_banner) {
+  Pet p;
+  fourMedalsOnOneTick(p);
+  CHECK_EQ(p.medals, (uint16_t)(MED_LV10 | MED_FIT | MED_STA | MED_SPD));
+  for (uint16_t m : { MED_LV10, MED_FIT, MED_STA, MED_SPD })
+    expectBanner(p, bitOf(m), MEDAL_BANNER_MS, "medal bit " + std::to_string(bitOf(m)));
+  CHECK_MSG(p.bannerShown() == BANNER_NONE, "nothing after the last");
+}
+
+// #83: the day's first care that makes a 7-day streak brings the milestone and the 7 STREAK
+// medal at once. The milestone shows first, for its whole time (it was half a second), then
+// the medal for its own.
+TEST(banners, a_streak_milestone_shows_first_then_the_medal_it_came_with) {
+  Pet p;
+  makePet(p, 4);
+  p.lastSeenEpoch = 100u * 86400 + 12 * 3600;
+  p.lastCareDay = 99;  // yesterday: today's first care continues the streak
+  p.streak = 6;
+  p.caress();
+  CHECK_EQ(p.streak, (uint16_t)7);
+  CHECK(p.hasMedal(MED_STREAK7));
+  expectBanner(p, BANNER_STREAK, MILESTONE_BANNER_MS, "the milestone");
+  expectBanner(p, bitOf(MED_STREAK7), MEDAL_BANNER_MS, "then its medal");
+  CHECK_MSG(p.bannerShown() == BANNER_NONE, "nothing after it");
+}
+
+// The banner's words (drawCelebration): a medal's "MEDAL!" and that medal's own name, a
+// milestone's "AWESOME!" and the streak's days, in every language.
+TEST(banners, each_banner_names_its_own_medal_or_the_streak) {
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    std::string where = "[lang " + std::to_string(lang) + "]";
+    const char *l1 = nullptr, *l2 = nullptr;
+    for (int8_t b = 0; b < MED_COUNT; b++) {
+      bannerLines(b, 7, &l1, &l2);
+      CHECK_MSG(!strcmp(l1, T(S_MEDAL_BANNER)), where + " medal " + std::to_string(b) + ": its title");
+      CHECK_MSG(!strcmp(l2, medalName(b)), where + " medal " + std::to_string(b) + ": its own name");
+    }
+    bannerLines(BANNER_STREAK, 30, &l1, &l2);
+    char want[32];
+    snprintf(want, sizeof(want), T(S_STREAK_DAYS_FMT), 30u);
+    CHECK_MSG(!strcmp(l1, T(S_GREAT)), where + " streak: its title");
+    CHECK_MSG(!strcmp(l2, want), where + " streak: its days");
+  }
+  gLang = LANG_DEFAULT;
+}
+
+// One that comes while another shows waits its turn: the one on screen keeps its whole time,
+// even for a lower medal. A milestone goes before the medals still waiting.
+TEST(banners, one_that_comes_while_another_shows_waits_its_turn) {
+  BannerQueue q;
+  q.add(MED_STR | MED_SPD, false, 1000);  // strength on screen, speed waiting
+  CHECK_EQ((int)q.shown(1000), (int)bitOf(MED_STR));
+  q.add(MED_LV10, false, 2000);  // a lower medal, later
+  CHECK_EQ((int)q.shown(2000), (int)bitOf(MED_STR));
+  q.add(0, true, 3000);  // the day's first care
+  uint32_t t = 1000 + MEDAL_BANNER_MS;
+  CHECK_EQ((int)q.shown(t - 1), (int)bitOf(MED_STR));
+  CHECK_EQ((int)q.shown(t), (int)BANNER_STREAK);
+  t += MILESTONE_BANNER_MS;
+  CHECK_EQ((int)q.shown(t - 1), (int)BANNER_STREAK);
+  CHECK_EQ((int)q.shown(t), (int)bitOf(MED_LV10));
+  CHECK_EQ((int)q.shown(t + MEDAL_BANNER_MS), (int)bitOf(MED_SPD));
+  CHECK_EQ((int)q.shown(t + 2 * MEDAL_BANNER_MS), (int)BANNER_NONE);
+}
+
+// Bounded by its shape: every medal at once (an old save's first tick after an update could)
+// and a milestone make MED_COUNT + 1 banners, each once, then none and an empty queue.
+TEST(banners, the_queue_is_bounded_each_once_then_none) {
+  BannerQueue q;
+  q.add(MED_ALL, true, 0);
+  uint32_t t = 0;
+  CHECK_EQ((int)q.shown(t), (int)BANNER_STREAK);
+  t += MILESTONE_BANNER_MS;
+  for (int8_t b = 0; b < MED_COUNT; b++) {
+    CHECK_EQ((int)q.shown(t), (int)b);
+    CHECK_EQ((int)q.shown(t + MEDAL_BANNER_MS - 1), (int)b);
+    t += MEDAL_BANNER_MS;
+  }
+  CHECK_EQ((int)q.shown(t), (int)BANNER_NONE);
+  CHECK_EQ(t, (uint32_t)(MED_COUNT * MEDAL_BANNER_MS + MILESTONE_BANNER_MS));
+  q.update(t);
+  CHECK(q.on == BANNER_NONE && q.medals == 0 && !q.streak);
+}
+
+// The queue keeps time with no pass in between (the screen off, a slow frame): each banner
+// starts as the one before it ends, not when a pass next looks.
+TEST(banners, each_starts_as_the_one_before_it_ends) {
+  BannerQueue q;
+  q.add(MED_STR | MED_SPD, false, 1000);
+  q.update(1000 + MEDAL_BANNER_MS + 500);  // the first pass after strength ended came late
+  CHECK_EQ((int)q.shown(1000 + 2 * MEDAL_BANNER_MS - 1), (int)bitOf(MED_SPD));
+  CHECK_EQ((int)q.shown(1000 + 2 * MEDAL_BANNER_MS), (int)BANNER_NONE);
+}
+
+// An ending (a farewell, a run-away, a release) clears them: none shows over it, and none that
+// was waiting turns up over the pet that hatches after it.
+TEST(banners, an_ending_clears_them) {
+  for (int k = 0; k < 3; k++) {
+    std::string ending = k == 0 ? "farewell" : k == 1 ? "run-away" : "release";
+    Pet p;
+    fourMedalsOnOneTick(p);  // 16 s of banners
+    mockAdvanceMillis(1000);
+    if (k == 0) p.startFarewell();
+    else if (k == 1) p.startRunaway();
+    else p.release();
+    CHECK_MSG(p.ceremony != CER_NONE, ending + ": started");
+    CHECK_MSG(p.bannerShown() == BANNER_NONE, ending + ": no banner over it");
+    mockAdvanceMillis(CEREMONY_MS);
+    p.update(millis());  // the ceremony ends: an egg
+    if (p.awaitingEgg()) p.chooseEgg(0);
+    p.eggTap();
+    p.eggTap();
+    p.eggTap();
+    CHECK_MSG(!p.isEgg(), ending + ": the next pet hatched");
+    // (a pet that hatches in its final form gains TOP FORM at once: its own banner may show)
+    int8_t b = p.bannerShown();
+    CHECK_MSG(b == BANNER_NONE || (b >= 0 && b < MED_COUNT && p.hasMedal((uint16_t)(1u << b))),
+              ending + ": a banner of the old pet's on the new one (" + std::to_string(b) + ")");
+  }
+}
+
+// An ended banner leaves the queue on the loop's next pass (Pet::update), so it cannot come back
+// once millis() is 2^31 ms (~24.8 days of uptime) past its end, as the old deadline did: a
+// medal's banner, then no new medal for 25 days on the charger.
+TEST(banners, an_ended_banner_stays_gone_after_25_days_of_uptime) {
+  Pet p;
+  makePet(p, 4);
+  p.trSpe = RIBBON_SPD;
+  advance(p, 1);
+  CHECK(p.showMedal());
+  mockAdvanceMillis(MEDAL_BANNER_MS);
+  p.update(millis());  // the loop's next pass
+  CHECK(!p.showMedal());
+  mockAdvanceMillis(25u * 86400 * 1000);  // more than 2^31 ms
+  CHECK_MSG(p.bannerShown() == BANNER_NONE, "the old banner came back");
 }
 
 // The thresholds are within a normal pet's life (pet.h): two punch sessions, about two good
@@ -3931,7 +4101,8 @@ TEST(exercise, a_screen_that_paid_nothing_gains_nothing) {
 }
 
 // #69: a medal or streak banner that came up under a minigame's or an exercise's result waits for
-// it to close, then shows its whole time on the creature's screen.
+// it to close, then shows its whole time on the creature's screen. #83: the milestone first,
+// the medal it came with after it, each for its whole time.
 TEST(exercise, a_banner_under_the_screen_waits_for_it_to_close) {
   Pet p;
   makePet(p, 4);
@@ -3940,25 +4111,21 @@ TEST(exercise, a_banner_under_the_screen_waits_for_it_to_close) {
   p.streak = 6;        // ...to 7: the 7 STREAK medal and the 7-day milestone
   p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);
   CHECK(p.hasMedal(MED_STREAK7));
-  CHECK(p.showMedal());
-  CHECK(p.showMilestone());
+  CHECK_MSG(p.showMilestone(), "the milestone first");
+  CHECK_MSG(!p.showMedal(), "the medal waits behind it");
   ExerciseScreen screen;
   for (int i = 0; i < 100; i++) {  // 10 s of result screen, a pass every 100 ms
     mockAdvanceMillis(100);
     screen.update(true, p);
   }
-  CHECK_MSG(p.showMedal(), "the medal banner waited");
-  CHECK_MSG(p.showMilestone(), "the milestone waited too");
+  CHECK_MSG(p.showMilestone(), "the milestone waited");
+  CHECK_MSG(!p.showMedal(), "and the medal behind it");
   screen.update(false, p);  // the creature's screen is back
-  mockAdvanceMillis(MEDAL_BANNER_MS - 100);
-  CHECK_MSG(p.showMedal(), "all of its time on the creature's screen");
-  mockAdvanceMillis(200);
-  CHECK(!p.showMedal());
-  mockAdvanceMillis(MILESTONE_BANNER_MS);
-  CHECK(!p.showMilestone());
+  expectBanner(p, BANNER_STREAK, MILESTONE_BANNER_MS, "all of the milestone's time on the creature's screen");
+  expectBanner(p, bitOf(MED_STREAK7), MEDAL_BANNER_MS, "then all of the medal's");
+  CHECK(p.bannerShown() == BANNER_NONE);
 }
 
-// ExerciseScreen calls exerciseOver() once, on the pass the screen has closed.
 TEST(exercise, the_screen_closing_gains_the_ribbon_once) {
   Pet p;
   makePet(p, 4);

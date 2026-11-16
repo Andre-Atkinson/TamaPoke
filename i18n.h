@@ -114,6 +114,11 @@ const char *T(StrId id);       // texto en el idioma activo
 const char *natureName(uint8_t n);  // the nature's name (#25, NAT_*); easygoing's when out of range
 const char *medalName(int i);  // banner de medalla (MED_COUNT)
 const char *medalDesc(int i);  // descripcion larga de medalla
+// The celebration banner's two lines (drawCelebration, scene.cpp; #82, #83) for the banner on
+// screen (Pet::bannerShown(), BannerQueue in pet.h): a medal's bit gives "MEDAL!" and its name;
+// BANNER_STREAK gives "AWESOME!" and "<streakDays> DAY STREAK!" (a buffer of its own, valid
+// until the next call).
+void bannerLines(int banner, uint16_t streakDays, const char **l1, const char **l2);
 // The date as the standby clock shows it (#60), short: "Sat 15 Nov", "s\240b, 15 nov".
 // `weekday` 0 (Sunday) to 6, `month` 1 to 12 (CivilDate, weather.h); out of range: "?".
 void formatDate(char *buf, size_t n, uint8_t weekday, uint8_t day, uint8_t month);

@@ -133,6 +133,74 @@ enum : uint16_t {
 #define MEDAL_BANNER_MS 4000UL      // a new medal's banner (drawCelebration)
 #define MILESTONE_BANNER_MS 4500UL  // a streak milestone's banner
 
+// The celebration banners (#82, #83): a streak milestone's and each new medal's, one at a
+// time, each for its whole time. One that comes while another shows waits its turn: a streak
+// milestone first (it answers the day's first care), then the medals, lowest bit first. So
+// several medals gained on one tick each get their own banner, and a milestone that comes
+// with a medal no longer hides under it. Bounded by its shape: MED_COUNT bits of waiting
+// medals and one milestone flag (a pet gains each medal once, a milestone comes once a day),
+// so at most MED_COUNT + 1 banners in a row. Each one starts as the one before it ends, so the
+// queue keeps time with no loop pass in between: with the screen off it runs out unseen, as a
+// single banner always did. Their sound is the gain's (Pet::checkMedals), not the banner's.
+// RAM only: a restart starts with none. An ending clears it (Pet::startFarewell, startRunaway,
+// release), so the egg after it and the pet that hatches start with none either.
+enum : int8_t { BANNER_NONE = -1, BANNER_STREAK = MED_COUNT };  // 0..MED_COUNT - 1: a medal's bit
+struct BannerQueue {
+  int8_t on = BANNER_NONE;  // on screen: a medal's bit, BANNER_STREAK or BANNER_NONE
+  uint32_t until = 0;       // ...until this millis()
+  uint16_t medals = 0;      // the medals waiting (bits), not the one on screen
+  bool streak = false;      // a streak milestone waiting
+
+  static uint32_t length(int8_t b) { return b == BANNER_STREAK ? MILESTONE_BANNER_MS : MEDAL_BANNER_MS; }
+  // What shows at `now`, the ones waiting started as each before them ended; changes nothing
+  int8_t shown(uint32_t now) const {
+    BannerQueue q = *this;
+    q.update(now);
+    return q.on;
+  }
+  // Takes the banners that ended by `now` off the screen, the next ones on in their turn
+  void update(uint32_t now) {
+    while (on != BANNER_NONE && (int32_t)(until - now) <= 0) {
+      uint32_t end = until;
+      next();
+      until = end + length(on);
+    }
+  }
+  // New medals (bits) and a streak milestone: on screen at once if nothing shows, else waiting
+  void add(uint16_t medalBits, bool milestone, uint32_t now) {
+    update(now);
+    medals |= medalBits & MED_ALL;
+    streak = streak || milestone;
+    if (on == BANNER_NONE) {
+      next();
+      until = now + length(on);
+    }
+  }
+  // Under a minigame's or an exercise's screen (Pet::holdBanners): the banner on screen keeps
+  // its whole time, and the ones behind it wait
+  void hold(uint32_t now) {
+    update(now);
+    if (on != BANNER_NONE) until = now + length(on);
+  }
+  void clear() { *this = BannerQueue(); }
+
+private:
+  void next() {  // the next one waiting to the screen; BANNER_NONE when none waits
+    if (streak) {
+      streak = false;
+      on = BANNER_STREAK;
+      return;
+    }
+    on = BANNER_NONE;
+    for (int8_t i = 0; i < MED_COUNT; i++)
+      if (medals & (1u << i)) {
+        medals &= (uint16_t)~(1u << i);
+        on = i;
+        return;
+      }
+  }
+};
+
 class Pet {
 public:
   // Estadisticas 0..100
@@ -166,7 +234,6 @@ public:
   char nick[12] = "";    // apodo (vacio = nombre de especie)
   // medallas: del individuo + contador acumulado entre todas las crianzas
   uint16_t medals = 0, totalMedals = 0;
-  uint16_t newMedal = 0;   // recien conseguida(s), para celebrar
   uint16_t lastMilestone = 0;  // hito de racha ya celebrado
   uint16_t gameHi = 0;     // record de keepy-uppy, el minijuego original (del jugador)
   uint16_t catchHi = 0, peekHi = 0, songHi = 0;  // records de Berry Catch, Peekaboo y Berry Song
@@ -321,12 +388,18 @@ public:
   // racha / vinculo / medallas / nombre
   void rename(const char *name);
   bool hasMedal(uint16_t m) const { return medals & m; }
-  bool showMedal() const { return timeLeft(medalUntil) > 0; }
-  bool showMilestone() const { return timeLeft(milestoneUntil) > 0; }
+  // the celebration banner on screen now (BannerQueue): a medal's bit, BANNER_STREAK or
+  // BANNER_NONE (drawCelebration names it)
+  int8_t bannerShown() const { return banners.shown(millis()); }
+  bool showMedal() const {
+    int8_t b = bannerShown();
+    return b >= 0 && b < MED_COUNT;
+  }
+  bool showMilestone() const { return bannerShown() == BANNER_STREAK; }
   // While a Play minigame or an exercise is on screen (the sketch, every loop pass,
   // #69): a medal or streak banner that came up under it (the exercise was the day's first
-  // care) waits, and shows its whole time once the creature's screen is back. Its sound
-  // played when it was gained, as before.
+  // care) waits, and shows its whole time once the creature's screen is back, then the
+  // ones queued behind it (#82, #83). Its sound played when it was gained, as before.
   void holdBanners();
   // A minigame or an exercise just closed (the sketch, once, as its screen goes; #76): a medal
   // its exercise completed (IN SHAPE, a training ribbon) is gained now, on the creature's
@@ -376,8 +449,7 @@ private:
   uint16_t goodTicks = 0;  // steady care towards the next stamina point, GOOD_STEP a minute (NVS "tdefm", #76)
   uint32_t ceremonyUntil = 0;
   uint8_t bondToday = 0;       // tope diario de subida de vinculo
-  uint32_t medalUntil = 0;     // celebracion de medalla en pantalla
-  uint32_t milestoneUntil = 0; // celebracion de hito de racha
+  BannerQueue banners;         // the medal and streak banners (#82, #83); RAM only
   bool selfCareOn = false;     // setCharger(): on USB and untouched SELFCARE_IDLE_MS
 
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }

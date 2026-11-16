@@ -149,7 +149,7 @@ static void gameScreenOff() {
 
 static bool gameNight();           // prototipos (definidas mas abajo)
 static uint16_t gameInk();
-static void drawGameScene();
+static void drawGameScene(bool words);
 static void drawGameBar(uint32_t left, uint32_t total);
 static void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS);
 
@@ -375,7 +375,7 @@ static void drawExerciseResult(uint16_t ink) {
 
 void renderExercise() {
   uint32_t now = millis();
-  drawGameScene();  // fondo del habitat
+  drawGameScene(trainOverUntil != 0);  // fondo del habitat; the result's has no stars (#84)
   uint16_t ink = gameInk();
 
   if (trainOverUntil) {  // pantalla de resultado
@@ -404,6 +404,7 @@ void renderExercise() {
   if (trainKind == EX_PUNCH ? punch.over(now) : hold.over(now)) {
     finishExercise(now);
     if (!trainOpen) return;
+    drawGameScene(true);  // the result's first frame: the sky again, without the stars (#84)
     drawExerciseResult(ink);
     flushUI();
     return;
@@ -472,8 +473,9 @@ uint8_t trainPickAt(int16_t x, int16_t y) {
   return EX_NONE;
 }
 
-// fondo del minijuego: hatibat del bicho (cielo por hora + suelo del bioma)
-static void drawGameScene() {
+// fondo del minijuego: habitat del bicho (cielo por hora + suelo del bioma). `words`: a title
+// card or a result is over it, so its night sky has no stars (gameStarShown, skylayout.h)
+static void drawGameScene(bool words) {
   int hh = sceneHour();
   bool night = hh < 6 || hh >= 20;
   uint16_t top, bot;
@@ -485,7 +487,8 @@ static void drawGameScene() {
   for (int y = 0; y < hor; y += 8)
     gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, hor));
   if (night && sceneStarsOut())  // not under cloud, rain, snow or fog (#60)
-    for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
+    for (auto &st : STARS)  // out of the HUD and the words (#84)
+      if (gameStarShown(st[1], words)) gfx->fillRect(st[0], st[1], SKY_STAR_SIZE, SKY_STAR_SIZE, UI_WHITE);
   uint8_t bio = scenePlace();  // where the pet is today (#60), not always its home
   uint16_t soil = BIOME_SOIL[bio < 6 ? bio : 0];
   if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
@@ -744,7 +747,7 @@ void renderGame() {
     gameSounds();
     if (games.over()) finishGame();
   }
-  drawGameScene();
+  drawGameScene(gameOverUntil || games.flow.phase == GP_TITLE);  // words in the sky: no stars (#84)
   if (gameOverUntil) {
     if (!timeLeft(gameOverUntil)) {
       gameOpen = false;
