@@ -81,5 +81,5 @@ reach GitHub, and the default is silence. Do not edit code yourself, and
 do not approve or merge: those decisions belong to the main session
 (see **Merging** in `CLAUDE.md`).
 
-Never create issues yourself; report deferred findings to the main
-session.
+Never create issues yourself; report deferred findings to the session that
+dispatched you.
