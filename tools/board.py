@@ -9,6 +9,7 @@ Linux; the board's USB port must not be open in another program.
   python3 tools/board.py status           # HEALTH + STATS
   python3 tools/board.py cmd TIME         # any console command; prints the reply up to DONE
   python3 tools/board.py cmd OWNER Name   # the player's name for the speech bubbles (#23)
+  python3 tools/board.py cmd BDAY 3 14    # the player's birthday, month then day (#26; BDAY 0 0 clears it)
   python3 tools/board.py --port /dev/cu.usbmodem101 clock
 
 The firmware keeps local wall-clock time as if it were UTC: the clock screen

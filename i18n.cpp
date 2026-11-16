@@ -54,6 +54,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "I'm hungry!", "I need a bath!", "I'm tired...", "I'm bored...",
     "Good morning!", "Look at the stars!", "Hi there!", "I'm happy!", "Pat me!",
     "I love you, %s!", "I love you!",
+    // the special days' greetings (#26)
+    "Merry Christmas, %s!", "Merry Christmas!", "Happy New Year, %s!", "Happy New Year!",
+    "Happy Valentine's Day, %s!", "Happy Valentine's Day!", "Happy Easter, %s!", "Happy Easter!",
+    "Happy Halloween, %s!", "Happy Halloween!", "Happy birthday, %s!", "Happy birthday!",
     // 1.75C toasts (#61)
     "Sound on", "Muted", "Locked", "Unlocked",
     // the standby clock's date (#60)
@@ -112,6 +116,10 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Tenho fome!", "Preciso de um banho!", "Estou com sono...", "Que t\202dio...",
     "Bom dia!", "Olha as estrelas!", "Ol\240!", "Estou feliz!", "Faz-me festinhas!",
     "Adoro-te, %s!", "Adoro-te!",
+    // the special days' greetings (#26)
+    "Feliz Natal, %s!", "Feliz Natal!", "Feliz Ano Novo, %s!", "Feliz Ano Novo!",
+    "Feliz Dia dos Namorados, %s!", "Feliz Dia dos Namorados!", "Feliz P\240scoa, %s!", "Feliz P\240scoa!",
+    "Feliz Halloween, %s!", "Feliz Halloween!", "Feliz anivers\240rio, %s!", "Feliz anivers\240rio!",
     // 1.75C toasts (#61)
     "Som ligado", "Sem som", "Bloqueado", "Desbloqueado",
     // the standby clock's date (#60)

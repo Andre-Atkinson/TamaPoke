@@ -137,8 +137,9 @@ While **awake**, per minute:
   level 5 (no slip-ups, weight 0), and slip-ups don't delay its evolution. The "ready to evolve"
   chime sounds at most once per level for each form, because the needs keep coming back over 40.
 - 💬 **Speech bubbles:** now and then the creature says something in a bubble above
-  it, for about 4.5 s. A need comes first, the same one (below 25) as the "!" bubble and
-  the status line: "I'm hungry!", "I need a bath!", "I'm tired...", "I'm bored...". Otherwise
+  it, for about 4.5 s. A need comes first (only a special day's greeting, below, comes
+  before it), the same one (below 25) as the "!" bubble and the status line: "I'm
+  hungry!", "I need a bath!", "I'm tired...", "I'm bored...". Otherwise
   "Good morning!" (6:00–9:59) or "Look at the stars!" (20:00–5:59) when the clock is set, a
   friendly line ("Hi there!", "I'm happy!", "Pat me!") or "I love you, <name>!". The name
   is the player's, set once from a computer with the serial command `OWNER <name>`
@@ -155,6 +156,21 @@ While **awake**, per minute:
   an attention call lights the screen; it takes the "!" bubble's place while it shows. It
   never wakes or lights the screen, and the bubble is not a touch target: taps work as before. Idea
   from Mu-Muu/TamaPoke.
+- 🎄 **Special days:** the scene is decorated and the creature greets the player by name in a
+  speech bubble ("Merry Christmas, <name>!"; just "Merry Christmas!" with no name set).
+  Christmas puts up a tree with lights all December, with a little snow even in the southern
+  summer, and the greeting on 25 Dec; New Year (1 Jan) has soft fireworks; Valentine's Day
+  (14 Feb) floating hearts; Easter Sunday (worked out each year) eggs in the grass;
+  Halloween (31 Oct) a friendly pumpkin, and on the evening a purple sky, a full moon and a few
+  bats; the player's birthday balloons, beside that day's own decorations. The day runs
+  from midnight to midnight on the clock. The greeting takes the place of the next speech
+  bubble, so it comes a few seconds after the screen wakes: at most 3 a day, at least 30
+  minutes apart, never in quiet hours (bedtime, or 22:00–07:00 with bedtime off). The
+  birthday's greeting wins over a holiday's. Nothing shows while the clock is not set
+  (after a power-off) or during an ending, and nothing changes in care or rewards. The
+  birthday is set once from a computer with the serial command `BDAY <month> <day>`
+  (`python3 tools/board.py cmd BDAY 3 14`; `BDAY 0 0` clears it, `BDAY?` shows it); a
+  29 February birthday shows on 28 February in other years. Idea from Mu-Muu/TamaPoke.
 - ❗ **Attention calls:** when FOOD, JOY, ENE or HYG first drops **below 25** (where
   its bar turns red), the creature calls once: one soft chirp (if sound is on) and a
   "!" speech bubble beside it with the icon of the button that helps (berry, ball,
@@ -586,6 +602,7 @@ set after a power cut.
 - `standby.h` — when the standby clock replaces screen-off on USB, and its burn-in steps (#60); `scene.cpp` draws it
 - `bubble.h` / `bubble.cpp` — the speech bubbles: which line, when, and where it goes on the round screen (#23)
 - `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the font can draw, and its NVS key
+- `holiday.h` / `holiday.cpp` — the special days (#26): Easter and the other dates, the player's birthday (`BDAY <month> <day>`) and its NVS key, and how often the greeting comes; `scene.cpp` draws the decorations
 - `gameui.h` / `gameui.cpp` — the minigames' screens and the calm exercises' (the rhythm punch and the stamina hold, #78; their rules are in `minigames.h` and `exercise.h`)
 - `screens.h` / `screens.cpp` — the other screens: starter and egg choice, the pet card's pages, clock and settings, the nickname keyboard, the Pokédex gallery
 - `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
@@ -645,7 +662,10 @@ runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio tes
 `TIME <epoch>` (sets the clock and the pet's saved time; a time the clock does not take
 gets `ERR clock not set: ...` and changes nothing) / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
 `SAVE` (write pending pet changes now) · `OWNER <name>` (the player's name in the
-speech bubbles; `OWNER` alone clears it) · `OWNER?` (read-only: `owner=<name>`) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
+speech bubbles; `OWNER` alone clears it) · `OWNER?` (read-only: `owner=<name>`) ·
+`BDAY <month> <day>` (the player's birthday for the special days; `BDAY 0 0` clears it) ·
+`BDAY?` (read-only: `bday=<month> <day>|none today=<none december christmas newyear valentine
+easter halloween> birthday=<0|1>`, today's day on the clock; `none` on an ordinary day, while the clock is not set and during a farewell or run-away) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
 inbed=<0|1> stale=<0|1> egg=<0|1> picking=<0|1>`, stale = bedtime paused until the clock
 is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on screen) ·
 `SCENE <place|auto> [weather|auto] [season|auto]` (forces the place, `meadow beach forest
@@ -680,7 +700,9 @@ gallery, with PWR and the pocket lock, on battery (no petals when dimmed), and w
 left open across a bedtime, an attention call over it, the morning and a plug-in lighting a
 dark screen, and PWR keeping it dark (its `standby clock` lines and `SCENE?`'s `standby=`),
 and `standby-place.txt` its weather picture across the 06:00 change of place and its moon at
-night.
+night. `holidays.txt` shows every special day by day and by night with its greeting (read the
+`say` and `bday=` lines in `serial.log`), the birthday, and the cases with no decorations or
+no greeting (no clock, quiet hours, a farewell).
 Run with the other scripts in `sim/scripts/`, it lets two builds be compared
 screen by screen.
 
@@ -688,7 +710,8 @@ A script is one step per line (the full list is in `sim/script.h`):
 `tap X Y`, `hold X Y 3s`, `swipe left|right|up|down`, `press pwr 3`,
 `press boot`, `wait 2h`, `serial SPEC 25`, `battery 15`, `usb on`,
 `idle doze` (the creature's next idle activity, simulator only; see
-`sim/scripts/idle-life.txt`), `say hungry` (a speech bubble now, simulator only),
+`sim/scripts/idle-life.txt`), `say hungry` (a speech bubble now, simulator only; `say christmas`
+and the other special days' greetings too),
 `train 30 10 30` (the creature's strength, stamina and speed training, simulator only; see
 `sim/scripts/fitness.txt`), and `shot NAME`. `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
 doesn't answer) set the language, the time and the PMU before boot, and only

@@ -97,6 +97,11 @@ enum StrId : uint8_t {
   // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
   S_SAY_HUNGRY, S_SAY_BATH, S_SAY_TIRED, S_SAY_BORED, S_SAY_MORNING, S_SAY_STARS,
   S_SAY_HI, S_SAY_HAPPY, S_SAY_PAT, S_SAY_LOVE_FMT, S_SAY_LOVE,
+  // the special days' greetings (#26, holiday.h), in BubbleLine order: each with the
+  // player's name, then without
+  S_SAY_CHRISTMAS_FMT, S_SAY_CHRISTMAS, S_SAY_NEW_YEAR_FMT, S_SAY_NEW_YEAR,
+  S_SAY_VALENTINE_FMT, S_SAY_VALENTINE, S_SAY_EASTER_FMT, S_SAY_EASTER,
+  S_SAY_HALLOWEEN_FMT, S_SAY_HALLOWEEN, S_SAY_BIRTHDAY_FMT, S_SAY_BIRTHDAY,
   // 1.75C toasts (#61): the BOOT button's sound toggle and the screen lock
   S_TOAST_SOUND_ON, S_TOAST_MUTED, S_TOAST_LOCKED, S_TOAST_UNLOCKED,
   // the standby clock's date (#60): weekday, day, month ("Sat 15 Nov"; see formatDate())

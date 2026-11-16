@@ -6,6 +6,7 @@
 #include "clockprompt.h"
 #include "clockset.h"
 #include "dex.h"
+#include "holiday.h"
 #include "owner.h"
 #include "rtcbat.h"
 #include "scene.h"
@@ -14,6 +15,17 @@
 #include "serialcmd.h"
 
 // ---------- consola serie (provision de SD + depuracion) ----------
+
+// BDAY and BDAY? (#26): the stored birthday ("none" or month and day), today's special day
+// on the scene's clock (holiday.h; "none" on an ordinary day, while the clock is not trusted
+// and during a farewell or a run-away, holidayNow()) and whether it is the birthday.
+static void printBday() {
+  Birthday b = birthday();
+  HolidayToday t = holidayNow();
+  if (b.month) Serial.printf("bday=%u %u", (unsigned)b.month, (unsigned)b.day);
+  else Serial.print("bday=none");
+  Serial.printf(" today=%s birthday=%d\n", HOLIDAY_KEYS[t.day < HOLIDAYS ? t.day : 0], t.birthday ? 1 : 0);
+}
 
 // SCENE and SCENE? (#60): the place on screen, today's, the home place, the weather and the
 // season, with "*" after a value the SCENE command forced.
@@ -43,6 +55,8 @@ void handleSerial() {
 
   char ownerArg[OWNER_CMD_NAME_BYTES];  // the name of an OWNER <name> line (owner.h)
   OwnerCmd ownerCmd;
+  Birthday bdayArg;  // the date of a BDAY <month> <day> line (holiday.h)
+  BdayCmd bdayCmd;
   if (line == "HATCH") {
     pet.eggTap(); pet.eggTap(); pet.eggTap();
     Serial.println("DONE");
@@ -112,6 +126,15 @@ void handleSerial() {
       else if (c != OWNER_OK) Serial.println("owner not set");
     }
     Serial.printf("owner=%s\n", ownerName());  // what is stored now
+    Serial.println("DONE");
+  } else if ((bdayCmd = bdayParse(line.c_str(), bdayArg)) != BDAY_CMD_NONE) {
+    // the player's birthday for the special days (holiday.h, #26): "BDAY?" only reads it,
+    // "BDAY <month> <day>" sets it ("BDAY 0 0" clears it)
+    if (bdayCmd == BDAY_CMD_BAD)
+      Serial.println("ERR usage: BDAY <month 1-12> <day of that month> (BDAY 0 0 clears it)");
+    else if (bdayCmd == BDAY_CMD_SET && !birthdaySet(bdayArg))
+      Serial.println("bday not set: the flash write failed");
+    printBday();  // what is stored now
     Serial.println("DONE");
   } else if (line == "CAREDAY") {  // simula un dia nuevo cuidado (pruebas)
     pet.setClock(pet.lastSeenEpoch + 86400);
