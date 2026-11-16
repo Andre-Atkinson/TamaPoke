@@ -19,14 +19,18 @@
 //
 // The look (#85). The classic font's capitals are 7 rows tall (rows 0-6) and its short
 // lowercase letters (a e o u...) 5 (rows 2-6), and the cell has no row above the capitals for
-// an accent. So an accented capital is a 6-row letter (rows 1-6) with its accent squeezed into
-// row 0 and no blank row between them, as the font's own O-umlaut does: taller than a short
-// lowercase letter, so an upper-case word stays upper-case.
-//  - acute and grave: one pixel above a top corner of the letter, where its top row has no
-//    ink, so it reads as a mark rather than a bump (U' has it right of centre, off the stem;
-//    E' has a 4-column E, like the font's E-acute, so the corner is free)
-//  - circumflex: one pixel on top of A and E; O^ is a full-height O whose top is the peak
-//  - tilde: a flat bar, as the font draws its own N-tilde
+// an accent. So letter and accent together ink every row 0-6 with no blank row between them,
+// as the font's own O-umlaut does: taller than a short lowercase letter, so an upper-case
+// word stays upper-case.
+//  - acute and grave: one pixel above a top corner of a 6-row letter (rows 1-6), where its
+//    top row has no ink, so it reads as a mark rather than a bump (U' has it right of centre,
+//    off the stem; E' has a 4-column E, like the font's E-acute, so the corner is free)
+//  - circumflex: a two-row hat (a peak, then its two shoulders) on a 5-row A or E (rows 2-6),
+//    which keep their capital shape at 5 rows, as the font's own E-acute does. A one-pixel
+//    hat on a 6-row A was one pixel from the plain A, and faint on the E. O^ is a full-height
+//    O whose top is the peak
+//  - tilde: a flat bar over a 6-row letter, in the shape of the bar the font draws over its
+//    own N-tilde; that N has a blank row under the bar and these do not, the cell has no room
 // C-cedilla stays the font's: its C is 6 rows from the top, the cedilla below, a capital already.
 // The two lowercase letters follow the font's o' and o^: the accent in rows 0-1, a blank row
 // and a 4-row letter. Their tilde is a wave, so a~ never looks like a^ (the font draws a^ with
@@ -41,7 +45,9 @@
 #define PTG_BYTES ((PTG_COLS * PTG_ROWS + 7) / 8)  // one glyph packed row by row, MSB first
 
 struct PtGlyph {
-  uint8_t code;                      // its byte in a string: Latin-1 = Unicode code point
+  // its byte in a string: the Latin-1 code (= its code point) of a letter CP437 lacks, or the
+  // CP437 byte of a letter it only redraws (0x90 E')
+  uint8_t code;
   char art[PTG_ROWS][PTG_COLS + 1];  // '#' = ink, '.' = background
 };
 
@@ -50,9 +56,9 @@ inline constexpr PtGlyph PT_GLYPHS[] = {
   {0xF5, {".##.#.", "#..#..", "......", ".###..", "#...#.", "#...#.", ".###..", "......"}},  // o~
   {0xC1, {"....#.", ".###..", "#...#.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A'
   {0xC0, {"#.....", ".###..", "#...#.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A`
-  {0xC2, {"..#...", ".###..", "#...#.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A^
+  {0xC2, {"..#...", ".#.#..", ".###..", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A^
   {0xC3, {"#####.", ".###..", "#...#.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A~
-  {0xCA, {"..#...", "#####.", "#.....", "####..", "#.....", "#.....", "#####.", "......"}},  // E^
+  {0xCA, {"..#...", ".#.#..", "#####.", "#.....", "####..", "#.....", "#####.", "......"}},  // E^
   {0xCD, {"....#.", ".###..", "..#...", "..#...", "..#...", "..#...", ".###..", "......"}},  // I'
   {0xD3, {"....#.", ".###..", "#...#.", "#...#.", "#...#.", "#...#.", ".###..", "......"}},  // O'
   {0xD4, {"..#...", ".#.#..", "#...#.", "#...#.", "#...#.", "#...#.", ".###..", "......"}},  // O^

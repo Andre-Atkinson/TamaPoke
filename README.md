@@ -547,11 +547,12 @@ the active one filled. The Portuguese uses *tu* throughout and has every letter
 it needs: the classic 5x7 font (CP437) lacks ã, õ and most accented capitals, so
 `ptglyphs.h` adds those 12 (ã õ Á À Â Ã Ê Í Ó Ô Õ Ú) as extra glyphs, one byte
 each, drawn by `printT()`. Its accented capitals stand taller than the lowercase
-letters, with the accent squeezed into the top row, so upper-case words such as
-FORMA FÍSICA stay upper-case; it redraws the font's own É to match (#85). Pokémon names stay in English, as in the Portuguese
-games. Until #61 the firmware also shipped Spanish, French, German, Italian,
-Japanese and Korean; a board set to one of those shows English after the update
-(the stored choice is kept, see `i18n.h`).
+letters, with the accent squeezed in above them, so upper-case words such as
+FORMA FÍSICA stay upper-case; it redraws the font's own É to match (#85).
+Pokémon names stay in English, as in the Portuguese games. Until #61 the firmware
+also shipped Spanish, French, German, Italian, Japanese and Korean; a board set to
+one of those shows English after the update (the stored choice is kept, see
+`i18n.h`).
 
 ## Backgrounds: places, weather + real time
 

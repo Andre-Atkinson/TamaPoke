@@ -479,8 +479,11 @@ TEST(PtGlyphs, accented_capitals_are_as_tall_as_the_fonts_capitals) {
   int capitals = 0, lowercase = 0;
   for (int g = 0; g < PTG_COUNT; g++) {
     const PtGlyph &p = PT_GLYPHS[g];
-    // Latin-1 capitals are 0xC0-0xDE and its lowercase 0xDF-0xFF; 0x90 is CP437's E-acute
-    const bool capital = p.code < 0xDF;
+    // The lowercase letters are named; every other entry is a capital (the codes of the
+    // capitals are Latin-1 0xC0-0xDE, plus CP437's E-acute at 0x90, and CP437's own accented
+    // lowercase letters sit below 0xC0 too, so no range tells them apart). A redrawn lowercase
+    // letter must be added to this list.
+    const bool capital = !(p.code == 0xE3 || p.code == 0xF5);  // a~ o~
     if (capital) capitals++;
     else lowercase++;
     for (int r = 0; r < 7; r++) {
