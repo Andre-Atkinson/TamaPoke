@@ -71,23 +71,23 @@ wait 4s
 shot 09-ribbon-banner
 wait 6s
 
-# three cared days in a row: OTIMO! 3 DIAS SEGUIDOS!
-serial CAREDAY
-wait 2s
-serial CAREDAY
-wait 2s
-serial CAREDAY
-wait 1s
-shot 10-streak-banner
-wait 5s
-
-# a final form: the medal's banner (MEDALHA! FORMA MAX.). The next cared day checks the
-# medals at once, so the screen has no time to turn off waiting for the minute tick.
+# a final form: the medal's banner (MEDALHA! FORMA MAX.). A cared day checks the medals at
+# once, so the screen has no time to turn off waiting for the minute tick. CAREDAY moves
+# the pet's clock a day on and the loop puts it back within 30 s, so a CAREDAY counts only
+# when it lands past the last cared day: this first one always does.
 serial SPEC 6
 serial CAREDAY
 wait 1s
-shot 11-final-banner
-wait 6s
+shot 10-final-banner
+wait 5s
+
+# three cared days in a row: OTIMO! n DIAS SEGUIDOS! Two back to back, so the second is a
+# new day whether or not the loop has put the clock back since the first.
+serial CAREDAY
+serial CAREDAY
+wait 1s
+shot 11-streak-banner
+wait 5s
 
 # a player's name that starts with an accented capital, in mixed case
 serial OWNER Ábc Íde Ôfg
