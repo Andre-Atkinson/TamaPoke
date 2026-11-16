@@ -762,6 +762,10 @@ void loop() {
   bool quiet = quietNow();
   pet.quietHours = quiet;
   pet.update(now);
+  // a minigame or an exercise (ExerciseScreen, pet.h): banners wait under it, and the medals
+  // its exercise completed come as it closes, after its result (#69, #76, #78)
+  static ExerciseScreen exerciseScreen;
+  exerciseScreen.update(gameOpen || trainOpen, pet);
 
   // el amplificador sigue al estado de sueno (la llamada sale sola si no cambia).
   // Aqui cubre todas las vias: el boton de luz, el sueno nocturno y el que llega

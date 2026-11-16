@@ -150,7 +150,7 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   22:00-07:00 or 23:00-08:00. The pet goes to sleep when the window starts and
   wakes when it ends. Only those two moments act, so waking it in the night
   sticks until the next bedtime. It waits for a minigame, dialog, bath or
-  evolution to finish; a minigame or the bag left open with the screen off is
+  evolution to finish; a minigame or an exercise left open with the screen off is
   abandoned without a prize at bedtime. It follows the clock you set; off by default.
 - **Choose your egg.** A third button on the Care page, *Eggs*: Surprise (the
   default, one random egg as before) or Choose. With Choose, every ending after
@@ -182,6 +182,22 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   (evolution, the dialogs, every minigame, the biomes, the endings, BOOT and PWR),
   so two builds can be compared screen by screen in every language.
 
+- **Fitness page and training ribbons** (#76). The stat card's "Battle" page is now
+  **Fitness**: three bars for the training you gave the creature, 0 to 100, as
+  **Strength**, **Stamina** and **Speed**, each with a line saying what trains it (the
+  punch, steady care and the hold, the Play games), and the weight under them. Reaching **30**
+  strength, **10** stamina or **30** speed earns that stat's **ribbon**; its goal sits
+  on the bar as a rosette that turns green once earned, and the Medals page shows the
+  three ribbons in a row under the medals (now 11 in all). A creature already past a
+  goal earns its ribbon a minute after the update. The stamina ribbon, earned by the
+  minute, keeps quiet in quiet hours like the other medals time earns; one earned by
+  exercise sounds. Each Play minigame's result now shows the speed it trained
+  (**SPEED +3**). Training also shows in the creature's own life, as looks only: a
+  strong one kicks its ball further, a fast one strolls and chases the ball up to 30 %
+  faster, and one with stamina keeps hopping a little longer. Serial `STATS` still
+  prints the full ATK/DEF/SPD. The simulator's `train STR STA SPD` step sets the
+  training for screenshots (`sim/scripts/fitness.txt`).
+
 ### Changed
 
 - **Calmer exercises** (#78). The stat card's button is now *Train*, and it offers
@@ -198,6 +214,17 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   nothing done costs nothing. The punch keeps its own record (most punches in a session);
   the old bag's tap record is no longer shown but stays in the save. Stamina still grows
   by itself with steady care, as before.
+
+- **Stamina grows with steady care you can actually give** (#76). It took 12 hours
+  in a row, awake, with every need at 40 or more, counted in memory only, so a
+  restart or one hungry minute started it again and no creature got there. Now
+  every awake minute with every need at 40 or more counts towards the next point,
+  one point per 30 such minutes; a minute under 40 just doesn't count, and the
+  count is saved, so a restart keeps it. Minutes self-care keeps the creature going
+  on the charger don't count, nor does sleep. Energy is one of the needs and only
+  sleep restores it, so putting a tired creature to bed for a while is part of the
+  steady care: looked after hourly with such naps, the stamina ribbon comes in about
+  a day and a half.
 
 - **Two languages: English and European Portuguese** (#61). Spanish, French,
   German, Italian, Japanese and Korean are gone. **A board set to one of them
@@ -251,6 +278,15 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 - **"Hold to exit" is readable at night on the 1.75C's training screen** (#78). Its
   label and outline were drawn in the night ink, light on the light button, as no
   minigame's is.
+
+- **A medal or streak banner earned during a minigame or an exercise shows after it**
+  (#69). When a game or an exercise was the day's first care, the medal or streak
+  milestone it completed showed its banner only under the result screen, so you
+  heard it but never saw which. The banner now waits for the result to close, then
+  shows its full time on the creature's screen. A medal the exercise completes (IN
+  SHAPE, a ribbon) now comes as the result closes, instead of up to a minute later.
+- A save with training points, weight or medal bits out of range (a damaged or
+  foreign save) loads with them back in range, as the other values already did.
 
 - **Speech bubbles and the "!" bubble sit by the creature's head** (#73). They were
   pinned high up under the status line, far above a small creature. Now their tails

@@ -267,6 +267,10 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
         if (w[1] == BUBBLE_KEYS[i]) c.a = i;
       if (c.a < 0) return fail("usage: say hungry|bath|tired|bored|morning|stars|hi|happy|pat|love-name|love");
       c.op = OP_SAY;
+    } else if (op == "train") {
+      if (n != 4 || !toInt(w[1], c.a, 0, 100) || !toInt(w[2], c.b, 0, 100) || !toInt(w[3], c.c, 0, 100))
+        return fail("usage: train STRENGTH STAMINA SPEED (training points, 0-100 each)");
+      c.op = OP_TRAIN;
     } else if (op == "shot") {
       if (n != 2) return fail("usage: shot NAME");
       if (!shotName(w[1])) return fail("shot names use letters, digits, '-', '_' and '.' only");

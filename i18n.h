@@ -46,6 +46,7 @@ enum StrId : uint8_t {
   S_REPS_FMT, S_STA_GAIN_FMT, S_HOLD_HINT, S_HOLD_KEEP,
   S_ONE_PUNCH, S_ONE_REP,  // the results' singular: "1 PUNCH", "1 REP"
   S_TRAIN, S_EX_TITLE, S_EX_PUNCH, S_EX_STR, S_EX_HOLD, S_EX_STA,
+  S_SPD_GAIN_FMT,  // the Play minigame result's speed gain (#76), as the punch shows its strength
   S_SCORE_FMT, S_GREAT_JOY, S_PLUS_JOY,
   // reloj / ajustes
   S_SET_TIME, S_HOUR, S_MIN, S_CLOCK_CANCEL,
@@ -55,8 +56,10 @@ enum StrId : uint8_t {
   // ficha: perfil
   S_STREAK_FMT, S_VIN, S_BERRY_UNK, S_BERRY_RED, S_BERRY_BLUE, S_BERRY_GREEN,
   S_INFO_FMT, S_RENAME_HINT,
-  // ficha: combate
-  S_BATTLE, S_STAT_ATK, S_STAT_DEF, S_STAT_SPE, S_STAT_WGT, S_TRAIN_STR,
+  // ficha: fitness (#76; the page was "battle"): the title, the four bars' labels, and
+  // under each trained bar what trains it
+  S_FITNESS, S_STAT_STR, S_STAT_STA, S_STAT_SPD, S_STAT_WGT,
+  S_TRAIN_HINT_STR, S_TRAIN_HINT_STA, S_TRAIN_HINT_SPD,
   // ficha: medallas
   S_MEDALS_FMT, S_BACK,
   // teclado y galeria

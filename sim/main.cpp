@@ -18,6 +18,9 @@
 #include "../board.h"
 #include "../idlelife.h"
 #include "../bubble.h"
+#include "../pet.h"
+
+extern Pet pet;  // the sketch's (TamaPoke.ino)
 
 void setup();
 void loop();
@@ -249,6 +252,12 @@ int main(int argc, char **argv) {
         break;
       case OP_SAY:
         bubbleSayNow((uint8_t)c.a);
+        run(50);
+        break;
+      case OP_TRAIN:
+        pet.trAtk = (uint8_t)c.a;
+        pet.trDef = (uint8_t)c.b;
+        pet.trSpe = (uint8_t)c.c;
         run(50);
         break;
       case OP_SHOT:

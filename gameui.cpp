@@ -25,6 +25,7 @@ static MiniGames games;
 static uint32_t gameOverUntil = 0;   // pantalla de resultado hasta este millis
 static uint16_t gameShownScore = 0;  // puntuacion de la partida que se ensena en el resultado
 static bool gameNewHi = false;
+static uint8_t gameSpeedGain = 0;    // the speed the game trained, for the result (#76)
 
 // the calm exercises (#78; their rules are in exercise.h)
 bool trainOpen = false;
@@ -99,7 +100,7 @@ static void finishGame() {
   uint8_t g = games.game();
   gameShownScore = games.score();
   gameNewHi = gameShownScore > pet.gameBest(g);
-  pet.playGame(g, gameShownScore);
+  gameSpeedGain = pet.playGame(g, gameShownScore);
   if (!games.won()) sfxPlay(gameNewHi && gameShownScore > 0 ? SFX_MEDAL : SFX_LEVEL);
   gameOverUntil = millis() + 4000;
 }
@@ -637,34 +638,41 @@ static void drawSong(uint16_t ink) {
   }
 }
 
-// resultado (4 s): puntuacion, record y premio
+// resultado (4 s): puntuacion, lo que entreno (#76: "SPEED +3", as the punch shows its
+// strength), record y premio
 static void drawGameResult(uint16_t ink) {
   uint8_t g = games.game();
   const char *name = T((StrId)(S_GAME_KEEPY + g));
   gfx->setTextColor(ink);
   setSize(2);
-  setCur(centerX(name, 2), 120);
+  setCur(centerX(name, 2), 112);
   printT(name);
   char buf[22];
   snprintf(buf, sizeof(buf), T(S_SCORE_FMT), gameShownScore);
   setSize(4);
-  setCur(centerX(buf, 4), 160);
+  setCur(centerX(buf, 4), 148);
   printT(buf);
+  char sp[18];
+  snprintf(sp, sizeof(sp), T(S_SPD_GAIN_FMT), gameSpeedGain);
+  gfx->setTextColor(ink);
+  setSize(3);
+  setCur(centerX(sp, 3), 198);
+  printT(sp);
   setSize(2);
   if (gameNewHi && gameShownScore > 0) {
     gfx->setTextColor(UI_BAR_WARN);
-    setCur(centerX(T(S_NEW_RECORD), 2), 214);
+    setCur(centerX(T(S_NEW_RECORD), 2), 242);
     printT(T(S_NEW_RECORD));
   } else {
     char rec[20];
     snprintf(rec, sizeof(rec), T(S_RECORD_FMT), pet.gameBest(g));
     gfx->setTextColor(ink);
-    setCur(centerX(rec, 2), 214);
+    setCur(centerX(rec, 2), 242);
     printT(rec);
   }
   const char *msg = gameNormScore(g, gameShownScore) >= 10 ? T(S_GREAT_JOY) : T(S_PLUS_JOY);
   gfx->setTextColor(ink);
-  setCur(centerX(msg, 2), 250);
+  setCur(centerX(msg, 2), 274);
   printT(msg);
 }
 

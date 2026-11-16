@@ -20,12 +20,14 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "%u REPS", "STAMINA +%u", "Hold the ring!", "Keep holding!",
     "1 PUNCH", "1 REP",
     "TRAIN", "TRAINING", "PUNCH", "Strength", "HOLD", "Stamina",
+    "SPEED +%u",
     "SCORE: %u", "So much fun!", "+happiness",
     "SET TIME", "HOUR", "MIN", "swipe up: cancel", "WHAT TIME?",
     "MEDAL!", "AWESOME!", "%u DAY STREAK!",
     "STREAK %u  best %u", "BOND", "BERRY ???", "RED BERRY", "BLUE BERRY", "GREEN BERRY",
     "%s   AGE %lud", "tap name: rename",
-    "BATTLE", "ATK", "DEF", "SPD", "WGT", "TRAIN STRENGTH",
+    "FITNESS", "STRENGTH", "STAMINA", "SPEED", "WEIGHT",
+    "Punching trains it", "Care and holding train it", "Play games train it",
     "MEDALS %d/%d", "tap: back",
     "NAME:", "tap to go back",
     "FOOD", "JOY", "ENE", "HYG",
@@ -74,12 +76,14 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "%u REPETI\200\325ES", "F\324LEGO +%u", "Segura no c\241rculo!", "Continua assim!",
     "1 SOCO", "1 REPETI\200\303O",
     "TREINAR", "TREINO", "SOCOS", "For\207a", "SEGURAR", "F\223lego",
+    "RAPIDEZ +%u",
     "PONTOS: %u", "Que alegria!", "+alegria",
     "ACERTAR HORA", "HORA", "MIN", "para cima: cancelar", "QUE HORAS S\303O?",
     "MEDALHA!", "\323TIMO!", "%u DIAS SEGUIDOS!",
     "SEQ %u  rec %u", "LA\200O", "BAGA ???", "BAGA VERMELHA", "BAGA AZUL", "BAGA VERDE",
     "%s   IDADE %lud", "toca no nome: renomear",
-    "COMBATE", "ATQ", "DEF", "VEL", "PES", "TREINAR FOR\200A",
+    "FORMA F\315SICA", "FOR\200A", "F\324LEGO", "RAPIDEZ", "PESO",
+    "Sobe com os socos", "Sobe com cuidado e segurar", "Sobe com os jogos",
     "MEDALHAS %d/%d", "toca: voltar",
     "NOME:", "toca para voltar",
     "COM", "ALE", "ENE", "HIG",
@@ -111,15 +115,21 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
 };
 
 // Medal names in two lengths [language][medal]: the banner and the description.
+// The last three are the training ribbons (#76): the banner names the ribbon, the medals
+// page's ribbon row names the stat.
 static const char *const MED_NAME[LANG_COUNT][MED_COUNT] = {
-  { "Lv.10", "Lv.25", "Lv.50", "BERRY", "7 STREAK", "BOND", "TOP FORM", "IN SHAPE" },
-  { "N\241v.10", "N\241v.25", "N\241v.50", "BAGA", "SEQ 7", "LA\200O", "FORMA M\301X.", "EM FORMA" },
+  { "Lv.10", "Lv.25", "Lv.50", "BERRY", "7 STREAK", "BOND", "TOP FORM", "IN SHAPE",
+    "STRENGTH RIBBON", "STAMINA RIBBON", "SPEED RIBBON" },
+  { "N\241v.10", "N\241v.25", "N\241v.50", "BAGA", "SEQ 7", "LA\200O", "FORMA M\301X.", "EM FORMA",
+    "FITA DE FOR\200A", "FITA DE F\324LEGO", "FITA DE RAPIDEZ" },
 };
 static const char *const MED_DSC[LANG_COUNT][MED_COUNT] = {
   { "LEVEL 10", "LEVEL 25", "LEVEL 50", "BERRY FOUND",
-    "7 DAY STREAK", "MAX BOND", "FINAL FORM", "IN SHAPE" },
+    "7 DAY STREAK", "MAX BOND", "FINAL FORM", "IN SHAPE",
+    "STRENGTH", "STAMINA", "SPEED" },
   { "N\315VEL 10", "N\315VEL 25", "N\315VEL 50", "BAGA ACHADA",
-    "7 DIAS A FIO", "LA\200O M\301X.", "FORMA FINAL", "EM FORMA" },
+    "7 DIAS A FIO", "LA\200O M\301X.", "FORMA FINAL", "EM FORMA",
+    "FOR\200A", "F\324LEGO", "RAPIDEZ" },
 };
 
 // The standby clock's date (#60), short [language][...]: English as in "Sat 15 Nov",

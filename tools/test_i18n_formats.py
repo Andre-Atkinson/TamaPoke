@@ -134,12 +134,21 @@ def count_enumerators(header_path, enum_name, terminator):
     return names.index(terminator)
 
 
+def define_value(path, name):
+    """The integer a plain `#define NAME <n>` gives in `path`."""
+    text = open(path, encoding='utf-8').read()
+    m = re.search(r'^#define\s+' + re.escape(name) + r'\s+(\d+)\b', text, re.M)
+    if not m:
+        raise ValueError(f'#define {name} <number> not found in {path}')
+    return int(m.group(1))
+
+
 def main():
     source = open(I18N_CPP, encoding='utf-8').read()
     i18n_hpp = os.path.join(HERE, '..', 'i18n.h')
 
     str_count = count_enumerators(i18n_hpp, 'StrId', 'STR_COUNT')
-    med_count = 8  # MED_COUNT, #define'd in include/pet.hpp
+    med_count = define_value(os.path.join(HERE, '..', 'pet.h'), 'MED_COUNT')
 
     errors = []
     errors += check_table(

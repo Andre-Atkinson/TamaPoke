@@ -201,6 +201,9 @@ at 60); its record still shows the raw score.
 
 **All games train SPEED.** Battles are out of scope, so the trained stats only
 show on the card; Play = SPEED and the bag = STRENGTH stays easy to remember.
+(Since #76 the card's Fitness page shows the training, a ribbon at each goal, and
+the result screen the speed each game trained; training also shows in the pet's idle
+life.)
 
 ### Records and save data (NVS `tamapoke`)
 
