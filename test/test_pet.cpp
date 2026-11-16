@@ -1338,6 +1338,35 @@ TEST(nature, playful_trains_speed_25_percent_more) {
   }
 }
 
+// A damaged save can hold trained stats past 100 (the other 0-100 values are clamped too);
+// load() caps each, and a playful pet at the cap stays there after a top-score game.
+TEST(nature, trained_stats_out_of_range_load_capped_at_100) {
+  Pet a;
+  makePet(a, 4);
+  a.saveNow();
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putUChar("tatk", 250);
+    raw.putUChar("tdef", 101);
+    raw.putUChar("tspe", 250);
+    raw.end();
+  }
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.trAtk, (uint8_t)100);
+  CHECK_EQ(b.trDef, (uint8_t)100);
+  CHECK_EQ(b.trSpe, (uint8_t)100);
+  b.nature = NAT_PLAYFUL;
+  b.playGame(GAME_KEEPY, 30);  // 6 points, 8 for a playful pet: 108 must not wrap
+  CHECK_EQ(b.trSpe, (uint8_t)100);
+  // defence in depth: playReward does not rely on load() for the 8-bit sum (a value that
+  // load() caps can't reach this; it is set directly)
+  b.trSpe = 250;
+  b.playGame(GAME_KEEPY, 30);
+  CHECK_EQ(b.trSpe, (uint8_t)100);
+}
+
 // stamina by itself (Pet::tick): every need at 40 or more for 12 h in a row, 9.6 h if tidy
 TEST(nature, tidy_trains_stamina_by_itself_25_percent_faster) {
   for (uint8_t n = 0; n < NAT_COUNT; n++) {

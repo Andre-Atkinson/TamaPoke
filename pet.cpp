@@ -224,7 +224,9 @@ void Pet::tick() {
 }
 
 // The nature's extra point (#25, natureDrain) comes after each need's own drain, so the
-// poop roll, the overweight drain and the joy penalties see what they always saw.
+// poop roll sees what it always saw. drainJoy() runs after this, so it sees the extra point:
+// a greedy pet's food penalty (fullness < 30) and a tidy pet's hygiene penalty (hygiene < 30)
+// start a few minutes sooner. The overweight drain reads only weight, so order means nothing to it.
 void Pet::drainBody() {
   fullness = clamp100(fullness - 2);
   energy = clamp100(energy - 1);
@@ -672,9 +674,10 @@ uint16_t Pet::gameBest(uint8_t game) const {
 }
 
 void Pet::playReward(uint8_t n) {
-  // jugar entrena la velocidad (playful: +25%, #25); n <= GAME_SCORE_CAP, so v <= 108
-  uint8_t v = trSpe + natureTrainGain(nature, TRAIN_SPEED, n / 5);
-  trSpe = v > 100 ? 100 : v;
+  // jugar entrena la velocidad (playful: +25%, #25); n <= GAME_SCORE_CAP and load() caps
+  // trSpe at 100, so v <= 108; 16 bits so a value past that can't wrap anyway
+  uint16_t v = (uint16_t)trSpe + natureTrainGain(nature, TRAIN_SPEED, n / 5);
+  trSpe = v > 100 ? 100 : (uint8_t)v;
   joy = clamp100(joy + 5 + (n > 15 ? 30 : n * 2) + playJoyExtra());
   energy = dropTo(energy, 10 + n / 2, 5);
   fullness = dropTo(fullness, 5, 5);
@@ -919,6 +922,9 @@ void Pet::load() {
   if (poops > 3) poops = 3;
   if (lastEnd > CER_RELEASE) lastEnd = CER_NONE;
   if (nature >= NAT_COUNT) nature = NAT_EASYGOING;
+  if (trAtk > 100) trAtk = 100;
+  if (trDef > 100) trDef = 100;
+  if (trSpe > 100) trSpe = 100;
   if (pace >= PACE_COUNT) pace = PACE_NORMAL;
   if (bedPreset >= BED_PRESETS) bedPreset = 0;
   if (eggPickMode >= EGGPICK_COUNT) eggPickMode = EGGPICK_OFF;

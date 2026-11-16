@@ -34,7 +34,7 @@ wait 300ms
 shot 05-lazy
 serial STATS
 
-# a nickname adds the "(species)" line under it; the longest name in Portuguese is BRINCALHAO
+# a nickname adds the "(species)" line under it; the longest names in Portuguese are BRINCALHAO and PREGUICOSO (10 letters each)
 serial NICK Wwwwwwwwwww
 nature playful
 wait 300ms
