@@ -145,7 +145,7 @@ TEST(i18n, los_acentos_van_en_un_solo_byte_no_en_utf8) {
 }
 
 // #61: a byte >= 0x80 must be a Portuguese letter the UI font draws: one of the CP437
-// accented letters Portuguese uses, or one of ptglyphs.h's 12. A mistyped octal draws
+// accented letters Portuguese uses, or one of ptglyphs.h's. A mistyped octal draws
 // something else without a word (Latin-1 a-acute \341 is a sharp s in CP437, \244 is
 // n-tilde), and so would a byte meant for a glyph that is not in ptglyphs.h.
 static bool portugueseCp437(unsigned char u) {
@@ -450,7 +450,7 @@ TEST(PtGlyphs, each_glyph_fits_the_classic_cell) {
   }
 }
 
-TEST(PtGlyphs, the_lookup_finds_the_12_codes_and_nothing_else) {
+TEST(PtGlyphs, the_lookup_finds_the_13_codes_and_nothing_else) {
   int found = 0;
   for (int b = 0; b < 256; b++) {
     int i = ptGlyphIndex((uint8_t)b);
@@ -459,12 +459,40 @@ TEST(PtGlyphs, the_lookup_finds_the_12_codes_and_nothing_else) {
     CHECK_EQ((int)PT_GLYPHS[i].code, b);
   }
   CHECK_EQ(found, PTG_COUNT);
-  CHECK_EQ(PTG_COUNT, 12);
+  CHECK_EQ(PTG_COUNT, 13);
+  CHECK(ptGlyphIndex(0x90) >= 0);  // #85: the classic font's E-acute, redrawn on its own byte
   for (int g = 0; g < PTG_COUNT; g++) CHECK_EQ(ptGlyphIndex(PT_GLYPHS[g].code), g);
   // ASCII, the CP437 letters Portuguese uses and the bytes printT() must hand on to the
   // classic font are not glyphs here
   for (uint8_t b : {(uint8_t)'A', (uint8_t)'a', (uint8_t)'\n', (uint8_t)0x80, (uint8_t)0x87, (uint8_t)0xA0})
     CHECK_EQ(ptGlyphIndex(b), -1);
+}
+
+// #85: an upper-case word stays upper-case. The classic font's capitals fill rows 0-6 and
+// its lowercase letters rows 2-6, or rows 3-6 under an accent and a blank row (o' o^). So
+// each accented capital here fills every row from 0 (its accent) to 6 (the baseline), with
+// no blank row between accent and letter: a letter under a gap is a lowercase height (#85:
+// I' and O^ read as i and o). The two lowercase letters keep that gap, like the font's o'
+// and o^, so a~ and o~ never pass for capitals (before #85 O~ and o~ were the same art).
+TEST(PtGlyphs, accented_capitals_are_as_tall_as_the_fonts_capitals) {
+  int capitals = 0, lowercase = 0;
+  for (int g = 0; g < PTG_COUNT; g++) {
+    const PtGlyph &p = PT_GLYPHS[g];
+    // Latin-1 capitals are 0xC0-0xDE and its lowercase 0xDF-0xFF; 0x90 is CP437's E-acute
+    const bool capital = p.code < 0xDF;
+    if (capital) capitals++;
+    else lowercase++;
+    for (int r = 0; r < 7; r++) {
+      bool ink = false;
+      for (int c = 0; c < PTG_COLS; c++) ink = ink || p.art[r][c] == '#';
+      char msg[48];
+      snprintf(msg, sizeof msg, "glyph 0x%02X row %d", p.code, r);
+      if (capital) CHECK_MSG(ink, std::string("a blank row in a capital: ") + msg);
+      else if (r == 2) CHECK_MSG(!ink, std::string("no blank row under a lowercase accent: ") + msg);
+    }
+  }
+  CHECK_EQ(capitals, 11);  // A' A` A^ A~ E^ I' O' O^ O~ U' and E'
+  CHECK_EQ(lowercase, 2);  // a~ o~
 }
 
 // #29: char is unsigned on the ESP32-S3 and signed on the Mac. test/Makefile builds
@@ -671,7 +699,7 @@ TEST(i18n, los_botones_de_despedida_y_escapada_dejan_margen_con_el_nombre_mas_la
   gLang = LANG_DEFAULT;
 }
 
-// ptGlyphIndex() reads the 12 codes from their own table, apart from the art
+// ptGlyphIndex() reads the codes from their own table, apart from the art
 TEST(PtGlyphs, the_code_table_matches_the_art_rows) {
   for (int g = 0; g < PTG_COUNT; g++) CHECK_EQ((int)PT_GLYPH_CODES.c[g], (int)PT_GLYPHS[g].code);
 }

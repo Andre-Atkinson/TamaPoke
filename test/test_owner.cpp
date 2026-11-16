@@ -60,7 +60,8 @@ TEST(Owner, plain_names_and_no_name_are_fine) {
 }
 
 TEST(Owner, every_accented_letter_the_font_has_is_fine) {
-  CHECK_EQ((int)OWNER_LETTER_COUNT, 43);  // 31 from CP437, 12 from ptglyphs.h (#61)
+  // 31 from CP437 (E' among them: ptglyphs.h only redraws it, #85), 12 from ptglyphs.h (#61)
+  CHECK_EQ((int)OWNER_LETTER_COUNT, 43);
   for (const OwnerLetter &l : OWNER_LETTERS) {
     std::string n = "X" + u8(l.cp);
     CHECK_MSG(ownerNameCheck(n.c_str()) == OWNER_OK, "refused U+" + std::to_string(l.cp));
@@ -230,11 +231,14 @@ TEST(Owner, portuguese_names_use_the_extra_glyphs) {
     ownerNameForFont(c.utf8.c_str(), out, sizeof out);
     CHECK_STREQ(out, c.font);
   }
-  // every ptglyphs.h letter is a name letter, drawn from its own Latin-1 byte
+  // every ptglyphs.h letter is a name letter, drawn from its own byte: its Latin-1 code,
+  // the code point itself, or for E' (#85: redrawn, not added) CP437's 0x90
   for (int g = 0; g < PTG_COUNT; g++) {
-    const OwnerLetter *l = ownerLetter(PT_GLYPHS[g].code);
-    CHECK_MSG(l != nullptr, "missing U+" + std::to_string(PT_GLYPHS[g].code));
-    if (l) CHECK_EQ((int)l->font, (int)PT_GLYPHS[g].code);
+    const uint8_t code = PT_GLYPHS[g].code;
+    const uint16_t cp = code == 0x90 ? 0xC9 : code;
+    const OwnerLetter *l = ownerLetter(cp);
+    CHECK_MSG(l != nullptr, "missing U+" + std::to_string(cp));
+    if (l) CHECK_EQ((int)l->font, (int)code);
   }
 }
 

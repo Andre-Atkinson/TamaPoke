@@ -1,0 +1,121 @@
+# The Portuguese accented capitals (#85): every upper-case string that uses one of the
+# capitals ptglyphs.h draws (A' A~ E' I' O' O^ O~), by day and by night, and two names
+# for the player in mixed case, which also show the four no UI string uses (A` A^ E^ U').
+# A manual check: run it in Portuguese on both boards and look at the shots.
+#   tools/sim.sh --board 175c --lang pt --script pt-capitals --out shots/175c/
+#   tools/sim.sh --board 175 --lang pt --script pt-capitals --out shots/175/
+clock none
+battery 64
+
+# a new game: Charmander (second row); the clock screen asks the time (QUE HORAS SAO?),
+# a serial TIME sets 10:00 and OK keeps it
+wait 1s
+tap 233 220
+wait 1s
+shot 01-clock-ask
+serial TIME 1794564000
+wait 1s
+tap 233 384
+wait 1s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# a new shiny pet's status line (E SHINY!! with E-acute) while it is under 15 minutes old
+serial SHINY
+wait 1s
+shot 01b-shiny
+
+# the card: profile (NATUREZA: BRINCALHAO), Fitness (FORMA FISICA, FOLEGO), medals
+# (NIVEL 10/25/50, LACO MAX., FOLEGO), progress (EVOLUCAO)
+swipe up
+nature playful
+wait 300ms
+shot 02-profile
+swipe left
+shot 03-fitness
+swipe left
+shot 04-medals
+swipe left
+shot 05-progress
+tap 233 420
+wait 1s
+
+# the release dialog (a long press on the pet): NAO keeps the pet
+hold 233 200 3500ms
+shot 06-release
+tap 298 278
+wait 520ms
+
+# the hold, one rep then no finger for 15 s: 1 REPETICAO, FOLEGO +n
+swipe up
+swipe left
+tap 233 320
+tap 233 240
+hold 233 270 2200ms
+wait 16s
+shot 07-hold-one-rep
+wait 5s
+
+# the hold, all 12 reps with the stamina ribbon one point off: 12 REPETICOES, FOLEGO +n,
+# then the ribbon's banner (MEDALHA! FITA DE FOLEGO)
+train 0 9 0
+swipe up
+swipe left
+tap 233 320
+tap 233 240
+hold 233 270 19s
+shot 08-hold-result
+wait 4s
+shot 09-ribbon-banner
+wait 6s
+
+# three cared days in a row: OTIMO! 3 DIAS SEGUIDOS!
+serial CAREDAY
+wait 2s
+serial CAREDAY
+wait 2s
+serial CAREDAY
+wait 1s
+shot 10-streak-banner
+wait 5s
+
+# a final form: the medal's banner (MEDALHA! FORMA MAX.). The next cared day checks the
+# medals at once, so the screen has no time to turn off waiting for the minute tick.
+serial SPEC 6
+serial CAREDAY
+wait 1s
+shot 11-final-banner
+wait 6s
+
+# a player's name that starts with an accented capital, in mixed case
+serial OWNER Ábc Íde Ôfg
+say love-name
+wait 300ms
+shot 12-name-bubble
+wait 5s
+serial OWNER Àb Âc Êd Úf
+say love-name
+wait 300ms
+shot 12b-name-bubble
+wait 5s
+serial OWNER
+
+# night: 22:00. The card pages and the release dialog again.
+serial TIME 1794607200
+wait 2s
+swipe up
+shot 13-profile-night
+swipe left
+shot 14-fitness-night
+swipe left
+shot 15-medals-night
+swipe left
+shot 16-progress-night
+tap 233 420
+wait 1s
+hold 233 200 3500ms
+shot 17-release-night
+tap 298 278
+wait 520ms
