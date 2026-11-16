@@ -209,7 +209,8 @@ rounds before it is merged. Both are mandatory, and two is also the cap.
 4. **After round 2** no more review agents. The main session fixes any
    HIGH/MEDIUM findings itself (a large set can go to one fresh
    `issue-fixer`, whose diff the main session then reviews), re-runs the gate,
-   and fixes or explicitly dispositions LOW ones. Nothing gets silently dropped.
+   fixes the small LOW ones (see **Small fixes go in the PR** below) and
+   explicitly dispositions the rest. Nothing gets silently dropped.
 
 **Reviewers take the firmware builds from CI** (owner's decision,
 2026-11-14). Reviews were rebuilding commits that CI builds anyway, and with at
@@ -295,3 +296,14 @@ regression test and mutation evidence when the behaviour is host-testable
 (otherwise say how it was checked). Anything bigger is reported to the main
 session, which records it (see **Recording findings**); findings are never
 silently dropped.
+
+**Small fixes go in the PR, not in an issue** (owner's decision, 2026-11-17).
+A small fix found while a PR is open, by its author or by either review
+round, is made in that PR. When it meets the conditions above, make it and
+list it under **Also fixed**. When one fails (another area, a call the owner
+has to make, a file another open PR owns), the session working on the PR asks
+the owner whether to fold it in, instead of deferring it. A GitHub issue is
+only for real work: a design call that needs its own session, an NVS
+migration, a new serial command, a second component, work that needs its own
+review, or a small fix the owner chose to defer. When picking work, bundle
+closely related small open issues into one PR instead of one session each.
