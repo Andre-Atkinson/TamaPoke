@@ -49,5 +49,6 @@ Huge thanks to that whole community for an enormous amount of work.
 | Special days: holiday decorations and greetings, and the player's birthday (#26) | `holiday.h` and `holiday.cpp`, and the seasonal decorations in `scene.ino`, of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`holiday.h`, `holiday.cpp`, `scene.cpp`): offline, without the lunar calendar, with our own days, decorations and greeting rules |
 | Seasons over the scene (#60) | `drawSeason()` in `scene.ino` and `seasonOf()` in `holiday.cpp` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`weather.h`, `scene.cpp`), for the southern hemisphere |
 | Speech bubbles (#23) | `pickBubble`, `bubbleTick` and `drawBubble` in `scene.ino` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`bubble.h`), offline and without the chess lines |
+| Natures (#25) | `NAT_*` in `pet.h` and the nature's drain and care boosts in `pet.cpp` of [Mu-Muu/TamaPoke](https://github.com/Mu-Muu/TamaPoke) (MIT), re-implemented here (`nature.h`), offline; the training bonus is this fork's own |
 
 TamaPoke's own code (firmware and tools) is original work.

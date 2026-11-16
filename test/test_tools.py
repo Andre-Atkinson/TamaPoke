@@ -365,6 +365,7 @@ class TestBuffersDeTexto(unittest.TestCase):
         'S_NAME_FMT': ('estrella', 'nombre_o_apodo'),
         'S_RELEASE_FMT': ('nombre',),
         'S_INFO_FMT': ('baya',),
+        'S_NATURE_FMT': ('naturaleza',),
         'S_FAREWELL_BTN': ('nombre_o_apodo',),
         'S_RUNAWAY_BTN': ('nombre_o_apodo',),
         'S_SAY_LOVE_FMT': ('dueno',),
@@ -431,6 +432,11 @@ class TestBuffersDeTexto(unittest.TestCase):
             elif arg == 'baya':
                 total += max(self.bytes_literal(self.LIT[b][li]) for b in
                              ('S_BERRY_UNK', 'S_BERRY_RED', 'S_BERRY_BLUE', 'S_BERRY_GREEN'))
+            elif arg == 'naturaleza':  # natureName() (#25)
+                total += max(self.bytes_literal(self.LIT[n][li]) for n in
+                             ('S_NAT_EASYGOING', 'S_NAT_GREEDY', 'S_NAT_PLAYFUL', 'S_NAT_TIDY', 'S_NAT_LAZY'))
+            else:
+                self.fail(f'{sid}: ARGS_S names {arg!r}, which peor_caso() does not know')
         return total
 
     def test_cada_texto_formateado_cabe_en_su_buffer_en_todos_los_idiomas(self):

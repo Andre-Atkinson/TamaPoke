@@ -3,6 +3,7 @@
 #include <Preferences.h>
 #include "clockprompt.h"  // CLOCK_EPOCH_END
 #include "gamecore.h"  // GameId, records and normalised scores of the Play minigames
+#include "nature.h"    // NAT_*, the drains, care boosts and training bonus of each nature (#25)
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
 // (p. ej. 5000UL = las estadisticas caen 12x mas rapido).
@@ -86,7 +87,8 @@ enum : uint16_t {
 // counts, in total (a minute under 40 pauses the count, it never resets it), and each
 // STAMINA_CARE_MIN of them is +1 trDef. A minute self-care holds up on the charger (#24) is
 // not the player's care and doesn't count. The count (goodTicks) is GOOD_STEP a good minute,
-// so a per-minute bonus (#25's tidy nature: 5 instead of 4) stays exact without changing what
+// so a per-minute bonus (#25's tidy nature, natureTrainGain(): 5 instead of 4, the point in
+// 24 minutes instead of 30) stays exact without changing what
 // the saved count means; it is saved as is (NVS "tdefm", 0 to STAMINA_CARE_MIN * GOOD_STEP - 1)
 // so a restart keeps it. Until #76 it was 720 minutes in a row, kept in RAM only.
 #define STAMINA_CARE_MIN 30
@@ -120,6 +122,7 @@ public:
   // genes (90-110%, se tiran al eclosionar) y entrenamiento (0-100)
   uint8_t geneAtk = 100, geneDef = 100, geneSpe = 100;
   uint8_t trAtk = 0, trDef = 0, trSpe = 0;
+  uint8_t nature = NAT_EASYGOING;  // rolled at hatch (#25, nature.h); NVS "nature"
   bool berryKnown = false;  // ya descubrio su baya favorita
   bool shiny = false;       // variante de color rara (se sortea en el huevo)
   uint32_t ageMinutes = 0;
@@ -331,6 +334,12 @@ private:
   void tick();
   void drainBody();  // parte del goteo de necesidades (comida, energia, caca, higiene)
   void drainJoy();   // ...y la felicidad (depende de comida e higiene ya bajadas)
+  // this drain carries the nature's extra point for `nat` (#25): 1 or 0
+  uint8_t natureDrain(uint8_t nat) const {
+    return nature == nat && natureDrainMinute(ageMinutes, pace == PACE_RELAXED) ? 1 : 0;
+  }
+  uint8_t playJoyExtra() const { return nature == NAT_PLAYFUL ? NAT_PLAY_JOY_EXTRA : 0; }
+  uint8_t sleepEnergy() const { return nature == NAT_LAZY ? NAT_SLEEP_ENERGY : 6; }  // per minute asleep
   void selfCare();   // one need back up to half while charging (#24), from tick()
   void hatch();
   void registerSpecies(int16_t dex);

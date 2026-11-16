@@ -260,6 +260,25 @@ After any ending, a **new egg** appears.
   of other types. Time is paused until you pick (as on the starter screen), and
   the choice survives a power-off. The first game still picks a starter.
 
+### Nature
+Each Pokémon hatches with one of five natures, shown on the stat card (swipe up,
+first page, under the berry and age):
+
+| Nature | Drains a little faster | Its favourite care does more | Trains faster |
+|---|---|---|---|
+| Easygoing | — | — | — |
+| Greedy | FOOD | berries **+5 FOOD** | STRENGTH |
+| Playful | JOY | play and the minigames **+5 JOY** | SPEED |
+| Tidy | HYG | a bath also gives **+10 JOY** | STAMINA (steady care: a point every 24 good minutes instead of 30) |
+| Lazy | ENE | asleep, ENE **+8/min** instead of +6 | — |
+
+- The faster drain is **one extra point every 4 minutes awake** (every 8 at the
+  relaxed pace), none while asleep. Powered off it stops at the same floor of 15, so
+  a long power-off ends where it would for any other nature.
+- The training bonus is **+25%, rounded up**, so even a 1-point gain gets its extra
+  point (bag: 18 → 23; a minigame's 1 → 2).
+- A Pokémon from before natures existed is Easygoing.
+
 ### Bonds, streaks, medals, Pokédex
 - **Streak** (player-wide, survives across pets): first care each real day; milestones
   at **3 / 7 / 30 / 100** days; skipping a day breaks it.
@@ -273,7 +292,8 @@ After any ending, a **new egg** appears.
 ### Fitness
 Training points 0–100 for **strength** (the bag), **stamina** (steady care: every
 need at 40+) and **speed** (the Play minigames), shown on the card's Fitness page
-with a ribbon at each goal. They show in the pet's idle life (looks only).
+with a ribbon at each goal. They show in the pet's idle life (looks only). Its
+nature trains one of them a little faster (see **Nature**).
 
 ## Hardware
 

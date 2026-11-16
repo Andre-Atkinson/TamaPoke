@@ -1,6 +1,7 @@
 #include "script.h"
 #include "../idleplan.h"  // IDLE_ACT_NAMES
 #include "../bubble.h"
+#include "../nature.h"  // NATURE_KEYS
 #include <ctype.h>
 #include <stdlib.h>
 #include <sstream>
@@ -255,6 +256,12 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       if (c.a < 0) return fail("usage: say hungry|bath|tired|bored|morning|stars|hi|happy|pat|love-name|love|"
                               "christmas|newyear|valentine|easter|halloween|birthday");
       c.op = OP_SAY;
+    } else if (op == "nature") {
+      c.a = -1;
+      for (int i = 0; n == 2 && i < NAT_COUNT; i++)
+        if (w[1] == NATURE_KEYS[i]) c.a = i;
+      if (c.a < 0) return fail("usage: nature easygoing|greedy|playful|tidy|lazy");
+      c.op = OP_NATURE;
     } else if (op == "train") {
       if (n != 4 || !toInt(w[1], c.a, 0, 100) || !toInt(w[2], c.b, 0, 100) || !toInt(w[3], c.c, 0, 100))
         return fail("usage: train STRENGTH STAMINA SPEED (training points, 0-100 each)");

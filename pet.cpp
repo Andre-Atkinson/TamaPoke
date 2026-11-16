@@ -80,7 +80,7 @@ void Pet::syncClock(uint32_t nowEpoch) {
       continue;
     }
     if (sleeping) {  // descanso: baja lento y con suelo, igual que en vivo
-      energy = clamp100(energy + 6);
+      energy = clamp100(energy + sleepEnergy());
       if (ageMinutes % 2 == 0) {
         fullness = dropTo(fullness, 1, 30);
         joy = dropTo(joy, 1, 35);
@@ -88,10 +88,13 @@ void Pet::syncClock(uint32_t nowEpoch) {
       if (ageMinutes % 3 == 0) hygiene = dropTo(hygiene, 1, 45);
       continue;
     }
-    fullness = dropTo(fullness, 2, 15);
-    energy = dropTo(energy, 1, 15);
-    hygiene = dropTo(hygiene, 1, 15);
-    joy = dropTo(joy, 1, 15);
+    // the nature's extra point (#25) every NATURE_DRAIN_EVERY minutes, as awake at the
+    // normal pace (this catch-up ignores the pace), down to the same floor of 15
+    uint8_t ex = natureDrainMinute(ageMinutes, false) ? 1 : 0;
+    fullness = dropTo(fullness, 2 + (nature == NAT_GREEDY ? ex : 0), 15);
+    energy = dropTo(energy, 1 + (nature == NAT_LAZY ? ex : 0), 15);
+    hygiene = dropTo(hygiene, 1 + (nature == NAT_TIDY ? ex : 0), 15);
+    joy = dropTo(joy, 1 + (nature == NAT_PLAYFUL ? ex : 0), 15);
   }
   if (!isEgg()) {
     if (!sleeping) {  // durmiendo no ensucia
@@ -137,7 +140,7 @@ void Pet::tick() {
   // cero, sin descuidos ni escapadas). despierto: comida -2/min, hig/joy -1/min.
   // El peso aun se quema; la racha de buen cuidado (goodTicks) queda en pausa.
   if (sleeping) {
-    energy = clamp100(energy + 6);
+    energy = clamp100(energy + sleepEnergy());  // lazy (#25): 8
     if (weight > 0 && ageMinutes % 3 == 0) weight--;
     if (ageMinutes % 2 == 0) {                 // ~4x mas lento que despierto
       fullness = dropTo(fullness, 1, 30);
@@ -168,7 +171,7 @@ void Pet::tick() {
   // on the charger are not the player's care. (Between the food/hygiene drain and the joy
   // drain, as always: lowestStat() includes joy, and moving it would change the rhythm.)
   if (lowestStat() >= 40 && !selfCareOn) {
-    goodTicks += GOOD_STEP;
+    goodTicks += natureTrainGain(nature, TRAIN_STAMINA, GOOD_STEP);  // tidy (#25): 5
     if (goodTicks >= STAMINA_CARE_MIN * GOOD_STEP) {
       goodTicks = 0;
       if (trDef < 100) trDef++;
@@ -219,18 +222,25 @@ void Pet::tick() {
   if (++ticksSinceSave >= 5) pendingSave = true;
 }
 
+// The nature's extra point (#25, natureDrain) comes after each need's own drain, so the
+// poop roll sees what it always saw. drainJoy() runs after this, so it sees the extra point:
+// a greedy pet's food penalty (fullness < 30) and a tidy pet's hygiene penalty (hygiene < 30)
+// start a few minutes sooner. The overweight drain reads only weight, so order means nothing to it.
 void Pet::drainBody() {
   fullness = clamp100(fullness - 2);
   energy = clamp100(energy - 1);
   if (fullness > 40 && poops < 3 && random(100) < 15) poops++;
 
   hygiene = clamp100(hygiene - 1 - 4 * poops);
+  fullness = clamp100(fullness - natureDrain(NAT_GREEDY));
+  energy = clamp100(energy - natureDrain(NAT_LAZY));
+  hygiene = clamp100(hygiene - natureDrain(NAT_TIDY));
   // el sobrepeso da pereza: la energia cae el doble
   if (weight > 50) energy = clamp100(energy - 1);
 }
 
 void Pet::drainJoy() {
-  int dJoy = -1;
+  int dJoy = -1 - natureDrain(NAT_PLAYFUL);
   if (fullness < 30) dJoy -= 2;
   if (hygiene < 30) dJoy -= 2;
   joy = clamp100(joy + dJoy);
@@ -575,6 +585,7 @@ void Pet::hatch() {
   geneDef = 90 + random(21);
   geneSpe = 90 + random(21);
   trAtk = trDef = trSpe = 0;
+  nature = (uint8_t)random(NAT_COUNT);  // #25: one in five each
   berryKnown = false;
   bond = 0;          // vinculo, medallas y nombre son del individuo
   bondToday = 0;
@@ -626,14 +637,15 @@ void Pet::feed() {
 void Pet::feedBerry(uint8_t color) {
   if (ceremony != CER_NONE) return;
   if (isEgg() || sleeping) return;
+  uint8_t extra = nature == NAT_GREEDY ? NAT_BERRY_EXTRA : 0;  // #25
   if (lovesBerry(color)) {
-    fullness = clamp100(fullness + 35);
+    fullness = clamp100(fullness + 35 + extra);
     joy = clamp100(joy + 10);
     heartUntil = millis() + HEART_MS;  // "le encanta!"
     berryKnown = true;                 // descubierto: se muestra en la ficha
     addBond(2);
   } else {
-    fullness = clamp100(fullness + 25);
+    fullness = clamp100(fullness + 25 + extra);
   }
   eatUntil = millis() + EAT_ANIM_MS;
   registerCare();
@@ -675,9 +687,11 @@ uint16_t Pet::gameBest(uint8_t game) const {
 
 uint8_t Pet::playReward(uint8_t n) {
   uint8_t before = trSpe;
-  uint8_t v = trSpe + n / 5;  // jugar entrena la velocidad
-  trSpe = v > 100 ? 100 : v;
-  joy = clamp100(joy + 5 + (n > 15 ? 30 : n * 2));
+  // jugar entrena la velocidad (playful: +25%, #25); n <= GAME_SCORE_CAP and load() caps
+  // trSpe at 100, so v <= 108; 16 bits so a value past that can't wrap anyway
+  uint16_t v = (uint16_t)trSpe + natureTrainGain(nature, TRAIN_SPEED, n / 5);
+  trSpe = v > 100 ? 100 : (uint8_t)v;
+  joy = clamp100(joy + 5 + (n > 15 ? 30 : n * 2) + playJoyExtra());
   energy = dropTo(energy, 10 + n / 2, 5);
   fullness = dropTo(fullness, 5, 5);
   int burn = (int)weight - n * 2;  // el ejercicio quema peso
@@ -695,6 +709,7 @@ uint8_t Pet::trainStrength(uint16_t hits) {
   if (ceremony != CER_NONE || isEgg()) return 0;
   uint8_t gain = hits / 4;          // ~4 golpes = 1 punto de entrenamiento
   if (gain > 18) gain = 18;         // tope por sesion: la FUE se forja a fuego lento
+  gain = natureTrainGain(nature, TRAIN_STRENGTH, gain);  // greedy (#25): after the cap, up to 23
   uint8_t antes = trAtk;
   uint16_t v = (uint16_t)trAtk + gain;
   trAtk = v > 100 ? 100 : (uint8_t)v;
@@ -717,7 +732,7 @@ uint8_t Pet::trainStrength(uint16_t hits) {
 void Pet::play() {
   if (ceremony != CER_NONE) return;
   if (isEgg() || sleeping) return;
-  joy = clamp100(joy + 25);
+  joy = clamp100(joy + 25 + playJoyExtra());
   energy = clamp100(energy - 10);
   fullness = clamp100(fullness - 5);
   heartUntil = millis() + HEART_MS;
@@ -769,6 +784,7 @@ void Pet::clean() {
   if (ceremony != CER_NONE) return;
   poops = 0;
   hygiene = 100;
+  if (nature == NAT_TIDY && !isEgg()) joy = clamp100(joy + NAT_BATH_JOY);  // #25
   addBond(1);
   registerCare();
   save();
@@ -811,6 +827,7 @@ void Pet::save() {
   prefs.putUChar("tatk", trAtk);
   prefs.putUChar("tdef", trDef);
   prefs.putUChar("tspe", trSpe);
+  prefs.putUChar("nature", nature);
   prefs.putBool("bk", berryKnown);
   prefs.putBool("shy", shiny);
   prefs.putBool("eshy", eggShiny);
@@ -863,6 +880,7 @@ void Pet::load() {
   trAtk = prefs.getUChar("tatk", 0);
   trDef = prefs.getUChar("tdef", 0);
   trSpe = prefs.getUChar("tspe", 0);
+  nature = prefs.getUChar("nature", NAT_EASYGOING);  // a pet saved before natures: easygoing
   goodTicks = prefs.getUShort("tdefm", 0);  // saves from before #76: none, 0
   berryKnown = prefs.getBool("bk", false);
   shiny = prefs.getBool("shy", false);
@@ -924,6 +942,10 @@ void Pet::load() {
   trSpe = clamp100(trSpe);
   if (goodTicks >= STAMINA_CARE_MIN * GOOD_STEP) goodTicks = 0;
   if (lastEnd > CER_RELEASE) lastEnd = CER_NONE;
+  if (nature >= NAT_COUNT) nature = NAT_EASYGOING;
+  if (trAtk > 100) trAtk = 100;
+  if (trDef > 100) trDef = 100;
+  if (trSpe > 100) trSpe = 100;
   if (pace >= PACE_COUNT) pace = PACE_NORMAL;
   if (bedPreset >= BED_PRESETS) bedPreset = 0;
   if (eggPickMode >= EGGPICK_COUNT) eggPickMode = EGGPICK_OFF;
