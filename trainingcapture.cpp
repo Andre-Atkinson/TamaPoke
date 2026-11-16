@@ -5,7 +5,7 @@ bool TrainingCapture::begin(Reader reader) {
   events_ = xQueueCreate(32, sizeof(TrainingEvent));
   done_ = xSemaphoreCreateBinary();
   if (events_ && done_ &&
-      xTaskCreate(worker, "sackTouch", 4096, this, 2, &task_) == pdPASS) return true;
+      xTaskCreate(worker, "trainTouch", 4096, this, 2, &task_) == pdPASS) return true;
   if (events_) vQueueDelete(events_);
   if (done_) vSemaphoreDelete(done_);
   events_ = nullptr; done_ = nullptr; task_ = nullptr; reader_ = nullptr;

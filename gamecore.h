@@ -81,7 +81,7 @@ using GameBag = ShuffleBag<GAME_COUNT>;
 // ---------------------------------------------------------------- touch
 
 // Leaving a game: a "Hold: exit" chip at the top centre, held for 1 s, like the
-// strength bag's exit on the 1.75C. The hold has to start on the chip; sliding
+// exercises' exit on the 1.75C. The hold has to start on the chip; sliding
 // onto it never arms it, and the touch that exits is swallowed until the finger
 // lifts. A finger report only counts while reports keep coming (<= 250 ms apart,
 // GameClock::MAX_STEP_MS: a game frame can take 100 ms or more and reports are

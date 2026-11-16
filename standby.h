@@ -27,7 +27,7 @@ struct StandbyIn {
   bool petAwake;    // a pet or an egg not asleep, and no ceremony, evolution or starter/egg choice
   bool pwrOff;      // the screen was turned off with PWR: it stays dark (a timed-out one may light)
   bool locked;      // pocket-locked (the 1.75C's triple PWR)
-  bool gameOpen;    // a minigame or the training bag: they never time out
+  bool gameOpen;    // a minigame or an exercise: they never time out
   uint32_t idleMs;  // since the last touch
   uint32_t offMs;   // the screen-off setting (0 = Never)
 };

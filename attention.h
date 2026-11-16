@@ -129,7 +129,7 @@ inline uint8_t attnScreen(bool pocketLocked, bool screenOff, bool offByPwr, bool
 
 struct AttnScene {
   bool busy;        // evolving, eating, bathing, or a dialog open: wait, whatever the screen
-  bool playing;     // a minigame or the training bag is open
+  bool playing;     // a minigame or an exercise is open
   bool browsing;    // the keyboard, clock/settings, gallery or stat card is open
   uint8_t screen;   // AttnScreen
   bool quiet;       // attnQuiet()
@@ -163,7 +163,7 @@ inline AttnAction attnDecide(const AttnScene &s) {
     a.brighten = true;
     a.closeViews = s.screen == ATTN_SCR_LIT_IDLE && s.browsing;
   } else if (s.screen == ATTN_SCR_TIMED_OUT && !s.playing) {
-    // a minigame or the bag can't time out (autoScreenOff), so `playing` here would be a
+    // a minigame or an exercise can't time out (autoScreenOff), so `playing` here would be a
     // state the sketch never reaches; it stays dark rather than showing a game
     a.peek = true;
     a.closeViews = s.browsing;

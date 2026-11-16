@@ -39,8 +39,13 @@ enum StrId : uint8_t {
   S_NAME_FMT,      // "%s%s Nv.%u"
   // dialogo soltar
   S_RELEASE_FMT, S_YES, S_NO,
-  // minijuego y saco
-  S_HITS_FMT, S_STR_GAIN_FMT, S_NEW_RECORD, S_RECORD_FMT, S_HIT_FAST,
+  // minijuego y ejercicios (#78): the punch's result and hint
+  S_PUNCHES_FMT, S_STR_GAIN_FMT, S_NEW_RECORD, S_RECORD_FMT, S_PUNCH_HINT,
+  // the calm exercises (#78): the hold's result and hints, the stat card's TRAIN button
+  // and the choice it opens (title, then each exercise's name and what it trains)
+  S_REPS_FMT, S_STA_GAIN_FMT, S_HOLD_HINT, S_HOLD_KEEP,
+  S_ONE_PUNCH, S_ONE_REP,  // the results' singular: "1 PUNCH", "1 REP"
+  S_TRAIN, S_EX_TITLE, S_EX_PUNCH, S_EX_STR, S_EX_HOLD, S_EX_STA,
   S_SCORE_FMT, S_GREAT_JOY, S_PLUS_JOY,
   // reloj / ajustes
   S_SET_TIME, S_HOUR, S_MIN, S_CLOCK_CANCEL,
@@ -72,7 +77,7 @@ enum StrId : uint8_t {
   S_EVO_Q, S_EVO_KEEP, S_FAR_Q, S_FAR_GO, S_FAR_STAY,
   S_CHOOSE_STARTER,  // titulo de la eleccion del inicial (primera vez)
   S_NO_SPRITES, S_LOAD_SPRITES,  // aviso cuando falta el sprite en la SD
-  S_HOLD_EXIT,  // one-second exit hold: every Play minigame, and the strength bag on the 1.75C
+  S_HOLD_EXIT,  // one-second exit hold: every Play minigame, and the exercises on the 1.75C
   S_TLOCK_OFF,  // "off" — automatic touch lock disabled
   // ficha: pagina Care (ritmo y hora de dormir; los horarios van en digitos)
   S_CARE, S_PACE, S_PACE_NORMAL, S_PACE_RELAXED, S_BEDTIME, S_BED_OFF,

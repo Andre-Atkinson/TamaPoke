@@ -47,8 +47,10 @@ static const ExpectedFmt EXPECTED[] = {
   { S_POKEDEX_FMT,     "%u" },
   { S_NAME_FMT,        "%s,%s,%u" },
   { S_RELEASE_FMT,     "%s" },
-  { S_HITS_FMT,        "%u" },
+  { S_PUNCHES_FMT,     "%u" },  // the exercises' results (#78, gameui.cpp)
   { S_STR_GAIN_FMT,    "%u" },
+  { S_REPS_FMT,        "%u" },
+  { S_STA_GAIN_FMT,    "%u" },
   { S_RECORD_FMT,      "%u" },
   { S_SCORE_FMT,       "%u" },
   { S_STREAK_DAYS_FMT, "%u" },
@@ -422,12 +424,47 @@ TEST(i18n, nombres_y_pistas_de_los_minijuegos_siguen_el_orden_de_GameId) {
 }
 
 // The hold-to-exit button is a fixed touch target, EXIT_W = 160 px in every minigame
-// (gamecore.h) and on the 1.75C's strength bag (trainingtouch.h); its label at size 2
+// (gamecore.h) and on the 1.75C's exercises (trainingtouch.h); its label at size 2
 // keeps 8 px inside each end, so 12 letters (#61: "Mantem para sair" spilled out).
 TEST(i18n, the_hold_to_exit_label_fits_its_button) {
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;
     CHECK_MSG(strlen(T(S_HOLD_EXIT)) * 12 <= 160 - 16, std::string("too wide: ") + T(S_HOLD_EXIT));
+  }
+  gLang = LANG_DEFAULT;
+}
+
+// The calm exercises' texts (#78, gameui.cpp) fit where they are drawn:
+//  - the hints, size 2 at y=46, where the round panel is 278 px wide: with a 12 px margin
+//    each side, 21 letters;
+//  - the choice's title, size 3 at y=48 (283 px): 14 letters, like the clock prompt's;
+//  - the choice's names, size 3, and what each trains, size 2, in a 320 px button with
+//    8 px inside each end: 16 and 25 letters; the stat card's TRAIN button, size 2 in
+//    274 px: 21 letters;
+//  - the result: the count (at most two digits), size 4 within 400 px, and the gain, size 3
+//    at y=210 within 360 px.
+TEST(i18n, the_exercise_texts_fit_where_they_are_drawn) {
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    for (StrId id : {S_PUNCH_HINT, S_HOLD_HINT, S_HOLD_KEEP})
+      CHECK_MSG(strlen(T(id)) * 12 <= 278 - 2 * 12, std::string("too wide: ") + T(id));
+    CHECK_MSG(strlen(T(S_EX_TITLE)) * 18 <= 252, std::string("too wide: ") + T(S_EX_TITLE));
+    for (StrId id : {S_EX_PUNCH, S_EX_HOLD})
+      CHECK_MSG(strlen(T(id)) * 18 <= 320 - 16, std::string("too wide: ") + T(id));
+    for (StrId id : {S_EX_STR, S_EX_STA})
+      CHECK_MSG(strlen(T(id)) * 12 <= 320 - 16, std::string("too wide: ") + T(id));
+    CHECK_MSG(strlen(T(S_TRAIN)) * 12 <= 274 - 16, std::string("too wide: ") + T(S_TRAIN));
+    for (StrId id : {S_ONE_PUNCH, S_ONE_REP})
+      CHECK_MSG(strlen(T(id)) * 24 <= 400, std::string("too wide: ") + T(id));
+    char b[32];
+    for (StrId id : {S_PUNCHES_FMT, S_REPS_FMT}) {
+      snprintf(b, sizeof(b), T(id), 12u);
+      CHECK_MSG(strlen(b) * 24 <= 400, std::string("too wide: ") + b);
+    }
+    for (StrId id : {S_STR_GAIN_FMT, S_STA_GAIN_FMT}) {
+      snprintf(b, sizeof(b), T(id), 18u);
+      CHECK_MSG(strlen(b) * 18 <= 360, std::string("too wide: ") + b);
+    }
   }
   gLang = LANG_DEFAULT;
 }

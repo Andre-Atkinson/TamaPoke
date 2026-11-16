@@ -26,7 +26,7 @@ Running on hardware. Implemented: the 151 + shinies animated from microSD, full
 life cycle (egg by rarity → evolution → farewell/release/runaway, each gated
 behind a decision dialog), bred-Pokédex with gallery, battle stats (genes +
 training), retention hooks (streak / bond / medals / name), biome + real-time
-backgrounds, four minigames, training bag, animated bath, RTC with offline
+backgrounds, four minigames, two calm exercises, animated bath, RTC with offline
 progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
 **sound (ES8311)**, **English and European Portuguese UI (English default)**, **starter choice on
 first run**, and a one-click **web installer**.
@@ -70,7 +70,13 @@ While **awake**, per minute:
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
 - 🍬 **Candy:** +10 FOOD, +12 JOY, but **+12 weight** (fattening).
 - ⚽ **Play / minigames:** +JOY, −ENE; a random one of four short games (keepy-uppy, Berry Catch, Peekaboo, Berry Song). Each trains **SPEED** and burns weight, and keeps its own best score.
-- 🥊 **Training bag:** trains **STRENGTH** (~4 hits = 1 pt, cap +18/session), tires it.
+- 🥊 **Training** (the *Train* button on the stat card): two calm exercises, each up to
+  12 punches or reps worth 1.5 points (+18 a session at most), and each tires it like a game:
+  - **Punch** trains **STRENGTH**: tap as the swinging bag reaches the creature (it lights
+    up). Off-beat taps do nothing and cost nothing.
+  - **Hold** trains **STAMINA**: keep a finger on the screen while it does reps; lifting
+    only pauses it.
+  Leaving early keeps what was earned.
 - 🫧 **Bath:** clears poops, HYG → 100.
 - 👆 **Pet it:** tap it for +5 JOY + bond. It also knows a few touches, and each
   one counts as a single pat (the daily bond limit is shared with everything else):
@@ -96,7 +102,7 @@ While **awake**, per minute:
   Only those two moments act, so if you wake it at night it stays awake until the
   next bedtime, and if you put it to bed early it still wakes in the morning.
   It waits until a minigame, dialog, bath or evolution is finished; a minigame or
-  the training bag left open with the screen off is abandoned (no prize) at bedtime. Eggs, farewell
+  an exercise left open with the screen off is abandoned (no prize) at bedtime. Eggs, farewell
   scenes, the starter pick and the egg choice are skipped. It follows the clock you set (swipe
   down): after a full power-off the 1.75C clock can be wrong until you set it, so
   after a power-off bedtime stays paused until the clock is set (clock screen, which
@@ -171,7 +177,7 @@ While **awake**, per minute:
     time the clock hasn't been set since a power-off): no chirp and no light.
   - No calls while it sleeps, as an egg, while choosing a starter or an egg, or during
     a farewell or a run-away.
-    A call waits while a minigame, the training bag, a dialog, the card, gallery,
+    A call waits while a minigame, an exercise, a dialog, the card, gallery,
     clock or keyboard is open on a lit screen, and comes once you are back.
 - 🐾 **A life of its own:** left alone on a lit screen, the creature keeps itself busy.
   Every few seconds it picks something to do: stand, look around, stroll, rest a
@@ -363,7 +369,7 @@ If one bottoms out it counts as a *slip-up*.
 - Horizontal swipe = open the **Pokédex / gallery**.
 - Vertical swipe up = open the **stat card** (5 pages: Profile / Battle / Medals /
   Progress / Care; swipe between them; tap the name on Profile to rename; on Battle the
-  "Train strength" button opens the bag; on Care two big buttons cycle the pace
+  "Train" button offers the punch and the hold; on Care two big buttons cycle the pace
   Normal ↔ Relaxed and the bedtime Off → 21–07 → 22–07 → 23–08).
 - Swipe down = **set the clock** and the **settings**. The first row is sound, brightness and
   language. Under it, each pill shows an icon and a number: the touch lock (a padlock and the
@@ -426,8 +432,8 @@ Pokédex number (persisted in NVS).
 Each creature has ATK/DEF/SPD = real gen-1 base × **genes** (90–110 %, rolled at
 hatch) + level + **training**:
 - SPEED ← the minigames
-- DEFENSE ← sustained good care (12 h with no slip-ups)
-- STRENGTH ← the training bag (whacking)
+- DEFENSE ← sustained good care (12 h with no slip-ups) and the stamina hold
+- STRENGTH ← the rhythm punch
 
 Shown on the Battle page of the stat card. The (hidden) weight goes up with candy
 and burns off with training.

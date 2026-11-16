@@ -1,5 +1,6 @@
 #include "pet.h"
 #include "dex.h"
+#include "exercise.h"
 #include "audio.h"
 #include "bedtime.h"
 
@@ -675,28 +676,47 @@ void Pet::playReward(uint8_t n) {
   save();
 }
 
-// saco de entrenamiento: los golpes entrenan la fuerza. Devuelve la subida.
-uint8_t Pet::trainStrength(uint16_t hits) {
-  if (ceremony != CER_NONE || isEgg()) return 0;
-  uint8_t gain = hits / 4;          // ~4 golpes = 1 punto de entrenamiento
-  if (gain > 18) gain = 18;         // tope por sesion: la FUE se forja a fuego lento
-  uint8_t antes = trAtk;
-  uint16_t v = (uint16_t)trAtk + gain;
+// The calm exercises (exercise.h, #78). Each punch or rep is worth 1.5 points
+// (exerciseGain), and the points that fit under 100 go in; the session's work is what it
+// burns, so a pet already at 100 still gets the exercise.
+uint8_t Pet::trainStrength(uint8_t punches) {
+  if (ceremony != CER_NONE || isEgg() || !punches) return 0;
+  if (punches > EX_COUNT) punches = EX_COUNT;
+  uint8_t work = exerciseGain(punches);
+  uint8_t before = trAtk;
+  uint16_t v = (uint16_t)trAtk + work;
   trAtk = v > 100 ? 100 : (uint8_t)v;
-  gain = trAtk - antes;             // lo que de verdad entro: al topar en 100 la
-                                    // pantalla anunciaba +18 aunque cupieran menos
-  energy = dropTo(energy, 12, 5);   // cansa
+  if (punches > punchHi) punchHi = punches;  // record de golpes
+  exerciseDone(work);
+  return trAtk - before;  // what really went in: at 100 the screen showed the full gain
+}
+
+uint8_t Pet::trainStamina(uint8_t reps) {
+  if (ceremony != CER_NONE || isEgg() || !reps) return 0;
+  if (reps > EX_COUNT) reps = EX_COUNT;
+  uint8_t work = exerciseGain(reps);
+  uint8_t before = trDef;
+  uint16_t v = (uint16_t)trDef + work;
+  trDef = v > 100 ? 100 : (uint8_t)v;
+  exerciseDone(work);
+  return trDef - before;
+}
+
+// What a session of either exercise costs and gives, the old strength bag's: it tires
+// (energy -12, not under 5) and makes a little hungry, burns weight (a full session 24,
+// as the bag's 72 taps did), cheers up, shows the heart for a good session (5 points or
+// more, the bag's 20 taps), and counts as the day's care and as exercise (#44).
+void Pet::exerciseDone(uint8_t work) {
+  energy = dropTo(energy, 12, 5);
   fullness = dropTo(fullness, 5, 5);
-  int burn = (int)weight - hits / 3;  // tambien quema peso
+  int burn = (int)weight - work * 4 / 3;
   weight = burn > 0 ? burn : 0;
   joy = clamp100(joy + 6);
-  if (hits >= 20) heartUntil = millis() + HEART_MS;
-  if (hits > strHi) strHi = hits;   // record de golpes
+  if (work >= 5) heartUntil = millis() + HEART_MS;
   addBond(2);
   registerCare();
-  exercised = true;  // idem (#44)
+  exercised = true;  // el ejercicio quema peso: el proximo tick ve un IN SHAPE como del jugador (#44)
   save();
-  return gain;
 }
 
 void Pet::play() {
@@ -825,7 +845,7 @@ void Pet::save() {
   prefs.putUShort("mgc", catchHi);
   prefs.putUShort("mgp", peekHi);
   prefs.putUShort("mgs", songHi);
-  prefs.putUShort("shi", strHi);
+  prefs.putUChar("phi", punchHi);
   prefs.putString("nick", nick);
 }
 
@@ -886,7 +906,7 @@ void Pet::load() {
   catchHi = gameRecordOk(GAME_CATCH, prefs.getUShort("mgc", 0));
   peekHi = gameRecordOk(GAME_PEEK, prefs.getUShort("mgp", 0));
   songHi = gameRecordOk(GAME_SONG, prefs.getUShort("mgs", 0));
-  strHi = prefs.getUShort("shi", 0);
+  punchHi = prefs.getUChar("phi", 0);
   prefs.getString("nick", nick, sizeof(nick));
   pace = prefs.getUChar("pace", PACE_NORMAL);
   bedPreset = prefs.getUChar("bed", 0);
@@ -901,6 +921,7 @@ void Pet::load() {
   energy = clamp100(energy);
   hygiene = clamp100(hygiene);
   if (poops > 3) poops = 3;
+  if (punchHi > EX_COUNT) punchHi = 0;  // a record no session can land: damaged, read as none
   if (lastEnd > CER_RELEASE) lastEnd = CER_NONE;
   if (pace >= PACE_COUNT) pace = PACE_NORMAL;
   if (bedPreset >= BED_PRESETS) bedPreset = 0;

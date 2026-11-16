@@ -1093,17 +1093,17 @@ class TestSketchWarnings(unittest.TestCase):
             with self.subTest(n=n):
                 r = self.run_script(self.log(n))
                 self.assertEqual(r.returncode, 0, r.stderr)
-                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline 19')
+                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline 18')
 
     def test_more_than_the_baseline_fails(self):
-        for n, baseline, rc in ((19, None, 0), (20, None, 1), (21, '21', 0), (22, '21', 1), (1, '0', 1)):
+        for n, baseline, rc in ((18, None, 0), (19, None, 1), (21, '21', 0), (22, '21', 1), (1, '0', 1)):
             with self.subTest(n=n, baseline=baseline):
                 env = {'WARN_BASELINE': baseline} if baseline is not None else {}
                 r = self.run_script(self.log(n), **env)
                 self.assertEqual(r.returncode, rc, r.stdout + r.stderr)
-                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline {baseline or 19}')
+                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline {baseline or 18}')
                 if rc:
-                    self.assertIn(f'+{n - int(baseline or 19)} NEW', r.stderr)
+                    self.assertIn(f'+{n - int(baseline or 18)} NEW', r.stderr)
 
     def test_bad_input_is_an_error_not_a_pass(self):
         for args, env in (((os.path.join(self.tmp, 'missing.log'),), {}),

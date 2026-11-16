@@ -2,8 +2,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// Pure strength-training input policy. Coordinates are the existing native
-// 466x466 UI coordinates (both axes mirrored by the board's touch setup).
+// Pure training input policy (the rhythm punch and the stamina hold, #78). Coordinates
+// are the existing native 466x466 UI coordinates (both axes mirrored by the board's
+// touch setup). A touch-down anywhere but the exit chip is a HIT (a punch's tap, or the
+// start of a hold); a release is never a tap.
 class TrainingTouch {
  public:
   enum Action : uint8_t { NONE, HIT, EXIT };
@@ -20,10 +22,16 @@ class TrainingTouch {
     return x >= EXIT_X && x < EXIT_X + EXIT_W && y >= EXIT_Y && y < EXIT_Y + EXIT_H;
   }
   constexpr void reset(bool requireRelease = false) {
-    down_ = false; blocked_ = requireRelease; exitArmed_ = false;
+    down_ = false; blocked_ = requireRelease; exitArmed_ = false; hitDown_ = false;
     exitStart_ = lastReport_ = 0;
   }
   constexpr bool down() const { return down_; }
+  // The stamina hold (#78): the finger of a HIT is still on the glass and still
+  // reporting. A touch that began on the exit chip, or one swallowed after an exit or a
+  // lock (requireRelease), never holds; a stream that stops pauses it, as for the exit.
+  constexpr bool holding(uint32_t now) const {
+    return hitDown_ && now - lastReport_ <= REPORT_GAP_MS;
+  }
   constexpr bool waitingRelease() const { return blocked_; }
   constexpr uint32_t exitHeldMs(uint32_t now) const {
     return exitArmed_ && now - lastReport_ <= REPORT_GAP_MS ? now - exitStart_ : 0;
@@ -38,11 +46,12 @@ class TrainingTouch {
     if (down_ && now - lastReport_ > REPORT_GAP_MS) exitArmed_ = false;
     down_ = pressed;
     lastReport_ = now;
-    if (!pressed) { exitArmed_ = false; return NONE; }
+    if (!pressed) { exitArmed_ = false; hitDown_ = false; return NONE; }
     if (start) {
       exitArmed_ = onPanel(x, y) && inExit(x, y);
       exitStart_ = now;
-      return onPanel(x, y) && !exitArmed_ ? HIT : NONE;
+      hitDown_ = onPanel(x, y) && !exitArmed_;
+      return hitDown_ ? HIT : NONE;
     }
     // Sliding into the button or back in after leaving it never arms exit.
     if (!onPanel(x, y) || !inExit(x, y)) exitArmed_ = false;
@@ -54,7 +63,7 @@ class TrainingTouch {
     return NONE;
   }
  private:
-  bool down_ = false, blocked_ = false, exitArmed_ = false;
+  bool down_ = false, blocked_ = false, exitArmed_ = false, hitDown_ = false;
   uint32_t exitStart_ = 0, lastReport_ = 0;
 };
 
@@ -102,8 +111,4 @@ constexpr TrainingReport decodeTrainingReport(const uint8_t *b, size_t n) {
   }
   r.kind = TrainingReport::RELEASE;
   return r;
-}
-
-constexpr bool trainingBeforeDeadline(uint32_t deadline, uint32_t capturedAt) {
-  return (int32_t)(deadline - capturedAt) > 0;
 }

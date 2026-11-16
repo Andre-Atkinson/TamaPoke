@@ -184,6 +184,21 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Changed
 
+- **Calmer exercises** (#78). The stat card's button is now *Train*, and it offers
+  two exercises instead of tapping the bag as fast as possible:
+  - **Punch** (strength): the bag swings in to the creature and back, 12 times. Tap as it
+    swings in, when it lights up, to land a punch; a tap at any other time does nothing
+    and costs nothing.
+  - **Hold** (stamina): keep a finger on the screen and the creature does reps, one every
+    1.5 s, up to 12. Lifting the finger only pauses it; 15 s with no finger ends it.
+
+  Each punch or rep is worth 1.5 points, so a full session still gives +18 at most, and
+  either one tires and feeds like the bag did. Leaving early (*Hold to exit* on the
+  1.75C, a tap at the very top on the 1.75) keeps what was earned; a session with
+  nothing done costs nothing. The punch keeps its own record (most punches in a session);
+  the old bag's tap record is no longer shown but stays in the save. Stamina still grows
+  by itself with steady care, as before.
+
 - **Two languages: English and European Portuguese** (#61). Spanish, French,
   German, Italian, Japanese and Korean are gone. **A board set to one of them
   switches to English on its first update**; the saved choice is kept as it is
@@ -232,6 +247,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   within about 7 px.
 
 ### Fixed
+
+- **"Hold to exit" is readable at night on the 1.75C's training screen** (#78). Its
+  label and outline were drawn in the night ink, light on the light button, as no
+  minigame's is.
 
 - **Speech bubbles and the "!" bubble sit by the creature's head** (#73). They were
   pinned high up under the status line, far above a small creature. Now their tails

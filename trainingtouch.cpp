@@ -105,8 +105,6 @@ static_assert(decodeTrainingReport(bad, sizeof(bad)).valid && !decodeTrainingRep
               !decodeTrainingReport(down, 6).valid, "completed filtered report is empty; short read is error");
 static_assert(decodeTrainingReport(cover, sizeof(cover)).valid && !decodeTrainingReport(cover, sizeof(cover)).pressed &&
               !decodeTrainingReport(outside, sizeof(outside)).valid, "cover is empty; invalid coordinates cannot score");
-static_assert(trainingBeforeDeadline(10000, 9999) && !trainingBeforeDeadline(10000, 10000) && !trainingBeforeDeadline(10000, 10001), "tap deadline uses capture time");
-static_assert(trainingBeforeDeadline(10, 0xFFFFFFFEu) && !trainingBeforeDeadline(10, 11), "tap deadline survives rollover");
 constexpr bool legacyEmptyRearms() {
   T t;
   auto contact = decodeTrainingReport(down, sizeof(down));
@@ -142,5 +140,21 @@ static_assert(decodeTrainingReport(zeroHeaderNoTrailer, sizeof(zeroHeaderNoTrail
               !decodeTrainingReport(zeroHeaderNoTrailer, sizeof(zeroHeaderNoTrailer)).pressed,
               "legacy empty packet without trailer must not latch previous contact");
 static_assert(emptyClearsReleaseGuard(), "legacy empty sample clears a held-exit guard");
+// The stamina hold (#78): a HIT's finger holds while it reports; the exit chip never does.
+constexpr bool holdWhileReporting() {
+  T t;
+  if (t.update(true, 233, 233, 0) != T::HIT) return false;
+  for (uint32_t n = 20; n <= 5000; n += 20)
+    if (t.update(true, 233, 233, n) != T::NONE || !t.holding(n)) return false;
+  return !t.holding(5101) && t.update(false, 0, 0, 5120) == T::NONE && !t.holding(5120);
+}
+constexpr bool exitChipNeverHolds() {
+  T t;
+  for (uint32_t n = 0; n < 1000; n += 20)
+    if (t.update(true, 233, 405, n) != T::NONE || t.holding(n)) return false;
+  return t.update(true, 233, 405, 1000) == T::EXIT && !t.holding(1000);
+}
+static_assert(holdWhileReporting(), "a held finger holds while reports keep coming, not after");
+static_assert(exitChipNeverHolds(), "a hold on the exit chip exits and never trains");
 static_assert(T::POLL_MS == 20, "keep proven cadence, not four-times-faster ACK traffic");
 }  // namespace

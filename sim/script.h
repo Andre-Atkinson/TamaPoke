@@ -9,7 +9,8 @@
 //   pmu ok|none              none: the AXP2101 doesn't answer at boot (USB reads as
 //                            present, no battery); before the first step only
 //   tap X Y                  toque corto en (X,Y)
-//   hold X Y DUR             mantener el dedo DUR en (X,Y)
+//   hold X Y DUR [SHOT]      mantener el dedo DUR en (X,Y); with SHOT, also save SHOT.png
+//                            at the end of the hold, the finger still down (#78)
 //   swipe left|right|up|down deslizar desde el centro
 //   swipe X0 Y0 X1 Y1 [DUR]  deslizar entre dos puntos (DUR >= 160ms, y < ~750ms para que cuente; 240ms)
 //   press pwr [N]            N pulsaciones cortas de PWR (3 = bloqueo de bolsillo)

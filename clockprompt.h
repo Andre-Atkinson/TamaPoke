@@ -75,7 +75,7 @@ struct ClockPromptHold {
   bool ceremony = false;     // farewell, runaway or goodbye
   bool evolving = false;     // evolution animation
   bool dialog = false;       // release, food menu, evolve or farewell choice
-  bool otherScreen = false;  // gallery, game, sack, keyboard, card or the clock screen
+  bool otherScreen = false;  // gallery, game, exercise, keyboard, card or the clock screen
 };
 
 inline bool clockPromptHeld(const ClockPromptHold &h) {

@@ -116,6 +116,7 @@ TEST(SimScript, un_guion_completo_se_lee_en_orden) {
   CHECK_EQ((int)s.cmds[4].op, (int)OP_TAP);     CHECK_EQ(s.cmds[4].a, (int32_t)233); CHECK_EQ(s.cmds[4].b, (int32_t)220);
   CHECK_EQ(s.cmds[4].line, 7);
   CHECK_EQ((int)s.cmds[5].op, (int)OP_HOLD);    CHECK_EQ(s.cmds[5].ms, (uint64_t)3000);
+  CHECK_EQ(s.cmds[5].text, std::string(""));    // no shot during it
   CHECK_EQ((int)s.cmds[6].op, (int)OP_SWIPE);
   CHECK_EQ((int)s.cmds[7].op, (int)OP_SWIPE);   CHECK_EQ(s.cmds[7].c, (int32_t)300); CHECK_EQ(s.cmds[7].ms, (uint64_t)500);
   CHECK_EQ((int)s.cmds[8].op, (int)OP_PRESS_PWR);  CHECK_EQ(s.cmds[8].a, (int32_t)3);
@@ -262,6 +263,22 @@ TEST(SimScript, idle_names_an_activity) {
            std::string("r.txt:2: usage: idle stand|look|walk|rest|doze|hop|ball|gesture|seek"));
   CHECK(!simParseScript("idle\n").error.empty());
   CHECK(!simParseScript("idle doze hop\n").error.empty());
+}
+
+// "hold X Y DUR SHOT" (#78): a shot at the end of the hold, before the finger lifts, so a
+// script can see a screen that changes while a finger stays down (the stamina hold)
+TEST(SimScript, hold_can_take_a_shot_before_the_finger_lifts) {
+  SimScript s = simParseScript("hold 233 280 4s 31-hold_held.en\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)1);
+  if (s.cmds.size() != 1) return;
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_HOLD);
+  CHECK_EQ(s.cmds[0].ms, (uint64_t)4000);
+  CHECK_EQ(s.cmds[0].text, std::string("31-hold_held.en"));
+  CHECK_EQ(simParseScript("hold 233 280 4s a/b\n", "h.txt").error,
+           std::string("h.txt:1: shot names use letters, digits, '-', '_' and '.' only"));
+  CHECK(!simParseScript("hold 233 280 4s a b\n").error.empty());
+  CHECK(!simParseScript("hold 233 280\n").error.empty());
 }
 
 // pmu ok|none (#24): the firmware asks the AXP2101 once, in setup(), so it is boot-only

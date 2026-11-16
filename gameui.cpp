@@ -1,10 +1,11 @@
-// The minigames' screens and the strength-training sack (gameui.h). Moved out of
-// TamaPoke.ino (#41).
+// The minigames' screens and the calm exercises (gameui.h). Moved out of TamaPoke.ino
+// (#41); the exercises replaced the strength-training sack (#78).
 #include <Arduino.h>
 #include "app.h"
 #include "audio.h"
 #include "blit.h"
 #include "dex.h"
+#include "exercise.h"
 #include "gameui.h"
 #include "i18n.h"
 #include "minigames.h"
@@ -24,13 +25,19 @@ static uint32_t gameOverUntil = 0;   // pantalla de resultado hasta este millis
 static uint16_t gameShownScore = 0;  // puntuacion de la partida que se ensena en el resultado
 static bool gameNewHi = false;
 
-// saco de entrenamiento (entrena la fuerza)
-bool sackOpen = false;
-uint32_t sackUntil = 0, sackOverUntil = 0;
-uint16_t sackHits = 0;
-float sackShake = 0;
-static uint8_t sackGain = 0;
-static bool sackNewHi = false;
+// the calm exercises (#78; their rules are in exercise.h)
+bool trainOpen = false;
+bool trainPick = false;
+static uint8_t trainKind = EX_PUNCH;
+static RhythmPunch punch;
+static StaminaHold hold;
+static uint32_t trainOverUntil = 0;  // the result is on screen until this millis(); 0 while training
+static uint8_t trainCount = 0, trainGain = 0;
+static bool trainNewHi = false;
+static uint32_t repAt = 0;           // when the last rep was done (the ring flashes)
+#if !BOARD_AMOLED_175C
+static bool trainHeld = false;       // the 1.75: a finger that didn't start on the top strip is on
+#endif
 
 // ---------- minijuegos de Play (logica en minigames.h) ----------
 
@@ -95,84 +102,231 @@ static void finishGame() {
   gameOverUntil = millis() + 4000;
 }
 
-// ---------- saco de entrenamiento (entrena la fuerza) ----------
+// ---------- the calm exercises (#78): the rhythm punch and the stamina hold ----------
+// The stat card's TRAIN button opens a choice on the card (trainPick, renderTrainPick);
+// a tap there starts one (startExercise). Touches reach them through exerciseTap() and,
+// for the hold, the board's holding state (exerciseHolding). Leaving early by the exit
+// (exerciseExit) ends the session and pays for what was done; with nothing done the
+// screen just closes and nothing is spent.
 
-void startSack() {
-  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
+static bool gameNight();           // prototipos (definidas mas abajo)
+static uint16_t gameInk();
+static void drawGameScene();
+static void drawGameBar(uint32_t left, uint32_t total);
+static void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS);
+
+#define TRAIN_GROUND 372            // the pet's feet on both exercise screens
+#define TRAIN_PET_S 4               // ...and its largest scale (a minigame's is 3)
+#define STAMINA_COL 0x4C98          // the stamina colour: the stat card's DEF bar
+#define STAMINA_COL_NIGHT C565(0x9c, 0xcc, 0xf4)  // ...lighter, on the night sky
+
+void startExercise(uint8_t kind) {
+  if (pet.isEgg() || pet.sleeping || pet.ceremony || (kind != EX_PUNCH && kind != EX_HOLD)) return;
 #if BOARD_AMOLED_175C
   if (!trainingCaptureReady) { showControlToast("Touch capture unavailable"); return; }
-  trainingCapture.reset();
+  trainingCapture.reset();  // opened by a tap, which resolves on the lift: no finger is down
+#else
+  trainHeld = false;
 #endif
-  sackOpen = true;
-  sackUntil = millis() + 10000;
-  sackOverUntil = 0;
-  sackHits = 0;
-  sackShake = 0;
-  sackNewHi = false;
+  uint32_t now = millis();
+  trainKind = kind;
+  punch.begin(now);
+  hold.begin(now);
+  trainOverUntil = 0;
+  trainCount = trainGain = 0;
+  trainNewHi = false;
+  repAt = 0;
+  trainOpen = true;
 }
 
-void sackTap() {
-  if (!timeLeft(sackUntil)) return;  // ya termino el tiempo
-  sackHits++;
-  sackShake = 16;  // sacude el saco
+// The session is over (its end, or the exit): pay for what was done and show the result
+// for 3.5 s. With nothing done, back to the pet at once: nothing paid, nothing spent.
+static void finishExercise(uint32_t now) {
+  if (trainOverUntil) return;
+  bool p = trainKind == EX_PUNCH;
+  trainCount = p ? punch.punches : hold.reps;
+  if (!trainCount) {
+    leaveTraining();
+    return;
+  }
+  trainNewHi = p && trainCount > pet.punchHi;
+  trainGain = p ? pet.trainStrength(trainCount) : pet.trainStamina(trainCount);
+#if BOARD_AMOLED_175C
+  Serial.printf("Training: %s count=%u gain=%u input_drops=%lu\n", p ? "punch" : "hold", trainCount,
+                trainGain, (unsigned long)trainingCapture.dropped());
+#else
+  Serial.printf("Training: %s count=%u gain=%u\n", p ? "punch" : "hold", trainCount, trainGain);
+#endif
+  sfxPlay(trainNewHi ? SFX_MEDAL : SFX_PLAY);
+  trainOverUntil = now + 3500;
+  if (!trainOverUntil) trainOverUntil = 1;  // 0 means "still training"
 }
 
-static void drawGameScene();  // prototipo (definida mas abajo)
+void exerciseTap(uint32_t at) {
+  if (!trainOpen || trainOverUntil || trainKind != EX_PUNCH) return;
+  if (punch.tap(at)) sfxPlay(SFX_PLAY);
+}
 
-void renderSack() {
+bool exerciseExit() {
+  if (!trainOpen) return true;
+  if (trainOverUntil) return false;  // the result screen closes by itself
+  finishExercise(millis());
+  return !trainOpen;
+}
+
+#if !BOARD_AMOLED_175C
+void exerciseHeld(bool on) { trainHeld = on; }
+#endif
+
+// A finger is on for the stamina hold (the 1.75C asks the capture, which the loop owns
+// here: renderExercise() reads it before its capture frame starts the worker).
+static bool exerciseHolding(uint32_t now) {
+#if BOARD_AMOLED_175C
+  return !screenIsLocked() && trainingCapture.holding(now);
+#else
+  (void)now;
+  return trainHeld;
+#endif
+}
+
+// the hint at the top and the count under it, the same on both screens
+static void drawTrainHead(const char *hint, uint8_t count, uint16_t ink) {
+  gfx->setTextColor(ink);
+  setSize(2);
+  setCur(centerX(hint, 2), 46);
+  printT(hint);
+  char b[4];
+  snprintf(b, sizeof(b), "%u", count);
+  setSize(5);
+  setCur(centerX(b, 5), 72);
+  printT(b);
+}
+
+// The punch: the pet on the left, the bag hanging from the right and swinging in to it.
+#define BAG_PIVOT_X 372
+#define BAG_PIVOT_Y 76
+#define BAG_ROPE 190
+#define BAG_W 64
+#define BAG_H 88
+#define BAG_OUT 0.04f    // the rope's angle all the way out (rad, + = right)
+#define BAG_IN (-0.62f)  // ...and at the pet: its near side reaches the pet's
+#define PUNCH_PET_X 186
+#define PUNCH_KNOCK_MS 400  // a punch knocks the bag back out for this long
+#define PUNCH_LUNGE_MS 250  // ...and the pet leans into it
+
+static void drawPunch(uint32_t now, uint16_t ink) {
+  drawTrainHead(T(S_PUNCH_HINT), punch.punches, ink);
+  uint32_t e = punch.elapsed(now);
+  drawGameBar(e < RhythmPunch::TOTAL_MS ? RhythmPunch::TOTAL_MS - e : 0, RhythmPunch::TOTAL_MS);
+
+  uint32_t since = now - punch.lastPunchAt;
+  bool knocked = punch.punches && since < PUNCH_KNOCK_MS;
+  float ang = BAG_OUT + (BAG_IN - BAG_OUT) * punch.reach(now);
+  if (knocked) ang += 0.3f * (1.0f - (float)since / PUNCH_KNOCK_MS);
+  int bx = BAG_PIVOT_X + (int)(BAG_ROPE * sinf(ang));
+  int by = BAG_PIVOT_Y + (int)(BAG_ROPE * cosf(ang));
+  gfx->fillRect(BAG_PIVOT_X - 20, BAG_PIVOT_Y - 8, 40, 8, ink);  // the hook
+  for (int d = -1; d <= 1; d++) gfx->drawLine(BAG_PIVOT_X + d, BAG_PIVOT_Y, bx + d, by, ink);  // rope
+  int x0 = bx - BAG_W / 2;
+  gfx->fillRoundRect(x0, by, BAG_W, BAG_H, 20, C565(0xb5, 0x3a, 0x3a));      // the bag
+  gfx->fillRoundRect(x0, by, BAG_W, 18, 14, C565(0x7e, 0x28, 0x28));         // its lid
+  gfx->fillRect(x0, by + BAG_H / 2, BAG_W, 4, C565(0x7e, 0x28, 0x28));       // seam
+  gfx->drawRoundRect(x0, by, BAG_W, BAG_H, 20, ink);
+  if (punch.open(now)) {  // "now!": a punch would land
+    gfx->drawRoundRect(x0 - 5, by - 5, BAG_W + 10, BAG_H + 10, 24, UI_BAR_WARN);
+    gfx->drawRoundRect(x0 - 6, by - 6, BAG_W + 12, BAG_H + 12, 25, UI_BAR_WARN);
+    gfx->drawRoundRect(x0 - 7, by - 7, BAG_W + 14, BAG_H + 14, 26, UI_BAR_WARN);
+  }
+
+  int lunge = punch.punches && since < PUNCH_LUNGE_MS
+                  ? (int)(16.0f * sinf((float)since * 3.14159265f / PUNCH_LUNGE_MS)) : 0;
+  drawGamePet(PMD_IDLE, PUNCH_PET_X + lunge, TRAIN_GROUND, TRAIN_PET_S);
+  if (knocked && since < 300) {  // the hit: a burst on the bag's near side
+    int cx = x0 + 6, cy = by + BAG_H / 2;
+    for (int i = 0; i < 8; i++) {
+      float a = (float)i * 0.785398f;
+      int r0 = 12, r1 = 26 + (int)(since / 30);
+      for (int d = -1; d <= 1; d++)
+        gfx->drawLine(cx + (int)(r0 * cosf(a)) + d, cy + (int)(r0 * sinf(a)), cx + (int)(r1 * cosf(a)) + d,
+                      cy + (int)(r1 * sinf(a)), UI_BAR_WARN);
+    }
+  }
+}
+
+// The hold: the pet in a ring, lifting itself once a rep while a finger is on.
+#define HOLD_RING_Y 276
+#define HOLD_RING_R 100
+#define HOLD_LIFT_PX 26
+
+static void drawHold(uint32_t now, uint16_t ink, bool holding) {
+  drawTrainHead(T(holding ? S_HOLD_KEEP : S_HOLD_HINT), hold.reps, ink);
+  drawGameBar(hold.into, StaminaHold::REP_MS);  // the rep under way: stops while lifted
+  uint16_t ring = repAt && now - repAt < 250 ? UI_WHITE : holding ? UI_BAR_OK : UI_TRACK;
+  for (int r = 0; r < 3; r++) gfx->drawCircle(CX, HOLD_RING_Y, HOLD_RING_R - r, ring);
+  int dy = -(int)(HOLD_LIFT_PX * sinf(hold.progress() * 3.14159265f));  // still while paused
+  drawGamePet(PMD_IDLE, CX, TRAIN_GROUND + dy, TRAIN_PET_S);
+}
+
+// the result (3.5 s): what was done, what it trained, and the punch record
+static void drawExerciseResult(uint16_t ink) {
+  bool p = trainKind == EX_PUNCH;
+  char b[24];  // buffer sizes: TestBuffersDeTexto in test/test_tools.py
+  if (trainCount == 1) snprintf(b, sizeof(b), "%s", T(p ? S_ONE_PUNCH : S_ONE_REP));
+  else snprintf(b, sizeof(b), T(p ? S_PUNCHES_FMT : S_REPS_FMT), trainCount);
+  gfx->setTextColor(ink);
+  uint8_t sz = textW(b, 4) <= 400 ? 4 : 3;
+  setSize(sz);
+  setCur(centerX(b, sz), 150);
+  printT(b);
+  char g[24];
+  snprintf(g, sizeof(g), T(p ? S_STR_GAIN_FMT : S_STA_GAIN_FMT), trainGain);
+  gfx->setTextColor(p ? UI_BAR_BAD : gameNight() ? STAMINA_COL_NIGHT : STAMINA_COL);
+  setSize(3);
+  setCur(centerX(g, 3), 210);
+  printT(g);
+  if (!p) return;
+  setSize(2);
+  if (trainNewHi) {
+    gfx->setTextColor(UI_BAR_WARN);
+    setCur(centerX(T(S_NEW_RECORD), 2), 256);
+    printT(T(S_NEW_RECORD));
+  } else {
+    char r[18];
+    snprintf(r, sizeof(r), T(S_RECORD_FMT), pet.punchHi);
+    gfx->setTextColor(ink);
+    setCur(centerX(r, 2), 256);
+    printT(r);
+  }
+}
+
+void renderExercise() {
   uint32_t now = millis();
   drawGameScene();  // fondo del habitat
-  bool night = sceneHour() < 6 || sceneHour() >= 20;
-  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
+  uint16_t ink = gameInk();
 
-  // pantalla de resultado
-  if (sackOverUntil) {
-    if (!timeLeft(sackOverUntil)) {
-#if BOARD_AMOLED_175C
-      leaveSack();
-#else
-      sackOpen = false;
-#endif
+  if (trainOverUntil) {  // pantalla de resultado
+    if (!timeLeft(trainOverUntil)) {
+      leaveTraining();
       return;
     }
-    char b[20];
-    snprintf(b, sizeof(b), T(S_HITS_FMT), sackHits);
-    gfx->setTextColor(ink);
-    setSize(4);
-    setCur(centerX(b, 4), 150);
-    printT(b);
-    char g[18];
-    snprintf(g, sizeof(g), T(S_STR_GAIN_FMT), sackGain);
-    gfx->setTextColor(UI_BAR_BAD);
-    setSize(3);
-    setCur(centerX(g, 3), 210);
-    printT(g);
-    setSize(2);
-    if (sackNewHi && sackHits > 0) {
-      gfx->setTextColor(UI_BAR_WARN);
-      setCur(centerX(T(S_NEW_RECORD), 2), 256);
-      printT(T(S_NEW_RECORD));
-    } else {
-      char r[18];
-      snprintf(r, sizeof(r), T(S_RECORD_FMT), pet.strHi);
-      gfx->setTextColor(ink);
-      setCur(centerX(r, 2), 256);
-      printT(r);
-    }
+    drawExerciseResult(ink);
     flushUI();
     return;
   }
 
-  // se acabaron los 10 s: aplicar entrenamiento
-  if (!timeLeft(sackUntil)) {
-    sackNewHi = (sackHits > pet.strHi);
-    sackGain = pet.trainStrength(sackHits);
-#if BOARD_AMOLED_175C
-    Serial.printf("Strength training: hits=%u input_drops=%lu poll=20ms exit_hold=1000ms\n",
-                  sackHits, (unsigned long)trainingCapture.dropped());
-#endif
-    sfxPlay(sackNewHi ? SFX_MEDAL : SFX_PLAY);
-    sackOverUntil = now + 3500;
+  bool holding = false;
+  if (trainKind == EX_HOLD) {
+    holding = exerciseHolding(now);
+    if (hold.step(now, holding)) {
+      repAt = now;
+      sfxPlay(SFX_NOTE0 + (hold.reps - 1) % 4);  // each rep a note up the scale
+    }
+    if (holding) wakeUI();  // a still finger is someone there: no dimming mid-hold
+  }
+  if (trainKind == EX_PUNCH ? punch.over(now) : hold.over(now)) {
+    finishExercise(now);
+    if (!trainOpen) return;
+    drawExerciseResult(ink);
     flushUI();
     return;
   }
@@ -183,49 +337,56 @@ void renderSack() {
   uint32_t exitHeld = trainingCapture.exitHeldMs(now);
   TrainingCapture::Frame captureFrame(trainingCapture, !screenIsLocked());
 #endif
-  // aporreo activo
-  sackShake *= 0.84f;
-  int off = (int)(sackShake * sinf(now * 0.05f));
-  int sx = CX + off, top = 86, sy = 150;
-  gfx->fillRect(CX - 3, 56, 6, top - 56, ink);          // gancho/cuerda
-  gfx->fillRect(sx - 4, top - 30, 8, 34, ink);          // cadena
-  gfx->fillRoundRect(sx - 42, top, 84, 150, 26, C565(0xb5, 0x3a, 0x3a));  // saco
-  gfx->fillRoundRect(sx - 42, top, 84, 22, 18, C565(0x7e, 0x28, 0x28));   // tapa
-  gfx->drawRoundRect(sx - 42, top, 84, 150, 26, ink);
-  gfx->fillRect(sx - 42, top + 70, 84, 4, C565(0x7e, 0x28, 0x28));        // costura
-
-  // contador de golpes
-  char buf[8];
-  snprintf(buf, sizeof(buf), "%u", sackHits);
-  gfx->setTextColor(ink);
-  setSize(6);
-  setCur(centerX(buf, 6), 268);
-  printT(buf);
-
-  setSize(2);
-  setCur(centerX(T(S_HIT_FAST), 2), 322);
-  printT(T(S_HIT_FAST));
-
-  // barra de tiempo
-  uint32_t left = sackUntil - now;
-  int bw = 280, fw = (int)((uint32_t)bw * left / 10000);
-  gfx->fillRoundRect(CX - bw / 2, 350, bw, 16, 5, UI_TRACK);
-  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 350, fw, 16, 5, UI_BAR_OK);
+  if (trainKind == EX_PUNCH) drawPunch(now, ink);
+  else drawHold(now, ink, holding);
 #if BOARD_AMOLED_175C
-  // Visible, separated from the bag/count/time bar, fully inside the circle.
+  // Visible, clear of the pet and the bag, fully inside the circle.
   const int ex = TrainingTouch::EXIT_X, ey = TrainingTouch::EXIT_Y;
   const int ew = TrainingTouch::EXIT_W, eh = TrainingTouch::EXIT_H;
   gfx->fillRoundRect(ex, ey, ew, eh, 8, UI_TRACK);
   int progress = (int)(ew * (exitHeld > 1000 ? 1000 : exitHeld) / 1000);
   if (progress > 2) gfx->fillRoundRect(ex, ey, progress, eh, 8, UI_BAR_WARN);
-  gfx->drawRoundRect(ex, ey, ew, eh, 8, ink);
-  gfx->setTextColor(ink);
+  gfx->drawRoundRect(ex, ey, ew, eh, 8, UI_INK);
+  gfx->setTextColor(UI_INK);  // the chip is light by day and by night: dark ink on it
   setSize(2);
   setCur(centerX(T(S_HOLD_EXIT), 2), ey + 16);
   printT(T(S_HOLD_EXIT));
 #endif
-
   flushUI();
+}
+
+// The exercise choice (#78), drawn on the stat card in place of the stats while
+// trainPick is set: two big buttons. TamaPoke.ino's onTap asks trainPickAt().
+#define PICK_X 73
+#define PICK_W 320
+#define PICK_H 84
+static const int PICK_Y[2] = { 98, 198 };
+
+void renderTrainPick() {
+  gfx->setTextColor(UI_INK);
+  setSize(3);
+  setCur(centerX(T(S_EX_TITLE), 3), 48);
+  printT(T(S_EX_TITLE));
+  for (uint8_t k = 0; k < 2; k++) {
+    int y = PICK_Y[k];
+    gfx->fillRoundRect(PICK_X, y, PICK_W, PICK_H, 14, k == EX_HOLD ? STAMINA_COL : UI_BAR_BAD);
+    gfx->setTextColor(UI_BG_DAY);
+    const char *name = T(k == EX_HOLD ? S_EX_HOLD : S_EX_PUNCH);
+    const char *what = T(k == EX_HOLD ? S_EX_STA : S_EX_STR);
+    setSize(3);
+    setCur(centerX(name, 3), y + 16);
+    printT(name);
+    setSize(2);
+    setCur(centerX(what, 2), y + 54);
+    printT(what);
+  }
+}
+
+uint8_t trainPickAt(int16_t x, int16_t y) {
+  if (x < PICK_X - 8 || x > PICK_X + PICK_W + 8) return EX_NONE;
+  for (uint8_t k = 0; k < 2; k++)
+    if (y >= PICK_Y[k] - 6 && y <= PICK_Y[k] + PICK_H + 6) return k;
+  return EX_NONE;
 }
 
 // fondo del minijuego: hatibat del bicho (cielo por hora + suelo del bioma)
@@ -254,6 +415,7 @@ static bool gameNight() {
   int h = sceneHour();
   return h < 6 || h >= 20;
 }
+static uint16_t gameInk() { return gameNight() ? UI_INK_NIGHT : UI_INK; }
 
 
 // el bicho dentro de un juego: su sprite PMD (sin esa accion, IDLE), si no el sprite
@@ -304,7 +466,7 @@ static void drawGameBar(uint32_t left, uint32_t total) {
   if (fw > 2) gfx->fillRoundRect(CX - bw / 2, by, fw, 10, 4, UI_BAR_OK);
 }
 
-// "Mantener: salir", arriba en todos los juegos (como el del saco en la 1.75C). El
+// "Mantener: salir", arriba en todos los juegos (como el de los ejercicios en la 1.75C). El
 // boton es claro de dia y de noche, asi que su texto va siempre en tinta oscura.
 static void drawGameExit() {
   const int ex = GameTouchRouter::EXIT_X, ey = GameTouchRouter::EXIT_Y;

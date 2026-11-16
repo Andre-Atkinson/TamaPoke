@@ -65,7 +65,7 @@ enum : uint16_t {
 // the minute, at level 5 or more). Their sound keeps out of quiet hours (Pet::quietHours,
 // #44) only when BOTH hold: the minute tick gains them with no exercise since the tick
 // before (checkMedals(true)), and every medal gained in that call is one of these.
-// Exercise burns weight too, so the tick right after a minigame or the bag checks with
+// Exercise burns weight too, so the tick right after a minigame or an exercise checks with
 // checkMedals(false) and an IN SHAPE the exercise completed sounds. So do the day's first
 // care (registerCare) and hatching (checkMedals(false); the egg that hatches by itself is
 // level 1, which earns no medal of time). The other medals need the player's care (the
@@ -109,7 +109,12 @@ public:
   uint16_t lastMilestone = 0;  // hito de racha ya celebrado
   uint16_t gameHi = 0;     // record de keepy-uppy, el minijuego original (del jugador)
   uint16_t catchHi = 0, peekHi = 0, songHi = 0;  // records de Berry Catch, Peekaboo y Berry Song
-  uint16_t strHi = 0;      // record de golpes al saco
+  // Most punches landed in one rhythm-punch session (#78), 0 to EX_COUNT: NVS `phi`, the
+  // player's like the minigames' records. The old tap-as-fast-as-you-can bag's record
+  // (`shi`) is no longer read, written or shown: a rhythm session lands far fewer punches,
+  // so it would be out of reach. Its key stays in NVS as it was, so an older firmware
+  // flashed back still finds it.
+  uint8_t punchHi = 0;
 
   void begin();                 // carga estado de NVS (o crea el primer huevo)
   void update(uint32_t nowMs);  // llamar en cada loop()
@@ -125,7 +130,12 @@ public:
   // puntuacion tal cual y paga la recompensa de la puntuacion normalizada (entrena VEL)
   void playGame(uint8_t game, uint16_t raw);
   uint16_t gameBest(uint8_t game) const;  // record de un minijuego (0 si no existe)
-  uint8_t trainStrength(uint16_t hits);  // saco de entrenamiento (entrena FUE)
+  // The calm exercises (exercise.h, #78): a rhythm-punch session with `punches` landed
+  // trains strength, a stamina-hold session with `reps` done trains stamina, 1.5 points
+  // each up to EX_GAIN_CAP. Both cost and reward like any exercise (exerciseDone); a
+  // session with nothing done does neither. They return the points that went in.
+  uint8_t trainStrength(uint8_t punches);
+  uint8_t trainStamina(uint8_t reps);
 
   // stats de combate: base real de gen 1 x genes + nivel + entrenamiento
   uint16_t atkStat() const;
@@ -277,9 +287,10 @@ private:
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo
   void playReward(uint8_t n);  // recompensa de un minijuego, n = 0..GAME_SCORE_CAP
+  void exerciseDone(uint8_t work);  // an exercise session's cost and reward (#78)
   void addBond(uint8_t amt);
   void checkMedals(bool byTick);  // byTick: from the minute tick, no exercise since the last one
-  bool exercised = false;  // a minigame or the bag since the last tick (#44): RAM only
+  bool exercised = false;  // a minigame or an exercise since the last tick (#44): RAM only
   bool allNeedsEmpty() const { return fullness == 0 && joy == 0 && energy == 0 && hygiene == 0; }
   void tick();
   void drainBody();  // parte del goteo de necesidades (comida, energia, caca, higiene)

@@ -1,8 +1,11 @@
-// The minigames' screens and the strength-training sack (#41: moved out of
-// TamaPoke.ino): starting and finishing a game, its touches and sounds, and drawing it.
-// The games' own logic is in minigames.h; render() and handleTouch() call in here.
+// The minigames' screens and the calm exercises (#41: moved out of TamaPoke.ino; #78
+// replaced the strength-training sack): starting and finishing a game or an exercise,
+// its touches and sounds, and drawing it. The games' own logic is in minigames.h and the
+// exercises' in exercise.h; render() and handleTouch() call in here.
 #pragma once
 #include <stdint.h>
+#include "board.h"      // BOARD_AMOLED_175C
+#include "exercise.h"   // EX_PUNCH, EX_HOLD, EX_NONE
 #include "minigames.h"  // GAME_COUNT
 #include "species.h"    // the SPR_ICON_* sprites
 
@@ -10,15 +13,25 @@
 inline const char *const *const GAME_ICON[GAME_COUNT] = { SPR_ICON_PLAY, SPR_ICON_FOOD, SPR_ICON_BUSH,
                                                           SPR_ICON_NOTE };
 
-extern bool gameOpen;  // a minigame is on screen
-extern bool sackOpen;  // the strength-training sack is on screen
-extern uint32_t sackUntil, sackOverUntil;
-extern uint16_t sackHits;
-extern float sackShake;
+extern bool gameOpen;   // a minigame is on screen
+extern bool trainOpen;  // an exercise is on screen (the rhythm punch or the stamina hold), or its result
+extern bool trainPick;  // the stat card shows the exercise choice in place of the stats
 
 void startGame();
 void gameTouch(bool pressed, int16_t x, int16_t y);
 void renderGame();
-void startSack();
-void sackTap();
-void renderSack();
+
+// The calm exercises (#78). kind: EX_PUNCH or EX_HOLD (exercise.h).
+void startExercise(uint8_t kind);
+// A touch-down while training, at the time it was captured (the 1.75C's HIT; the 1.75's
+// poll): on the punch screen it may land a punch. A release is never a tap.
+void exerciseTap(uint32_t at);
+// The exit while training: ends the session and pays for what was done (nothing on the
+// result screen). True when the training screen has closed.
+bool exerciseExit();
+#if !BOARD_AMOLED_175C
+void exerciseHeld(bool on);  // the 1.75: whether a finger that counts for the hold is on
+#endif
+void renderExercise();
+void renderTrainPick();                     // the choice, on the stat card
+uint8_t trainPickAt(int16_t x, int16_t y);  // the choice a tap is on: EX_PUNCH, EX_HOLD or EX_NONE

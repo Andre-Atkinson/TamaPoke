@@ -553,8 +553,8 @@ static void renderCardStats() {
   gfx->fillRoundRect(96, 300, 274, 40, 12, UI_BAR_BAD);
   gfx->setTextColor(UI_BG_DAY);
   setSize(2);
-  setCur(centerX(T(S_TRAIN_STR), 2), 311);
-  printT(T(S_TRAIN_STR));
+  setCur(centerX(T(S_TRAIN), 2), 311);
+  printT(T(S_TRAIN));
 }
 
 // pagina 2: medallas con etiqueta descriptiva
@@ -718,6 +718,7 @@ void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   if (cardPage == 0) renderCardProfile();
+  else if (cardPage == 1 && trainPick) renderTrainPick();  // the TRAIN button's choice (#78)
   else if (cardPage == 1) renderCardStats();
   else if (cardPage == 2) renderCardMedals();
   else if (cardPage == 3) renderCardProgress();
