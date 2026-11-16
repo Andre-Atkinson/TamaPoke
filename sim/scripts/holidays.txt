@@ -127,7 +127,12 @@ press pwr
 wait 3500ms
 shot 13-easter-night-greeting
 
-# Halloween: a friendly pumpkin; at night a purple sky, a full orange moon and bats
+# Halloween: a friendly pumpkin; on the evening a purple sky, a full orange moon and bats.
+# The small hours of the 31st are the night before Halloween: the pumpkin, the plain night
+# sky and moon, no bats
+serial TIME 1824951600
+wait 5s
+shot 13b-halloween-early-morning-plain-night
 press pwr
 serial TIME 1824976800
 wait 2m

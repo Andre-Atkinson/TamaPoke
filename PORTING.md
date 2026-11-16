@@ -171,8 +171,9 @@ python3 tools/board.py cmd 'BDAY?'       # show the stored birthday and today's 
   namespace (month × 100 + day), so app-only updates and backups keep it too, and `WIPE`
   erases it. The reply is `bday=<month> <day> today=<day> birthday=<0|1>` (`bday=none`
   when none is set); a day the month does not have (`BDAY 2 30`) gets `ERR usage: ...`
-  and changes nothing. `today=none` while the clock is not set: set it first
-  (`board.py clock`) to check what the creature thinks today is.
+  and changes nothing. `today=none` on an ordinary day, while the clock is not set (set it first with
+  `board.py clock` to check what the creature thinks today is), and during a farewell or a
+  run-away, which keep their own look.
 - `board.py` uses only the Python standard library (no venv needed) and
   needs the serial port to itself: close any serial monitor first.
 

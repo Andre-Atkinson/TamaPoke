@@ -17,8 +17,8 @@
 // ---------- consola serie (provision de SD + depuracion) ----------
 
 // BDAY and BDAY? (#26): the stored birthday ("none" or month and day), today's special day
-// on the scene's clock (holiday.h; "none" while the clock is not trusted) and whether it is
-// the birthday.
+// on the scene's clock (holiday.h; "none" on an ordinary day, while the clock is not trusted
+// and during a farewell or a run-away, holidayNow()) and whether it is the birthday.
 static void printBday() {
   Birthday b = birthday();
   HolidayToday t = holidayNow();

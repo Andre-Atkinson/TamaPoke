@@ -335,12 +335,13 @@ static void drawXmasTree(uint32_t now, bool night, bool live) {
   }
 }
 
-// The birthday: three balloons on the left, on strings tied to a little parcel. They sway
-// gently at the full frame rate.
+// The birthday: three balloons on the left, on strings tied to a little parcel at the
+// horizon, above the poops (drawPoops: x 36..192, y 244..308, drawn after the scene). They
+// sway gently at the full frame rate.
 static void drawBalloons(uint32_t now, bool night, bool live) {
-  static const int16_t AT[3][2] = { { 50, 204 }, { 84, 192 }, { 70, 226 } };
+  static const int16_t AT[3][2] = { { 44, 182 }, { 88, 176 }, { 64, 204 } };
   static const uint16_t COLS[3] = { C565(0xf0, 0x48, 0x48), C565(0xf8, 0xc8, 0x30), C565(0x38, 0xb0, 0xc8) };
-  const int ax = 66, ay = 290;  // where the strings are tied
+  const int ax = 66, ay = 234;  // where the strings are tied
   uint16_t string = night ? C565(0x8a, 0x90, 0xa0) : C565(0x5a, 0x5a, 0x64);
   for (int i = 0; i < 3; i++) {
     int x = AT[i][0] + (live ? sway(now, 4000 + i * 700, i * 900, 3) : 0), y = AT[i][1];
@@ -385,8 +386,8 @@ static void drawPumpkins(bool night) {
   gfx->fillEllipse(sx, sy, 7, 10, lobe);
 }
 
-// Halloween's bats, at night under a sky that shows the moon: three small ones flapping
-// slowly across.
+// Halloween's bats, on the evening of 31 October under a sky that shows the moon: three
+// small ones flapping slowly across.
 static void drawBats(uint32_t now) {
   uint16_t c = C565(0x12, 0x0a, 0x1a);
   for (int i = 0; i < 3; i++) {
@@ -404,9 +405,10 @@ static void drawBats(uint32_t now) {
   }
 }
 
-// Easter Sunday: painted eggs in the grass.
+// Easter Sunday: painted eggs in the grass. Two sit at the sides of the poops' box (drawPoops:
+// x 36..192, y 244..308) rather than under them.
 static void drawEasterEggs(bool night) {
-  static const int16_t AT[6][2] = { { 104, 298 }, { 168, 266 }, { 300, 294 }, { 348, 262 }, { 392, 292 }, { 436, 268 } };
+  static const int16_t AT[6][2] = { { 24, 284 }, { 214, 268 }, { 300, 294 }, { 348, 262 }, { 392, 292 }, { 436, 268 } };
   static const uint16_t BASE[6] = { C565(0xf6, 0xa8, 0xc8), C565(0xf8, 0xe0, 0x70), C565(0xc4, 0xa8, 0xf0),
                                     C565(0x9c, 0xe4, 0xb8), C565(0x98, 0xd0, 0xf8), C565(0xf8, 0xbc, 0x90) };
   static const uint16_t BAND[6] = { UI_WHITE, C565(0x58, 0x90, 0xe0), C565(0xf8, 0xe0, 0x70),
@@ -484,7 +486,8 @@ static void drawFireworks(uint32_t now, bool night, bool live) {
 }
 
 // Everything the day brings (holidayNow()): over the landscape and the fog, behind the pet.
-static void drawHoliday(uint32_t now, const HolidayToday &hol, bool night, bool live, const WxNow &wx) {
+// `spooky`: the evening of 31 October (drawScene's halloweenNight), when the bats come out.
+static void drawHoliday(uint32_t now, const HolidayToday &hol, bool night, bool spooky, bool live, const WxNow &wx) {
   switch (hol.day) {
     case HOL_DECEMBER:
     case HOL_CHRISTMAS:
@@ -497,7 +500,7 @@ static void drawHoliday(uint32_t now, const HolidayToday &hol, bool night, bool 
     case HOL_EASTER: drawEasterEggs(night); break;
     case HOL_HALLOWEEN:
       drawPumpkins(night);
-      if (live && night && wxSunOut(wx)) drawBats(now);
+      if (live && spooky && wxSunOut(wx)) drawBats(now);
       break;
     default: break;
   }
@@ -511,7 +514,9 @@ void drawScene(uint32_t now, bool night) {
   bool live = wxParticlesLive(frameIntervalMs(powerCtx(now)));
   int h = sceneHour();
   HolidayToday hol = holidayNow();  // the special day's decorations (#26)
-  bool halloweenNight = night && hol.day == HOL_HALLOWEEN;  // a gently spooky purple sky and a full moon
+  // a gently spooky purple sky and a full moon on the evening of 31 October: not in the small
+  // hours of the 31st (that night is the one before Halloween), so from noon on
+  bool halloweenNight = night && h >= 12 && hol.day == HOL_HALLOWEEN;
   uint16_t top, bot;
   if (halloweenNight)   { top = C565(0x1c, 0x0e, 0x2e); bot = C565(0x46, 0x24, 0x52); }
   else if (night)       { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
@@ -619,7 +624,7 @@ void drawScene(uint32_t now, bool night) {
     gfx->fillEllipse(58, 286, 30, 5, pud);
     gfx->fillEllipse(410, 296, 24, 4, pud);
   }
-  drawHoliday(now, hol, night, live, wx);  // in front of the fog: the decorations stand close by
+  drawHoliday(now, hol, night, halloweenNight, live, wx);  // in front of the fog: the decorations stand close by
   if (!live) return;  // dimmed or slow frames: no falling rain or snow (they would step)
   drawSeasonFx(now, seasonFx(season, biome, night, wx), night);
   uint8_t drops = wxDrops(wx), flakes = wxFlakes(wx);

@@ -157,7 +157,7 @@ While **awake**, per minute:
   Christmas puts up a tree with lights all December, with a little snow even in the southern
   summer, and the greeting on 25 Dec; New Year (1 Jan) has soft fireworks; Valentine's Day
   (14 Feb) floating hearts; Easter Sunday (worked out each year) eggs in the grass;
-  Halloween (31 Oct) a friendly pumpkin, and at night a purple sky, a full moon and a few
+  Halloween (31 Oct) a friendly pumpkin, and on the evening a purple sky, a full moon and a few
   bats; the player's birthday balloons, beside that day's own decorations. The day runs
   from midnight to midnight on the clock. The greeting takes the place of the next speech
   bubble, so it comes a few seconds after the screen wakes: at most 3 a day, at least 30
@@ -661,7 +661,7 @@ gets `ERR clock not set: ...` and changes nothing) / `RTCSET <epoch>` · `HEALTH
 speech bubbles; `OWNER` alone clears it) · `OWNER?` (read-only: `owner=<name>`) ·
 `BDAY <month> <day>` (the player's birthday for the special days; `BDAY 0 0` clears it) ·
 `BDAY?` (read-only: `bday=<month> <day>|none today=<none december christmas newyear valentine
-easter halloween> birthday=<0|1>`, today's day on the clock, `none` while it is not set) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
+easter halloween> birthday=<0|1>`, today's day on the clock; `none` on an ordinary day, while the clock is not set and during a farewell or run-away) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
 inbed=<0|1> stale=<0|1> egg=<0|1> picking=<0|1>`, stale = bedtime paused until the clock
 is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on screen) ·
 `SCENE <place|auto> [weather|auto] [season|auto]` (forces the place, `meadow beach forest

@@ -83,8 +83,8 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   Christmas!" with no name): a Christmas tree with lights all December, with a little
   snow even in the southern summer, and the greeting on 25 December; soft fireworks on
   New Year's Day; floating hearts on Valentine's Day; eggs in the grass on Easter Sunday,
-  worked out for each year; a friendly pumpkin on Halloween, with a purple night sky, a
-  full moon and a few bats after dark; and balloons on the player's birthday, beside that
+  worked out for each year; a friendly pumpkin on Halloween, with a purple sky, a
+  full moon and a few bats on the evening of 31 October; and balloons on the player's birthday, beside that
   day's own decorations. The greeting takes the place of the next speech bubble, at most
   3 a day and at least 30 minutes apart, never in quiet hours; the birthday's wins over a
   holiday's. The day follows the clock from midnight to midnight; nothing shows while the
