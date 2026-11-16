@@ -41,7 +41,7 @@ class MockSerial : public Print {
 public:
   void begin(unsigned long) {}
   void setRxBufferSize(size_t) {}
-  void setTxTimeoutMs(uint32_t) {}
+  void setTxTimeoutMs(uint32_t ms);
   void setTimeout(unsigned long) {}
   size_t write(uint8_t c) override;
   using Print::write;
@@ -58,6 +58,11 @@ extern MockSerial Serial;
 void mockSerialSilence(bool quiet);   // true: descarta la salida (por defecto)
 void mockSerialOutput(FILE *f);       // nullptr = callada
 void mockSerialFeed(const char *text);  // encola entrada como si llegara por USB
+// The host takes only the next `bytes` bytes, then every write comes back short (a full USB
+// transmit buffer nobody reads); -1 = no limit. mockSerialTxRefused() counts the bytes refused.
+void mockSerialTxRoom(long bytes);
+size_t mockSerialTxRefused();
+uint32_t mockSerialTxTimeout();  // the last setTxTimeoutMs()
 
 // ---- utilidades ------------------------------------------------------------
 template <class T> static inline T min(T a, T b) { return a < b ? a : b; }

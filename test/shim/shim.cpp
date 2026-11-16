@@ -59,7 +59,17 @@ void mockSerialFeed(const char *text) {
   for (const char *p = text; *p; p++) gSerialIn.push_back((uint8_t)*p);
 }
 
+static long gTxRoom = -1;
+static size_t gTxRefused = 0;
+static uint32_t gTxTimeout = 0;
+void mockSerialTxRoom(long bytes) { gTxRoom = bytes; gTxRefused = 0; }
+size_t mockSerialTxRefused() { return gTxRefused; }
+uint32_t mockSerialTxTimeout() { return gTxTimeout; }
+void MockSerial::setTxTimeoutMs(uint32_t ms) { gTxTimeout = ms; }
+
 size_t MockSerial::write(uint8_t c) {
+  if (gTxRoom == 0) { gTxRefused++; return 0; }
+  if (gTxRoom > 0) gTxRoom--;
   if (gSerialOut) fputc(c, gSerialOut);
   return 1;
 }

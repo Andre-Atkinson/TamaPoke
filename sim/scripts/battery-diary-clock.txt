@@ -1,0 +1,24 @@
+# The battery diary (#14) with a clock that was not set: the board boots with no time, as the
+# 1.75C does after a power-off, and setup() seeds the clock from the last saved time and marks
+# it untrusted. A row written then has no time (epoch 0 in BATLOG?, an empty time in
+# tools/board.py batlog), not the made-up one; once the clock is set (TIME, as board.py clock
+# sends it) the next row has it. The BATLOG blocks in serial.log are the check.
+#   tools/sim.sh --script battery-diary-clock --out shots/battery-diary-clock
+clock none
+battery 80
+
+# new game: the starter choice, then skip the clock screen's question and hatch
+wait 1s
+tap 233 220
+wait 1s
+swipe up
+serial HATCH
+wait 6s
+
+# the boot row: no time
+serial BATLOG?
+
+# the clock is set over USB: the hourly row has the time
+serial TIME 1794564000
+wait 1h
+serial BATLOG?

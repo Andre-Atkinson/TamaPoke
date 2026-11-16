@@ -3,6 +3,7 @@
 // costs in flash writes, and that everything read back is range-checked.
 #include "framework.h"
 #include "../batdiary.h"
+#include "../serialcmd.h"  // SERIAL_TX_TIMEOUT_MS
 #include "../sim/simhw.h"  // gSimPower: what rtcbat_sim.cpp reports
 #include <Arduino.h>      // the fake clock and Serial
 #include <Preferences.h>
@@ -277,7 +278,8 @@ TEST(BatRecorder, minutes_are_capped_at_a_period_and_the_excess_is_not_carried) 
   BatRecorder rec;
   BatRow r;
   rec.took(0, false, r);
-  for (int i = 0; i < 10; i++) rec.addOn(0xFFFFFFF0UL);  // never overflows
+  rec.addOn(0xFFFFFFF0UL);
+  rec.addOn(0x20);  // would wrap a plain sum to 16 ms
   rec.addSleep(5 * HOUR_MS);
   rec.took(HOUR_MS, false, r);
   CHECK_EQ(r.onMin, (uint8_t)BATLOG_MIN_MAX);
@@ -354,6 +356,20 @@ static void putRaw64(const char *k, uint64_t v) {
   p.begin("batlog", false);
   p.putULong64(k, v);
   p.end();
+}
+
+static std::string captureDump() {
+  FILE *f = tmpfile();
+  mockSerialOutput(f);
+  batLogPrint();
+  mockSerialOutput(nullptr);  // silent again, as the tests run
+  std::string out;
+  rewind(f);
+  char buf[256];
+  size_t n;
+  while ((n = fread(buf, 1, sizeof buf, f)) > 0) out.append(buf, n);
+  fclose(f);
+  return out;
 }
 
 TEST(BatLogNvs, a_row_takes_the_batterys_cached_readings) {
@@ -477,6 +493,11 @@ TEST(BatLogNvs, a_corrupt_row_is_skipped_and_the_others_are_kept) {
   CHECK_EQ(batLogEpoch(after[1].minute), T0 + 2 * 3600);
   CHECK_EQ(batLogEpoch(after[2].minute), T0 + 3 * 3600);
   CHECK_EQ(batLogRing().slot[1], (uint64_t)0);  // what was refused is not kept either
+  std::string dump = captureDump();  // ...nor dumped, nor counted
+  CHECK_EQ(dump.find("BATLOG rows=3 "), (size_t)0);
+  size_t lines = 0;
+  for (char c : dump) lines += c == '\n';
+  CHECK_EQ(lines, (size_t)5);
 }
 
 TEST(BatLogNvs, a_failed_write_keeps_the_rows_and_waits_for_the_next_row) {
@@ -507,10 +528,11 @@ TEST(BatLogNvs, a_cut_between_a_row_and_the_counter_loses_only_the_rows_not_coun
   std::vector<BatRow> after = rowsAfterReboot();
   CHECK_EQ(after.size(), (size_t)1);
   CHECK_EQ(batLogEpoch(after[0].minute), T0);
-  poll(10000, T0 + 9000);  // the boot row after the restart
+  poll(10000, T0 + 9000);  // the boot row after the restart, in the slot the lost row had
   CHECK(batLogSave());
   after = rowsAfterReboot();
   CHECK_EQ(after.size(), (size_t)2);
+  CHECK_EQ(batLogRing().n, (uint16_t)2);  // no gap left where the lost rows were
   CHECK_EQ(batLogEpoch(after[1].minute), T0 + 9000 - 9000 % 60);
 }
 
@@ -580,20 +602,6 @@ TEST(BatLogNvs, a_failed_clear_keeps_the_rows) {
   CHECK_EQ(rowsAfterReboot().size(), (size_t)1);
 }
 
-static std::string captureDump() {
-  FILE *f = tmpfile();
-  mockSerialOutput(f);
-  batLogPrint();
-  mockSerialOutput(nullptr);  // silent again, as the tests run
-  std::string out;
-  rewind(f);
-  char buf[256];
-  size_t n;
-  while ((n = fread(buf, 1, sizeof buf, f)) > 0) out.append(buf, n);
-  fclose(f);
-  return out;
-}
-
 TEST(BatLogNvs, the_dump_lists_the_rows_oldest_first) {
   FreshBoard board;
   gSimPower.batPct = 90;
@@ -612,4 +620,23 @@ TEST(BatLogNvs, the_dump_lists_the_rows_oldest_first) {
               "0,boot,90,4110,0,0,0,0\n"
               "1794564000,hour,84,4056,0,0,5,50\n"
               "1794567600,hour,79,4011,0,0,0,0\n");
+}
+
+// The dump is about 4 KB, more than the USB transmit buffer: it waits for the host while it
+// prints (a longer transmit timeout), stops at the first write that still comes back short
+// (nobody reading: one wait, not one per row), and puts the console's timeout back.
+TEST(BatLogNvs, the_dump_stops_when_nobody_reads_it) {
+  FreshBoard board;
+  for (uint32_t h = 0; h < 40; h++) poll(10000 + h * HOUR_MS, T0 + h * 3600);
+  Serial.setTxTimeoutMs(SERIAL_TX_TIMEOUT_MS);
+  mockSerialTxRoom(120);  // the first line and the header, then nothing more is taken
+  batLogPrint();
+  size_t refused = mockSerialTxRefused();
+  mockSerialTxRoom(-1);
+  CHECK_RANGE(refused, (size_t)1, (size_t)64);  // the rest of one line, not 40 rows
+  CHECK_EQ(mockSerialTxTimeout(), (uint32_t)SERIAL_TX_TIMEOUT_MS);
+  std::string all = captureDump();  // a host reading takes it all
+  size_t lines = 0;
+  for (char c : all) lines += c == '\n';
+  CHECK_EQ(lines, (size_t)42);
 }

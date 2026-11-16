@@ -75,18 +75,22 @@ void batLogRecord(uint8_t kind, uint32_t now, uint32_t epoch) {
 bool batLogSaveDue() { return !saveFailed && (ring.unsaved || (fmtSaved && ring.n != savedN)); }
 
 // The rows not yet saved, oldest first, then the counter. A power cut between them loses only
-// the rows whose counter was not written: the next rows go to the same slots.
+// the rows whose counter was not written: the counter in NVS still says the rows before, and
+// the next rows go to the same slots. (With the ring full, the slot written held the oldest
+// row: that row is gone, and the new one shows first in the dump until the next row takes the
+// slot again.)
 bool batLogSave() {
   if (!ring.unsaved && fmtSaved && ring.n == savedN) return true;
   Preferences p;
   if (!p.begin(BATLOG_NS, false)) { saveFailed = true; return false; }
   bool ok = true;
-  if (!fmtSaved) {  // a new diary: nothing old left behind, then every row kept goes now
+  // A new diary (a new board, BATLOG CLEAR, or one refused at boot): nothing old left behind.
+  // Every row kept is then one of the unsaved ones, since the ring started empty.
+  if (!fmtSaved) {
     ok = p.clear() && p.putUShort("fmt", BATLOG_FMT) == sizeof(uint16_t);
     if (ok) {
       fmtSaved = true;
       savedN = 0xFFFF;
-      ring.unsaved = (uint8_t)ring.filled();
     }
   }
   while (ok && ring.unsaved) {

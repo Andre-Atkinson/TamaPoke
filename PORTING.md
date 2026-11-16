@@ -126,6 +126,8 @@ python3 tools/board.py cmd OWNER Name     # the player's name in the speech bubb
 python3 tools/board.py cmd 'OWNER?'       # show the stored name
 python3 tools/board.py cmd BDAY 3 14     # the player's birthday, month then day (BDAY 0 0 clears it)
 python3 tools/board.py cmd 'BDAY?'       # show the stored birthday and today's special day
+python3 tools/board.py batlog > run.csv   # the battery diary as CSV (see Measuring battery life)
+python3 tools/board.py cmd BATLOG CLEAR   # start a new battery diary (the pet is not touched)
 ```
 
 - **The pet's save** is the whole NVS partition (20 KB at `0x9000`): the pet,
@@ -176,6 +178,63 @@ python3 tools/board.py cmd 'BDAY?'       # show the stored birthday and today's 
   run-away, which keep their own look.
 - `board.py` uses only the Python standard library (no venv needed) and
   needs the serial port to itself: close any serial monitor first.
+
+### Measuring battery life (battery diary, #14)
+
+The firmware keeps a diary of the battery (`batdiary.h`, both boards): a row
+every hour, and one at boot, when USB is plugged in or pulled out, and at the
+low-battery power-off. The newest 96 rows (about four days) are kept in RAM
+and in flash, so a run that ends with the battery flat can still be read after
+the next boot. A battery test:
+
+1. Charge the board on USB until the charge is done (an hourly row on USB
+   reads `full`).
+2. Set its clock, so the rows carry real times: `python3 tools/board.py clock`.
+   To start with an empty diary: `python3 tools/board.py cmd BATLOG CLEAR`.
+3. Unplug it, and let the player look after the pet as usual.
+4. Plug it back in when you want to look, or let it run flat: at 3.30 V the
+   firmware saves a `cutoff` row and powers off. Plugged in, the board starts
+   again on USB.
+5. `python3 tools/board.py batlog > run.csv` and open it in a spreadsheet.
+
+The columns:
+
+| column | what it is |
+|---|---|
+| `time` | the board's clock, to the minute; empty while the clock was not set (after a power-off the 1.75C's clock is lost until `board.py clock` or the clock screen sets it) |
+| `event` | `boot`, `hour` (an hour since the previous row), `unplug`, `plug`, `cutoff` (the low-battery power-off) |
+| `battery_pct` | the level shown on screen: the smoothed LiPo curve on battery, the PMU's gauge on USB; empty without a reading |
+| `battery_mv` | the battery voltage read for the row |
+| `state` | `discharging`, `charging`, `full` (on USB, the charger done) or `no battery` |
+| `screen_on_min` | minutes the screen was lit since the previous row, at any brightness (dimmed and almost off count too) |
+| `asleep_min` | minutes the CPU spent in light sleep since the previous row |
+
+The run on battery is the rows from `unplug` to `cutoff` (or the next `plug`):
+the time between them is the battery life, and the hours in between show where
+the charge went. An hour with the screen off should be nearly all asleep; one
+with the screen off but few asleep minutes means something kept the CPU awake.
+On USB the CPU never light-sleeps (the serial port has to stay up), so
+`asleep_min` is 0 there.
+
+- **What it costs:** 8 bytes per row, so 768 bytes of RAM, and 99 of the
+  roughly 500 entries of the 20 KB NVS partition (96 rows, the format, the
+  row counter and the namespace). Each row is one 8-byte NVS entry plus the
+  counter's, 64 bytes of flash a row (about 1.5 KB a day), so the wear is
+  negligible. Rows are written only while the screen is dark, at the same
+  moments as the pet's autosave (a flash write pauses both cores briefly,
+  and nothing on screen is moving then); `batlog` says when the newest rows
+  are not in flash yet. The `cutoff` row is written at once.
+- **Where it lives:** NVS namespace `batlog`, apart from the pet's save, so
+  app-only updates keep it and `WIPE` does not erase it. `BATLOG CLEAR`
+  erases only it. `pet_save.sh backup` copies the whole NVS partition, the
+  diary included, and a `restore` brings back the diary of that backup.
+- **Rows are hourly from the previous row**, not on the hour: a `plug` or
+  `unplug` row restarts the hour. A plug or unplug row waits until a minute
+  after the previous row, so a loose plug that comes and goes logs one row at
+  most a minute.
+- `python3 tools/board.py cmd 'BATLOG?'` shows the raw dump (an epoch, `-1`
+  for no reading). `board.py batlog` checks it got every row the board
+  announced and says so if the dump was cut short.
 
 ## Sprite storage trade-off
 
