@@ -216,7 +216,7 @@ if [[ "$BUILD" -eq 1 ]]; then
         fi
       done
       if [[ "$rc" -eq 0 ]]; then
-        record "sim checks $b" 0 "${#CHECK_SCRIPTS[@]} scripts, $passed/$total checks"
+        record "sim checks $b" 0 "${#CHECK_SCRIPTS[@]} script$([[ ${#CHECK_SCRIPTS[@]} -eq 1 ]] || echo s), $passed/$total checks"
       else
         record "sim checks $b" 1 "$passed/$total checks; failed: ${bad[*]}"
       fi

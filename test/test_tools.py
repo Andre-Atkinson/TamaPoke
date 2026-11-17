@@ -2124,6 +2124,16 @@ class TestGateSimChecks(FakeArduinoCliCase):
                 self.assertNotIn('--lang', line)
                 self.assertIn('--quiet', line)
 
+    def test_one_script_with_a_check_is_reported_in_the_singular(self):
+        root = self.gate_root()
+        self.scripts(root, only_game='wait 1s\nexpect Play: song untouched (screen off)\n',
+                     no_checks='wait 1s\nshot x\n')
+        r = self.gate(root, '--no-firmware')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('PASS  sim checks 175c  (1 script, 1/1 checks)', r.stdout)
+        self.assertIn('PASS  sim checks 175  (1 script, 1/1 checks)', r.stdout)
+        self.assertNotIn('1 scripts', r.stdout)
+
     def test_the_whole_gate_runs_the_checks_before_the_firmware_builds(self):
         root = self.checks_root()
         r = self.gate(root, FAKE_ORDER_LOG=self.ran)
