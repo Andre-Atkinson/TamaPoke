@@ -69,8 +69,9 @@ While **awake**, per minute:
 Sickness is meant to punish neglect, more than the rest of the game does, but it never ends
 the creature any way other than the run-away below.
 - **Falling sick:** the HYG bar left **in the red (under 25) for 6 hours in a row**. Only
-  hours it could have called you count: awake, outside quiet hours (the bedtime window, or
-  22:00–07:00 with bedtime off), with the clock set. Asleep or in quiet hours the count waits;
+  hours awake count, outside quiet hours (the bedtime window, or 22:00–07:00 with bedtime
+  off) and with the clock set: the hours its calls can reach you (the 1.75C's pocket lock,
+  which silences them, still counts). Asleep or in quiet hours the count waits;
   any bath starts it again. Both paces count the same (relaxed only makes the bar go red
   later), and time powered off never counts. On the charger, self-care keeps it clean.
 - **Sick:** it looks poorly (its hurt pose), the status line and a "!" bubble with a

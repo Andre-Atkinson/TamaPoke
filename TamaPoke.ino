@@ -1361,6 +1361,7 @@ bool petSceneFree() {
 // farewell button drawn over it (the same hit tests, in the same order, as onTap).
 static bool onPetBody(int16_t x, int16_t y) {
   if (!inPetZone(x, y)) return false;
+  if (petButtonsHeld()) return true;  // a banner is up: no button is there (#15)
   if (pet.wantEvolveButton() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
       y >= EVO_BTN_Y && y <= EVO_BTN_Y + EVO_BTN_H) return false;
   if ((pet.canRunawayNow() || pet.wantMedicineButton() || pet.wantFarewellButton()) && x >= FAR_BTN_X &&
@@ -1791,14 +1792,16 @@ void onTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     return;
   }
-  // boton de evolucion: abre el dialogo evolucionar/mantener
-  if (pet.wantEvolveButton() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
+  // boton de evolucion: abre el dialogo evolucionar/mantener. None of the buttons over the pet
+  // while a banner shows (petButtonsHeld, #15): the tap goes on to the pet below.
+  bool overPetButtons = !petButtonsHeld();
+  if (overPetButtons && pet.wantEvolveButton() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
       y >= EVO_BTN_Y && y <= EVO_BTN_Y + EVO_BTN_H) {
     choiceKind = 1; choiceUntil = millis() + 12000;
     return;
   }
   // botones de final (mismo recuadro): escapada directa; despedida abre dialogo
-  if (x >= FAR_BTN_X && x <= FAR_BTN_X + FAR_BTN_W &&
+  if (overPetButtons && x >= FAR_BTN_X && x <= FAR_BTN_X + FAR_BTN_W &&
       y >= FAR_BTN_Y && y <= FAR_BTN_Y + FAR_BTN_H) {
     if (pet.canRunawayNow()) { startPetEnding(CER_RUNAWAY); return; }
     if (pet.wantMedicineButton()) {  // #15: one tap, no dialog; it takes the pill
@@ -2030,7 +2033,9 @@ bool render() {
     drawBars();
     drawButtons();
     drawCelebration();
-    if (pet.wantEvolveButton()) drawEvolveButton();        // CTA rojo: evolucionar
+    if (petButtonsHeld()) {
+      // a medal's or a streak's banner is up, where the buttons go: they wait (scene.cpp)
+    } else if (pet.wantEvolveButton()) drawEvolveButton();  // CTA rojo: evolucionar
     else if (pet.canRunawayNow()) drawRunawayButton();     // CTA sombrio: escapada (abandono)
     else if (pet.wantMedicineButton()) drawMedicineButton();  // #15: green, the pill
     else if (pet.wantFarewellButton()) drawFarewellButton();  // CTA dorado: despedida

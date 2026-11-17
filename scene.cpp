@@ -1242,7 +1242,15 @@ int petHeadTop() {
   return headNow.pmd ? PET_GROUND + headNow.dy - pmdHeight(headNow.act, 5) : headNow.top;
 }
 
+// A medal's or a streak's banner (drawCelebration, y 150-246) covers the place of the buttons
+// drawn over the pet (evolve, run-away, medicine, farewell; y 167-241 at their biggest pulse).
+// While one shows, those buttons wait, drawn and tapped alike: the banner can be read, and a tap
+// there can't press a button nobody can see (it is a pat, as anywhere on the pet). The owner's
+// call, 2026-11-17 (#15): before, the button was drawn over the banner and hid it.
+bool petButtonsHeld() { return pet.bannerShown() != BANNER_NONE; }
+
 bool petButtonShown() {
+  if (petButtonsHeld()) return false;
   return pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantMedicineButton() || pet.wantFarewellButton();
 }
 

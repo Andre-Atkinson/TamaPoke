@@ -3,7 +3,8 @@
 #   A. the Care page's fourth row switches sickness on
 #   B. sick: one call, the HURT pose, the status line, the thermometer bubble, the medicine
 #      button, and the Progress page's "Get well to evolve"
-#   C. the medicine: the pill, "Feeling better!", and the evolve button it was holding back
+#   C. a banner holds the buttons over the pet back; then the medicine: the pill, "Feeling
+#      better!", and the evolve button it was holding back
 #   D. it says so in a speech bubble; the warning call, halfway to running away
 #   E. left sick a day it runs away, but only once someone looks at the screen
 #   tools/sim.sh --script sickness --out shots/          (and --lang pt for the texts)
@@ -43,17 +44,27 @@ swipe left
 shot 3-progress-get-well
 swipe up
 
-# C. the medicine button (in the farewell button's place, y 176-234): the pill, then the
-# evolve button
-wait 1s
+# C. a banner first: three days' care in a row (CAREDAY moves the clock a day and pats) brings
+# the "3 DAY STREAK!" banner, then any medal that care earned. While a banner shows, the
+# buttons over the pet wait, drawn and tapped alike: a tap where the medicine button goes is a
+# pat. Once the banners are over, the same tap gives the medicine (the button is at y 176-234):
+# the pill, then the evolve button it was holding back.
+serial CAREDAY
+serial CAREDAY
+serial CAREDAY
+wait 300ms
+shot 4-banner-holds-the-button
+tap 233 205
+expect-not medicine: taken
+wait 15s
 tap 233 205
 expect medicine: taken
 wait 500ms
-shot 4-taking-medicine
+shot 5-taking-medicine
 wait 3s
 serial CARE?
 expect * sickness=1 sick=0 germ=0 heal=0 sickmin=0
-shot 5-better-evolve-button
+shot 6-better-evolve-button
 
 # D. sick again, a minute short of the warning: the "sick" call, then the warning. A tap off
 # the pet and the buttons (x 400, y 140) keeps the screen lit: the 1.75C turns it off at 60 s.
@@ -66,7 +77,7 @@ tap 400 140
 wait 1s
 say sick
 wait 300ms
-shot 6-says-so
+shot 7-says-so
 wait 24s
 expect-once call sick-warning: *
 serial CARE?
@@ -83,4 +94,4 @@ expect * sick=1 * sickmin=1440
 press pwr
 wait 1s
 expect-once sick: ran away
-shot 7-runs-away
+shot 8-runs-away

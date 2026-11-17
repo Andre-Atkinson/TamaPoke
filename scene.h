@@ -106,6 +106,7 @@ int petHeadTop();
 // The evolve, run-away or farewell button is drawn over the pet (render()): the bubbles stay
 // above it (bubbleTipY in attention.h).
 bool petButtonShown();
+bool petButtonsHeld();  // a medal's or a streak's banner shows: the buttons over the pet wait (#15)
 // The pet is huffing (the 12th quick tap on): its puffs of breath go by the head, so the
 // bubbles are not drawn meanwhile, as for the heart (#73).
 bool petHuffing();
