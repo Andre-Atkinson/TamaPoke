@@ -203,9 +203,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   (cream Common, silver Rare, gold Legendary) and the spots the type colour; the
   species stays a surprise. Tap an egg to look at it, tap it again to pick it.
   One of the three is the usual roll (same odds, farewell blessing, runaway
-  curse and shiny chance); the other two are Common eggs of other types. Time is
-  paused until you pick, and the choice survives a power-off. Saved under new
-  keys in the pet's NVS namespace (`eggch`, `ecpk`, `ec0`-`ec2`).
+  curse and shiny chance); the other two are Common eggs of other types, and no
+  two of the three have spots of colours that look alike (ground and rock, poison
+  and ghost, electric and ground, normal and rock, #34). Time is paused until you
+  pick, and the choice survives a power-off. Saved under new keys in the pet's
+  NVS namespace (`eggch`, `ecpk`, `ec0`-`ec2`).
 - **Self-care while charging** (#24, always on). Plugged into USB and untouched
   for 10 minutes, the pet looks after itself up to half: once a minute the first
   need under 40 (food, then hygiene, which also clears the poops, then energy,
@@ -372,7 +374,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   without sending anything. It prints one line per file, stops at the first that fails with
   the command to send it again, and exits non-zero. It no longer needs pyserial: it uses
   `tools/board.py`'s console. A bare run used to send all 303 files (41.7 MB), which can't
-  fit on the 1.75C. It now shows how to use it instead.
+  fit on the 1.75C. It now shows how to use it instead. It refuses a file of a size the
+  board's loader would not accept, and Ctrl-C part-way through a file waits for the board to
+  give up on it and prints the same command to send it again.
+
+- **Slip-ups stop at 255** (#15). The count of slip-ups is one byte, and its 256th went back
+  to 0, as if the creature had never been neglected. It now stays at 255.
 
 - **An ending closes everything open over the creature first** (#33). A farewell, a
   run-away or a release now closes whatever is open before it starts: a minigame or an

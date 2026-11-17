@@ -283,8 +283,10 @@ After any ending, a **new egg** appears.
   stays a surprise. Tap an egg to look at it, tap it again to pick it. One of the
   three is the normal roll above (same odds, same blessing/curse, same shiny
   chance, which goes with whichever egg you pick); the other two are Common eggs
-  of other types. Time is paused until you pick (as on the starter screen), and
-  the choice survives a power-off. The first game still picks a starter.
+  of other types, and no two of the three have spots of colours that look alike
+  (ground and rock, say). Time is paused until you pick (as on the starter
+  screen), and the choice survives a power-off. The first game still picks a
+  starter.
 
 ### Nature
 Each Pokémon hatches with one of five natures, shown on the stat card (swipe up,
@@ -544,7 +546,8 @@ thumbnails (`SdThumbs`). `SdMon` (TPK1) remains as a dormant legacy fallback onl
 background biome), evolution line with gen-1 levels, rarities and starters.
 `tools/dex_stats.py` has the real base stats (from PokéAPI). Both UI languages use
 the English species names, as the Portuguese games do. `gen_dex.py` emits `dex.h`
-(the `DEX_TBL[152]` table and the `dexName()` accessor). The pet's identity is its
+(the `DEX_TBL[152]` table, the `dexName()` accessor, and the egg-spot look-alike
+table with `eggSpotsLookAlike()`, #34). The pet's identity is its
 Pokédex number (persisted in NVS).
 
 - **Evolution** gen-1 style (levels 16/36/…; stones ≈30, trade ≈40; Eevee
@@ -696,7 +699,7 @@ set after a power cut.
 - `rtcbat.h` / `rtcbat.cpp` — PCF85063 RTC + AXP2101 PMU (battery, brightness, PWR button)
 - `audio.h` / `audio.cpp` — ES8311 + I2S + Game-Boy-style tone synth (non-blocking task)
 - `i18n.h` / `i18n.cpp` — the English and European Portuguese string tables, and the `lang` key
-- `dex.h` — GENERATED (`gen_dex.py`): the 151 table
+- `dex.h` — GENERATED (`gen_dex.py`): the 151 table and the egg-spot look-alike pairs
 - `species.h` — GENERATED (`sprites.py`): fallback sprites, UI icons, colours
 - `pin_config.h` — the board's official pins
 - `tools/` — pipeline: `dex_data.py` (data), `dex_stats.py`, `gen_dex.py`,

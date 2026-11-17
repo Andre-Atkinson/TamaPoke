@@ -7,6 +7,7 @@
 #include "../audio.h"  // SFX_*, audioSetEnabled/audioSetSleeping (the shim's, muted)
 #include "../exercise.h"  // EX_COUNT, EX_GAIN_CAP (#78)
 #include "../i18n.h"  // bannerLines, medalName (#82)
+#include <math.h>
 #include <string.h>
 
 // ---------------------------------------------------------------- helpers
@@ -3008,23 +3009,179 @@ TEST(eggpick, una_escapada_da_tres_comunes) {
   }
 }
 
-TEST(eggpick, tres_colores_de_tipo_distintos) {
-  // con pokedex vacia, a medias y con todas las lineas comunes completas
+// CIE76 colour difference of two RGB565 accents (#34), worked out here apart from
+// tools/gen_dex.py, which writes eggSpotsLookAlike()'s table into dex.h: each
+// channel widened to 8 bits by repeating its top bits, sRGB, D65 white.
+static void labOf565(uint16_t c, double lab[3]) {
+  int r5 = c >> 11, g6 = (c >> 5) & 0x3F, b5 = c & 0x1F;
+  int rgb[3] = { (r5 << 3) | (r5 >> 2), (g6 << 2) | (g6 >> 4), (b5 << 3) | (b5 >> 2) };
+  double lin[3];
+  for (int i = 0; i < 3; i++) {
+    double v = rgb[i] / 255.0;
+    lin[i] = v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4);
+  }
+  double xyz[3] = {
+    (0.4124 * lin[0] + 0.3576 * lin[1] + 0.1805 * lin[2]) / 0.95047,
+    0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2],
+    (0.0193 * lin[0] + 0.1192 * lin[1] + 0.9505 * lin[2]) / 1.08883,
+  };
+  const double e = 6.0 / 29.0;
+  double f[3];
+  for (int i = 0; i < 3; i++)
+    f[i] = xyz[i] > e * e * e ? cbrt(xyz[i]) : xyz[i] / (3 * e * e) + 4.0 / 29.0;
+  lab[0] = 116 * f[1] - 16;
+  lab[1] = 500 * (f[0] - f[1]);
+  lab[2] = 200 * (f[1] - f[2]);
+}
+
+static double deltaE76(uint16_t a, uint16_t b) {
+  double la[3], lb[3];
+  labOf565(a, la);
+  labOf565(b, lb);
+  return sqrt((la[0] - lb[0]) * (la[0] - lb[0]) + (la[1] - lb[1]) * (la[1] - lb[1]) +
+              (la[2] - lb[2]) * (la[2] - lb[2]));
+}
+
+// the test's own reading of "these two eggs' spots look alike" (not eggSpotsLookAlike)
+static bool spotsTooClose(int16_t a, int16_t b) {
+  uint16_t ca = DEX_TBL[a].accent, cb = DEX_TBL[b].accent;
+  return ca == cb || deltaE76(ca, cb) < EGG_SPOT_MIN_DE;
+}
+
+TEST(eggpick, the_look_alike_table_matches_the_accents_in_dex) {
+  // every pair of accents in DEX_TBL: the generated table says "alike" exactly when
+  // the colour difference computed here is under the threshold, so an accent
+  // changed by hand in dex.h, or a generator that measures differently, fails here
+  uint16_t acc[DEX_COUNT];
+  int n = 0;
+  for (int16_t d = 1; d <= DEX_COUNT; d++) {
+    bool seen = false;
+    for (int i = 0; i < n; i++)
+      if (acc[i] == DEX_TBL[d].accent) seen = true;
+    if (!seen) acc[n++] = DEX_TBL[d].accent;
+  }
+  CHECK_EQ(n, 14);  // one accent per type
+  int alikePairs = 0, wrong = 0;
+  char first[96] = "";
+  for (int i = 0; i < n; i++) {
+    CHECK_MSG(eggSpotsLookAlike(acc[i], acc[i]), "an accent looks like itself");
+    for (int j = i + 1; j < n; j++) {
+      double de = deltaE76(acc[i], acc[j]);
+      bool want = de < EGG_SPOT_MIN_DE;
+      if (want) alikePairs++;
+      if (eggSpotsLookAlike(acc[i], acc[j]) == want && eggSpotsLookAlike(acc[j], acc[i]) == want) continue;
+      if (!wrong++)
+        snprintf(first, sizeof first, "first: 0x%04X / 0x%04X, dE %.1f, table says %d", acc[i], acc[j], de,
+                 (int)eggSpotsLookAlike(acc[i], acc[j]));
+    }
+  }
+  CHECK_MSG(wrong == 0, std::string("the table agrees with the colour difference, both ways round; ") + first);
+  // the four pairs #34 set out to keep apart, and the closest pair it leaves alone
+  CHECK_MSG(spotsTooClose(27, 74), "ground (Sandshrew) / rock (Geodude)");
+  CHECK_MSG(spotsTooClose(23, 92), "poison (Ekans) / ghost (Gastly)");
+  CHECK_MSG(spotsTooClose(25, 27), "electric (Pikachu) / ground (Sandshrew)");
+  CHECK_MSG(spotsTooClose(19, 74), "normal (Rattata) / rock (Geodude)");
+  CHECK_MSG(!spotsTooClose(7, 144), "water (Squirtle) / ice (Articuno), dE 27.4, may share a roll");
+  CHECK_EQ(alikePairs, 4);
+}
+
+TEST(eggpick, no_two_eggs_in_a_roll_look_alike) {
+  // every egg species as the usual roll, with the Pokedex nearly empty (passes 0
+  // and 1), half full and full (no new line anywhere: pass 1)
+  int rolls = 0, closeToSpecial = 0, bad = 0;
+  char first[96] = "";
   for (int16_t upTo : { (int16_t)4, (int16_t)80, (int16_t)151 }) {
     Pet p;
     makePet(p, 4);
     registerRange(p, 1, upTo);
-    for (int seed = 1; seed <= 200; seed++) {
-      randomSeed(seed);
-      int16_t out[EGG_CHOICES];
-      p.rollEggChoices(p.pickEggSpecies(), out);
-      CHECK(threeEggSpecies(out));
-      CHECK_MSG(DEX_TBL[out[0]].accent != DEX_TBL[out[1]].accent &&
-                DEX_TBL[out[0]].accent != DEX_TBL[out[2]].accent &&
-                DEX_TBL[out[1]].accent != DEX_TBL[out[2]].accent,
-                "cada huevo da una pista de tipo distinta");
+    for (int16_t special = 1; special <= DEX_COUNT; special++) {
+      if (DEX_TBL[special].rarity == R_EVO) continue;
+      bool hasCloseCommon = false;
+      for (int16_t d = 1; d <= DEX_COUNT; d++)
+        if (d != special && DEX_TBL[d].rarity == R_COMUN && spotsTooClose(d, special)) hasCloseCommon = true;
+      for (int seed = 1; seed <= 10; seed++) {
+        randomSeed(seed);
+        int16_t out[EGG_CHOICES];
+        p.rollEggChoices(special, out);
+        bool ok = threeEggSpecies(out) && !spotsTooClose(out[0], out[1]) &&
+                  !spotsTooClose(out[0], out[2]) && !spotsTooClose(out[1], out[2]);
+        if (!ok && !bad++)
+          snprintf(first, sizeof first, "first: Pokedex to %d, special %d, seed %d: eggs %d %d %d", upTo,
+                   special, seed, out[0], out[1], out[2]);
+        rolls++;
+        if (hasCloseCommon) closeToSpecial++;
+      }
     }
   }
+  CHECK_MSG(bad == 0, std::string("three distinct eggs, no two with spots that look alike; ") + first);
+  CHECK_EQ(rolls, 3 * 79 * 10);
+  CHECK_MSG(closeToSpecial > 0, "the special egg sometimes has look-alike Commons to avoid");
+}
+
+TEST(eggpick, the_colour_rule_never_runs_out_of_eggs) {
+  // With today's accents and table, whatever the usual roll and the first extra
+  // egg, some Common is left whose spots look like neither: passes 0 and 1 always
+  // have a candidate when no line is new, so passes 2 and 3 are never needed.
+  int fewest = DEX_COUNT;
+  for (int16_t s = 1; s <= DEX_COUNT; s++) {
+    if (DEX_TBL[s].rarity == R_EVO) continue;
+    int seconds = 0;
+    for (int16_t c = 1; c <= DEX_COUNT; c++) {
+      if (c == s || DEX_TBL[c].rarity != R_COMUN) continue;
+      if (eggSpotsLookAlike(DEX_TBL[s].accent, DEX_TBL[c].accent)) continue;
+      seconds++;
+      int thirds = 0;
+      for (int16_t d = 1; d <= DEX_COUNT; d++) {
+        if (d == s || d == c || DEX_TBL[d].rarity != R_COMUN) continue;
+        if (eggSpotsLookAlike(DEX_TBL[s].accent, DEX_TBL[d].accent)) continue;
+        if (eggSpotsLookAlike(DEX_TBL[c].accent, DEX_TBL[d].accent)) continue;
+        thirds++;
+      }
+      if (thirds < fewest) fewest = thirds;
+    }
+    CHECK_MSG(seconds > 0, "a second egg whose spots don't look like the usual roll's");
+  }
+  CHECK_MSG(fewest > 0, "a third egg whose spots look like neither, whatever the first two");
+}
+
+static bool everyColourAlike(uint16_t, uint16_t) { return true; }
+
+TEST(eggpick, with_no_colour_left_the_fallback_still_fills_three_slots) {
+  // a look-alike rule that no pair passes: passes 0 and 1 find nothing, so the
+  // extras come from passes 2 (a new line) and 3 (any Common)
+  int notThree = 0, notCommon = 0, oldLine = 0, noSpecial = 0;
+  for (int16_t upTo : { (int16_t)4, (int16_t)60, (int16_t)151 }) {
+    Pet p;
+    makePet(p, 4);
+    registerRange(p, 1, upTo);
+    p.lastEnd = CER_FAREWELL;
+    p.streak = 30;
+    p.bond = 100;
+    for (int seed = 1; seed <= 200; seed++) {
+      randomSeed(seed);
+      int16_t special = p.pickEggSpecies();
+      int16_t out[EGG_CHOICES];
+      p.rollEggChoices(special, out, everyColourAlike);
+      if (!threeEggSpecies(out)) {
+        notThree++;
+        continue;
+      }
+      int found = 0;
+      for (int16_t d : out) {
+        if (d == special) {
+          found++;
+          continue;
+        }
+        if (DEX_TBL[d].rarity != R_COMUN) notCommon++;
+        if (upTo < 151 && !p.lineHasUnregistered(d)) oldLine++;
+      }
+      if (found != 1) noSpecial++;
+    }
+  }
+  CHECK_EQ(notThree, 0);   // three distinct egg species, even with no colour left
+  CHECK_EQ(notCommon, 0);  // the extras are Common
+  CHECK_EQ(oldLine, 0);    // pass 2 still prefers a new line while there is one
+  CHECK_EQ(noSpecial, 0);  // the usual roll is one of the three
 }
 
 TEST(eggpick, los_comunes_prefieren_lineas_incompletas) {
@@ -3042,32 +3199,56 @@ TEST(eggpick, los_comunes_prefieren_lineas_incompletas) {
 }
 
 TEST(eggpick, sin_linea_nueva_cede_la_linea_antes_que_el_color) {
-  // Todo registrado salvo los comunes del color del huevo especial: los unicos
-  // comunes con la linea incompleta comparten su color, asi que la pasada 0
-  // (color nuevo y linea nueva) no encuentra nada y la pasada 1 (solo color
-  // nuevo) si. Si cediera antes el color, los extras saldrian del color del
-  // especial.
+  // Everything registered but the Commons whose spots look like the special egg's
+  // (ground: ground, rock and electric, #34): the only Commons with an incomplete
+  // line look alike, so pass 0 (far colour and new line) finds nothing and pass 1
+  // (far colour only) does. If the colour gave way first, the extras would be
+  // look-alikes.
   Pet p;
   makePet(p, 4);
-  const int16_t special = 4;
+  const int16_t special = 27;  // Sandshrew, ground
   registerRange(p, 1, 151);
-  int sameColour = 0;
+  int alikeOthers = 0;
   for (int16_t d = 1; d <= DEX_COUNT; d++)
-    if (DEX_TBL[d].rarity == R_COMUN && DEX_TBL[d].accent == DEX_TBL[special].accent) {
+    if (DEX_TBL[d].rarity == R_COMUN && spotsTooClose(d, special)) {
       p.dexReg[(d - 1) >> 3] &= (uint8_t)~(1 << ((d - 1) & 7));
-      sameColour++;
+      if (DEX_TBL[d].accent != DEX_TBL[special].accent) alikeOthers++;
     }
-  CHECK_MSG(sameColour >= 2, "hay otros comunes del mismo color sin registrar");
+  CHECK_MSG(alikeOthers >= 2, "Commons of other, look-alike colours are left unregistered");
+  int bad = 0;
   for (int seed = 1; seed <= 100; seed++) {
     randomSeed(seed);
     int16_t out[EGG_CHOICES];
     p.rollEggChoices(special, out);
-    CHECK(threeEggSpecies(out));
-    CHECK_MSG(DEX_TBL[out[0]].accent != DEX_TBL[out[1]].accent &&
-              DEX_TBL[out[0]].accent != DEX_TBL[out[2]].accent &&
-              DEX_TBL[out[1]].accent != DEX_TBL[out[2]].accent,
-              "cede la linea antes que el color: tres colores distintos");
+    if (!threeEggSpecies(out) || spotsTooClose(out[0], out[1]) || spotsTooClose(out[0], out[2]) ||
+        spotsTooClose(out[1], out[2]))
+      bad++;
   }
+  CHECK_MSG(bad == 0, "the line gives way before the colour: three eggs, no two spots alike");
+}
+
+TEST(eggpick, a_saved_choice_keeps_its_eggs_even_if_they_look_alike) {
+  // A choice saved before #34 (or by any roll) is not rolled again for its colours:
+  // the player sees the same three eggs after a restart or an update.
+  Pet a;
+  makePet(a, 4);
+  a.setEggPickMode(EGGPICK_ON);
+  endLife(a, CER_RELEASE);
+  CHECK(a.awaitingEgg());
+  const int16_t saved[EGG_CHOICES] = { 27, 74, 25 };  // ground, rock, electric: all Common
+  {
+    Preferences raw;
+    raw.begin("tamapoke", false);
+    raw.putShort("ec0", saved[0]);
+    raw.putShort("ec1", saved[1]);
+    raw.putShort("ec2", saved[2]);
+    raw.end();
+  }
+  CHECK(spotsTooClose(saved[0], saved[1]));
+  Pet b;
+  b.begin();
+  CHECK(b.awaitingEgg());
+  for (uint8_t i = 0; i < EGG_CHOICES; i++) CHECK_EQ(b.eggChoice(i), saved[i]);
 }
 
 TEST(eggpick, el_shiny_no_cambia_y_va_con_el_elegido) {

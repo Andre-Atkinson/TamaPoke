@@ -51,6 +51,36 @@
 #define MILK_WEIGHT 4
 #define MILK_SLEEP_ENERGY 2
 
+// Sickness and medicine (#15; the owner's choices, 2026-11-17). Off unless the Care page's
+// setting is on (NVS "sickopt", sickMode). It is meant to cost something: the owner chose to
+// let it punish neglect harder than the rest of the game does, but never to end the pet any
+// way but the run-away the game already has. All of it is Pet::sickTick(), once a minute.
+//  - Falling sick: the hygiene bar in the red (under SICK_DIRTY) for SICK_AFTER_MIN counted
+//    minutes in a row. A counted minute is a live one, awake, outside quiet hours (which
+//    include a stale or unknown clock), the hours the attention calls stay silent. The 1.75C's
+//    pocket lock silences the calls too but still counts: the player locked it. Asleep
+//    or in quiet hours the count waits; any clean (hygiene back to SICK_DIRTY or more) starts
+//    it again. Both paces count alike: relaxed only makes the bar go red later. The
+//    powered-off catch-up (syncClock) never counts.
+//  - Sick: a slip-up (careMistakes, -1 bond, as a need's slip-up) when it falls sick, and
+//    another every SICK_SLIP_MIN counted minutes it stays sick, on top of the needs' own. Joy
+//    falls one point more a drain minute, but sickness never takes it under SICK_JOY_FLOOR.
+//    It doesn't evolve, and the farewell button waits, until it is better.
+//  - Better: the medicine (giveMedicine) at once; or by itself after SICK_HEAL_MIN minutes
+//    with the hygiene out of the red, in all (a red minute only pauses it), awake or asleep,
+//    at any hour.
+//  - Left sick SICK_RUNAWAY_MIN counted minutes, it runs away (sickRunawayDue: the sketch
+//    starts the run-away, the same ending as total neglect). The medicine saves it up to then.
+enum : uint8_t { SICK_OFF = 0, SICK_ON = 1, SICK_MODES = 2 };
+#define SICK_DIRTY 25           // hygiene under this is dirty: the bar's red (ATTN_LOW, attention.h)
+#define SICK_AFTER_MIN 360      // 6 h of counted minutes in the red: sick
+#define SICK_SLIP_MIN 60        // each hour sick is one more slip-up
+#define SICK_WARN_MIN 720       // 12 h sick: the sketch's second call, a warning
+#define SICK_RUNAWAY_MIN 1440   // 24 h sick: it runs away
+#define SICK_HEAL_MIN 720       // 12 h out of the red, in all: better by itself
+#define SICK_JOY_FLOOR 30       // sickness's own joy drain stops here
+#define SICK_MEDICINE_JOY 10
+
 // ritmo de cuidado (ajuste "Care", NVS "pace"): normal o relajado (las necesidades
 // bajan a la mitad de velocidad mientras esta despierto)
 enum : uint8_t { PACE_NORMAL = 0, PACE_RELAXED = 1, PACE_COUNT = 2 };
@@ -301,6 +331,21 @@ public:
   void setPace(uint8_t v);
   void setBedPreset(uint8_t v);
   void setEggPickMode(uint8_t v);
+  // Sickness (#15, SICK_* above). The setting is saved at once in its own key, like the pace;
+  // switching it off cures the pet and clears the counts, and nothing counts while it is off.
+  uint8_t sickMode = SICK_OFF;  // SICK_OFF or SICK_ON
+  void setSickMode(uint8_t v);
+  bool isSick() const { return sick; }
+  // counted minutes sick so far (0 when well), up to SICK_RUNAWAY_MIN
+  uint16_t sickMinutes() const { return sick ? sickMin : 0; }
+  // The medicine: cures it at once, +SICK_MEDICINE_JOY, a heart, the day's care and +1 bond;
+  // it takes the pill for EAT_ANIM_MS (eating() and takingMedicine()). False, and nothing
+  // given, unless it is sick, awake, hatched and not in a ceremony.
+  bool giveMedicine();
+  bool takingMedicine() const { return !sleeping && timeLeft(medUntil) > 0; }
+  // left sick SICK_RUNAWAY_MIN counted minutes: the sketch starts the run-away. Awake only,
+  // as canRunawayNow(): a pet put to bed (or loaded asleep) waits until it wakes.
+  bool sickRunawayDue() const { return sick && sickMin >= SICK_RUNAWAY_MIN && ceremony == CER_NONE && !isEgg() && !sleeping; }
   void clean();
   void caress();  // tocar al bicho
   void eggTap();  // tocar el huevo: 3 toques y eclosiona
@@ -339,7 +384,8 @@ public:
   bool canRunawayNow() const;   // abandono total 1h: lista para escaparse (boton triste)
   // el usuario decide en un dialogo; "mantener/quedaros" pospone y re-ofrece luego
   bool wantEvolveButton() const { return canEvolveNow() && level() > evoDeclinedLv; }
-  bool wantFarewellButton() const { return canFarewellNow() && ageMinutes >= farDeclinedAge; }
+  // a sick pet (#15) says goodbye once it is better: the button waits
+  bool wantFarewellButton() const { return canFarewellNow() && !sick && ageMinutes >= farDeclinedAge; }
   void declineEvolve() { evoDeclinedLv = level(); }              // re-ofrece al subir de nivel
   void declineFarewell() { farDeclinedAge = ageMinutes + 1440; } // re-ofrece dentro de 1 dia
   // primera partida: el jugador elige inicial (Bulbasaur/Charmander/Squirtle)
@@ -351,9 +397,13 @@ public:
   int16_t eggChoice(uint8_t i) const { return i < EGG_CHOICES ? eggCand[i] : (int16_t)-1; }
   void chooseEgg(uint8_t i);         // i fuera de rango o sin eleccion: no hace nada
   void cancelEggChoice();            // consola SPEC: sale de la eleccion sin elegir
-  // rellena out[] con tres especies de huevo distintas: `special` (la tirada de
-  // siempre) y dos comunes de otros colores de tipo, en orden aleatorio
+  // Fills out[] with three distinct egg species in random order: `special` (the
+  // usual roll) and two Commons, no two of the three with spots that look alike
+  // (eggSpotsLookAlike() in dex.h, #34) while the Commons allow it.
   void rollEggChoices(int16_t special, int16_t out[EGG_CHOICES]);
+  // The same with another look-alike rule, so a host test can leave no colour
+  // that passes it and reach the fallback passes (#34).
+  void rollEggChoices(int16_t special, int16_t out[EGG_CHOICES], bool (*lookAlike)(uint16_t, uint16_t));
   static bool validEggChoices(const int16_t c[EGG_CHOICES]);
   void factoryReset() { prefs.clear(); }  // borra la NVS (test: comando serie WIPE)
   void dbgRunawayReady() { fullness = joy = energy = hygiene = 0; neglectTicks = RUNAWAY_TICKS; }  // test
@@ -431,6 +481,13 @@ private:
   uint8_t toyJoys = 0;      // plays that gave joy in this hour (TOY_PER_HOUR; RAM only)
   uint32_t toyFrom = 0;     // when this hour started (the first play that gave joy)
   bool milked = false;      // had warm milk: its sleep restores more until it wakes (#13; RAM only)
+  uint32_t medUntil = 0;    // taking the medicine (#15): the pill shows until this millis()
+  // Sickness (#15), saved (NVS "sick", "sickg", "sickh", "sickt"); all four are false/0 while
+  // sickMode is off and for an egg.
+  bool sick = false;
+  uint16_t germMin = 0;  // well: counted minutes in the red in a row, under SICK_AFTER_MIN
+  uint16_t healMin = 0;  // sick: minutes out of the red in all, under SICK_HEAL_MIN
+  uint16_t sickMin = 0;  // sick: counted minutes sick, up to SICK_RUNAWAY_MIN
   uint32_t heartUntil = 0;
   uint32_t evolveUntil = 0;
   int16_t eggTarget = 1;       // dex oculto que saldra del huevo
@@ -470,6 +527,9 @@ private:
   // per minute asleep: the nature's rate, and more after warm milk (#13)
   uint8_t sleepEnergy() const { return (nature == NAT_LAZY ? NAT_SLEEP_ENERGY : 6) + (milked ? MILK_SLEEP_ENERGY : 0); }
   void selfCare();   // one need back up to half while charging (#24), from tick()
+  void sickTick(bool awake);  // sickness's minute (#15): falls sick, slips up, gets better
+  void clearSickness();       // well, every count at 0
+  void addSlipUp();           // one more slip-up (careMistakes, capped at 255) and -1 bond
   void hatch();
   void registerSpecies(int16_t dex);
   void save();
