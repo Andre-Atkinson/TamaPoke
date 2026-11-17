@@ -124,10 +124,13 @@ matching a wrapper shell whose command line holds it).
 Never drop a warning or a skipped-test count, and read any failure in full:
 the gate prints failing assertions, and a failed run keeps its full logs in
 `test/build/gate-logs/`. A build with more sketch warnings than
-`WARN_BASELINE` in `tools/sketch_warnings.sh` (18, the exact count on `main`
+`WARN_BASELINE` in `tools/sketch_warnings.sh` (17, the exact count on `main`
 per build) fails the gate and CI's `Compile firmware`, which count them with
 that same script; only new warnings are findings, and a PR that changes the
-count updates the baseline. `ruff check tools/` and a
+count updates the baseline. CI's `Game-logic tests (host, no board)` job builds
+the host tests with Linux g++, and its `No host build warnings` step fails on
+any `: warning: ` line, which macOS clang (and so the gate) may not show (#98).
+`ruff check tools/` and a
 generated-headers check (needs Pillow) run in CI but not in the gate: ask the
 owner before installing ruff (even into `.venv/`).
 

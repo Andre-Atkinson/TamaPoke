@@ -288,7 +288,6 @@ public:
   uint16_t atkStat() const;
   uint16_t defStat() const;
   uint16_t speStat() const;
-  void play();
   void toggleLight();  // dormir / despertar
   // horario de dormir: solo actuan si se puede (no huevo, ni ceremonia, ni eleccion
   // de inicial, ni ya en ese estado). Devuelven true si cambiaron algo. Dormir es

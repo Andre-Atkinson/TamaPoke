@@ -151,7 +151,8 @@ inline void ownerNameForFont(const char *utf8, char *out, size_t outSize) {
   if (ownerNameCheck(utf8) != OWNER_OK) return;
   size_t k = 0;
   for (const char *p = utf8; *p && k + 1 < outSize;) {
-    uint32_t cp;
+    // The check above means ownerUtf8() always sets cp here; g++ can't see that (#98).
+    uint32_t cp = 0;
     p += ownerUtf8(p, &cp);
     const OwnerLetter *l = ownerLetter(cp);
     out[k++] = !l ? (char)cp : (char)l->font;
