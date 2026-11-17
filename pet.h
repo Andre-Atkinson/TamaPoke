@@ -343,8 +343,9 @@ public:
   // given, unless it is sick, awake, hatched and not in a ceremony.
   bool giveMedicine();
   bool takingMedicine() const { return !sleeping && timeLeft(medUntil) > 0; }
-  // left sick SICK_RUNAWAY_MIN counted minutes: the sketch starts the run-away
-  bool sickRunawayDue() const { return sick && sickMin >= SICK_RUNAWAY_MIN && ceremony == CER_NONE && !isEgg(); }
+  // left sick SICK_RUNAWAY_MIN counted minutes: the sketch starts the run-away. Awake only,
+  // as canRunawayNow(): a pet put to bed (or loaded asleep) waits until it wakes.
+  bool sickRunawayDue() const { return sick && sickMin >= SICK_RUNAWAY_MIN && ceremony == CER_NONE && !isEgg() && !sleeping; }
   // The medicine button over the pet (#15), in the farewell and run-away buttons' place: while
   // it is sick and awake. The run-away button, when it shows, keeps that place: one care makes
   // it go, and then the medicine shows.

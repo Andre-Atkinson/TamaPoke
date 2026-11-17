@@ -78,6 +78,26 @@ TEST(sick, a_clean_starts_the_count_again) {
   CHECK(p.isSick());
 }
 
+// The red is hygiene under SICK_DIRTY (25): exactly 25 is not red. minutesAt() sets the hygiene
+// before the tick and the easygoing pet loses 1 a minute (no poops): 26 ends the minute at 25,
+// 25 at 24.
+TEST(sick, the_red_starts_under_25_not_at_25) {
+  Pet p;
+  hatchPet(p, 4);
+  p.setSickMode(SICK_ON);
+  minutesAt(p, 2 * SICK_AFTER_MIN, 26);
+  CHECK_EQ(p.hygiene, (uint8_t)SICK_DIRTY);
+  CHECK_MSG(!p.isSick(), "hygiene at exactly 25 is not in the red");
+  Pet q;
+  hatchPet(q, 4);
+  q.setSickMode(SICK_ON);
+  minutesAt(q, SICK_AFTER_MIN - 1, 25);
+  CHECK_EQ(q.hygiene, (uint8_t)(SICK_DIRTY - 1));
+  CHECK(!q.isSick());
+  minutesAt(q, 1, 25);
+  CHECK_MSG(q.isSick(), "hygiene at 24 is in the red");
+}
+
 TEST(sick, asleep_or_in_quiet_hours_the_count_waits) {
   Pet p;
   hatchPet(p, 4);
@@ -115,6 +135,23 @@ TEST(sick, self_care_on_the_charger_keeps_it_well) {
     p.update(millis());
   }
   CHECK(!p.isSick());
+}
+
+// tick() runs sickTick after self-care: a bath it gives this minute is a clean minute
+TEST(sick, a_bath_self_care_gives_this_minute_counts_as_clean) {
+  Pet p;
+  hatchPet(p, 4);
+  p.setSickMode(SICK_ON);
+  minutesAt(p, SICK_AFTER_MIN - 1, RED);
+  CHECK(!p.isSick());
+  p.setCharger(true, true, SELFCARE_IDLE_MS);
+  p.fullness = p.joy = p.energy = 80;  // food is fine, so self-care picks the hygiene
+  p.poops = 3;                         // the drain takes 13: 26 -> 13, in the red
+  p.hygiene = 26;
+  mockAdvanceMillis(PET_TICK_MS);
+  p.update(millis());
+  CHECK_EQ(p.hygiene, (uint8_t)SELFCARE_LEVEL);  // self-care bathed it
+  CHECK_MSG(!p.isSick(), "the bath came before sickness's minute: that minute was clean");
 }
 
 TEST(sick, the_powered_off_catch_up_never_counts) {
@@ -244,6 +281,18 @@ TEST(sick, a_run_away_is_not_due_in_a_ceremony) {
   CHECK(!p.sickRunawayDue());
 }
 
+TEST(sick, a_run_away_is_not_due_asleep_but_waits_for_it_to_wake) {
+  Pet p;
+  hatchPet(p, 4);
+  makeSick(p);
+  minutesAt(p, SICK_RUNAWAY_MIN, RED);
+  CHECK(p.sickRunawayDue());
+  p.toggleLight();  // to bed
+  CHECK(!p.sickRunawayDue());
+  p.toggleLight();
+  CHECK(p.sickRunawayDue());
+}
+
 // ---------------------------------------------------------------- better
 TEST(sick, the_medicine_cures_at_once_as_the_days_care) {
   Pet p;
@@ -271,7 +320,47 @@ TEST(sick, the_medicine_cures_at_once_as_the_days_care) {
   CHECK(!p.isSick());
 }
 
-TEST(sick, no_medicine_when_well_asleep_or_as_an_egg) {
+// The medicine saves on its own: with no clock registerCare() does nothing, so only
+// giveMedicine's own save() clears the pending one.
+TEST(sick, the_medicine_saves_the_cure_at_once_with_no_clock) {
+  Pet p;
+  hatchPet(p, 4);
+  makeSick(p);
+  minutesAt(p, 10, RED);
+  CHECK_EQ(p.lastSeenEpoch, (uint32_t)0);
+  CHECK(p.savePending());
+  CHECK(p.giveMedicine());
+  CHECK(!p.savePending());
+  Pet q;
+  q.begin();
+  CHECK_MSG(!q.isSick(), "the cure was written");
+}
+
+TEST(sick, no_medicine_in_a_ceremony) {
+  Pet p;
+  hatchPet(p, 4);
+  makeSick(p);
+  p.startRunaway();  // the ceremonies don't clear the sickness
+  CHECK(!p.giveMedicine());
+  CHECK(p.isSick());
+}
+
+// as timers.an_ended_animation_stays_ended_after_25_days_of_uptime (test_pet.cpp): the pill's
+// deadline is left behind by Pet::update() and would read as ahead again after ~25 days
+TEST(sick, an_ended_medicine_stays_ended_after_25_days_of_uptime) {
+  Pet p;
+  hatchPet(p, 4);
+  makeSick(p);
+  CHECK(p.giveMedicine());
+  CHECK(p.takingMedicine());
+  mockAdvanceMillis(EAT_ANIM_MS + 100);
+  p.update(millis());  // the loop's next pass
+  CHECK(!p.takingMedicine());
+  mockAdvanceMillis(25u * 86400 * 1000);  // more than 2^31 ms
+  CHECK_MSG(!p.takingMedicine(), "the medicine came back");
+}
+
+TEST(sick, no_medicine_when_well_or_asleep) {
   Pet p;
   hatchPet(p, 4);
   p.setSickMode(SICK_ON);
@@ -321,6 +410,16 @@ TEST(sick, switching_it_off_cures_it_and_clears_the_counts) {
   p.setSickMode(SICK_ON);
   minutesAt(p, SICK_AFTER_MIN - 1, RED);
   CHECK(!p.isSick());
+}
+
+TEST(sick, a_setting_the_game_cannot_set_is_off) {
+  Pet p;
+  hatchPet(p, 4);
+  p.setSickMode(7);
+  CHECK_EQ(p.sickMode, (uint8_t)SICK_OFF);
+  Pet q;
+  q.begin();
+  CHECK_EQ(q.sickMode, (uint8_t)SICK_OFF);
 }
 
 TEST(sick, a_new_egg_is_well) {
