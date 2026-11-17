@@ -634,6 +634,7 @@ TEST(sick, the_serial_command_takes_on_off_and_minutes_up_to_the_run_away) {
   }
   for (const char *other : { "SICKX", "SCENE?", "STATS", "" })
     CHECK_MSG(sickCmdParse(other, m) == SICKCMD_NONE, std::string("not SICK: ") + other);
+}
 
 // Round 2 (R2-1): the powered-off catch-up leaves a sick pet as it was: no minute sick, no
 // slip-up, and no cure, awake or asleep, even past SICK_HEAL_MIN.
@@ -675,4 +676,3 @@ TEST(sick, falling_sick_and_getting_better_ask_for_a_save) {
   CHECK(!p.isSick());
   CHECK_MSG(p.savePending(), "getting better asks for a save");
 }
-
