@@ -203,9 +203,11 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   (cream Common, silver Rare, gold Legendary) and the spots the type colour; the
   species stays a surprise. Tap an egg to look at it, tap it again to pick it.
   One of the three is the usual roll (same odds, farewell blessing, runaway
-  curse and shiny chance); the other two are Common eggs of other types. Time is
-  paused until you pick, and the choice survives a power-off. Saved under new
-  keys in the pet's NVS namespace (`eggch`, `ecpk`, `ec0`-`ec2`).
+  curse and shiny chance); the other two are Common eggs of other types, and no
+  two of the three have spots of colours that look alike (ground and rock, poison
+  and ghost, electric and ground, normal and rock, #34). Time is paused until you
+  pick, and the choice survives a power-off. Saved under new keys in the pet's
+  NVS namespace (`eggch`, `ecpk`, `ec0`-`ec2`).
 - **Self-care while charging** (#24, always on). Plugged into USB and untouched
   for 10 minutes, the pet looks after itself up to half: once a minute the first
   need under 40 (food, then hygiene, which also clears the poops, then energy,

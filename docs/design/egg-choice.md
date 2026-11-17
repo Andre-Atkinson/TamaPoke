@@ -49,7 +49,10 @@ way around the luck: which Pokémon hatches stays a surprise.
 | Silhouette | The Pokémon's outline | Almost none |
 
 The three eggs are always three different species, with three different type
-colours when the tier allows (it always does for Common and Rare).
+colours when the tier allows (it always does for Common and Rare). Since #34,
+two colours that look alike as spots (CIE76 colour difference under 25 on the
+RGB565 accents: ground/rock, poison/ghost, electric/ground, normal/rock) count
+as the same colour; `tools/gen_dex.py` writes the pairs into `dex.h`.
 
 ### 2. How the three eggs are rolled
 
@@ -153,7 +156,8 @@ strings, and Care values must fit the 300 px button at size 4.
 
 ## Tests (host, each shown failing without its code)
 
-- The roll: three distinct valid egg species; distinct type colours; runaway
+- The roll: three distinct valid egg species; type colours that don't look
+  alike (#34); runaway
   gives three Common; with ★ odds, egg 1 matches today's tier odds over many
   seeded rolls and eggs 2-3 are Common.
 - The flow: a farewell or release with Choose on opens a choice; with
