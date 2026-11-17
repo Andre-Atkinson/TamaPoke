@@ -216,6 +216,14 @@ TEST(ClockEpochParse, a_value_that_wraps_a_64_bit_counter_is_refused) {
   CHECK_EQ(e, UNSET);
 }
 
+// 2^32 + T0, a time in 2162 that is still under the range's end before its last digit: a
+// 32-bit counter would wrap round to T0 and take it
+TEST(ClockEpochParse, a_value_that_wraps_a_32_bit_counter_is_refused) {
+  uint32_t e = UNSET;
+  CHECK(!clockEpochParse("6089531296", e));
+  CHECK_EQ(e, UNSET);
+}
+
 TEST(ClockEpochParse, a_negative_value_is_refused) {
   uint32_t e = UNSET;
   CHECK(!clockEpochParse("-1763380000", e));  // toInt() then a uint32_t cast: 2050-03-22

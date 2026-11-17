@@ -13,6 +13,8 @@
 #                                                "(ending)" line: paid once, at its end
 #   lim=0 ... then lim=100                    L. STATS before the bath and during the
 #                                                run-away: the bath finished first
+#   lim=0 ... then lim=100                    M. the same for the farewell choice's
+#                                                button, tapped during a bath
 #   ERR gallery not opened: an ending is on screen   M. GAL during the farewell
 # The scores differ from run to run (the games' dice follow the time and the board).
 
@@ -224,16 +226,27 @@ tap 233 200
 tap 233 200
 wait 6s
 
-# M. the player's farewell: a final form old enough, its button, its choice, "farewell";
-# then GAL during the farewell is refused (ERR) and the farewell stays on screen
+# M. the player's farewell during a bath: a final form old enough, left uncared for (ABANDON
+# empties its needs) and then stroked (CAREDAY: the next day, cared for, so the farewell
+# button shows in place of the run-away one), the bath, then within the bath's 3 s its
+# button, its choice and "farewell": the bath finishes first (STATS lim=0, then lim=100
+# during the farewell). Then GAL during the farewell is refused (ERR) and the farewell stays
+# on screen.
 serial SPEC 6
 serial LVL 80
 wait 1s
+serial ABANDON
+serial CAREDAY
+wait 1s
+serial STATS
+tap 326 390
+wait 300ms
 tap 233 205
 wait 300ms
 shot M1-farewell-choice-open
 tap 233 232
 wait 1s
+serial STATS
 serial GAL
 wait 300ms
 shot M2-farewell-gal-refused
