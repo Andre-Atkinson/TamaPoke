@@ -11,9 +11,11 @@
 # Steps, fastest first so most breakage shows in seconds: host tests
 # (+ASan/UBSan), i18n format check, no-network check over the firmware sources,
 # the desktop simulator for both boards (tools/sim.sh: it compiles the real
-# sketch on the host; when SDL2 is installed, also its interactive window,
-# built and driven by synthetic events with --selftest under SDL's dummy video
-# driver, with no display needed; without SDL2 that line is a SKIP), then both
+# sketch on the host and shoots screens.txt), the simulator scripts that check
+# their own serial output (an expect or expect-not step, sim/script.h) on both
+# boards, the interactive simulator window when SDL2 is installed (built and
+# driven by synthetic events with --selftest under SDL's dummy video driver,
+# with no display needed; without SDL2 that line is a SKIP), then both
 # firmware builds (1.75C and the original 1.75, one after the other).
 #
 # The firmware builds run from a staged copy of the working tree (uncommitted
@@ -178,6 +180,48 @@ if [[ "$BUILD" -eq 1 ]]; then
     if [[ "$rc" -eq 0 && "$got" -ne "$want" ]]; then rc=1; fi
     record "simulator $b" "$rc" "$got/$want screens, $w host build warning(s)"
   done
+  # Scripts that check their own serial output (expect / expect-not, #99): every script in
+  # sim/scripts/ with such a step, on both boards, with the simulators built just above. No
+  # --lang: a script's own lang step applies. Each run must exit 0 and report as many passed
+  # checks as the script has check steps (sim: checks P/N passed), so a run that skips
+  # checks or stops early fails too.
+  CHECK_RE='^[[:space:]]*expect(-not)?([[:space:]]|$)'
+  CHECK_SCRIPTS=()
+  for f in sim/scripts/*.txt; do
+    [[ -f "$f" ]] && grep -qE "$CHECK_RE" "$f" && CHECK_SCRIPTS+=("$f")
+  done
+  if [[ "${#CHECK_SCRIPTS[@]}" -eq 0 ]]; then
+    SUMMARY+=("SKIP  sim checks (no script in sim/scripts has an expect step)")
+  else
+    for b in 175c 175; do
+      rc=0
+      passed=0
+      total=0
+      bad=()
+      for f in "${CHECK_SCRIPTS[@]}"; do
+        n="$(basename "$f" .txt)"
+        want="$(grep -cE "$CHECK_RE" "$f")"
+        log="$TMP/check-$b-$n.log"
+        ./tools/sim.sh --board "$b" --script "$f" --out "$TMP/check-$b/$n" --quiet >"$log" 2>&1
+        r=$?
+        got="$(sed -nE "s|^sim: checks ([0-9]+)/$want passed\$|\1|p" "$log" | tail -n 1)"
+        total=$((total + want))
+        passed=$((passed + ${got:-0}))
+        if [[ "$r" -ne 0 || "${got:-}" != "$want" ]]; then
+          echo "-- sim checks $b: $n (exit $r)"
+          grep -vE '^sim: (the PMU|checks )' "$log" | head -n 40
+          [[ "$r" -eq 0 ]] && echo "sim checks $b: $n reported ${got:-no} passed checks, not $want"
+          bad+=("$n")
+          rc=1
+        fi
+      done
+      if [[ "$rc" -eq 0 ]]; then
+        record "sim checks $b" 0 "${#CHECK_SCRIPTS[@]} scripts, $passed/$total checks"
+      else
+        record "sim checks $b" 1 "$passed/$total checks; failed: ${bad[*]}"
+      fi
+    done
+  fi
   # The interactive window (sim/window.cpp) is opt-in and needs SDL2 (Homebrew), which a
   # machine may not have: no working sdl2-config, no window lines. Its --selftest pushes synthetic
   # mouse and key events through the window's real event handler under SDL's dummy video

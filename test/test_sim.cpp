@@ -887,3 +887,149 @@ TEST(SimWindow, las_capturas_se_numeran_y_no_pisan_las_de_una_sesion_anterior) {
   CHECK_STREQ(p.c_str(), "out/dir/window-001.png");
   gFakeFiles.clear();
 }
+
+// ---------------------------------------------------------------- checks (#99)
+// expect / expect-not: a check on the serial output, the rest of the line up to a comment
+TEST(SimScript, expect_reads_the_rest_of_the_line_up_to_a_comment) {
+  SimScript s = simParseScript(
+      "wait 1s\n"
+      "expect Play: song untouched (screen off)   # a note after it\n"
+      "  expect-not \tPlay:\t\n"
+      "expect a  b*c\n",
+      "e.txt");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)4);
+  if (s.cmds.size() != 4) return;
+  CHECK_EQ((int)s.cmds[1].op, (int)OP_EXPECT);
+  CHECK_EQ(s.cmds[1].text, std::string("Play: song untouched (screen off)"));
+  CHECK_EQ(s.cmds[1].line, 2);
+  CHECK_EQ((int)s.cmds[2].op, (int)OP_EXPECT_NOT);
+  CHECK_EQ(s.cmds[2].text, std::string("Play:"));
+  CHECK_EQ(s.cmds[3].text, std::string("a  b*c"));  // the spaces inside are kept as written
+  CHECK_EQ(simCheckCount(s), (size_t)3);
+  CHECK_EQ(simCheckCount(simParseScript("wait 1s\nshot x\n")), (size_t)0);
+  // nothing to look for, a comment alone included: an error, never a check that passes
+  CHECK_EQ(simParseScript("wait 1s\nexpect   # only a note\n", "e.txt").error,
+           std::string("e.txt:2: usage: expect TEXT (a part of a serial line; '*' stands for any run of characters)"));
+  CHECK_EQ(simParseScript("expect-not\n", "e.txt").error,
+           std::string("e.txt:1: usage: expect-not TEXT (a part of a serial line; '*' stands for any run of characters)"));
+  CHECK_EQ(simParseScript("expectx Play:\n", "e.txt").error, std::string("e.txt:1: unknown step 'expectx'"));
+  // a check comes after boot (it looks at what setup() printed): it ends the preparation
+  CHECK_EQ(simPreBootEnd(simParseScript("battery 5\nexpect TamaPoke\n")), (size_t)1);
+  CHECK_EQ(simParseScript("battery 5\nexpect TamaPoke\nlang pt\n", "e.txt").error,
+           std::string("e.txt:3: lang must come before the first step that runs the firmware"));
+}
+
+TEST(SimChecks, a_star_stands_for_any_run_of_characters) {
+  // the same check passes on both boards, whatever the score and the 1.75C's extra field
+  CHECK(simLineMatches("Play: peek score=6 speed=+1 (screen off)", "Play: peek score=* (screen off)"));
+  CHECK(simLineMatches("Play: peek score=14 speed=+3 (screen off)", "Play: peek score=* (screen off)"));
+  CHECK(simLineMatches("Training: punch count=2 gain=3 input_drops=0 (screen off)",
+                       "Training: punch count=2 gain=3*(screen off)"));
+  CHECK(simLineMatches("Training: punch count=2 gain=3 (screen off)", "Training: punch count=2 gain=3*(screen off)"));
+  CHECK(!simLineMatches("Training: punch count=2 gain=3", "Training: punch count=2 gain=3*(screen off)"));
+  CHECK(!simLineMatches("Play: keepy score=0 speed=+0", "Play: keepy*(screen off)"));
+  // a part of the line: anywhere in it, exactly as written
+  CHECK(simLineMatches("PWR triple: Locked", "triple"));
+  CHECK(simLineMatches("PWR triple: Locked", "PWR triple: Locked"));
+  CHECK(!simLineMatches("PWR triple: Locked", "pwr"));
+  CHECK(!simLineMatches("PWR triple: Locked", "PWR triple: Locked "));
+  // the parts in order, never overlapping
+  CHECK(simLineMatches("a then b", "a*b"));
+  CHECK(!simLineMatches("b then a", "a*b"));
+  CHECK(!simLineMatches("aaa", "aa*aa"));
+  CHECK(simLineMatches("aaaa", "aa*aa"));
+  CHECK(simLineMatches("ab", "a*b"));  // a star can stand for nothing
+  // stars at the ends add nothing; stars alone match any line, an empty one too
+  CHECK(simLineMatches("x Play: y", "*Play:*"));
+  CHECK(simLineMatches("", "*"));
+  CHECK(simLineMatches("anything", "**"));
+  CHECK(!simLineMatches("", "Play:"));
+}
+
+static SimCmd simCheckCmd(SimOp op, int line, const char *text) {
+  SimCmd c;
+  c.op = op;
+  c.line = line;
+  c.text = text;
+  return c;
+}
+
+TEST(SimChecks, checks_in_a_row_share_one_window_and_the_next_step_starts_a_new_one) {
+  SimSerialWindow w;
+  std::string why;
+  w.text = "TamaPoke fw v1.19\nPlay: a\n";
+  w.stepRuns();  // no check before it: nothing is dropped
+  CHECK(w.check(simCheckCmd(OP_EXPECT, 3, "Play: a"), why));
+  CHECK_EQ(why, std::string(""));
+  CHECK(w.check(simCheckCmd(OP_EXPECT, 4, "TamaPoke fw"), why));  // same window: boot on
+  w.stepRuns();
+  w.text += "PWR short\nPlay: b\n";
+  CHECK(!w.check(simCheckCmd(OP_EXPECT, 6, "Play: a"), why));
+  CHECK_EQ(why, std::string("expect failed: none of the 2 lines printed since the check on line 4 contains "
+                            "\"Play: a\":\n    PWR short\n    Play: b"));
+  CHECK(w.check(simCheckCmd(OP_EXPECT, 7, "Play: b"), why));  // the failed check shared the window
+  w.stepRuns();
+  w.stepRuns();  // two steps in a row: still one new window
+  CHECK(!w.check(simCheckCmd(OP_EXPECT, 9, "Play: b"), why));
+  CHECK_EQ(why, std::string("expect failed: nothing was printed since the check on line 7, so no line contains "
+                            "\"Play: b\""));
+  CHECK(w.check(simCheckCmd(OP_EXPECT_NOT, 10, "*"), why));  // and nothing at all was printed
+}
+
+TEST(SimChecks, a_line_still_being_printed_is_seen_whole_by_the_next_window) {
+  SimSerialWindow w;
+  std::string why;
+  w.text = "done\nPlay: pe";
+  CHECK(w.check(simCheckCmd(OP_EXPECT, 1, "Play: pe"), why));
+  w.stepRuns();
+  CHECK_EQ(w.text, std::string("Play: pe"));
+  w.text += "ek (screen off)\n";
+  CHECK(w.check(simCheckCmd(OP_EXPECT, 3, "Play: peek (screen off)"), why));
+  CHECK(w.check(simCheckCmd(OP_EXPECT_NOT, 4, "done"), why));
+}
+
+TEST(SimChecks, expect_not_fails_on_a_matching_line_and_names_it) {
+  SimSerialWindow w;
+  std::string why;
+  w.text = "PWR short\r\nPlay: keepy score=0 speed=+0 (screen off)\r\nBTN 1\r\n";
+  CHECK(w.check(simCheckCmd(OP_EXPECT_NOT, 5, "Training:"), why));
+  CHECK_EQ(why, std::string(""));
+  CHECK(!w.check(simCheckCmd(OP_EXPECT_NOT, 6, "Play:"), why));
+  CHECK_EQ(why, std::string("expect-not failed: 1 of the 3 lines printed since boot contains \"Play:\":\n"
+                            "    Play: keepy score=0 speed=+0 (screen off)"));
+  CHECK(!w.check(simCheckCmd(OP_EXPECT_NOT, 7, "*"), why));
+  CHECK_EQ(why.substr(0, 59), std::string("expect-not failed: 3 of the 3 lines printed since boot cont"));
+  CHECK(why.find("contain \"*\"") != std::string::npos);
+  CHECK(why.find('\r') == std::string::npos);  // a "\r\n" line end is not part of the line
+  CHECK(w.check(simCheckCmd(OP_EXPECT, 8, "speed=+0 (screen off)"), why));  // the line ends before the '\r'
+  CHECK(!w.check(simCheckCmd(OP_WAIT, 9, "Play:"), why));  // not a check: never a pass
+}
+
+TEST(SimChecks, a_failed_check_lists_at_most_20_lines_cut_to_160_characters) {
+  SimSerialWindow w;
+  std::string why;
+  for (int i = 0; i < 25; i++) w.text += "line " + std::to_string(i) + "\n";
+  w.text += std::string(200, 'x') + "\n";
+  CHECK(!w.check(simCheckCmd(OP_EXPECT, 1, "Play:"), why));
+  CHECK(why.find("none of the 26 lines printed since boot") != std::string::npos);
+  CHECK(why.find("\n    line 19\n    ... and 6 more") != std::string::npos);
+  CHECK(why.find("line 20") == std::string::npos);
+  CHECK(!w.check(simCheckCmd(OP_EXPECT_NOT, 2, "xxx"), why));
+  CHECK(why.find("\n    " + std::string(160, 'x') + "...") != std::string::npos);
+  CHECK(why.find(std::string(161, 'x')) == std::string::npos);
+}
+
+TEST(SimChecks, the_shim_copies_what_the_firmware_prints) {
+  std::string seen;
+  mockSerialCapture(&seen);
+  Serial.print("Play: ");
+  Serial.printf("%s score=%d\n", "peek", 6);
+  Serial.println("PWR short");
+  mockSerialTxRoom(0);  // a byte the host doesn't take was never printed
+  Serial.print("lost");
+  mockSerialTxRoom(-1);
+  mockSerialCapture(nullptr);
+  Serial.print("after");
+  CHECK_EQ(seen, std::string("Play: peek score=6\nPWR short\n"));
+}

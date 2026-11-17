@@ -102,8 +102,13 @@ It runs: `test/run_tests.sh --asan` (host logic + ASan/UBSan + tools tests),
 --warnings=all`) with `--warnings=all`, and the desktop simulator for both
 boards (`tools/sim.sh --board 175c` and `--board 175`, each with `--lang en
 --script sim/scripts/screens.txt --out <dir> --quiet`; the PNG count must equal
-the lines matching `^[[:space:]]*shot[[:space:]]` in that script). When
-`sdl2-config` works it also builds the interactive simulator window and runs
+the lines matching `^[[:space:]]*shot[[:space:]]` in that script). Then, for
+both boards, every script in `sim/scripts/` with an `expect` or `expect-not`
+step (checks on the serial output, `sim/script.h`; no `--lang`, so the script's
+own `lang` applies), one `sim checks <board>` line each: every run must exit 0
+and print `sim: checks N/N passed`, where N is the number of lines matching
+`^[[:space:]]*expect(-not)?([[:space:]]|$)` in that script. With no such script
+it records `SKIP  sim checks`. When `sdl2-config` works it also builds the interactive simulator window and runs
 its `--selftest` (synthetic SDL events, `SDL_VIDEODRIVER=dummy`) for both
 boards, one `window <board>` line each; without SDL2 it records `SKIP  window
 (no SDL2)`. SDL2 is opt-in and only the window needs it: ask the owner before
@@ -231,8 +236,8 @@ most two builds at a time, parallel sessions queued behind them. A
   firmware builds, so it includes the desktop simulator for both boards, which
   CI does not run. The simulator uses the host compiler, so it is not a
   firmware build and is outside the two-builds limit. Report the summary
-  lines (they include each board's screen count and host warning count) and
-  any `warning:` lines it prints.
+  lines (they include each board's screen count and host warning count, and
+  each board's `sim checks` count) and any `warning:` lines it prints.
 - **Checks CI** for the firmware builds: `gh pr checks <n> --repo
   Andre-Atkinson/TamaPoke` must list `Compile firmware` as passing, which also
   means both builds fit `app0` and neither has more sketch warnings than

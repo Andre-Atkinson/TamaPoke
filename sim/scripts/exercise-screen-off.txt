@@ -13,6 +13,9 @@
 # when the screen is back on (shot 56). Last, the battery runs out mid-punch: the punch is
 # paid ("Training: punch count=1 gain=1 ... (screen off)") before the PMU powers the board
 # off, and the simulator stops there.
+# The expect steps check those lines (#99; tools/gate.sh runs this script on both boards and
+# fails if one doesn't hold). Each looks at the lines printed since the check before it, and
+# a '*' stands for any run of characters: the 1.75C adds "input_drops=0" before "(screen off)".
 # Timing as in exercises.txt: a tap is 80 ms down then 400 ms settling, an exercise starts
 # when the tap that chose it lifts, and the punch's windows are 400-1100 ms into each 1.5 s
 # swing (exercise.h).
@@ -37,6 +40,7 @@ tap 233 240
 shot 40-punch-two
 press pwr
 shot 41-punch-pwr-off
+expect Training: punch count=2 gain=3*(screen off)
 wait 5s
 # PWR again: the creature, not the exercise (no result screen, nothing resumed)
 press pwr
@@ -53,6 +57,7 @@ tap 233 240
 hold 233 270 2200ms 44-hold-held
 press pwr
 shot 45-hold-pwr-off
+expect Training: hold count=1 gain=1*(screen off)
 wait 5s
 press pwr
 wait 1s
@@ -71,6 +76,7 @@ wait 300ms
 tap 233 240
 press pwr 3
 shot 47-punch-locked
+expect Training: punch count=1 gain=1*(screen off)
 wait 3s
 press pwr 3
 tap 40 233
@@ -87,6 +93,7 @@ swipe up
 swipe left
 tap 233 320
 shot 49-train-asleep-note
+expect TRAIN: asleep
 wait 2500ms
 shot 50-train-asleep-after
 swipe up
@@ -109,6 +116,9 @@ wait 800ms
 tap 233 240
 wait 17s
 shot 52-punch-result-before-pwr
+# paid at the end of the session, with no PWR press in it
+expect Training: punch count=2 gain=3
+expect-not Training:*(screen off)
 press pwr
 shot 53-result-pwr-off
 wait 2s
@@ -118,6 +128,8 @@ shot 54-result-pwr-on
 swipe up
 swipe left
 shot 55-fitness-after-result-pwr
+# PWR on the result paid nothing again
+expect-not Training:
 
 # A ribbon a session ended by PWR completes (#69, #88): strength set to 28 (the ribbon's goal
 # is 30), two punches (+3), PWR. The ribbon is gained at the press (its chime) and its banner
@@ -135,6 +147,7 @@ wait 6s
 press pwr
 wait 500ms
 shot 56-ribbon-banner-after-pwr
+expect Training: punch count=2 gain=3*(screen off)
 
 # The battery runs out mid-punch (0 %, no USB): the punch is paid before the power-off.
 swipe up
@@ -145,3 +158,5 @@ wait 300ms
 tap 233 240
 battery 0
 wait 2s
+# paid before the power-off (the simulator stops running the firmware there; the check still runs)
+expect Training: punch count=1 gain=1*(screen off)

@@ -290,6 +290,16 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
         if (w[1] == GAME_KEYS[i]) c.a = i;
       if (c.a < 0) return fail("usage: game keepy|catch|peek|song");
       c.op = OP_GAME;
+    } else if (op == "expect" || op == "expect-not") {
+      // the rest of the line, trimmed: `line` already stops at a '#' (a comment), so a
+      // trailing comment can't become part of the text and make an expect-not pass for good
+      std::string rest = line.substr(line.find(op) + op.size());
+      size_t a = rest.find_first_not_of(" \t\r");
+      if (a == std::string::npos)
+        return fail("usage: " + op + " TEXT (a part of a serial line; '*' stands for any run of characters)");
+      size_t b = rest.find_last_not_of(" \t\r");
+      c.op = op == "expect" ? OP_EXPECT : OP_EXPECT_NOT;
+      c.text = rest.substr(a, b - a + 1);
     } else if (op == "shot") {
       if (n != 2) return fail("usage: shot NAME");
       if (!shotName(w[1])) return fail("shot names use letters, digits, '-', '_' and '.' only");
@@ -302,4 +312,89 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
     out.cmds.push_back(c);
   }
   return out;
+}
+
+// ---------------------------------------------------------------- checks (#99)
+
+bool simLineMatches(const std::string &line, const std::string &pattern) {
+  size_t at = 0;  // where the next part may start in `line`
+  size_t i = 0;   // where the next part starts in `pattern`
+  while (i <= pattern.size()) {
+    size_t star = pattern.find('*', i);
+    if (star == std::string::npos) star = pattern.size();
+    if (star > i) {
+      // the leftmost place for each part leaves the most room for the parts after it
+      size_t hit = line.find(pattern.substr(i, star - i), at);
+      if (hit == std::string::npos) return false;
+      at = hit + (star - i);
+    }
+    i = star + 1;
+  }
+  return true;
+}
+
+size_t simCheckCount(const SimScript &script) {
+  size_t n = 0;
+  for (const SimCmd &c : script.cmds)
+    if (c.op == OP_EXPECT || c.op == OP_EXPECT_NOT) n++;
+  return n;
+}
+
+void SimSerialWindow::stepRuns() {
+  if (!afterCheck_) return;
+  afterCheck_ = false;
+  since_ = lastCheckLine_;
+  size_t nl = text.rfind('\n');
+  text.erase(0, nl == std::string::npos ? 0 : nl + 1);
+}
+
+// The window's lines, '\r' dropped; the last one may still be open (no '\n' yet).
+static std::vector<std::string> windowLines(const std::string &text) {
+  std::vector<std::string> out;
+  size_t start = 0;
+  while (start < text.size()) {
+    size_t nl = text.find('\n', start);
+    size_t end = nl == std::string::npos ? text.size() : nl;
+    std::string l = text.substr(start, end - start);
+    if (!l.empty() && l.back() == '\r') l.pop_back();
+    out.push_back(l);
+    if (nl == std::string::npos) break;
+    start = nl + 1;
+  }
+  return out;
+}
+
+static std::string linesWord(size_t n) { return std::to_string(n) + (n == 1 ? " line" : " lines"); }
+
+// The lines a failed check shows, one per row, indented; at most 20, each cut to 160 characters.
+static std::string listLines(const std::vector<std::string> &lines) {
+  const size_t MAX_LINES = 20, MAX_CHARS = 160;
+  std::string out;
+  for (size_t i = 0; i < lines.size() && i < MAX_LINES; i++)
+    out += "\n    " + (lines[i].size() > MAX_CHARS ? lines[i].substr(0, MAX_CHARS) + "..." : lines[i]);
+  if (lines.size() > MAX_LINES) out += "\n    ... and " + std::to_string(lines.size() - MAX_LINES) + " more";
+  return out;
+}
+
+bool SimSerialWindow::check(const SimCmd &c, std::string &why) {
+  why.clear();
+  if (c.op != OP_EXPECT && c.op != OP_EXPECT_NOT) return false;
+  afterCheck_ = true;
+  lastCheckLine_ = c.line;
+  std::vector<std::string> lines = windowLines(text), hits;
+  for (const std::string &l : lines)
+    if (simLineMatches(l, c.text)) hits.push_back(l);
+  bool expect = c.op == OP_EXPECT;
+  if (expect ? !hits.empty() : hits.empty()) return true;
+  std::string from = since_ ? "since the check on line " + std::to_string(since_) : "since boot";
+  std::string what = "\"" + c.text + "\"";
+  if (!expect)
+    why = "expect-not failed: " + std::to_string(hits.size()) + " of the " + linesWord(lines.size()) + " printed " +
+          from + " " + (hits.size() == 1 ? "contains " : "contain ") + what + ":" + listLines(hits);
+  else if (lines.empty())
+    why = "expect failed: nothing was printed " + from + ", so no line contains " + what;
+  else
+    why = "expect failed: none of the " + linesWord(lines.size()) + " printed " + from + " contains " + what + ":" +
+          listLines(lines);
+  return false;
 }

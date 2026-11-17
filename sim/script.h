@@ -46,6 +46,22 @@
 //                            medal check (the minute tick). Only the simulator has this.
 //   game NAME                the next Play deals this minigame (#94), one of keepy, catch, peek
 //                            or song, in place of the bag's pick. Only the simulator has this.
+//   expect TEXT              a check on the serial output (#99): some line printed since the
+//                            previous check contains TEXT. '*' in TEXT stands for any run of
+//                            characters, so "expect Play: peek score=* (screen off)" passes
+//                            whatever the score. TEXT is the rest of the line, trimmed; '#'
+//                            starts a comment here as on every step but serial, so TEXT can't
+//                            hold a '#'. Checks in a row share one window: the lines printed
+//                            since the check before them (the first window starts at boot and
+//                            holds what setup() printed). A failed check prints its line and
+//                            the lines it looked at; the run goes on to the end (shots and
+//                            serial.log complete) and exits 1. Once the PMU has powered the
+//                            board off, the steps left are skipped but the checks still run,
+//                            on what was printed. tools/gate.sh runs every script in
+//                            sim/scripts/ that has a check, on both boards.
+//   expect-not TEXT          the opposite: no line printed since the previous check contains
+//                            TEXT (same matching, same window). A typo makes it pass whatever
+//                            happens, so pair it with an expect in the same window where one fits.
 //
 // Duraciones: 500ms, 2s, 5m, 2h, 1d y combinaciones (1h30m); un numero solo = ms.
 #pragma once
@@ -58,7 +74,7 @@ enum SimOp : uint8_t {
   OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING, OP_PMU,
   OP_TAP, OP_HOLD, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
   OP_WAIT, OP_SERIAL, OP_SHOT, OP_IDLE, OP_SAY, OP_NATURE,
-  OP_TRAIN, OP_GAME, OP_POOPS,
+  OP_TRAIN, OP_GAME, OP_POOPS, OP_EXPECT, OP_EXPECT_NOT,
 };
 
 struct SimCmd {
@@ -92,4 +108,38 @@ SimScript simParseScript(const std::string &text, const std::string &name = "scr
 // serial, shot): los anteriores (lang, clock, battery, usb, charging, pmu) son preparacion
 // y se aplican antes de setup(). Es el mismo corte que usa el lector para rechazar un
 // lang/clock/pmu tardio, asi que no pueden discrepar. cmds.size() si no hay ninguno.
+// A check (expect, expect-not) also ends the preparation: it looks at what setup() printed.
 size_t simPreBootEnd(const SimScript &script);
+
+// ---- checks on the serial output (expect, expect-not; #99) ----
+
+// True if `line` contains `pattern`, where each '*' in the pattern stands for any run of
+// characters, none included: "Play: peek * (screen off)". The parts between the stars are
+// found in order, left to right, without overlapping. A pattern of stars only matches any line.
+bool simLineMatches(const std::string &line, const std::string &pattern);
+
+// How many steps of the script are checks.
+size_t simCheckCount(const SimScript &script);
+
+// The serial output the checks look at. The simulator has the shim append every byte the
+// firmware prints to `text` (mockSerialCapture), and tells it when a step that isn't a check
+// comes (stepRuns). A check looks at the lines printed since the previous check; checks in a
+// row share one window, and the first window starts at boot.
+struct SimSerialWindow {
+  std::string text;  // the current window: from the start of a line to the last byte printed
+
+  // A step that isn't a check comes next (run, or skipped once the board is off). If checks
+  // came just before it, their window is done and the next one starts here, at the start of
+  // the line being printed: a line still open is seen whole by the next check.
+  void stepRuns();
+
+  // One check (OP_EXPECT or OP_EXPECT_NOT; any other step: false). If it fails, `why` says
+  // what was looked for since which script line, and lists the lines it looked at (expect)
+  // or the ones that matched (expect-not), at most 20, each cut to 160 characters.
+  bool check(const SimCmd &c, std::string &why);
+
+ private:
+  bool afterCheck_ = false;  // the last step was a check
+  int lastCheckLine_ = 0;    // the script line of the last check
+  int since_ = 0;            // the window started after this script line's check (0: boot)
+};
