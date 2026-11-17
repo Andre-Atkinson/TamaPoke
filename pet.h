@@ -395,7 +395,9 @@ public:
   bool canFarewellNow() const;  // forma final + 7 dias: lista para despedirse (boton)
   bool canRunawayNow() const;   // abandono total 1h: lista para escaparse (boton triste)
   // el usuario decide en un dialogo; "mantener/quedaros" pospone y re-ofrece luego
-  bool wantEvolveButton() const { return canEvolveNow() && level() > evoDeclinedLv; }
+  // ...not while it takes the medicine's pill (#15, review R2-6): cured, a pet ready to evolve
+  // would get the evolve button at once, where the medicine button just was, under the finger
+  bool wantEvolveButton() const { return canEvolveNow() && level() > evoDeclinedLv && !takingMedicine(); }
   // a sick pet (#15) says goodbye once it is better: the button waits
   bool wantFarewellButton() const { return canFarewellNow() && !sick && ageMinutes >= farDeclinedAge; }
   void declineEvolve() { evoDeclinedLv = level(); }              // re-ofrece al subir de nivel

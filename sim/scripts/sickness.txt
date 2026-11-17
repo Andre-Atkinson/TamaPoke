@@ -2,12 +2,14 @@
 # make the pet sick, and its minutes for a day left sick:
 #   A. the Care page's fourth row switches sickness on
 #   B. sick: one call, the HURT pose, the status line, the thermometer bubble, the medicine
-#      button (a long press on it is not one on the pet), and the Progress page's "Get well to
-#      evolve"
+#      button (a long press on it is not one on the pet), the sick line said by itself, and
+#      the Progress page's "Get well to evolve"
 #   C. a banner holds the buttons over the pet back; then the medicine: the pill, "Feeling
-#      better!", and the evolve button it was holding back
-#   D. it says so in a speech bubble; the warning call, halfway to running away
+#      better!", and the evolve button it was holding back, which a banner holds back too
+#   D. it says so in a speech bubble; the warning call, halfway to running away; asleep it
+#      calls no one, not even once it wakes
 #   E. left sick a day it runs away, but only once someone looks at the screen
+#   F. a call's light alone is not someone looking: it stays until a touch
 #   tools/sim.sh --script sickness --out shots/          (and --lang pt for the texts)
 battery 80
 
@@ -46,6 +48,20 @@ expect-not medicine: taken
 hold 233 285 3500ms
 expect-once release: asked
 wait 11s
+# The bubble loop says the sick line by itself (no "say" step): bubbles come 1 to 2 minutes
+# apart, so taps off the pet and the buttons (x 400, y 140) keep the screen lit and undimmed
+# until one does.
+tap 400 140
+wait 25s
+tap 400 140
+wait 25s
+tap 400 140
+wait 25s
+tap 400 140
+wait 25s
+tap 400 140
+wait 25s
+expect say sick
 swipe up
 swipe left
 swipe left
@@ -79,6 +95,20 @@ wait 3s
 serial CARE?
 expect * sickness=1 sick=0 germ=0 heal=0 sickmin=0
 shot 6-better-evolve-button
+# The evolve button waits under a banner too: four more days' care in a row (CAREDAY) make
+# the 7-day streak, its banner and its medal's. A tap on the evolve button's place is a pat
+# then; after the banners, the same tap opens the evolve/keep dialog, which closes by itself.
+serial CAREDAY
+serial CAREDAY
+serial CAREDAY
+serial CAREDAY
+wait 300ms
+tap 233 204
+expect-not evolve: asked
+wait 10s
+tap 233 204
+expect-once evolve: asked
+wait 13s
 
 # D. sick again, a minute short of the warning: the "sick" call, then the warning. A tap off
 # the pet and the buttons (x 400, y 140) keeps the screen lit: the 1.75C turns it off at 60 s.
@@ -101,6 +131,21 @@ wait 24s
 expect-once call sick-warning: *
 serial CARE?
 expect * sickness=1 sick=1 * sickmin=72*
+
+# Asleep, falling sick calls no one, and nothing calls later when it wakes: the moon's strip
+# puts it to bed (lights out, the strip's first item), SICK ON while it sleeps, then the moon
+# wakes it.
+serial SICK OFF
+tap 264 404
+wait 300ms
+tap 231 320
+wait 1s
+serial SICK ON
+wait 2s
+expect-not call sick
+tap 264 404
+wait 2s
+expect-not call sick
 
 # E. due to run away (SICK ON 1440) with the screen turned off with PWR, as the player leaves
 # it: nobody is looking, so it waits. PWR again (someone looks) and it goes.

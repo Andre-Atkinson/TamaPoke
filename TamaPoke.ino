@@ -117,6 +117,10 @@ BedEvent bedPending = BED_NONE;  // evento a la espera de que no haya minijuego 
 // Attention calls (attention.h, #9): see attnLoop()
 AttnArm attnArm;
 SickCall sickCall;            // sickness's two calls (#15): falling sick and the warning
+// Someone has woken the screen (a touch, PWR or BOOT) since this boot (wakeUI): the sickness
+// run-away (#15) waits for it, so a reset nobody saw (a crash or a watchdog in a pocket) doesn't
+// send the pet away on the screen that boot lights by itself (review R2-7)
+bool wokenSinceBoot = false;
 uint32_t attnShowUntil = 0;   // a call lights (or brightens) the screen until this millis() (0 = none)
 bool screenOffByPwr = false;  // the screen went dark with a PWR press, not the timeout: calls leave it dark
 ClockPrompt clockPrompt;      // asks for the time after a reseed (clockprompt.h, #10)
@@ -956,8 +960,9 @@ void loop() {
   bubbleLoop(now, bubbleFree(now));
   // Left sick a day (#15): it runs away the next time someone is looking, on the main screen,
   // lit by a touch, PWR or BOOT, free and undimmed (petSceneFree, so awake), not just lit for
-  // a call (attnShow). The run-away's own ending, as total neglect's: SFX_BYE and its egg.
-  if (pet.sickRunawayDue() && petSceneFree() && !attnShow) {
+  // a call (attnShow), nor only by a boot (wokenSinceBoot, at wakeUI). The run-away's own
+  // ending, as total neglect's: SFX_BYE and its egg.
+  if (pet.sickRunawayDue() && petSceneFree() && !attnShow && wokenSinceBoot) {
     Serial.println("sick: ran away");
     startPetEnding(CER_RUNAWAY);
   }
@@ -1159,6 +1164,7 @@ static bool standbyShown(uint32_t now) { return standby && !attnShowing(now); }
 // frame de un ritmo lento) y el amplificador se enciende antes de que suene nada
 void wakeUI() {
   if (screenIsLocked()) return;
+  wokenSinceBoot = true;
   standby = false;  // a touch, BOOT or PWR on: the pet again (standby.h)
   uint32_t now = millis();
   uint32_t iv = frameIntervalMs(powerCtx(now));
@@ -1805,6 +1811,7 @@ void onTap(int16_t x, int16_t y) {
   if (overPetButtons && pet.wantEvolveButton() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
       y >= EVO_BTN_Y && y <= EVO_BTN_Y + EVO_BTN_H) {
     choiceKind = 1; choiceUntil = millis() + 12000;
+    Serial.println("evolve: asked");  // the evolve/keep dialog (a log line for the sim's checks)
     return;
   }
   // botones de final (mismo recuadro): escapada directa; despedida abre dialogo

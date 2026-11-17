@@ -613,6 +613,9 @@ TEST(sick, the_serial_hook_makes_it_sick_with_no_slip_up_or_well_and_saves) {
   CHECK_EQ(p.sickMinutes(), (uint16_t)SICK_RUNAWAY_MIN);  // capped
   CHECK(p.dbgSick(false, 0));
   CHECK(!p.isSick());
+  p.startRunaway();  // during an ending (review R2-2)
+  CHECK(!p.dbgSick(true, 0));
+  CHECK(!p.isSick());
   p.newEgg();
   CHECK(!p.dbgSick(true, 0));  // an egg can't be sick
 }
@@ -676,3 +679,20 @@ TEST(sick, falling_sick_and_getting_better_ask_for_a_save) {
   CHECK(!p.isSick());
   CHECK_MSG(p.savePending(), "getting better asks for a save");
 }
+
+// Review R2-6: cured, a pet ready to evolve gets the evolve button only once the pill is taken,
+// not at once in the medicine button's place, under the finger that just tapped it
+TEST(sick, the_evolve_button_waits_for_the_pill) {
+  Pet p;
+  hatchPet(p, 4);  // Charmander: evolves at 16 plus its slip-ups
+  makeSick(p);
+  p.ageMinutes = 40u * MINUTES_PER_LEVEL;
+  p.fullness = p.joy = p.energy = p.hygiene = 80;
+  CHECK(p.giveMedicine());
+  CHECK(p.canEvolveNow());
+  CHECK_MSG(!p.wantEvolveButton(), "no evolve button while it takes the pill");
+  mockAdvanceMillis(EAT_ANIM_MS);
+  p.update(millis());
+  CHECK(p.wantEvolveButton());
+}
+
