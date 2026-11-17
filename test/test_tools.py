@@ -2995,7 +2995,8 @@ class TestSendSd(unittest.TestCase):
         stop = threading.Event()
 
         def heartbeat():
-            while not stop.wait(0.2):
+            end = time.time() + 8            # a script that waited for ever would hang the run
+            while not stop.wait(0.2) and time.time() < end:
                 os.write(board.master, b'HEALTH up=1s\r\n')
         t = threading.Thread(target=heartbeat, daemon=True)
         t.start()
