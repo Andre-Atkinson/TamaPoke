@@ -573,7 +573,7 @@ void ensureMon() {
   monShinyFor = pet.shiny;
   mon.unload();
   pmd.unload();
-  beh.x = beh.targetX = 233;
+  beh.x = beh.targetX = PLAY_MID_X;
   beh.mode = 0;
   beh.until = 0;
   beh.fast = false;

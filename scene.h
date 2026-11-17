@@ -9,6 +9,7 @@
 #include "skylayout.h"  // STARS, the sun and the moon, the header (#70)
 #include "weather.h"  // WxNow, ScenePlace (#60)
 #include "holiday.h"  // HolidayToday (#26)
+#include "playarea.h"  // PLAY_MID_X (#66)
 
 // comportamiento del bicho en pantalla
 struct PetBeh {
@@ -17,7 +18,7 @@ struct PetBeh {
   uint8_t act = PMD_IDLE;
   uint32_t t0 = 0;      // inicio de la animacion en curso
   uint32_t until = 0;   // fin del estado actual
-  float x = 233, targetX = 233;
+  float x = PLAY_MID_X, targetX = PLAY_MID_X;
   bool fast = false;    // walking after a dragging finger (#21) until it gets there
 };
 
