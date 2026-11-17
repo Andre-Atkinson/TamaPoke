@@ -114,7 +114,7 @@ enum StrId : uint8_t {
   S_TOAST_SOUND_ON, S_TOAST_MUTED, S_TOAST_LOCKED, S_TOAST_UNLOCKED,
   // the standby clock's date (#60): weekday, day, month ("Sat 15 Nov"; see formatDate())
   S_DATE_FMT,
-  // sickness and medicine (#15): the Care page's row (label and "On"; "Off" is S_BED_OFF), the
+  // sickness and medicine (#15): the Care page's row (label and "On"; "Off" is bedtime's), the
   // status line, the medicine button, the status while it takes it, and the Progress page
   S_SICKNESS, S_ON, S_SICK, S_GIVE_MEDICINE, S_BETTER, S_EVO_SICK,
   STR_COUNT
