@@ -377,6 +377,14 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **A banner is no longer hidden under a button over the creature** (#15). A medal's or a
+  streak's banner used to be drawn under the evolve, farewell or run-away button, which hid
+  its text. Those buttons now wait while a banner shows, and a tap there is a pat.
+
+- **A long press on a button over the creature no longer asks to release it** (#15). Three
+  seconds on the evolve, farewell, run-away or medicine button offered "Release?"; the long
+  press now has to start on the creature itself.
+
 - **Slip-ups stop at 255** (#15). The count of slip-ups is one byte, and its 256th went back
   to 0, as if the creature had never been neglected. It now stays at 255.
 
