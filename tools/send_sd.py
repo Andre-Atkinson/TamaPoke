@@ -12,9 +12,10 @@ Linux; the board's USB port must not be open in another program.
 
 A plain name is a file in tools/sdcard/mons/ (tools/pack_pmd.py makes them); a name with a
 / in it is a path, so a shell glob works too (tools/sdcard/mons/ps00*.bin). Each file goes
-to the board as mons/<name>: pNNN.bin is dex number NNN's sprite, psNNN.bin its shiny one
-and thumbs.bin the gallery's thumbnails. The firmware reads no other name, so no other
-name is sent.
+to the board as mons/<name>. The firmware reads five kinds of name and this sends no other:
+pNNN.bin is dex number NNN's sprite and psNNN.bin its shiny one (TPK2, tools/pack_pmd.py),
+NNN.bin and sNNN.bin the older animated ones (TPK1), and thumbs.bin the gallery's thumbnails.
+A file must be a size the board's loader accepts, or it would be sent and never used.
 
 Before sending anything it reads the board's free space (SDINFO) and what it already holds
 (LS), and sends nothing unless every file fits. A file the board already has is replaced:
@@ -42,6 +43,12 @@ from dex_data import DEX  # noqa: E402
 MONS = os.path.join(TOOLS, 'sdcard', 'mons')
 DEX_MAX = max(n for n, *_ in DEX)
 PUT_MAX = 4 * 1024 * 1024  # sdmon.cpp: PUT refuses an empty file and one over 4 MB
+# The sizes sdmon.cpp's loaders accept, by the file's first four bytes: (least, most) bytes.
+# A file outside its range is sent whole and then never loaded, and no command deletes it.
+# PmdMon::load wants 7 bytes to 3 MiB and SdThumbs::load 10 bytes to 2 MiB. SdMon::load has no
+# limit of its own: its header is 4 + 8 + 2 bytes and it needs at least one pixel after that.
+SIZE_RANGE = {b'TPK1': (15, PUT_MAX), b'TPK2': (7, 3 * 1024 * 1024),
+              b'TPTH': (10, 2 * 1024 * 1024)}
 CHUNK = 2048               # sdmon.cpp: PUT reads the data in 2048-byte blocks, acking each with '#'
 FS_BLOCK = 4096            # tools/build_spritefs.sh: the 1.75C's LittleFS block size
 FS_SPARE = 16 * FS_BLOCK   # left free, so the file system still has room for its own writes
@@ -52,7 +59,7 @@ FS_SPARE = 16 * FS_BLOCK   # left free, so the file system still has room for it
 OK_TIMEOUT, ACK_TIMEOUT, DONE_TIMEOUT, RESYNC_TIMEOUT = 10, 15, 15, 7
 LS_TIMEOUT = 15            # LS lists every file in mons/: about 300 lines at most
 
-NAME = re.compile(r'(p|ps|s|)(\d{3})\.bin')
+NAME = re.compile(r'(p|ps|s|)([0-9]{3})\.bin')  # not \d: that takes any script's digits
 
 
 class BoardError(Exception):
@@ -102,11 +109,18 @@ def load_files(args):
         except OSError as e:
             problems.append(f'{arg}: {e.strerror}')
             continue
+        least, most = SIZE_RANGE[magic]
         if len(data) > PUT_MAX:
             problems.append(f'{arg}: over {kb(PUT_MAX)}, more than PUT takes')
         elif data[:4] != magic:
             problems.append(f'{arg}: not a sprite file of its kind (it should start with '
                             f'{magic.decode()})')
+        elif len(data) > most:
+            problems.append(f'{arg}: over {kb(most)}, more than the board loads of this kind '
+                            'of file')
+        elif len(data) < least:
+            problems.append(f'{arg}: {len(data)} bytes, under the {least} the board needs to '
+                            'load this kind of file')
         else:
             files.append((arg, name, data))
     if problems:
@@ -186,45 +200,77 @@ def wait_for(con, wanted, timeout):
             return text
 
 
+def resync(con):
+    """Wait until the board is back to reading commands. After a failed PUT it may still be
+    waiting for data and would take the next command line as part of the file; it gives up
+    after 5 s without data and says ERR (or, if its last answer was only late, DONE). Gives up
+    itself after RESYNC_TIMEOUT s with no sign from the board that it is inside the PUT: every
+    'OK' or '#' it prints (a late answer) starts that wait again, because its own 5 s start
+    again with it. A Ctrl-C here, or a port that fails, ends the wait."""
+    try:
+        end = time.time() + RESYNC_TIMEOUT
+        while True:
+            text = con.read_line(max(0.0, end - time.time()))
+            if text in (None, 'ERR', 'DONE'):
+                return
+            if text in ('OK', '#'):
+                end = time.time() + RESYNC_TIMEOUT
+    except (OSError, KeyboardInterrupt):
+        pass
+
+
 def put(con, name, data):
     """Send one file with PUT (sdmon.cpp's sdSerialCommand). None once the board has it
-    whole, else what went wrong."""
+    whole, else what went wrong. A Ctrl-C part-way is passed on (as KeyboardInterrupt) once
+    the board has been waited for."""
     size = len(data)
 
     def failed(why, got):
         # Unless the board said ERR itself, it may still be waiting for data: let it give up
-        # (5 s) and say ERR, so that it doesn't take the next command as part of the file.
+        # and say ERR, so that it doesn't take the next command as part of the file.
         if got != 'ERR':
-            wait_for(con, ('ERR',), RESYNC_TIMEOUT)
+            resync(con)
         return why
 
-    con.write(f'PUT mons/{name} {size}\n'.encode())
-    got = wait_for(con, ('OK', 'ERR'), OK_TIMEOUT)
-    if got != 'OK':
-        return failed('the board refused it (ERR)' if got else 'no answer to PUT', got)
-    for off in range(0, size, CHUNK):
-        con.write(data[off:off + CHUNK], timeout=ACK_TIMEOUT)
-        got = wait_for(con, ('#', 'ERR'), ACK_TIMEOUT)
-        if got != '#':
-            said = 'the board said ERR' if got else 'no answer'
-            return failed(f'it stopped after {kb(off)} of {kb(size)} ({said})', got)
-    got = wait_for(con, ('DONE', 'ERR'), DONE_TIMEOUT)
-    if got != 'DONE':
-        return failed('the board said ERR after the last block' if got
-                      else 'no DONE after the last block', got)
-    return None
+    try:
+        con.write(f'PUT mons/{name} {size}\n'.encode())
+        got = wait_for(con, ('OK', 'ERR'), OK_TIMEOUT)
+        if got != 'OK':
+            return failed('the board refused it (ERR)' if got else 'no answer to PUT', got)
+        for off in range(0, size, CHUNK):
+            con.write(data[off:off + CHUNK], timeout=ACK_TIMEOUT)
+            got = wait_for(con, ('#', 'ERR'), ACK_TIMEOUT)
+            if got != '#':
+                said = 'the board said ERR' if got else 'no answer'
+                return failed(f'it stopped after {kb(off)} of {kb(size)} ({said})', got)
+        got = wait_for(con, ('DONE', 'ERR'), DONE_TIMEOUT)
+        if got != 'DONE':
+            return failed('the board said ERR after the last block' if got
+                          else 'no DONE after the last block', got)
+        return None
+    except OSError as e:  # the port failed, or a write timed out because the board stopped reading
+        return failed(str(e), None)
+    except KeyboardInterrupt:
+        resync(con)
+        raise
 
 
 def unusable(name):
-    """What the board shows while mons/<name> is only part of a file (scene.cpp's drawPet():
-    the firmware does not fall back to the normal sprite when a shiny file is broken)."""
+    """What the board does while mons/<name> is only part of a file, or gone (scene.cpp's
+    drawPet(): the firmware does not fall back to the normal sprite when a shiny file is
+    broken). A PUT that fails leaves sdDirty false (sdmon.cpp), so the board keeps showing the
+    sprite it already loaded until it loads that creature again."""
     if name == 'thumbs.bin':
-        return 'the gallery shows no thumbnails'
+        return 'After a restart the gallery shows no thumbnails.'
     if not name.startswith('p'):
-        return 'the board cannot use it'
+        return 'The board cannot load it.'
     who = "that species' shiny form" if name.startswith('ps') else 'that species'
-    return (f'{who} shows a "?" and "No sprites" where its sprite goes (the nine starter-line '
-            'species show their small built-in sprite)')
+    gone = (' If the board refused the PUT, the old copy is gone and the normal sprite shows '
+            'instead.' if name.startswith('ps') else '')
+    return (f'The board keeps the sprite it has loaded until it loads that creature again (after '
+            f'a restart, or when the creature changes); then {who} shows a "?" and "No sprites" '
+            f'where its sprite goes (the nine starter-line species show their small built-in '
+            f'sprite).{gone}')
 
 
 def send(con, files, port):
@@ -232,18 +278,17 @@ def send(con, files, port):
         started = time.time()
         try:
             why = put(con, name, data)
-        except OSError as e:
-            why = str(e)
+        except KeyboardInterrupt:  # put() has waited for the board to stop listening for data
+            why = 'interrupted with Ctrl-C'
         if why is None:
             print(f'{name}: sent, {kb(len(data))} in {time.time() - started:.1f} s', flush=True)
             continue
         print(f'{name}: FAILED: {why}', flush=True)
         rest = [a for a, _, _ in files[i:]]
-        again = shlex.join(['python3', 'tools/send_sd.py', *(['--port', port] if port else []), *rest])
+        again = shlex.join(['python3', sys.argv[0], *(['--port', port] if port else []), *rest])
         msg = (f'{name} did not arrive whole. PUT deletes the copy the board had before it '
-               'starts, so the board may now hold only part of it, and it cannot use a partial '
-               f'file: until it is sent whole, {unusable(name)}. Send it again (PUT replaces '
-               f'it):\n  {again}')
+               'starts, so the board may now hold only part of it, or none, and it cannot use a '
+               f'partial file. {unusable(name)} Send it again (PUT replaces it):\n  {again}')
         if len(rest) > 1:
             msg = f'Not sent: {", ".join(n for _, n, _ in files[i + 1:])}.\n{msg}'
         sys.exit(msg)
@@ -309,6 +354,8 @@ def main(argv=None):
         sys.exit(f'send_sd.py: {e}')
     except NoDone as e:
         sys.exit(f'send_sd.py: {e}; try again')
+    except KeyboardInterrupt:  # during a file, send() has already reported it
+        sys.exit('send_sd.py: interrupted (Ctrl-C); a file that said "sent" above is on the board')
     except (OSError, termios.error) as e:
         sys.exit(f'send_sd.py: {e}. Is the board plugged in, awake, and the port free '
                  '(not open in another program)?')

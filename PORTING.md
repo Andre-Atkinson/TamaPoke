@@ -267,8 +267,12 @@ checking with `SDINFO` and `LS` that they fit. It counts each file as whole 4 KB
 LittleFS blocks plus one more, keeps 64 KB spare, and counts a file it replaces
 as freed. There is no delete command. A shiny that was sent stays until the
 sprite image is flashed again, and a send that fails part-way leaves a partial
-file, which the firmware can't load (it does not fall back to the normal sprite
-then), until the file is sent again.
+file, which the firmware can't load. A shiny with a partial file shows a "?" (it
+does not fall back to the normal sprite), but only once the board loads that sprite
+again (a restart, or the creature changing): a failed `PUT` leaves `sdDirty` false, so
+the sprite already in memory stays. If the board refused the `PUT` after removing the
+old copy, no file is left and the shiny shows the normal sprite. Sending the file
+again fixes both.
 
 `sdBegin()` mounts LittleFS at `/littlefs` (label `storage`) and **does not
 auto-format**: a failed mount means the image hasn't been flashed yet. Paths

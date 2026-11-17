@@ -450,15 +450,21 @@ python3 tools/send_sd.py --ls                # read-only: what the board holds, 
 - It prints one line per file, stops at the first one that fails, and exits non-zero.
 - The board shows a new sprite as soon as it arrives. The screen pauses while a file goes
   over (the board's main loop is busy receiving it).
-- **If a send fails part-way**, the board may hold only part of that file, and the old copy
-  is gone, because `PUT` deletes it first. It can't use a partial file: until the file is
-  sent again, that creature shows a "?" and "No sprites" instead of its sprite (the nine
-  species of the three starter lines show a small built-in sprite). The script prints the
-  command that sends it again.
+- **If a send fails part-way** (or you press Ctrl-C), the board may hold only part of that
+  file, or none of it, because `PUT` deletes the old copy first, and it can't use a partial
+  file. The creature keeps the sprite the board already has loaded until the board loads it
+  again (after a restart, or when the creature changes). Then a shiny form shows a "?" and
+  "No sprites" instead of its sprite (the nine species of the three starter lines show a
+  small built-in sprite), or, if the board refused the send and no file is left, the normal
+  sprite. The script waits for the board to give up on the file, then prints the command
+  that sends it again.
+- It refuses a file the board would not load: one that doesn't start with the right four
+  bytes for its name, or is too small or too big (`psNNN.bin` and `pNNN.bin` 7 bytes to
+  3 MiB, `thumbs.bin` 10 bytes to 2 MiB).
 - There is no command that deletes a file from the board. A shiny you sent stays until the
   sprite image is flashed again (`tools/build_spritefs.sh`, then
-  `tools/flash_175c.sh --fs-only`), which puts back the 151
-  normal sprites and `thumbs.bin`, and nothing else.
+  `tools/flash_175c.sh --fs-only --out tools/build`, which flashes the image just built),
+  which puts back the 151 normal sprites and `thumbs.bin`, and nothing else.
 
 ## How to play
 
