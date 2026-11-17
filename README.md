@@ -284,8 +284,9 @@ After any ending, a **new egg** appears.
   three is the normal roll above (same odds, same blessing/curse, same shiny
   chance, which goes with whichever egg you pick); the other two are Common eggs
   of other types, and no two of the three have spots of colours that look alike
-  (ground and rock, say). Time is paused until you pick (as on the starter screen), and
-  the choice survives a power-off. The first game still picks a starter.
+  (ground and rock, say). Time is paused until you pick (as on the starter
+  screen), and the choice survives a power-off. The first game still picks a
+  starter.
 
 ### Nature
 Each Pokémon hatches with one of five natures, shown on the stat card (swipe up,
