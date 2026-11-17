@@ -19,12 +19,15 @@
 # The firmware builds run from a staged copy of the working tree (uncommitted
 # changes included; only the parts the firmware build reads) in a folder
 # literally named "TamaPoke": arduino-cli refuses a sketch whose folder name
-# differs from the main .ino, which is the case in every agent worktree. The
-# staged copy and both build folders persist between runs (tools/build_cache.sh
-# says where), so a rebuild reuses the compiled core and libraries. Every
-# sketch file is compiled again on every run, so the sketch warning count
-# covers the whole sketch each time. One firmware-building gate at a time per
-# checkout (a lock); --no-build and --no-firmware take none.
+# differs from the main .ino, which is the case in every agent worktree.
+# tools/build_175c.sh on its own stages the same way, with the same code
+# (tp_stage), into a copy of its own. The staged copy and both build folders
+# persist between runs (tools/build_cache.sh says where), so a rebuild reuses
+# the compiled core and libraries. Every sketch file is compiled again on every
+# run, so the sketch warning count covers the whole sketch each time. One
+# firmware-building gate at a time per checkout (a lock); --no-build and
+# --no-firmware take none. A firmware-building gate also deletes the cache
+# folders of removed checkouts and idle worktrees, and says so.
 #
 # Exit status is non-zero if any step failed; the last lines are one summary
 # line per step. Works with macOS (BSD) and Linux tools.
@@ -227,26 +230,10 @@ show_build() {  # show_build <label> <log> <exit code>
 }
 
 if [[ "$FIRMWARE" -eq 1 ]]; then
-  # Mirror the working tree into the same folder every run: rsync keeps the
-  # mtimes, and --delete/--delete-excluded drop whatever is no longer there.
-  # Folders the firmware build never reads stay out. arduino-cli rebuilds
-  # everything when the set of source-like files anywhere under the sketch
-  # changes (its "additionalFiles" build option), so without this a new test,
-  # doc or simulator file would cost a full rebuild. A folder missing from this
-  # list is only staged for nothing; tools/ is reduced to the build scripts.
-  # --checksum: rsync's size-and-mtime quick check misses a same-size edit made
-  # in the same second as the previous sync (mtimes are whole seconds on some
-  # rsyncs), and the stage now persists between runs, so it would never arrive.
+  # Mirror the working tree into the same folder every run, with only what the
+  # firmware build reads (tools/build_cache.sh, tp_stage, says why).
   STAGE="$CACHE/stage/TamaPoke"
-  if [[ "$CLEAN" -eq 1 ]]; then rm -rf "$CACHE/stage"; fi
-  mkdir -p "$STAGE"
-  if ! rsync -a --checksum --delete --delete-excluded \
-    --include '/tools/' --include '/tools/build_175c.sh' --include '/tools/build_cache.sh' \
-    --exclude '/tools/*' \
-    --exclude '/.git' --exclude '/.github' --exclude '/.claude' --exclude '/.venv' \
-    --exclude '/test' --exclude '/sim' --exclude '/docs' --exclude '/web' \
-    --exclude '/out' --exclude '/backups' --exclude '/shots' \
-    "$ROOT/" "$STAGE/"; then
+  if ! tp_stage "$ROOT" "$CACHE/stage" "$CLEAN"; then
     record "stage working tree for builds" 1 "rsync failed; builds skipped"
     FIRMWARE=0
   fi

@@ -45,7 +45,8 @@ if [[ "$BUILD" -eq 1 ]]; then
   echo "== 2/4 building"
   # From scratch: the image that goes on the board never reuses an object from
   # an earlier build (see tools/build_cache.sh for what an incremental one keeps).
-  step 'Sketch uses|build OK' "${ROOT}/tools/build_175c.sh" --clean --out "$OUT"
+  # Also shown: what the build's cache prune freed (tools/build_cache.sh).
+  step 'Sketch uses|build OK|^Build cache:' "${ROOT}/tools/build_175c.sh" --clean --out "$OUT"
 else
   echo "== 2/4 skipping the build (--no-build)"
 fi

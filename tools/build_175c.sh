@@ -12,17 +12,20 @@
 #   tools/build_175c.sh --out DIR
 #   tools/build_175c.sh --flags '-DSOME_FLAG=1'   # extra compiler flags
 #   tools/build_175c.sh --clean              # full build: reuse nothing from earlier builds
-#   tools/build_175c.sh --build-path DIR     # build folder (default: this checkout's, see below)
 #   TAMAPOKE_JOBS=8 tools/build_175c.sh      # parallel compile jobs: default 3, 0 = all cores
-# The build folder persists between runs (tools/build_cache.sh says where), so
-# a rebuild reuses the compiled core and libraries. Every sketch file is
-# compiled again on every run. One run at a time per build folder.
-# This script builds the checkout itself, and arduino-cli rebuilds everything
-# when the set of source-like files (.h .c .cpp .S .md .json ...) anywhere under
-# the sketch folder changes, hidden folders such as .claude/worktrees/ included.
-# So adding or removing a file in test/, sim/, docs/, web/ or an agent worktree
-# makes the next run a full build. tools/gate.sh avoids that by building a
-# narrowed staged copy.
+#   tools/build_175c.sh --build-path DIR     # for tools/gate.sh: build folder DIR, no staging (see below)
+# It builds a staged copy of this checkout's working tree, uncommitted changes
+# included, in a folder named TamaPoke (arduino-cli refuses a sketch whose
+# folder name differs from its .ino, as in every agent worktree): the same
+# narrowed copy tools/gate.sh builds, made by the same code (tools/build_cache.sh,
+# tp_stage), so adding or removing a file in test/, sim/, docs/, web/ or an
+# agent worktree does not make the next run a full build. The staged copy and
+# the build folder persist between runs (tools/build_cache.sh says where), so a
+# rebuild reuses the compiled core and libraries. Every sketch file is compiled
+# again on every run. One run at a time per checkout. Each run also deletes the
+# cache folders of removed checkouts and of idle worktrees, and says so.
+# With --build-path the caller has staged already (the gate runs the staged
+# copy of this script): it builds the folder it is in, and prunes nothing.
 # CI runs this same script (with --clean), so a green CI means this command works.
 set -euo pipefail
 
@@ -70,14 +73,21 @@ APP_MAX="${APP_MAX_OVERRIDE:-$APP0_SIZE}"
 
 # shellcheck source=build_cache.sh
 . "${ROOT}/tools/build_cache.sh"
+trap tp_unlock_all EXIT
+SKETCH="$ROOT"
+STAGE=""
 if [[ -z "$BUILD" ]]; then
   CACHE="$(tp_cache_dir "$ROOT")"
   tp_cache_prune "$CACHE" "$ROOT" || exit 1
   BUILD="$CACHE/build-175c"
+  STAGE="$CACHE/stage"
 fi
-trap tp_unlock_all EXIT
-tp_lock "$BUILD" || exit 1
-tp_prepare_build "$BUILD" "$ROOT" "$CLEAN"
+tp_lock "$BUILD" || exit 1   # on its own, this lock covers the staged copy too
+if [[ -n "$STAGE" ]]; then
+  tp_stage "$ROOT" "$STAGE" "$CLEAN" || { echo "Could not stage $ROOT into $STAGE" >&2; exit 1; }
+  SKETCH="$STAGE/TamaPoke"
+fi
+tp_prepare_build "$BUILD" "$SKETCH" "$CLEAN"
 mkdir -p "$OUT"
 # The checks below must read what this run produced, never a leftover: the
 # hook writes the table again (tp_prepare_build removed the old one) and
@@ -96,7 +106,7 @@ arduino-cli compile --warnings=all --jobs "$JOBS" ${CLEAN_ARG[@]+"${CLEAN_ARG[@]
   --build-property "compiler.cpp.extra_flags=-DBOARD_AMOLED_175C=1 ${EXTRA}" \
   --build-property "recipe.hooks.prebuild.1.pattern=cp -f \"${PARTS}\" \"{build.path}/partitions.csv\"" \
   --output-dir "$OUT" \
-  "$ROOT"
+  "$SKETCH"
 
 # arduino-cli checks the sum of the sections; the .bin also carries headers and
 # padding (about 250 bytes more), so check the real file against app0 as well.

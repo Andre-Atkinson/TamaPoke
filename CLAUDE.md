@@ -106,7 +106,9 @@ boards, one `window <board>` line each; without SDL2 it records `SKIP  window
 (no SDL2)`. SDL2 is opt-in and only the window needs it: ask the owner before
 installing it. The builds run from a staged copy of
 the working tree in a folder named `TamaPoke`, because arduino-cli rejects a
-sketch whose folder name differs from the `.ino` (every agent worktree). Never
+sketch whose folder name differs from the `.ino` (every agent worktree).
+`tools/build_175c.sh` on its own stages the same way, so it and
+`tools/update_175c.sh` work from any worktree as it is. Never
 run the builds by hand through a `grep` pipe: it hides failures and the exit
 code becomes grep's.
 

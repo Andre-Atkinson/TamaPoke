@@ -11,7 +11,8 @@
 # LOG is arduino-cli compile --warnings=all output (colour codes are ignored).
 #
 # A sketch warning is a "file:line:col: warning:" line for a file in a folder
-# named TamaPoke (the sketch: the gate's staged copy, CI's checkout). The same
+# named TamaPoke (the sketch: the staged copy that tools/build_175c.sh and the
+# gate build, or CI's checkout for its original-1.75 build). The same
 # line twice (a header included by two files) counts once. Warnings from the
 # ESP32 core and the libraries never count.
 
