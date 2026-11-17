@@ -188,8 +188,34 @@ jobs:
       # de Arduino, con millis() y random() falsos y una NVS en memoria. Aqui es
       # donde se han roto las cosas: los tres bugs de la v1.3, v1.4 y v1.8 eran
       # logica pura y estos tests los pillan sin tocar la placa.
+      # The output is kept for the warning check below. "shell: bash" runs with
+      # pipefail, so a failing suite still fails this step.
       - name: Run the suite (plus AddressSanitizer + UBSan)
-        run: ./test/run_tests.sh --asan
+        shell: bash
+        run: ./test/run_tests.sh --asan 2>&1 | tee "$RUNNER_TEMP/tests.log"
+
+      # Linux g++ warns about code that macOS clang, and so the gate, accepts
+      # (#98): this is where a new host warning shows up, and none is allowed.
+      # It runs even when the suite failed, and counts each different line once,
+      # as tools/sketch_warnings.sh does. It is not in the Makefile or
+      # run_tests.sh, because a mutation that only adds a warning would then
+      # fail like a caught one.
+      - name: No host build warnings
+        if: success() || failure()
+        shell: bash
+        run: |
+          log="$RUNNER_TEMP/tests.log"
+          if [[ ! -r "$log" ]]; then
+            echo "::error::no suite output to check for warnings"
+            exit 1
+          fi
+          w="$(grep -E ': warning: ' "$log" | sort -u || true)"
+          if [[ -n "$w" ]]; then
+            printf '%s\n' "$w"
+            echo "::error::$(printf '%s\n' "$w" | wc -l) host build warning(s) (each line once; the suite's output above shows where): fix them, CI allows none"
+            exit 1
+          fi
+          echo "0 host build warnings"
 
   i18n:
     name: i18n format-specifier consistency

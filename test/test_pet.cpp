@@ -1058,13 +1058,15 @@ TEST(nvs, sin_claves_de_minijuegos_los_records_empiezan_en_0) {
   CHECK_EQ(b.songHi, (uint16_t)0);
 }
 
-TEST(play, jugar_sube_felicidad_y_cansa) {
+// A game, the real Play path (#87): scored 10, it cheers (+5, +2 a point), tires (-10,
+// -half the score), makes a little hungry (-5) and shows the heart.
+TEST(play, a_game_cheers_tires_and_makes_hungry) {
   Pet p;
   makePet(p, 4);
   setStats(p, 50, 50, 50, 50);
-  p.play();
+  p.playGame(GAME_KEEPY, 10);  // normalised 10
   CHECK_EQ(p.joy, (uint8_t)75);
-  CHECK_EQ(p.energy, (uint8_t)40);
+  CHECK_EQ(p.energy, (uint8_t)35);
   CHECK_EQ(p.fullness, (uint8_t)45);
   CHECK(p.showHeart());
 }
@@ -1092,7 +1094,7 @@ TEST(care, mimar_sube_felicidad_y_vinculo) {
 TEST(care, el_vinculo_tiene_tope_diario) {
   Pet p;
   makePet(p, 4);
-  for (int i = 0; i < 50; i++) p.play();  // +2 de vinculo cada vez
+  for (int i = 0; i < 50; i++) p.playGame(GAME_KEEPY, 10);  // +2 de vinculo cada vez
   CHECK_MSG(p.bond <= 20, "tope de 20 puntos de vinculo al dia");
   CHECK_EQ(p.bond, (uint8_t)20);
 }
@@ -1708,12 +1710,13 @@ TEST(ceremony, durante_la_ceremonia_no_se_puede_interactuar) {
   p.startRunaway();
   p.feedBerry(0);
   p.feedCandy();
-  p.play();
+  p.playGame(GAME_KEEPY, 10);
   p.clean();
   p.caress();
   p.toggleLight();
   CHECK_EQ(p.fullness, (uint8_t)50);
   CHECK_EQ(p.joy, (uint8_t)50);
+  CHECK_EQ(p.gameHi, (uint16_t)0);  // no game, so no record either
   CHECK_EQ(p.poops, (uint8_t)2);
   CHECK(!p.sleeping);
 }
@@ -1993,18 +1996,6 @@ TEST(nature, greedy_berries_fill_5_more) {
     p.feedBerry(1);  // blue: its favourite
     CHECK_EQ(p.fullness, (uint8_t)(40 + 35 + extra));
     CHECK_EQ(p.joy, (uint8_t)60);
-  }
-}
-
-TEST(nature, playful_play_cheers_5_more) {
-  for (uint8_t n = 0; n < NAT_COUNT; n++) {
-    uint8_t extra = n == NAT_PLAYFUL ? 5 : 0;
-    Pet p;
-    makePet(p, 4);
-    p.nature = n;
-    setStats(p, 60, 40, 80, 60);
-    p.play();
-    CHECK_EQ(p.joy, (uint8_t)(40 + 25 + extra));
   }
 }
 
