@@ -1157,6 +1157,57 @@ class TestSketchWarnings(unittest.TestCase):
         self.assertNotIn('if:', counts[0])
         self.assertNotIn('continue-on-error', counts[0])
 
+    def test_ci_host_tests_fail_on_a_warning(self):
+        """CI's host-test job keeps the suite's output and fails on any g++
+        warning in it (#98). Without "shell: bash" (pipefail) the tee hides a
+        failing suite, so the steps are pinned, and the check's own script is
+        run the way Actions runs it."""
+        with open(os.path.join(ROOT, '.github', 'workflows', 'ci.yml')) as fh:
+            ci = fh.read()
+        job = re.search(r'^  tests:\n(.*?)(?=^  \S|\Z)', ci, re.S | re.M).group(1)
+        steps = re.split(r'^      - ', job, flags=re.M)[1:]
+        suites = [st for st in steps if './test/run_tests.sh --asan' in st]
+        self.assertEqual(len(suites), 1, 'expected one step that runs the suite')
+        self.assertRegex(suites[0], r'\n        shell: bash\n', 'a tee without pipefail hides a failed suite')
+        self.assertRegex(suites[0], re.compile(r'2>&1 \| tee "\$RUNNER_TEMP/tests\.log"$', re.M))
+        checks = [st for st in steps if st.startswith('name: No host build warnings')]
+        self.assertEqual(len(checks), 1, 'expected the warning check step')
+        check = checks[0]
+        self.assertIn('$RUNNER_TEMP/tests.log', check)
+        self.assertRegex(check, r'\n        shell: bash\n')
+        self.assertRegex(check, r'\n        if: success\(\) \|\| failure\(\)\n', 'the check must run after a failed suite too')
+        self.assertNotIn('continue-on-error', check)
+
+        body = re.search(r'\n        run: \|\n(.*)', check, re.S).group(1)
+        body = '\n'.join(ln[10:] for ln in body.splitlines())
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        log = os.path.join(tmp, 'tests.log')
+        line = '../a.cpp:1:2: warning: x [-Wfoo]\n'
+        coloured = '../a.cpp:1:2: \033[01;35m\033[Kwarning: \033[m\033[Kx\n'
+
+        def run(text):
+            if os.path.exists(log):
+                os.remove(log)
+            if text is not None:
+                with open(log, 'w') as fh:
+                    fh.write(text)
+            # the flags Actions gives "shell: bash"
+            return subprocess.run(['bash', '--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', body],
+                                  cwd=ROOT, env=dict(os.environ, RUNNER_TEMP=tmp),
+                                  capture_output=True, text=True)
+
+        for name, text, rc, out in (
+                ('clean', 'ok\n1 warning-free line\n', 0, '0 host build warnings'),
+                # the normal and the ASan build print the same line
+                ('twice', 'ok\n' + line + line, 1, '1 host build warning(s)'),
+                ('coloured', coloured, 1, '1 host build warning(s)'),
+                ('missing', None, 1, 'no suite output')):
+            with self.subTest(log=name):
+                r = run(text)
+                self.assertEqual(r.returncode, rc, r.stdout + r.stderr)
+                self.assertIn(out, r.stdout + r.stderr)
+
     def test_the_gate_counts_with_it(self):
         with open(os.path.join(TOOLS, 'gate.sh')) as fh:
             gate = fh.read()
