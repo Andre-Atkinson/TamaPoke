@@ -260,7 +260,7 @@ a 3 MB app in 32 MB, so the 1.75C image (`tools/build_spritefs.sh`) holds **all
 Shiny forms fall back to the normal sprite (the firmware already did that when a
 shiny file was missing). About 8,700 KB is left (`SDINFO` on the board:
 `total=30277632 used=21368832`). That is room for roughly 60 of the 151 shiny
-files (50 to 480 KB each), sent one species at a time over USB:
+files (53 to 484 KB each), sent one species at a time over USB:
 `python3 tools/send_sd.py ps151.bin` sends Mew's (README, "Add a shiny sprite for
 one species"). The script sends only the files it is given, and only after
 checking with `SDINFO` and `LS` that they fit. It counts each file as whole 4 KB

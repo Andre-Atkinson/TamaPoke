@@ -431,7 +431,7 @@ above). `pack_pmd.py` also takes individual dex numbers, e.g. `pack_pmd.py 7 25`
 
 The 1.75C's sprite storage holds the 151 normal sprites and `thumbs.bin`, with
 about 8,700 KB to spare. That is room for roughly 60 of the 151 shiny sprites:
-each one is 50 to 480 KB, about 135 KB on average. A shiny creature whose shiny
+each one is 53 to 484 KB, about 134 KB on average. A shiny creature whose shiny
 file isn't on the board shows its normal sprite. To add one, plug the board in
 over USB, make sure no other program has its port open, and run:
 
