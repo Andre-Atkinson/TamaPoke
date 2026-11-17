@@ -2797,6 +2797,19 @@ class TestSendSd(unittest.TestCase):
         self.assertIn('ps028.bin: no such file', code)
         self.assertEqual(out, '')
 
+    def test_space_is_counted_in_whole_blocks_with_room_to_spare(self):
+        # A new file: whole 4 KB blocks of 4,032 data bytes (LittleFS keeps the file's block
+        # list in them), and one block more. A replaced file gives back at least its data in
+        # whole blocks. 64 KB stays free.
+        block = 4096
+        for size, blocks in ((1, 2), (4032, 2), (4033, 3), (30000, 9)):
+            with self.subTest(size=size):
+                self.assertEqual(self.sd.new_cost(size), blocks * block)
+        for size, blocks in ((1, 1), (4096, 1), (4097, 2), (20000, 5)):
+            with self.subTest(old=size):
+                self.assertEqual(self.sd.old_freed(size), blocks * block)
+        self.assertEqual(self.sd.FS_SPARE, 16 * block)
+
     def test_files_that_do_not_fit_are_not_sent(self):
         a = self.sprite('ps151.bin', 30000)
         board = FakeSdBoard(self, free=self.sd.new_cost(30000) + self.sd.FS_SPARE - 1)
