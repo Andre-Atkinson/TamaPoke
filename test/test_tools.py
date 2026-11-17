@@ -1326,9 +1326,14 @@ class TestBuildCache(FakeArduinoCliCase):
                 time.sleep(0.05)
             self.assertEqual(len(self.calls()), 1, 'the build never started compiling')
             during()
+            # A build that already ended gave every lock back from its EXIT
+            # trap, so during() would have seen "given back" for nothing.
+            self.assertIsNone(p.poll(), 'the build had already exited: its EXIT trap may have given the locks back')
         finally:
             os.killpg(p.pid, signal.SIGTERM)
             _, err = p.communicate(timeout=20)
+        for failure in ('Error opening sketch', 'Could not stage'):
+            self.assertNotIn(failure, err)
         return err
 
     @staticmethod
@@ -1663,6 +1668,57 @@ class TestBuildCache(FakeArduinoCliCase):
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
         self.assertFalse(os.path.exists(gone), 'left an empty folder behind')
 
+    def test_a_build_that_starts_while_its_folder_is_deleted_is_refused(self):
+        # While a prune deletes a worktree's folder it holds both locks the builds
+        # there take, by the names gate.sh and build_175c.sh really use: a gate or
+        # a standalone build that starts there then is refused, instead of
+        # building in a folder that is going away. du runs right before the
+        # deletion; a stand-in for it starts both builds there and then.
+        import json
+        root, cache = self.checkout('wt', 'worktree')
+        self.last_built(cache, 8)
+        seen = os.path.join(self.tmp, 'seen.json')
+        real_du = shutil.which('du')
+        put(os.path.join(self.bindir, 'du'), f'''#!/usr/bin/env python3
+import json, os, subprocess, sys
+if os.environ.get('IN_FAKE_DU'):
+    os.execv({real_du!r}, ['du'] + sys.argv[1:])
+folder = sys.argv[-1]
+def owners():
+    out = {{}}
+    for name in ('build-175c', 'gate'):
+        try:
+            with open(os.path.join(folder, name + '.lock', 'owner')) as fh:
+                out[name] = fh.read().strip()
+        except OSError:
+            out[name] = None
+    return out
+got = {{'before': owners()}}
+for script, args in (('build_175c.sh', ['--out', {os.path.join(self.tmp, 'out-wt')!r}]), ('gate.sh', [])):
+    r = subprocess.run([os.path.join({root!r}, 'tools', script), *args], env=dict(os.environ, IN_FAKE_DU='1'),
+                       capture_output=True, text=True, timeout=120)
+    got[script] = [r.returncode, r.stderr]
+got['after'] = owners()
+with open({seen!r}, 'w') as fh:
+    json.dump(got, fh)
+os.execv({real_du!r}, ['du'] + sys.argv[1:])
+'''.encode())
+        os.chmod(os.path.join(self.bindir, 'du'), 0o755)
+        r = self.build_175c()   # prunes the idle worktree's folder
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(seen) as fh:
+            got = json.load(fh)
+        owner = got['before']['build-175c']
+        self.assertIsNotNone(owner, 'the prune deleted without holding build-175c.lock')
+        self.assertEqual(got['before']['gate'], owner, 'the prune deleted without holding gate.lock')
+        for script, rc in (('build_175c.sh', 1), ('gate.sh', 2)):
+            code, err = got[script]
+            self.assertEqual(code, rc, f'{script} started in a folder being deleted: {err}')
+            self.assertIn('in use by another run', err)
+        self.assertEqual(got['after'], got['before'], "a refused build touched the prune's locks")
+        self.assertFalse(os.path.exists(cache))
+        self.assertIn(f'Build cache: deleted the folder of {root} (no firmware build there since', r.stderr)
+
     def test_every_firmware_build_marks_its_cache_used(self):
         # The idle prune goes by the age of the checkout record, so every
         # firmware build must write it again, whether it changed or not.
@@ -1690,27 +1746,18 @@ class TestBuildCache(FakeArduinoCliCase):
         os.makedirs(stuck)
         put(os.path.join(stuck, 'file.o'))
         os.chmod(stuck, 0o500)   # its file cannot be deleted
-        import signal
+
+        def given_back():
+            # The prune is over and this build is still compiling: the worktree's
+            # locks are back already, or a build there would be refused meanwhile.
+            for lock in ('build-175c.lock', 'gate.lock'):
+                self.assertFalse(os.path.exists(os.path.join(cache, lock)), f'{lock} was not given back')
+            self.assertTrue(os.path.exists(os.path.join(cache, 'checkout')),
+                            'the record went first: no later prune would find the rest')
         try:
-            self.fresh()
-            p = subprocess.Popen([os.path.join(TOOLS, 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out')],
-                                 env=dict(self.env, FAKE_SLEEP='30'), start_new_session=True,
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            try:
-                deadline = time.time() + 20
-                while not self.calls() and time.time() < deadline:
-                    time.sleep(0.05)
-                self.assertEqual(len(self.calls()), 1, 'the build never started compiling')
-                # The prune is over and this build is still compiling: the worktree's
-                # locks are back already, or a build there would be refused meanwhile.
-                for lock in ('build-175c.lock', 'gate.lock'):
-                    self.assertFalse(os.path.exists(os.path.join(cache, lock)), f'{lock} was not given back')
-                self.assertTrue(os.path.exists(os.path.join(cache, 'checkout')),
-                                'the record went first: no later prune would find the rest')
-            finally:
-                os.killpg(p.pid, signal.SIGTERM)
-                _, err = p.communicate(timeout=20)
+            err = self.build_while_compiling(given_back)
             self.assertIn(f'Build cache: could not delete all of {cache} (no firmware build there since', err)
+            self.assertIn(f"delete it by hand while no build runs: rm -rf '{cache}'", err)
         finally:
             os.chmod(stuck, 0o700)
         r = self.build_175c()

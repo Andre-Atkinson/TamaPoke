@@ -85,7 +85,7 @@ fi
 tp_lock "$BUILD" || exit 1   # on its own, this lock covers the staged copy too
 if [[ -n "$STAGE" ]]; then
   tp_stage "$ROOT" "$STAGE" "$CLEAN" || { echo "Could not stage $ROOT into $STAGE" >&2; exit 1; }
-  SKETCH="$STAGE/TamaPoke"
+  SKETCH="$(tp_stage_sketch "$STAGE")"
 fi
 tp_prepare_build "$BUILD" "$SKETCH" "$CLEAN"
 mkdir -p "$OUT"

@@ -70,15 +70,15 @@ again. `--clean` builds from scratch, as CI does. The image still lands in
 reads it. `tools/update_175c.sh` always builds with `--clean`, so the image
 that goes on the board never reuses an object from an earlier build.
 
-A checkout's cache folder takes up to about 5 GB (each build folder is about
-1.5 GB, and a checkout that ran both the gate and a standalone build has three,
-plus two staged copies). Every firmware build, standalone or the gate's, deletes the folders of
-checkouts that no longer exist and those of git worktrees with no firmware
-build for 7 days (the primary checkout's, and any other clone's, are never
-deleted for being idle), and prints one `Build cache:` line for each, with
-what it freed. A folder that a running build holds is never touched. Any
-folder under `~/Library/Caches/tamapoke/` can also be deleted by hand while no
-build is running (the next build there is then a full one).
+A checkout's cache folder takes up to about 5 GB (each build folder is about 1.5
+GB, and a checkout that ran both the gate and a standalone build has three, plus
+two staged copies). Every firmware build, standalone or the gate's, deletes the
+folders of checkouts that no longer exist and those of git worktrees with no
+firmware build for 7 days (the primary checkout's, and any other clone's, are
+never deleted for being idle), and prints one `Build cache:` line for each, with
+what it freed. A folder that a running build holds is never touched. Any folder
+under `~/Library/Caches/tamapoke/` can also be deleted by hand while no build is
+running (the next build there is then a full one).
 
 There is deliberately **no `partitions.csv` in the sketch root**: the core
 copies a root `partitions.csv` into every build, whatever scheme is selected,

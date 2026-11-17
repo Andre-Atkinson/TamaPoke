@@ -232,7 +232,7 @@ show_build() {  # show_build <label> <log> <exit code>
 if [[ "$FIRMWARE" -eq 1 ]]; then
   # Mirror the working tree into the same folder every run, with only what the
   # firmware build reads (tools/build_cache.sh, tp_stage, says why).
-  STAGE="$CACHE/stage/TamaPoke"
+  STAGE="$(tp_stage_sketch "$CACHE/stage")"
   if ! tp_stage "$ROOT" "$CACHE/stage" "$CLEAN"; then
     record "stage working tree for builds" 1 "rsync failed; builds skipped"
     FIRMWARE=0

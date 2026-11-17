@@ -19,8 +19,9 @@
 # firmware build (the gate's, or tools/build_175c.sh on its own) deletes the
 # cache folders of other checkouts that no longer exist (a removed worktree),
 # and those of git worktrees with no firmware build for TP_CACHE_IDLE_DAYS
-# days, and says what it freed (tp_cache_prune). Any of them can also be deleted by hand while no
-# build uses it; the next build is then a full one, as with --clean.
+# days, and says what it freed (tp_cache_prune). Any of them can also be
+# deleted by hand while no build uses it; the next build is then a full one, as
+# with --clean.
 #
 # tools/build_175c.sh and the gate both build a staged copy of the working tree
 # (tp_stage), never the checkout itself: arduino-cli wants the sketch's folder
@@ -156,7 +157,7 @@ tp_cache_remove() {  # tp_cache_remove <cache folder>
   if [[ "$ok" -eq 1 ]] && rmdir "$dir" 2>/dev/null; then
     echo "Build cache: deleted the folder of $checkout ($why): $(tp_size "$kb") freed." >&2
   else
-    echo "Build cache: could not delete all of $dir ($why); the next build tries again." >&2
+    echo "Build cache: could not delete all of $dir ($why); the next build tries again. If this keeps coming back, delete it by hand while no build runs: rm -rf '$dir'" >&2
   fi
   return 0
 }
@@ -190,17 +191,21 @@ tp_cache_prune() {  # tp_cache_prune <cache folder of this checkout> <checkout r
 # in the same second as the previous sync (mtimes are whole seconds on some
 # rsyncs), and the stage persists between runs, so it would never arrive.
 tp_stage() {  # tp_stage <checkout root> <stage folder> <clean: 0|1>
-  local root="$1" stage="$2" clean="$3"
+  local root="$1" stage="$2" clean="$3" sketch
+  sketch="$(tp_stage_sketch "$stage")"
   if [[ "$clean" -eq 1 ]]; then rm -rf "$stage" || return 1; fi
-  mkdir -p "$stage/TamaPoke" || return 1
+  mkdir -p "$sketch" || return 1
   rsync -a --checksum --delete --delete-excluded \
     --include '/tools/' --include '/tools/build_175c.sh' --include '/tools/build_cache.sh' \
     --exclude '/tools/*' \
     --exclude '/.git' --exclude '/.github' --exclude '/.claude' --exclude '/.venv' \
     --exclude '/test' --exclude '/sim' --exclude '/docs' --exclude '/web' \
     --exclude '/out' --exclude '/build' --exclude '/backups' --exclude '/shots' \
-    "$root/" "$stage/TamaPoke/"
+    "$root/" "$sketch/"
 }
+
+# The sketch folder tp_stage fills in <stage folder>: what a build compiles.
+tp_stage_sketch() { printf '%s/TamaPoke\n' "$1"; }  # tp_stage_sketch <stage folder>
 
 TP_LOCKS=()
 tp_lock() {  # tp_lock <folder>: take <folder>.lock, or say who holds it and return 1
