@@ -78,7 +78,8 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
   `batlog` send only read-only ones),
   `tools/pet_save.sh` (`backup` and `restore` send `SAVE`),
   `tools/update_175c.sh` (runs both of those, so sends `SAVE` and
-  `TIME <epoch>`) and `tools/send_sd.py` (`PUT`). The owner's request to run
+  `TIME <epoch>`) and `tools/send_sd.py` (`PUT` for each file named; `--check`
+  and `--ls` send only the read-only `SDINFO` and `LS`). The owner's request to run
   one covers the commands it always sends; `tools/board.py cmd X` needs the
   request that `X` itself needs. (From `handleSerial` in `serialcmd.cpp` and
   `sdSerialCommand` in `sdmon.cpp`; re-check when those change.)

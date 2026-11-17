@@ -2346,6 +2346,45 @@ class TestBoardPy(unittest.TestCase):
             con.command('FOO', timeout=1, idle=3.0)
         self.assertIn('unknown command', str(cm.exception))
 
+    def test_write_sends_all_of_a_long_write(self):
+        # The port is non-blocking: one os.write takes only what fits in the tty's buffer, so a
+        # long write (send_sd.py's 2 KB blocks; far more here) has to wait for room for the rest.
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, slave)
+        data = bytes(range(256)) * 800                  # 200 KB
+        got = []
+
+        def board_side():
+            # until all of it is here, or 25 s: a loaded machine can stall for longer than a second
+            import select
+            end, have = time.time() + 25, 0
+            while have < len(data) and time.time() < end:
+                if select.select([master], [], [], 0.5)[0]:
+                    got.append(os.read(master, 4096))
+                    have += len(got[-1])
+                    time.sleep(0.001)                   # a board slower than the computer
+        t = threading.Thread(target=board_side, daemon=True)
+        t.start()
+        con = self.board.Console(os.ttyname(slave))
+        self.addCleanup(con.close)
+        con.write(data, timeout=20)
+        t.join(25)
+        self.assertEqual(len(b''.join(got)), len(data))
+        self.assertEqual(b''.join(got), data)
+
+    def test_read_line_skips_blank_lines_and_gives_none_when_nothing_comes(self):
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, slave)
+        con = self.board.Console(os.ttyname(slave))
+        self.addCleanup(con.close)
+        os.write(master, b'\r\n\r\nOK\r\n#')
+        self.assertEqual(con.read_line(2), 'OK')
+        self.assertIsNone(con.read_line(0.3), 'a line with no end yet is not a line')
+        os.write(master, b'\r\n')
+        self.assertEqual(con.read_line(2), '#')
+
     def test_cmd_sends_accents_precomposed_and_keeps_the_spaces(self):
         # OWNER <name> (#23): a name typed with a combining accent (as some macOS
         # input gives it) reaches the board as the precomposed letter the firmware
@@ -2558,6 +2597,661 @@ class TestBoardPy(unittest.TestCase):
         self.assertIsInstance(code, str)
         self.assertIn('older than the battery diary', code)
         self.assertIn('try again', code)
+
+
+class FakeSdBoard:
+    """The far side of a pty, answering SDINFO, LS and PUT as sdmon.cpp's sdSerialCommand does
+    on the 1.75C (LittleFS, whole 4 KB blocks), with its files in a dict. Nothing here touches
+    a real board.
+
+    trouble maps a PUT path to (what, block): 'refuse' answers the PUT with ERR; 'err' takes
+    that block and says ERR instead of acking it (a full or failing flash); 'silent' takes it
+    and says nothing, then ERR once no data has come for STALL s (the firmware waits 5 s);
+    'nodone' acks every block and never says DONE; 'ignore' says nothing at all to the PUT;
+    'late' takes that block and acks it only LATE s after (the firmware's own 5 s wait for the
+    next block then starts from the late ack); 'slowok' says OK only LATE s after the PUT and
+    then takes the file as usual (ERR once no data has come for STALL s). chatter puts a HEALTH heartbeat before every
+    answer and every ack. noinfo answers SDINFO with only DONE.
+
+    STALL is the longest the fake waits for the next block before it gives up on the file,
+    as the firmware does after 5 s. It is the longest gap a test's sends may have between a
+    '#' and the next block, so it is well above what a loaded CI machine could take."""
+    STALL = 3.0
+    LATE = 2.0
+
+    def __init__(self, test, files=None, free=10 << 20, other=0, total=None, trouble=None,
+                 chatter=False, noinfo=False):
+        import select
+        self.select = select.select
+        self.master, slave = os.openpty()
+        test.addCleanup(os.close, slave)
+        test.addCleanup(os.close, self.master)
+        self.port = os.ttyname(slave)
+        self.files = dict(files or {})
+        self.other = other                      # bytes used outside mons/
+        self.total = self.used() + free if total is None else total
+        self.trouble = trouble or {}
+        self.chatter = chatter
+        self.noinfo = noinfo
+        self.commands = []
+        self.err_at = None                      # when a PUT that stopped said ERR
+        self.buf = b''
+        threading.Thread(target=self.serve, daemon=True).start()
+
+    def used(self):
+        return self.other + sum(-(-len(d) // 4096) * 4096 for d in self.files.values())
+
+    def fill(self, timeout):
+        if not self.select([self.master], [], [], timeout)[0]:
+            return False
+        data = os.read(self.master, 65536)
+        if not data:
+            raise EOFError
+        self.buf += data
+        return True
+
+    def readline(self):
+        while b'\n' not in self.buf:
+            self.fill(None)
+        line, self.buf = self.buf.split(b'\n', 1)
+        return line.decode().strip()
+
+    def read_block(self, n):
+        """Up to n bytes; fewer once nothing has come for STALL s."""
+        while len(self.buf) < n and self.fill(self.STALL):
+            pass
+        data, self.buf = self.buf[:n], self.buf[n:]
+        return data
+
+    def say(self, *lines):
+        if self.chatter:
+            lines = ('HEALTH up=1s',) + lines
+        os.write(self.master, ''.join(t + '\r\n' for t in lines).encode())
+
+    def serve(self):
+        try:
+            while True:
+                line = self.readline()
+                self.commands.append(line)
+                if line == 'SDINFO':
+                    self.say(*(() if self.noinfo else (f'total={self.total} used={self.used()}',)),
+                             'DONE')
+                elif line == 'LS':
+                    self.say(*(f'{n} {len(d)}' for n, d in self.files.items()), 'DONE')
+                elif line.startswith('PUT '):
+                    self.put(line)
+        except (EOFError, OSError, ValueError):
+            pass
+
+    def put(self, line):
+        path, size = line[4:].rsplit(' ', 1)
+        size = int(size)
+        what, at = self.trouble.get(path, (None, None))
+        if what == 'ignore':
+            return
+        if what == 'refuse' or not path.startswith('mons/'):
+            self.say('ERR')
+            return
+        name = path[len('mons/'):]
+        self.files.pop(name, None)              # PUT deletes the old copy first
+        if what == 'slowok':
+            time.sleep(self.LATE)
+        self.say('OK')
+        got, block = b'', 0
+        while len(got) < size:
+            chunk = self.read_block(min(2048, size - len(got)))
+            if not chunk:
+                break                           # no data for a while: the firmware gives up
+            got += chunk
+            if what == 'err' and block == at:
+                break
+            if what == 'late' and block == at:
+                time.sleep(self.LATE)
+            if not (what == 'silent' and block == at):
+                self.say('#')
+            block += 1
+        self.files[name] = got                  # what was written stays, whole or not
+        if len(got) < size or what == 'err':
+            self.err_at = time.time()
+            self.say('ERR')
+        elif what != 'nodone':
+            self.say('DONE')
+
+    def puts(self):
+        return [c for c in self.commands if c.startswith('PUT ')]
+
+
+class TestSendSd(unittest.TestCase):
+    """tools/send_sd.py (#110) against FakeSdBoard: only the files named, only if they fit,
+    one result per file."""
+
+    def setUp(self):
+        import send_sd
+        self.sd = send_sd
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        for name, value in (('OK_TIMEOUT', 2), ('ACK_TIMEOUT', 2), ('DONE_TIMEOUT', 2),
+                            ('RESYNC_TIMEOUT', 0.5)):
+            self.patch(name, value)
+
+        # Never the real board: a run that gets as far as looking for one without --port (a
+        # broken usage check) fails here instead of opening a board plugged into this computer.
+        def no_real_board(explicit=None):
+            if explicit:
+                return explicit
+            raise AssertionError('send_sd.py looked for a real board (no --port)')
+        self.patch('find_port', no_real_board)
+        # the resend command names the script as it was run
+        old_argv = sys.argv
+        self.addCleanup(setattr, sys, 'argv', old_argv)
+        sys.argv = ['tools/send_sd.py']
+
+    def patch(self, name, value):
+        self.addCleanup(setattr, self.sd, name, getattr(self.sd, name))
+        setattr(self.sd, name, value)
+
+    def patch_stall(self, seconds):
+        self.addCleanup(setattr, FakeSdBoard, 'STALL', FakeSdBoard.STALL)
+        FakeSdBoard.STALL = seconds
+
+    def hook_console(self, **hooks):
+        """Make send_sd.py use a Console whose methods are replaced: name=hook(original, *args)
+        where original(*args) is the real method. It still talks to the fake board's pty."""
+        base = self.sd.Console
+
+        def wrap(name, hook):
+            def method(con, *args, **kw):
+                return hook(lambda *a, **k: getattr(base, name)(con, *a, **k), *args, **kw)
+            return method
+        self.patch('Console', type('HookedConsole', (base,),
+                                   {n: wrap(n, h) for n, h in hooks.items()}))
+
+    @staticmethod
+    def raise_on_second_block(exc):
+        """A Console.write hook that raises `exc` instead of writing the file's second block
+        (PUT's blocks are the only writes of 2048 bytes)."""
+        blocks = []
+
+        def write(original, data, timeout=5.0):
+            if len(data) == 2048:
+                blocks.append(1)
+                if len(blocks) == 2:
+                    raise exc
+            return original(data, timeout=timeout)
+        return write
+
+    def assert_waited_for_the_boards_err(self, board, ended):
+        """The run ended just after the board said ERR: not before (the next command would
+        have gone into the file) and not long after (a fixed wait)."""
+        self.assertIsNotNone(board.err_at, 'let go of the port before the board said ERR')
+        self.assertLessEqual(board.err_at, ended)
+        self.assertLess(ended - board.err_at, 1.0, 'went on waiting after the ERR')
+
+    def sprite(self, name, size, magic=b'TPK2'):
+        """A file of `size` bytes in the temp folder, starting with `magic`; its path."""
+        path = os.path.join(self.tmp, name)
+        with open(path, 'wb') as fh:
+            fh.write((magic + bytes(range(256)) * (size // 256 + 1))[:size])
+        return path
+
+    def run_send(self, *args, board=None):
+        """send_sd.py's main(['--port', board's port, *args]); (exit code, stdout, stderr)."""
+        import contextlib
+        import io
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        argv = ['--port', board.port, *args] if board else list(args)
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                self.sd.main(argv)
+            except SystemExit as e:
+                code = e.code
+        return code, out.getvalue(), err.getvalue()
+
+    def test_sends_only_the_files_named(self):
+        board = FakeSdBoard(self, files={'p151.bin': b'TPK2' + b'n' * 9000})
+        a, b = self.sprite('ps151.bin', 9000), self.sprite('ps025.bin', 5000)
+        code, out, _ = self.run_send(a, b, board=board)
+        self.assertEqual(code, 0)
+        self.assertEqual(board.commands, ['SDINFO', 'LS', 'PUT mons/ps151.bin 9000',
+                                          'PUT mons/ps025.bin 5000'])
+        with open(a, 'rb') as fh:
+            self.assertEqual(board.files['ps151.bin'], fh.read())
+        self.assertEqual(len(board.files['ps025.bin']), 5000)
+        self.assertIn('ps151.bin: sent', out)
+        self.assertIn('ps025.bin: sent', out)
+        self.assertIn('All 2 sent.', out)
+
+    def test_a_plain_name_is_a_file_in_tools_sdcard_mons(self):
+        self.patch('MONS', self.tmp)
+        self.sprite('ps151.bin', 3000)
+        board = FakeSdBoard(self)
+        code, out, _ = self.run_send('ps151.bin', board=board)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(board.files['ps151.bin']), 3000)
+        code, _, _ = self.run_send('--port', '/dev/does-not-exist', 'ps150.bin')
+        self.assertIn('ps150.bin: no such file in tools/sdcard/mons/', code)
+
+    def test_a_bare_run_refuses_with_usage(self):
+        code, _, err = self.run_send()
+        self.assertEqual(code, 2)
+        self.assertIn('name the files to send', err)
+        self.assertIn('usage:', err)
+        code, _, err = self.run_send('--ls', 'ps151.bin')
+        self.assertEqual(code, 2)
+        self.assertIn('--ls takes no file names', err)
+
+    def test_names_the_firmware_never_reads_and_bad_files_are_refused_before_the_port(self):
+        self.assertEqual(self.sd.DEX_MAX, 151)
+        for name, magic in (('p001.bin', b'TPK2'), ('ps151.bin', b'TPK2'), ('001.bin', b'TPK1'),
+                            ('s151.bin', b'TPK1'), ('thumbs.bin', b'TPTH'), ('ps000.bin', None),
+                            ('ps152.bin', None), ('p1.bin', None), ('x001.bin', None),
+                            ('ps151', None), ('PS151.bin', None),
+                            ('ps\u0661\u0665\u0661.bin', None)):   # Arabic-Indic 151
+            with self.subTest(name=name):
+                self.assertEqual(self.sd.magic_for(name), magic)
+        wrong = self.sprite('ps025.bin', 900, magic=b'TPK1')
+        big = self.sprite('ps026.bin', 3 * 1024 * 1024 + 1)
+        os.mkdir(os.path.join(self.tmp, 'dup'))
+        twice = os.path.join(self.tmp, 'dup', 'ps027.bin')
+        shutil.copy(self.sprite('ps027.bin', 900), twice)
+        code, out, _ = self.run_send('--port', '/dev/does-not-exist', 'pikachu.bin', wrong, big,
+                                     os.path.join(self.tmp, 'ps027.bin'), twice,
+                                     os.path.join(self.tmp, 'ps028.bin'))
+        self.assertIsInstance(code, str)
+        self.assertTrue(code.startswith('send_sd.py: nothing sent:'), code)  # not a port error
+        self.assertIn("no file called 'pikachu.bin'", code)
+        self.assertIn('ps025.bin: not a sprite file of its kind', code)
+        self.assertIn('ps026.bin: over 3,072 KB', code)
+        self.assertIn('ps027.bin is named twice', code)
+        self.assertIn('ps028.bin: no such file', code)
+        self.assertEqual(out, '')
+
+    def test_space_is_counted_in_whole_blocks_with_room_to_spare(self):
+        # A new file: whole 4 KB blocks of 4,032 data bytes (LittleFS keeps the file's block
+        # list in them), and one block more. A replaced file gives back at least its data in
+        # whole blocks. 64 KB stays free.
+        block = 4096
+        for size, blocks in ((1, 2), (4032, 2), (4033, 3), (30000, 9)):
+            with self.subTest(size=size):
+                self.assertEqual(self.sd.new_cost(size), blocks * block)
+        for size, blocks in ((1, 1), (4096, 1), (4097, 2), (20000, 5)):
+            with self.subTest(old=size):
+                self.assertEqual(self.sd.old_freed(size), blocks * block)
+        self.assertEqual(self.sd.FS_SPARE, 16 * block)
+
+    def test_files_that_do_not_fit_are_not_sent(self):
+        a = self.sprite('ps151.bin', 30000)
+        board = FakeSdBoard(self, free=self.sd.new_cost(30000) + self.sd.FS_SPARE - 1)
+        code, out, _ = self.run_send(a, board=board)
+        self.assertIsInstance(code, str)
+        self.assertIn('not enough room, nothing sent', code)
+        self.assertEqual(board.puts(), [])
+        board = FakeSdBoard(self, free=self.sd.new_cost(30000) + self.sd.FS_SPARE)
+        code, out, _ = self.run_send(a, board=board)
+        self.assertEqual(code, 0, out)
+
+    def test_a_file_the_board_already_has_counts_as_freed(self):
+        old = b'TPK2' + b'o' * 19996                          # 20,000 bytes: 5 blocks
+        a = self.sprite('ps151.bin', 20000)
+        free = self.sd.new_cost(20000) - self.sd.old_freed(20000) + self.sd.FS_SPARE
+        self.assertLess(free, self.sd.new_cost(20000) + self.sd.FS_SPARE)
+        board = FakeSdBoard(self, files={'ps151.bin': old}, free=free)
+        code, out, _ = self.run_send(a, board=board)
+        self.assertEqual(code, 0, out)
+        self.assertIn("replaces the board's copy", out)
+        self.assertEqual(board.puts(), ['PUT mons/ps151.bin 20000'])
+
+    def test_the_most_needed_on_the_way_must_fit_not_only_the_end(self):
+        # A new file first, then one that shrinks: in the end they free space, but the first
+        # needs its room before the second frees any.
+        a, b = self.sprite('ps151.bin', 20000), self.sprite('ps025.bin', 100)
+        old = {'ps025.bin': b'TPK2' + b'o' * 39996}
+        net, peak = self.sd.plan([(a, 'ps151.bin', b'x' * 20000), (b, 'ps025.bin', b'x' * 100)],
+                                 {n: len(d) for n, d in old.items()})
+        self.assertLess(net, 0)
+        board = FakeSdBoard(self, files=old, free=10000 + self.sd.FS_SPARE)
+        code, _, _ = self.run_send(a, b, board=board)
+        self.assertIsInstance(code, str)
+        self.assertIn('not enough room', code)
+        self.assertEqual(board.puts(), [])
+        board = FakeSdBoard(self, files=old, free=10000 + self.sd.FS_SPARE)
+        code, out, _ = self.run_send(b, a, board=board)   # the shrinking one first: it fits
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(board.puts()), 2)
+
+    def test_check_and_ls_send_only_read_only_commands(self):
+        board = FakeSdBoard(self, files={'p151.bin': b'TPK2' + b'n' * 9000}, free=900 * 1024)
+        code, out, _ = self.run_send('--check', self.sprite('ps151.bin', 9000), board=board)
+        self.assertEqual(code, 0)
+        self.assertIn('They fit', out)
+        self.assertIn('Nothing sent (--check).', out)
+        self.assertEqual(board.commands, ['SDINFO', 'LS'])
+        board = FakeSdBoard(self, files={'p151.bin': b'TPK2' + b'n' * 9000}, free=900 * 1024)
+        code, out, _ = self.run_send('--ls', board=board)
+        self.assertEqual(code, 0)
+        self.assertEqual(board.commands, ['SDINFO', 'LS'])
+        self.assertIn('p151.bin 9004', out)
+        self.assertIn('900 KB free', out)
+
+    def test_the_first_failure_stops_the_run_and_says_how_to_recover(self):
+        board = FakeSdBoard(self, trouble={'mons/ps151.bin': ('err', 1)})
+        a, b = self.sprite('ps151.bin', 9000), self.sprite('ps025.bin', 5000)
+        code, out, _ = self.run_send(a, b, board=board)
+        self.assertIsInstance(code, str, 'a failed file must exit non-zero')
+        self.assertIn('ps151.bin: FAILED: it stopped after 2 KB of 9 KB (the board said ERR)', out)
+        self.assertEqual(board.puts(), ['PUT mons/ps151.bin 9000'], 'went on after a failure')
+        self.assertIn('Not sent: ps025.bin', code)
+        self.assertIn('did not arrive whole', code)
+        self.assertIn('"?"', code)
+        self.assertIn(f'python3 tools/send_sd.py --port {board.port} {a} {b}', code)
+        self.assertIn('keeps the sprite it has loaded', code)
+        self.assertNotIn('wait 10 seconds', code, 'the board said ERR: it is reading commands')
+
+    def test_a_refused_put_and_a_missing_done_are_failures(self):
+        for what, why in (('refuse', 'the board refused it (ERR)'),
+                          ('nodone', 'no DONE after the last block'),
+                          ('ignore', 'no answer to PUT')):
+            with self.subTest(what=what):
+                self.patch('OK_TIMEOUT', 0.5)
+                board = FakeSdBoard(self, trouble={'mons/ps151.bin': (what, None)})
+                code, out, _ = self.run_send(self.sprite('ps151.bin', 5000), board=board)
+                self.assertIsInstance(code, str)
+                self.assertIn(f'ps151.bin: FAILED: {why}', out)
+                self.assertNotIn('sent,', out)
+                self.assertNotIn('Not sent', code, 'one file named: nothing else to list')
+
+    def test_after_a_silent_board_it_waits_for_the_boards_err_before_letting_go(self):
+        # The board still waits for the rest of the file: a command sent now would be taken as
+        # data. It gives up after 5 s without data and says ERR; the script waits for that, and
+        # no longer (the window is 4 s, the ERR comes after 2.5).
+        self.patch_stall(2.5)
+        self.patch('ACK_TIMEOUT', 1.0)
+        self.patch('RESYNC_TIMEOUT', 4)
+        board = FakeSdBoard(self, trouble={'mons/ps151.bin': ('silent', 1)})
+        code, out, _ = self.run_send(self.sprite('ps151.bin', 9000), board=board)
+        ended = time.time()
+        self.assertIsInstance(code, str)
+        self.assertIn('it stopped after 2 KB of 9 KB (no answer)', out)
+        self.assert_waited_for_the_boards_err(board, ended)
+
+    def test_a_late_answer_starts_the_wait_for_the_boards_err_again(self):
+        # The board acks block 1 only after the script has given up on it. Its own 5 s wait for
+        # the next block starts from that late '#', so its ERR comes after the script's
+        # RESYNC_TIMEOUT from giving up (1.0 + 3.0 = 4.0 s) has run out, at 2.0 + 2.5 = 4.5 s.
+        # The script waits RESYNC_TIMEOUT from the late '#' (5.0 s) instead.
+        self.patch_stall(2.5)
+        self.patch('ACK_TIMEOUT', 1.0)
+        self.patch('RESYNC_TIMEOUT', 3)
+        board = FakeSdBoard(self, trouble={'mons/ps151.bin': ('late', 1)})
+        code, out, _ = self.run_send(self.sprite('ps151.bin', 9000), board=board)
+        ended = time.time()
+        self.assertIsInstance(code, str)
+        self.assertIn('it stopped after 2 KB of 9 KB (no answer)', out)
+        self.assert_waited_for_the_boards_err(board, ended)
+
+    def test_a_late_ok_starts_the_wait_for_the_boards_err_again(self):
+        # The board says OK after the script gave up on it (0.5 s), at 2.0 s: it is inside the
+        # PUT from then on, waiting for data, and says ERR STALL s later (4.5 s). The script's
+        # wait from giving up would end at 3.5 s; the late OK moves it to 5.0 s.
+        self.patch_stall(2.5)
+        self.patch('OK_TIMEOUT', 0.5)
+        self.patch('RESYNC_TIMEOUT', 3)
+        board = FakeSdBoard(self, trouble={'mons/ps151.bin': ('slowok', None)})
+        code, out, _ = self.run_send(self.sprite('ps151.bin', 5000), board=board)
+        ended = time.time()
+        self.assertIsInstance(code, str)
+        self.assertIn('ps151.bin: FAILED: no answer to PUT', out)
+        self.assert_waited_for_the_boards_err(board, ended)
+        self.assertNotIn('wait 10 seconds', code, 'the board said ERR: it is reading commands')
+
+    def test_a_file_whose_last_answers_come_late_counts_as_sent(self):
+        # The board acks the last block only after the script gave up on it, then says DONE:
+        # remaining == 0 in sdmon.cpp, so the file is whole and nothing needs sending again.
+        self.patch('ACK_TIMEOUT', 1.0)
+        self.patch('RESYNC_TIMEOUT', 3)
+        a, b = self.sprite('ps151.bin', 5000), self.sprite('ps025.bin', 3000)
+        board = FakeSdBoard(self, trouble={'mons/ps151.bin': ('late', 2)})   # 3 blocks: 0, 1, 2
+        code, out, _ = self.run_send(a, b, board=board)
+        self.assertEqual(code, 0, out)
+        self.assertIn('ps151.bin: sent', out)
+        self.assertNotIn('FAILED', out)
+        self.assertEqual(len(board.files['ps151.bin']), 5000)
+        self.assertEqual(len(board.files['ps025.bin']), 3000)
+
+    def test_ctrl_c_on_a_file_that_arrives_whole_says_sent_and_stops(self):
+        # Ctrl-C right after the last block went out: the board still says '#' and DONE, so
+        # the file is whole; the run stops there as asked, and names what was not sent.
+        def write(original, data, timeout=5.0):
+            original(data, timeout=timeout)
+            if len(data) == 5000 - 2 * 2048:      # the last block of ps151.bin (904 bytes)
+                time.sleep(0.3)                   # the fake has read it
+                raise KeyboardInterrupt
+        self.hook_console(write=write)
+        a, b = self.sprite('ps151.bin', 5000), self.sprite('ps025.bin', 3000)
+        board = FakeSdBoard(self)
+        code, out, _ = self.run_send(a, b, board=board)
+        self.assertIsInstance(code, str, 'a Ctrl-C must exit non-zero')
+        self.assertIn('ps151.bin: sent', out)
+        self.assertNotIn('FAILED', out)
+        self.assertEqual(code, 'send_sd.py: interrupted (Ctrl-C). Not sent: ps025.bin.')
+        self.assertEqual(board.puts(), ['PUT mons/ps151.bin 5000'])
+
+    def test_output_still_queued_is_thrown_away_after_a_failure_and_only_then(self):
+        # Bytes still queued for the port would reach the board as file data, or as command
+        # lines once its PUT has ended; tcflush(TCOFLUSH) drops them on every failure path.
+        import termios
+        calls = []
+        real = termios.tcflush
+        self.addCleanup(setattr, termios, 'tcflush', real)
+        termios.tcflush = lambda fd, queue: (calls.append(queue), real(fd, queue))[1]
+        self.patch('RESYNC_TIMEOUT', 0.5)
+        code, _, _ = self.run_send(self.sprite('ps151.bin', 9000), board=FakeSdBoard(self))
+        self.assertEqual((code, calls), (0, []), 'nothing to throw away after a good send')
+        for what, hook in (('a silent board', None),
+                           ('a write that times out', TimeoutError('stopped taking data')),
+                           ('Ctrl-C', KeyboardInterrupt())):
+            with self.subTest(what):
+                calls.clear()
+                if hook is not None:
+                    self.hook_console(write=self.raise_on_second_block(hook))
+                self.patch('ACK_TIMEOUT', 0.5)
+                trouble = {'mons/ps151.bin': ('silent', 1)} if hook is None else None
+                board = FakeSdBoard(self, trouble=trouble)
+                code, _, _ = self.run_send(self.sprite('ps151.bin', 9000), board=board)
+                self.assertIsInstance(code, str)
+                self.assertEqual(calls, [termios.TCOFLUSH])
+
+    def test_the_wait_for_the_boards_err_gives_up_when_the_board_only_prints_heartbeats(self):
+        # A board that is not inside the PUT prints a HEALTH line now and then and never
+        # says ERR: its heartbeat must not keep the script waiting.
+        self.patch('OK_TIMEOUT', 0.3)
+        self.patch('RESYNC_TIMEOUT', 1.0)
+        board = FakeSdBoard(self, trouble={'mons/ps151.bin': ('ignore', None)})
+        stop = threading.Event()
+
+        def heartbeat():
+            end = time.time() + 8            # a script that waited for ever would hang the run
+            while not stop.wait(0.2) and time.time() < end:
+                os.write(board.master, b'HEALTH up=1s\r\n')
+        t = threading.Thread(target=heartbeat, daemon=True)
+        t.start()
+        self.addCleanup(t.join, 5)
+        self.addCleanup(stop.set)
+        started = time.time()
+        code, out, _ = self.run_send(self.sprite('ps151.bin', 5000), board=board)
+        self.assertIsInstance(code, str)
+        self.assertIn('FAILED: no answer to PUT', out)
+        self.assertLess(time.time() - started, 4.0)
+        self.assertIn('wait 10 seconds before you send it again', code, 'no ERR came: say so')
+
+    def test_a_write_that_times_out_waits_for_the_boards_err_and_says_how_to_recover(self):
+        # Console.write gives up when the board stops taking data. The board still waits for the
+        # block, so the script must wait for its ERR like for any other failure.
+        self.patch_stall(1.0)
+        self.patch('RESYNC_TIMEOUT', 5)
+        self.hook_console(write=self.raise_on_second_block(
+            TimeoutError('the board stopped taking data (2048 bytes not sent)')))
+        a, b = self.sprite('ps151.bin', 9000), self.sprite('ps025.bin', 5000)
+        board = FakeSdBoard(self)
+        code, out, _ = self.run_send(a, b, board=board)
+        ended = time.time()
+        self.assertIsInstance(code, str, 'a failed file must exit non-zero')
+        self.assertIn('ps151.bin: FAILED: the board stopped taking data', out)
+        self.assertIn('did not arrive whole', code)
+        self.assertNotIn('wait 10 seconds', code, 'the board said ERR: it is reading commands')
+        self.assertIn('Not sent: ps025.bin', code)
+        self.assertIn(f'python3 tools/send_sd.py --port {board.port} {a} {b}', code)
+        self.assertEqual(board.puts(), ['PUT mons/ps151.bin 9000'], 'went on after a failure')
+        self.assert_waited_for_the_boards_err(board, ended)
+
+    def test_ctrl_c_in_the_middle_of_a_file_waits_for_the_boards_err_and_says_how_to_recover(self):
+        self.patch_stall(1.0)
+        self.patch('RESYNC_TIMEOUT', 5)
+        self.hook_console(write=self.raise_on_second_block(KeyboardInterrupt()))
+        a, b = self.sprite('ps151.bin', 9000), self.sprite('ps025.bin', 5000)
+        board = FakeSdBoard(self)
+        code, out, _ = self.run_send(a, b, board=board)   # a traceback would raise out of here
+        ended = time.time()
+        self.assertIsInstance(code, str, 'an interrupted file must exit non-zero')
+        self.assertIn('ps151.bin: FAILED: interrupted with Ctrl-C', out)
+        self.assertIn('did not arrive whole', code)
+        self.assertNotIn('wait 10 seconds', code, 'the board said ERR: it is reading commands')
+        self.assertIn('Not sent: ps025.bin', code)
+        self.assertIn(f'python3 tools/send_sd.py --port {board.port} {a} {b}', code)
+        self.assertEqual(board.puts(), ['PUT mons/ps151.bin 9000'])
+        self.assert_waited_for_the_boards_err(board, ended)
+
+    def test_a_second_ctrl_c_while_waiting_for_the_boards_err_still_exits_cleanly(self):
+        # A silent board, then Ctrl-C during the wait for its ERR (the one read that waits as
+        # long as RESYNC_TIMEOUT): the wait ends, and the failure is reported as it was.
+        self.patch_stall(2.5)
+        self.patch('ACK_TIMEOUT', 0.5)
+        self.patch('RESYNC_TIMEOUT', 5)
+
+        def read_line(original, timeout):
+            if timeout > 3:
+                raise KeyboardInterrupt
+            return original(timeout)
+        self.hook_console(read_line=read_line)
+        board = FakeSdBoard(self, trouble={'mons/ps151.bin': ('silent', 1)})
+        started = time.time()
+        code, out, _ = self.run_send(self.sprite('ps151.bin', 9000), board=board)
+        self.assertIsInstance(code, str)
+        self.assertIn('it stopped after 2 KB of 9 KB (no answer)', out)
+        self.assertIn('did not arrive whole', code)
+        self.assertLess(time.time() - started, 2.0, 'waited for the ERR after the Ctrl-C')
+        self.assertIn('wait 10 seconds before you send it again', code, 'the wait was cut short')
+
+    def test_ctrl_c_before_a_file_is_sent_exits_without_a_traceback(self):
+        board = FakeSdBoard(self)
+        calls = []
+
+        def command(original, line, **kw):
+            calls.append(line)
+            if line == 'LS':
+                raise KeyboardInterrupt
+            return original(line, **kw)
+        self.hook_console(command=command)
+        code, out, _ = self.run_send(self.sprite('ps151.bin', 900), board=board)
+        self.assertIsInstance(code, str)
+        self.assertIn('interrupted', code)
+        self.assertEqual(calls, ['SDINFO', 'LS'])
+        self.assertEqual(board.puts(), [])
+
+    def test_heartbeats_between_the_answers_are_skipped(self):
+        board = FakeSdBoard(self, chatter=True)
+        code, out, _ = self.run_send(self.sprite('ps151.bin', 9000), board=board)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(board.files['ps151.bin']), 9000)
+
+    def test_no_storage_and_damaged_replies_send_nothing(self):
+        a = self.sprite('ps151.bin', 900)
+        n = b'TPK2' + b'n' * 9996
+        for why, board, want in (
+                ('no storage', FakeSdBoard(self, total=0), 'no sprite storage mounted'),
+                ('used under the files', FakeSdBoard(self, files={'p001.bin': n}, other=-5000),
+                 'disagree'),
+                ('used over total', FakeSdBoard(self, files={'p001.bin': n}, total=4096),
+                 'disagree'),
+                ('no total= line', FakeSdBoard(self, noinfo=True), 'no total=/used= line')):
+            with self.subTest(why):
+                code, _, _ = self.run_send(a, board=board)
+                self.assertIsInstance(code, str)
+                self.assertIn(want, code)
+                self.assertEqual(board.puts(), [])
+
+    def test_what_a_failed_file_leaves_is_said_for_each_kind_of_file(self):
+        # sdmon.cpp's PUT removes the old file first and leaves sdDirty false on a failure;
+        # scene.cpp's drawPet() shows "?" for a broken file, and a shiny falls back to the
+        # normal sprite only when its file is not there at all.
+        shiny, normal = self.sd.unusable('ps151.bin'), self.sd.unusable('p001.bin')
+        for text in (shiny, normal):
+            self.assertIn('keeps the sprite it has loaded until it loads that creature again',
+                          text)
+            self.assertIn('"?" and "No sprites"', text)
+        # a later file that arrives whole sets sdDirty, and ensureMon() reloads the sprite
+        for text in (shiny, normal, self.sd.unusable('thumbs.bin')):
+            self.assertIn('once another file arrives whole', text)
+        self.assertIn("that species' shiny form shows", shiny)
+        self.assertIn('the old copy is gone and the normal sprite shows instead', shiny)
+        self.assertIn('that species shows', normal)
+        self.assertNotIn('normal sprite', normal)
+        self.assertIn('no thumbnails', self.sd.unusable('thumbs.bin'))
+        self.assertNotIn('"?"', self.sd.unusable('thumbs.bin'))
+        for name in ('151.bin', 's151.bin'):
+            self.assertNotIn('"?"', self.sd.unusable(name))
+
+    def test_the_resend_command_names_the_script_as_it_was_run_and_needs_no_port(self):
+        sys.argv = ['my tools/send_sd.py']                 # quoted in the command
+        board = FakeSdBoard(self, trouble={'mons/ps151.bin': ('refuse', None)})
+        con = self.sd.Console(board.port)
+        self.addCleanup(con.close)
+        a, b = self.sprite('ps151.bin', 900), self.sprite('ps025.bin', 900)
+        files = [(a, 'ps151.bin', b'TPK2' + b'x' * 896), (b, 'ps025.bin', b'TPK2' + b'x' * 896)]
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as cm:
+            self.sd.send(con, files, None)
+        msg = cm.exception.code
+        self.assertIn(f"python3 'my tools/send_sd.py' {a} {b}", msg)
+        self.assertNotIn('--port', msg)
+        self.assertIn('Not sent: ps025.bin.', msg)
+
+    def test_a_file_must_be_a_size_the_boards_loader_accepts(self):
+        # sdmon.cpp: PmdMon::load takes 7 bytes to 3 MiB, SdThumbs::load 10 bytes to 2 MiB;
+        # SdMon::load needs its 14-byte header and a pixel. A file outside that is sent whole
+        # and never used, and nothing deletes it.
+        MiB = 1024 * 1024
+        for name, magic, least, most in (('ps151.bin', b'TPK2', 7, 3 * MiB),
+                                         ('p001.bin', b'TPK2', 7, 3 * MiB),
+                                         ('thumbs.bin', b'TPTH', 10, 2 * MiB),
+                                         ('151.bin', b'TPK1', 15, 4 * MiB),
+                                         ('s151.bin', b'TPK1', 15, 4 * MiB)):
+            for size, ok in ((least - 1, False), (least, True), (most, True),
+                             (most + 1, False)):
+                with self.subTest(name=name, size=size):
+                    path = self.sprite(name, size, magic=magic)
+                    if ok:
+                        self.assertEqual([n for _, n, _ in self.sd.load_files([path])], [name])
+                    else:
+                        with self.assertRaises(SystemExit) as cm:
+                            self.sd.load_files([path])
+                        self.assertRegex(cm.exception.code, r'under the \d+ the board needs'
+                                         if size < least else r'over [\d,]+ KB')
+
+    def test_parse_ls_takes_names_with_or_without_the_folder(self):
+        self.assertEqual(self.sd.parse_ls(['/mons/ps151.bin 123', 'HEALTH up=1s', 'p001.bin 5',
+                                           'cargado /mons/p001.bin (5 KB)']),
+                         {'ps151.bin': 123, 'p001.bin': 5})
+
+    def test_a_board_that_is_not_there_gives_a_message_not_a_traceback(self):
+        r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'send_sd.py'),
+                            '--port', '/dev/does-not-exist', 'ps151.bin'],
+                           capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn('Traceback', r.stderr)
+        self.assertIn('send_sd.py:', r.stderr)
 
 
 SIM = os.path.join(ROOT, 'sim')
