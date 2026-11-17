@@ -60,13 +60,13 @@ TEST(PlayArea, the_idle_and_the_double_tap_hops_share_one_shape) {
 // (a triangle gives -4/-9/-10 and -5/-11/-12 there, sin squared -2/-9/-10 and -3/-11/-12).
 TEST(PlayArea, the_hops_are_half_a_sine) {
   // idle hop, 450 ms / 20 px
-  CHECK_EQ(IDLE_HOP_MS, 450u);
+  CHECK_EQ(IDLE_HOP_MS, 450);
   CHECK_EQ(IDLE_HOP_PX, 20);
   CHECK_EQ(hopDy(56, 450, 20), -7);    // 20 * sin(pi * 56 / 450)  = 7.62
   CHECK_EQ(hopDy(112, 450, 20), -14);  // 20 * sin(pi * 112 / 450) = 14.09
   CHECK_EQ(hopDy(337, 450, 20), -14);  // 20 * sin(pi * 337 / 450) = 14.19
   // double-tap hop, 350 ms / 24 px
-  CHECK_EQ(PET_TAP_HOP_MS, 350u);
+  CHECK_EQ(PET_TAP_HOP_MS, 350);
   CHECK_EQ(PET_TAP_HOP_PX, 24);
   CHECK_EQ(hopDy(43, 350, 24), -9);    // 24 * sin(pi * 43 / 350)  = 9.05
   CHECK_EQ(hopDy(87, 350, 24), -16);   // 24 * sin(pi * 87 / 350)  = 16.88
