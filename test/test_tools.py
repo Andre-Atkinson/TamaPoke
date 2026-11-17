@@ -1563,14 +1563,27 @@ class TestBuildCache(FakeArduinoCliCase):
         os.makedirs(stuck)
         put(os.path.join(stuck, 'file.o'))
         os.chmod(stuck, 0o500)   # its file cannot be deleted
+        import signal
         try:
-            r = self.build_175c()
-            self.assertEqual(r.returncode, 0, r.stderr)
-            self.assertIn(f'Build cache: could not delete all of {cache} (no firmware build there since', r.stderr)
-            self.assertTrue(os.path.exists(os.path.join(cache, 'checkout')),
-                            'the record went first: no later prune would find the rest')
-            for lock in ('build-175c.lock', 'gate.lock'):
-                self.assertFalse(os.path.exists(os.path.join(cache, lock)), f'{lock} was not given back')
+            self.fresh()
+            p = subprocess.Popen([os.path.join(TOOLS, 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out')],
+                                 env=dict(self.env, FAKE_SLEEP='30'), start_new_session=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                deadline = time.time() + 20
+                while not self.calls() and time.time() < deadline:
+                    time.sleep(0.05)
+                self.assertEqual(len(self.calls()), 1, 'the build never started compiling')
+                # The prune is over and this build is still compiling: the worktree's
+                # locks are back already, or a build there would be refused meanwhile.
+                for lock in ('build-175c.lock', 'gate.lock'):
+                    self.assertFalse(os.path.exists(os.path.join(cache, lock)), f'{lock} was not given back')
+                self.assertTrue(os.path.exists(os.path.join(cache, 'checkout')),
+                                'the record went first: no later prune would find the rest')
+            finally:
+                os.killpg(p.pid, signal.SIGTERM)
+                _, err = p.communicate(timeout=20)
+            self.assertIn(f'Build cache: could not delete all of {cache} (no firmware build there since', err)
         finally:
             os.chmod(stuck, 0o700)
         r = self.build_175c()
