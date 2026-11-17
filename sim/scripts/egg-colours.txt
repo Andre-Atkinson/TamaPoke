@@ -17,13 +17,13 @@ tap 233 200
 tap 233 200
 wait 6s
 
-# Care page, Eggs -> Choose (the buttons are at y = 92 / 172 / 252, 72 px high)
+# Care page, Eggs -> Choose (the rows are at y = 76 / 142 / 208 / 274, 60 px high: cardlayout.h)
 swipe up
 swipe left
 swipe left
 swipe left
 swipe left
-tap 233 288
+tap 233 238
 swipe up
 serial CARE?
 expect egg=1 picking=0
