@@ -709,8 +709,8 @@ prints them as CSV; `PORTING.md` (*Measuring battery life*) has the steps of a b
 creature closes first, as for every ending: a minigame or an exercise is paid for what was
 done) · `ABANDON` (force the
 runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio test) ·
-`REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery; not during a farewell or
-run-away: `ERR gallery not opened: ...`) · `CAREDAY` ·
+`REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery; not during an ending
+(farewell, run-away or release): `ERR gallery not opened: ...`) · `CAREDAY` ·
 `TIME <epoch>` (sets the clock and the pet's saved time; `<epoch>` is seconds since 1970 in
 digits only, from 2025 to 2099, and anything else, or a time the clock does not take, gets
 `ERR clock not set: ...` and changes nothing) / `RTCSET <epoch>` (the clock only, the same

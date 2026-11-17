@@ -232,6 +232,16 @@ TEST(ClockEpochParse, trailing_junk_is_refused) {
   CHECK_EQ(e, UNSET);
 }
 
+// The characters either side of '0'..'9' ('/' and ':'), in values short enough that a digit
+// check one character too wide would still leave a time inside 2025-2099: it would take
+// "179456400:" as 1794564010 and "179456400/" as 1794563999.
+TEST(ClockEpochParse, the_characters_next_to_the_digits_are_refused) {
+  uint32_t e = UNSET;
+  CHECK(!clockEpochParse("179456400:", e));
+  CHECK(!clockEpochParse("179456400/", e));
+  CHECK_EQ(e, UNSET);
+}
+
 TEST(ClockEpochParse, anything_before_the_digits_is_refused) {
   uint32_t e = UNSET;
   CHECK(!clockEpochParse("+1794564000", e));

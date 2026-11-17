@@ -14,8 +14,8 @@
 // before the ceremony starts because the pet takes nothing during one (Pet::playGame,
 // trainStrength, trainStamina and clean() return at once): run after, a minigame's score
 // would be lost. A pet that cannot end now (an egg, which a starter or egg choice is too, or
-// an ending already on: the test Pet's startFarewell(), startRunaway() and release() make)
-// is left as it is, its overlays too, and so is an unknown `kind`.
+// an ending already on: the same check Pet::startFarewell(), startRunaway() and release()
+// make) is left as it is, its overlays too, and so is an unknown `kind`.
 // Returns whether the ending started.
 inline bool startEnding(Pet &pet, uint8_t kind, void (*closeOverlays)()) {
   if (pet.isEgg() || pet.ceremony != CER_NONE) return false;

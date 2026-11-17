@@ -346,8 +346,8 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 - **The serial clock commands take only a real time** (#65). `TIME <epoch>` and
   `RTCSET <epoch>` now refuse anything but the digits of a time from 2025 to 2099, with
   `ERR clock not set: ...`: an epoch with a digit too many was taken as 2038-01-19, a minus
-  sign or a stray letter could set some other time, and every real time from 2038 on was
-  set as 2038-01-19. `tools/board.py clock` always sent a correct time and still does.
+  sign could set a time in 2050, anything after the digits was silently ignored, and every
+  real time from 2038 on was set as 2038-01-19. `tools/board.py clock` always sent a correct time and still does.
 
 - **Portuguese accented capitals at full height** (#85): the accented capitals, and the
   font's own É, now stand as tall as the other capitals, so FORMA FÍSICA, NÍVEL and

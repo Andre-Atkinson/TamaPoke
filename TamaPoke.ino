@@ -720,7 +720,8 @@ static bool attnShowing(uint32_t now) {
 }
 
 // back to the pet screen, as if each had been left by hand without finishing (no rename,
-// no new time): they were left open when the screen timed out
+// no new time): they were left open when the screen timed out, or an ending is about to
+// start over them (closeForEnding(), #33)
 static void attnCloseViews() {
   if (galleryOpen) {
     galleryOpen = false;
