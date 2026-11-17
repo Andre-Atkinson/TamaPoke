@@ -793,21 +793,12 @@ void drawStreakBadge() {
   printT(s);
 }
 
-// banner temporal: medalla nueva o hito de racha
+// banner temporal: hito de racha o medalla nueva, one at a time (BannerQueue, pet.h)
 void drawCelebration() {
-  const char *l1 = nullptr, *l2 = nullptr;
-  // TestBuffersDeTexto (test/test_tools.py) vigila que "%u DIAS SEGUIDOS!" quepa.
-  char buf[32];
-  if (pet.showMedal()) {
-    for (int i = 0; i < MED_COUNT; i++)
-      if (pet.newMedal & (1 << i)) { l2 = medalName(i); break; }
-    l1 = T(S_MEDAL_BANNER);
-  } else if (pet.showMilestone()) {
-    snprintf(buf, sizeof(buf), T(S_STREAK_DAYS_FMT), pet.streak);
-    l1 = T(S_GREAT);
-    l2 = buf;
-  }
-  if (!l1) return;
+  int8_t b = pet.bannerShown();
+  if (b == BANNER_NONE) return;
+  const char *l1, *l2;
+  bannerLines(b, pet.streak, &l1, &l2);
   gfx->fillRoundRect(73, 150, 320, 96, 16, UI_BAR_WARN);
   gfx->drawRoundRect(73, 150, 320, 96, 16, UI_INK);
   gfx->setTextColor(UI_INK);

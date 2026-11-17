@@ -188,6 +188,18 @@ const char *natureName(uint8_t n) { return T((StrId)(S_NAT_EASYGOING + (n < NAT_
 const char *medalName(int i)  { return MED_NAME[gLang][i]; }
 const char *medalDesc(int i)  { return MED_DSC[gLang][i]; }
 
+void bannerLines(int banner, uint16_t streakDays, const char **l1, const char **l2) {
+  if (banner == BANNER_STREAK) {
+    static char buf[32];  // TestBuffersDeTexto (test/test_tools.py) checks "%u DIAS SEGUIDOS!" fits
+    snprintf(buf, sizeof(buf), T(S_STREAK_DAYS_FMT), streakDays);
+    *l1 = T(S_GREAT);
+    *l2 = buf;
+  } else {
+    *l1 = T(S_MEDAL_BANNER);
+    *l2 = medalName(banner);
+  }
+}
+
 // The stored byte keeps the old enum's codes (langFromNvs/langToNvs, i18n.h). Read-only:
 // a board on a removed language shows English and keeps its byte until the player
 // picks a language.

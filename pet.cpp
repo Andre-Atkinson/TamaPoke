@@ -110,7 +110,23 @@ void Pet::syncClock(uint32_t nowEpoch) {
   save();
 }
 
+// A deadline that has passed reads 0 from then on (timeLeft(0) is 0)
+static void endIfPast(uint32_t &deadline) {
+  if (deadline && !timeLeft(deadline)) deadline = 0;
+}
+
 void Pet::update(uint32_t nowMs) {
+  // What has ended is cleared on the next pass: a deadline left behind would read as ahead
+  // again once millis() is 2^31 ms (~24.8 days of uptime) past it, and an evolution, a plush
+  // play, warm milk or a meal from weeks before would then seem to run for weeks more, holding
+  // back bedtime and the attention calls (careBusy() in the sketch); a medal's or a streak's
+  // banner would come back (BannerQueue::update takes the ended ones off its queue).
+  banners.update(millis());
+  endIfPast(evolveUntil);
+  endIfPast(toyUntil);
+  endIfPast(milkUntil);
+  endIfPast(eatUntil);
+  endIfPast(heartUntil);
   // fin de ceremonia: la criatura se va y queda un huevo nuevo
   if (ceremony != CER_NONE && !timeLeft(ceremonyUntil)) {
     newEgg();
@@ -456,7 +472,7 @@ void Pet::registerCare() {
               : (streak >= 7)   ? 7   : (streak >= 3)  ? 3 : 0;
   if (ms > lastMilestone) {
     lastMilestone = ms;
-    milestoneUntil = millis() + MILESTONE_BANNER_MS;
+    banners.add(0, true, millis());  // first: the medals below wait behind it (#83)
   }
   checkMedals(false);  // de una accion del jugador, no del tick
   save();
@@ -486,8 +502,7 @@ void Pet::checkMedals(bool byTick) {
   uint16_t gained = medals & ~before;
   if (gained) {
     for (uint16_t m = gained; m; m &= (m - 1)) totalMedals++;
-    newMedal = gained;
-    medalUntil = millis() + MEDAL_BANNER_MS;
+    banners.add(gained, false, millis());  // a banner each, one after another (#82)
     // a medal that only time earned, noticed by the tick, is silent in quiet hours (#44);
     // the banner shows anyway. One the player's action gains (exercise burns weight too) sounds.
     bool byTimeOnly = !(gained & ~MED_BY_TIME);
@@ -497,10 +512,7 @@ void Pet::checkMedals(bool byTick) {
   }
 }
 
-void Pet::holdBanners() {
-  if (showMedal()) medalUntil = millis() + MEDAL_BANNER_MS;
-  if (showMilestone()) milestoneUntil = millis() + MILESTONE_BANNER_MS;
-}
+void Pet::holdBanners() { banners.hold(millis()); }
 
 void Pet::exerciseOver() {
   if (exercised) checkMedals(false);  // the next tick still sees the exercise, as before
@@ -554,6 +566,7 @@ void Pet::startFarewell() {
   if (isEgg() || ceremony != CER_NONE) return;
   lastEnd = CER_FAREWELL;
   ceremony = CER_FAREWELL;
+  banners.clear();  // the ending replaces any banner, and none waits for the egg after it
   ceremonyUntil = millis() + CEREMONY_MS;
   heartUntil = ceremonyUntil;  // corazones durante toda la despedida
   sfxPlay(SFX_BYE);
@@ -564,6 +577,7 @@ void Pet::startRunaway() {
   if (isEgg() || ceremony != CER_NONE) return;
   lastEnd = CER_RUNAWAY;
   ceremony = CER_RUNAWAY;
+  banners.clear();  // the ending replaces any banner, and none waits for the egg after it
   ceremonyUntil = millis() + CEREMONY_MS;
   sfxPlay(SFX_BYE);
   save();
@@ -573,6 +587,7 @@ void Pet::release() {
   if (isEgg() || ceremony != CER_NONE) return;
   lastEnd = CER_RELEASE;
   ceremony = CER_RELEASE;
+  banners.clear();  // the ending replaces any banner, and none waits for the egg after it
   ceremonyUntil = millis() + CEREMONY_MS;
   heartUntil = ceremonyUntil;
   sfxPlay(SFX_BYE);
@@ -593,7 +608,6 @@ void Pet::hatch() {
   bondToday = 0;
   goodTicks = 0;     // stamina's steady-care minutes are this pet's too (#76)
   medals = 0;
-  newMedal = 0;
   nick[0] = 0;
   registerSpecies(speciesId);  // criado = registrado en la pokedex
   checkMedals(false);  // por si nace ya en forma final (legendario)

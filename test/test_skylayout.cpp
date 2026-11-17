@@ -58,3 +58,18 @@ TEST(SkyLayout, the_stars_sit_below_the_header_and_off_the_moon) {
               "star " + at + " on the moon");
   }
 }
+
+// #84: over a minigame's or an exercise's screen at night the stars stay out of the words: none
+// under a title card or a result, and during play none in the HUD band at the top, while the
+// sky still keeps some.
+TEST(SkyLayout, the_game_screens_stars_stay_out_of_the_words) {
+  int shown = 0;
+  for (auto &st : STARS) {
+    CHECK_MSG(!gameStarShown(st[1], true), "a star under a title card or a result");
+    if (gameStarShown(st[1], false)) {
+      shown++;
+      CHECK_MSG(st[1] >= GAME_HUD_BOTTOM, "a star in the HUD band during play");
+    }
+  }
+  CHECK_MSG(shown > 0, "during play the night sky keeps some stars");
+}

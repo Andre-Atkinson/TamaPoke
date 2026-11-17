@@ -337,6 +337,26 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   font's own É, now stand as tall as the other capitals, so FORMA FÍSICA, NÍVEL and
   FÔLEGO no longer read as lowercase.
 
+- **Every new medal gets its banner, and a streak's shows its whole time** (#82, #83). When
+  several medals came at once (an older creature can reach level 10, IN SHAPE and a training
+  ribbon in the same minute), the banner named only one of them; and a streak milestone that
+  came with a medal (the 7-day streak always brings one) showed for only half a second. Now
+  they take turns: the streak first, then each medal, each for its whole time. Their sound
+  is as before (one chime as they are earned, silent in quiet hours for the ones time earns),
+  banners that come under a minigame's or an exercise's result still wait for it to close,
+  and a farewell, a run-away or a release clears any still waiting.
+
+- **At night the stars keep out of the minigames' words** (#84). On a minigame's or an
+  exercise's result and on a game's title card, the stars sat among the lines and could
+  speckle the numbers; during play they touched the record line and the time bar. Now the
+  result and the title card show the night sky without stars, and during play the stars stay
+  below the top lines.
+
+- **Nothing comes back after weeks switched on.** After about 25 days without a restart, a
+  medal's or a streak's banner from weeks before could show again, and so could an
+  evolution, a meal, warm milk or a plush play, which then held back bedtime and the
+  attention calls. Each now ends for good.
+
 - **Turning the screen off ends a minigame** (#94), as it already ends an exercise. PWR
   during a Play minigame (or the 1.75C's pocket lock) left it open in the dark with the CPU
   at full speed, and bedtime then took it away with no prize; if the battery ran out
