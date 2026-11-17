@@ -367,6 +367,9 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **Slip-ups stop at 255** (#15). The count of slip-ups is one byte, and its 256th went back
+  to 0, as if the creature had never been neglected. It now stays at 255.
+
 - **An ending closes everything open over the creature first** (#33). A farewell, a
   run-away or a release now closes whatever is open before it starts: a minigame or an
   exercise ends and the creature keeps what it earned (as when the screen goes dark), a bath
