@@ -153,7 +153,8 @@ While **awake**, per minute:
   hungry!", "I need a bath!", "I'm tired...", "I'm bored...". In the evening, now and then,
   "Sleepy... warm milk?" (see warm milk above). Otherwise
   "Good morning!" (6:00–9:59) or "Look at the stars!" (20:00–5:59) when the clock is set, a
-  friendly line ("Hi there!", "I'm happy!", "Pat me!") or "I love you, <name>!". The name
+  line of its nature (one bubble in five, see Nature below), a friendly line ("Hi there!",
+  "I'm happy!", "Pat me!") or "I love you, <name>!". The name
   is the player's, set once from a computer with the serial command `OWNER <name>`
   (`python3 tools/board.py cmd OWNER Name`; `OWNER` alone clears it, `OWNER?` shows
   it); with no name it says "I love you!". Names can use plain letters, digits,
@@ -215,8 +216,9 @@ While **awake**, per minute:
 - 🐾 **A life of its own:** left alone on a lit screen, the creature keeps itself busy.
   Every few seconds it picks something to do: stand, look around, stroll, rest a
   while, doze, hop, chase and kick a ball about, strike a pose (the few species that
-  have one), or, when FOOD is under 40, walk over to the food button and wish for
-  food. How it feels sets the odds: tired (ENE under 50) it dozes and rests more,
+  have one), or, when FOOD is under 40 (50 for a greedy one), walk over to the food
+  button and wish for food. Its nature tips the odds a little (see Nature below). How it
+  feels sets the odds: tired (ENE under 50) it dozes and rests more,
   happy (JOY over 70) it hops and plays more, chubby (weight over 60) it rests more,
   and at night (20:00–06:00) while it's still up it dozes more (an unset clock
   counts as daytime). A small thought bubble
@@ -301,6 +303,23 @@ first page, under the berry and age):
 - The training bonus is **+25%, rounded up**, so even a 1-point gain gets its extra
   point (bag: 18 → 23; a minigame's 1 → 2).
 - A Pokémon from before natures existed is Easygoing.
+- **It shows in play.** Right after it hatches, its first speech bubble names its nature
+  ("I'm playful!", "Sou brincalhão!", the same word as the card). After that, about one
+  bubble in five is a line of its nature, and none of them asks for anything: only a low
+  need's bubble does. (If the egg hatched while the board was off, it skips that first one,
+  and the line still comes up now and then.)
+
+  | Nature | It says | Left alone on the main screen |
+  |---|---|---|
+  | Easygoing | "I'm easygoing!", "Life is good!", "No rush, no worries!" | — |
+  | Greedy | "I'm a bit greedy!", "Berries are the best!", "Dreaming of berries..." | goes to the food button from FOOD under 50 (others: 40) |
+  | Playful | "I'm playful!", "Catch me if you can!", "I love games!" | plays ball and hops more |
+  | Tidy | "I'm tidy!", "Neat and clean!", "A place for everything!" | with poops on the ground, strolls on the right (from x 260), clear of them, and looks about more |
+  | Lazy | "I'm a little lazy!", "So comfy here...", "Nice and slow..." | stands and rests more, walks and hops less |
+
+  Looks only: these lines and habits change no drain, perk or hourly limit. A playful one's
+  extra ball games can only bring the usual +3 JOY a little more often, never past +6 an hour.
+  Once the screen dims every nature just strolls, gestures or stands, as before.
 
 ### Bonds, streaks, medals, Pokédex
 - **Streak** (player-wide, survives across pets): first care each real day; milestones

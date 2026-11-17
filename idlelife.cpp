@@ -33,6 +33,8 @@ static IdleIn idleInputs(bool full) {
   in.energy = pet.energy;
   in.weight = pet.weight;
   in.stamina = pet.trDef;
+  in.nature = pet.nature;  // #86: small biases, looks only (idleplan.h)
+  in.poops = pet.poops;
   // the hour only from a trusted clock, as the quiet hours read it (attnLoop): no clock, or
   // one reseeded after a power-off and not set yet, is no hour at all
   in.hour = idleHour(pet.lastSeenEpoch, bedEdge.stale());

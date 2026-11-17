@@ -2,6 +2,8 @@
 // cap, the ball and where the emote goes. Pure logic.
 #include "framework.h"
 #include "../idleplan.h"
+#include <string>
+#include <vector>
 
 static uint16_t bit(uint8_t a) { return (uint16_t)(1u << a); }
 // what every shipped sprite has, and the 30 species with gestures on top
@@ -289,6 +291,160 @@ TEST(IdlePlan, look_turns_one_way_then_the_other_and_a_hop_stays_low) {
   CHECK_EQ(idleHopDy(IDLE_HOP_MS), 0);  // and lands between hops
 }
 
+// ---------------------------------------------------------------- the nature (#86)
+// Small biases, looks only, in the full repertoire (idleplan.h's header).
+static IdleIn natured(IdleIn in, uint8_t nature, uint8_t poops = 0) {
+  in.nature = nature;
+  in.poops = poops;
+  return in;
+}
+// pets in every state the weights read: rested, happy, tired, weary, hungry, chubby, at night,
+// with no gestures, with no walk frames, and calm
+static std::vector<IdleIn> variety() {
+  return { needs(80, 60, 80), needs(80, 90, 80), needs(80, 60, 45), needs(80, 90, 30), needs(30, 60, 80),
+           needs(45, 60, 80), needs(80, 60, 80, 80), needs(80, 90, 80, 0, 22), needs(80, 60, 80, 0, -1, BASE),
+           needs(30, 90, 80, 0, 13, bit(PMD_IDLE) | bit(PMD_SLEEP)), needs(80, 90, 80, 0, 13, BASE | GESTURES, true),
+           needs(30, 60, 45, 70, 23, BASE, true) };
+}
+static bool sameWeights(const W &a, const W &b) {
+  for (int i = 0; i < IDLE_ACTS; i++)
+    if (a.v[i] != b.v[i]) return false;
+  return true;
+}
+static bool samePick(const IdlePick &a, const IdlePick &b, bool target = true) {
+  return a.act == b.act && a.pmdAct == b.pmdAct && a.ms == b.ms && a.emote == b.emote && a.emoteMs == b.emoteMs &&
+         (!target || a.targetX == b.targetX);
+}
+
+TEST(IdleNature, easygoing_and_a_nature_out_of_range_change_nothing) {
+  for (const IdleIn &base : variety())
+    for (uint8_t poops : { 0, 1, 3 })
+      for (uint8_t nat : { (uint8_t)NAT_EASYGOING, (uint8_t)NAT_COUNT, (uint8_t)200 }) {
+        IdleIn in = natured(base, nat, poops);
+        CHECK(sameWeights(weights(in), weights(base)));  // base: easygoing, no poops
+        for (uint32_t seed = 1; seed <= 300; seed++) CHECK(samePick(idlePick(in, seed * 977u), idlePick(base, seed * 977u)));
+      }
+}
+
+TEST(IdleNature, a_playful_pet_plays_ball_and_hops_more) {
+  W easy = weights(needs(80, 60, 80));  // not happy (joy 60): only the nature's terms
+  W play = weights(natured(needs(80, 60, 80), NAT_PLAYFUL));
+  CHECK_EQ(easy.v[IDLE_BALL], 6);
+  CHECK_EQ(play.v[IDLE_BALL], 12);
+  CHECK_EQ(easy.v[IDLE_HOP], 7);
+  CHECK_EQ(play.v[IDLE_HOP], 11);
+  for (uint8_t a = 0; a < IDLE_ACTS; a++)
+    if (a != IDLE_BALL && a != IDLE_HOP) CHECK_EQ(play.v[a], easy.v[a]);
+  CHECK(play.share(IDLE_BALL) > easy.share(IDLE_BALL) * 3 / 2);  // about 8 % -> 14 %
+  // the needs still count, after the nature: a tired playful pet plays less than a rested one
+  W tired = weights(natured(needs(80, 60, 45), NAT_PLAYFUL));
+  CHECK_EQ(tired.v[IDLE_BALL], 12 / 3);
+  CHECK_EQ(tired.v[IDLE_HOP], 11 / 2);
+  // with no walk frames: no ball, the hops still
+  W noWalk = weights(natured(needs(80, 60, 80, 0, 13, bit(PMD_IDLE) | bit(PMD_SLEEP)), NAT_PLAYFUL));
+  CHECK_EQ(noWalk.v[IDLE_BALL], 0);
+  CHECK_EQ(noWalk.v[IDLE_HOP], 11);
+}
+
+TEST(IdleNature, a_lazy_pet_stands_and_rests_more_and_walks_and_hops_less) {
+  W easy = weights(needs(80, 60, 80));
+  W lazy = weights(natured(needs(80, 60, 80), NAT_LAZY));
+  CHECK_EQ(lazy.v[IDLE_STAND], 14 + 6);
+  CHECK_EQ(lazy.v[IDLE_REST], 4 + 6);
+  CHECK_EQ(lazy.v[IDLE_WALK], 20 - 6);
+  CHECK_EQ(lazy.v[IDLE_HOP], 7 / 2);
+  for (uint8_t a : { IDLE_LOOK, IDLE_DOZE, IDLE_BALL, IDLE_GESTURE, IDLE_SEEK }) CHECK_EQ(lazy.v[a], easy.v[a]);
+  CHECK(lazy.share(IDLE_STAND) + lazy.share(IDLE_REST) > (easy.share(IDLE_STAND) + easy.share(IDLE_REST)) * 3 / 2);
+  // weary: its walks halve too (14 / 2), its doze is everyone's
+  W weary = weights(natured(needs(80, 60, 30), NAT_LAZY));
+  CHECK_EQ(weary.v[IDLE_WALK], 7);
+  CHECK_EQ(weary.v[IDLE_DOZE], weights(needs(80, 60, 30)).v[IDLE_DOZE]);
+  // with no walk frames nothing goes below zero
+  for (const IdleIn &base : variety()) {
+    W w = weights(natured(base, NAT_LAZY));
+    for (int v : w.v) CHECK(v >= 0);
+  }
+  CHECK_EQ(weights(natured(needs(80, 60, 80, 0, 13, bit(PMD_IDLE) | bit(PMD_SLEEP)), NAT_LAZY)).v[IDLE_WALK], 0);
+}
+
+TEST(IdleNature, a_greedy_pet_goes_to_the_food_button_sooner) {
+  static_assert(IDLE_GREEDY_HUNGRY > IDLE_HUNGRY && IDLE_GREEDY_HUNGRY >= 2 * ATTN_LOW,
+                "a little sooner, and still well above the \"!\"");
+  for (int food = 0; food <= 100; food++) {
+    W greedy = weights(natured(needs((uint8_t)food, 60, 80), NAT_GREEDY));
+    W easy = weights(needs((uint8_t)food, 60, 80));
+    CHECK_EQ(greedy.v[IDLE_SEEK], food < IDLE_GREEDY_HUNGRY ? 15 : 0);
+    CHECK_EQ(easy.v[IDLE_SEEK], food < IDLE_HUNGRY ? 15 : 0);
+    for (uint8_t a = 0; a < IDLE_ACTS; a++)
+      if (a != IDLE_SEEK) CHECK_EQ(greedy.v[a], easy.v[a]);
+  }
+  bool sought = false;
+  for (uint32_t seed = 1; seed <= 500; seed++) {
+    IdlePick p = idlePick(natured(needs(45, 60, 80), NAT_GREEDY), seed * 977u);
+    if (p.act != IDLE_SEEK) continue;
+    sought = true;
+    CHECK_RANGE(p.targetX, (int16_t)IDLE_SEEK_X, (int16_t)(IDLE_SEEK_X + 10));
+  }
+  CHECK(sought);
+}
+
+TEST(IdleNature, a_tidy_pet_strolls_clear_of_the_poops_and_looks_about) {
+  IdleIn base = needs(80, 60, 80);
+  // no poops: like any easygoing pet, its strolls go anywhere
+  CHECK(sameWeights(weights(natured(base, NAT_TIDY, 0)), weights(base)));
+  int lo = 999, hi = 0;
+  for (uint32_t seed = 1; seed <= 400; seed++) {
+    int x = idlePickAct(natured(base, NAT_TIDY, 0), IDLE_WALK, seed * 7919u).targetX;
+    lo = x < lo ? x : lo;
+    hi = x > hi ? x : hi;
+  }
+  CHECK(lo < IDLE_TIDY_WALK_MIN - 40 && hi > IDLE_WALK_MAX - 10);
+  static_assert(IDLE_TIDY_WALK_MIN - 66 > 192 && IDLE_TIDY_WALK_MIN < IDLE_WALK_MAX - 60,
+                "standing at its left end, all but the 2 widest sprites (66 px left of centre at most) clear the "
+                "third poop's right edge (drawPoops: x 192), with room left to stroll");
+  for (uint8_t poops = 1; poops <= 3; poops++) {
+    IdleIn in = natured(base, NAT_TIDY, poops);
+    W w = weights(in);
+    CHECK_EQ(w.v[IDLE_LOOK], 10 + 6);
+    for (uint8_t a = 0; a < IDLE_ACTS; a++)
+      if (a != IDLE_LOOK) CHECK_EQ(w.v[a], weights(base).v[a]);
+    lo = 999, hi = 0;
+    for (uint32_t seed = 1; seed <= 400; seed++) {
+      IdlePick p = idlePickAct(in, IDLE_WALK, seed * 7919u);
+      lo = p.targetX < lo ? p.targetX : lo;
+      hi = p.targetX > hi ? p.targetX : hi;
+      CHECK(samePick(p, idlePickAct(base, IDLE_WALK, seed * 7919u), false));  // only where it goes
+    }
+    CHECK_RANGE(lo, IDLE_TIDY_WALK_MIN, IDLE_TIDY_WALK_MIN + 5);  // never nearer, and the whole stretch used
+    CHECK_RANGE(hi, IDLE_WALK_MAX - 5, IDLE_WALK_MAX);
+    for (uint32_t seed = 1; seed <= 2000; seed++) {  // the planner's own walks keep clear too
+      IdlePick p = idlePick(in, seed * 2246822519u);
+      if (p.act == IDLE_WALK) CHECK(p.targetX >= IDLE_TIDY_WALK_MIN);
+    }
+    // hungry, it still goes to the food button (by the poops): the need comes first
+    IdlePick seek = idlePickAct(natured(needs(30, 60, 80), NAT_TIDY, poops), IDLE_SEEK, 11);
+    CHECK_RANGE(seek.targetX, (int16_t)IDLE_SEEK_X, (int16_t)(IDLE_SEEK_X + 10));
+  }
+}
+
+TEST(IdleNature, the_calm_repertoire_and_every_activity_but_the_tidy_stroll_are_the_same_for_every_nature) {
+  for (const IdleIn &base : variety())
+    for (uint8_t nat = 0; nat < NAT_COUNT; nat++)
+      for (uint8_t poops : { 0, 3 }) {
+        IdleIn in = natured(base, nat, poops);
+        if (in.calm) {  // dimmed or a dialog: what the pet always did, whatever its nature
+          CHECK(sameWeights(weights(in), weights(base)));
+          for (uint32_t seed = 1; seed <= 300; seed++) CHECK(samePick(idlePick(in, seed * 977u), idlePick(base, seed * 977u)));
+        }
+        // how long each activity lasts, its gesture and its emote: no nature changes them
+        for (uint8_t act = 0; act < IDLE_ACTS; act++)
+          for (uint32_t seed = 1; seed <= 60; seed++) {
+            bool where = !(act == IDLE_WALK && nat == NAT_TIDY && poops && !in.calm);
+            CHECK(samePick(idlePickAct(in, act, seed * 7919u), idlePickAct(base, act, seed * 7919u), where));
+          }
+      }
+}
+
 // ---------------------------------------------------------------- the perks' cap
 TEST(IdlePerks, at_most_six_of_each_in_an_hour) {
   IdlePerks p;
@@ -517,4 +673,22 @@ TEST(IdleEmote, it_stays_in_the_play_area_beside_the_head) {
   CHECK_EQ(idleEmoteAt(300, 100).x, (int16_t)(300 - IDLE_EMOTE_DX));
   // pmdHeight() finds nothing (0): the head "top" is the ground line, and the bubble still stops
   CHECK_EQ(idleEmoteAt(233, 304).y, (int16_t)IDLE_EMOTE_YMAX);  // above the bars
+}
+
+TEST(IdleNature, no_nature_gives_weight_to_or_picks_an_activity_the_sprite_lacks) {
+  int checked = 0;
+  for (const IdleIn &base : variety())
+    for (uint8_t nat = 0; nat <= NAT_COUNT; nat++)  // the last is out of range
+      for (uint8_t poops : { 0, 3 }) {
+        IdleIn in = natured(base, nat, poops);
+        W w = weights(in);
+        for (uint8_t a = 0; a < IDLE_ACTS; a++)
+          if (!idleAvailable(in, a)) CHECK_MSG(w.v[a] == 0, std::string(IDLE_ACT_NAMES[a]) + " weighs " + std::to_string(w.v[a]));
+        for (uint32_t seed = 1; seed <= 300; seed++) {
+          IdlePick p = idlePick(in, seed * 2654435761u);
+          CHECK_MSG(idleAvailable(in, p.act), "picked " + std::string(IDLE_ACT_NAMES[p.act]));
+          checked++;
+        }
+      }
+  CHECK_EQ(checked, (int)variety().size() * (NAT_COUNT + 1) * 2 * 300);
 }

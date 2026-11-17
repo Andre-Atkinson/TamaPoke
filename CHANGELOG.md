@@ -10,6 +10,15 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Natures show in play.** A newly hatched creature's first speech bubble names its nature
+  ("I'm playful!", the same word as on the stat card), and now and then (about one bubble in
+  five) it says a line of its nature: "Berries are the best!", "Catch me if you can!",
+  "So comfy here...". None of them asks for anything; only a low need's bubble does. Left
+  alone it acts its nature a little too: a playful one plays ball and hops more, a lazy one
+  stands and rests more, a greedy one heads for the food button a little sooner, and a tidy
+  one strolls clear of the poops. Looks only: no new drain or reward; a playful one's extra
+  ball games can reach the usual +6 JOY an hour a little sooner.
+
 - **Battery diary.** To measure how long a charge really lasts, the board keeps a diary of
   its battery: a row every hour, and one at start-up, when USB is plugged in or pulled out,
   and when a flat battery turns it off, with the time, the battery level and voltage, whether
