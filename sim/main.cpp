@@ -4,6 +4,8 @@
 //   tamapoke_sim [--lang pt] [--clock "2026-11-13 10:00"] [--script FILE]
 //                [--out DIR] [--sprites DIR] [--serial-log FILE] [--square] [--quiet]
 //
+// A script with checks (expect, expect-not; script.h) ends with "sim: checks P/N passed",
+// also with --quiet, and exits 1 unless all N ran and passed (tools/gate.sh reads that line).
 // tools/sim.sh compila y llama a este programa.
 #include <Arduino.h>
 #include <fstream>
@@ -316,7 +318,7 @@ int main(int argc, char **argv) {
     printf("sim: checks %zu/%zu passed\n", checksPassed, checks);
     fflush(stdout);
     if (checksPassed != checks) {
-      fprintf(stderr, "sim: %zu of %zu check(s) failed in %s\n", checks - checksPassed, checks, o.script.c_str());
+      fprintf(stderr, "sim: %zu of %zu check(s) did not pass in %s\n", checks - checksPassed, checks, o.script.c_str());
       return 1;
     }
   }
