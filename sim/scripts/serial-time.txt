@@ -1,0 +1,41 @@
+# The serial TIME and RTCSET times (#65, clockEpochParse in clockset.h):
+#   tools/sim.sh --board 175c --lang en --script serial-time --out shots/
+# The serial log (shots/serial.log) answers each line, in this order:
+#   ERR clock not set: '21474836470' is not a time ...; the pet's saved time is unchanged
+#   ERR ... '-1763380000' ...           (toInt() and a cast made it 2050-03-22)
+#   ERR ... '1794600000x' ...
+#   ERR ... ' 1794600000' ...           (two spaces after TIME)
+#   ERR ... '99999999999' ... 1970      (RTCSET: no word about the pet's saved time)
+#   ERR ... 'soon' ... 1970
+#   no ERR, rtc=2524608000 then rtc=1794600000: 2050 and back, each taken whole
+# Every refused line leaves rtc= where it was (10:00 plus the seconds the script has run).
+# Shot 01 is the clock screen after the refused lines: still 10:00; shot 02 after TIME
+# 2050-01-01 00:00, then 20:00 on the starting day (1794600000): 20:00.
+
+clock 2026-11-13 10:00
+battery 64
+
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+serial TIME 21474836470
+serial TIME -1763380000
+serial TIME 1794600000x
+serial TIME  1794600000
+serial RTCSET 99999999999
+serial RTCSET soon
+swipe down
+wait 300ms
+shot 01-refused-clock-unchanged
+swipe up
+wait 300ms
+serial TIME 2524608000
+serial TIME
+serial TIME 1794600000
+swipe down
+wait 300ms
+shot 02-set-20h

@@ -38,6 +38,7 @@
 #include "bedtime.h"
 #include "clockprompt.h"
 #include "attention.h"
+#include "ending.h"
 #include "bubble.h"
 #include "caremenu.h"
 #include "minigames.h"
@@ -730,6 +731,33 @@ static void attnCloseViews() {
   clockOpen = false;
   cardOpen = false;
 }
+
+// ---------- endings (ending.h, #33) ----------
+// Everything over the scene closes before an ending starts, so nothing is drawn in its place
+// and nothing waits for the egg after it:
+//  - a minigame or an exercise ends paid for what was done, as when the screen goes dark
+//    (#94, #88), with no result screen; one on its result screen only closes (paid already);
+//  - a bath ends now, the pet clean, as at its own end;
+//  - the gallery, the rename keyboard (no rename), the clock and settings screen (no new
+//    time; its settings apply as they are tapped) and the pet card (its pages, the Care page
+//    and the exercise choice) close as if left by hand, as an attention call closes them;
+//  - the care strips (food, Play, moon: #13), the release dialog and the evolve or farewell
+//    choice close with nothing chosen. The ending's screen never draws them, but one could
+//    still be open after it: the choice lasts 12 s, the ceremony 10.
+// Not closed: a toast (gone by itself within 2 s), and the pocket lock and the standby
+// clock, which are the screen being off: an ending under them goes on as it does with the
+// screen off. The starter and egg choices cannot be up: an egg does not end.
+static void closeForEnding() {
+  playEndNow(" (ending)");
+  bathFinishNow();
+  attnCloseViews();
+  trainPick = false;
+  menuUntil = 0;
+  confirmUntil = 0;
+  choiceKind = 0;
+}
+
+bool startPetEnding(uint8_t kind) { return startEnding(pet, kind, closeForEnding); }
 
 void attnLoop(uint32_t now) {
   // the window ended, or the screen came on for real (PWR, BOOT, a touch): forget the
@@ -1720,7 +1748,7 @@ void onTap(int16_t x, int16_t y) {
       if (b1) { int16_t old = pet.speciesId; pet.evolve(); evoPmd.load(old, pet.shiny); }
       else if (b2) pet.declineEvolve();
     } else if (choiceKind == 2) {          // despedida
-      if (b1) pet.startFarewell();
+      if (b1) startPetEnding(CER_FAREWELL);
       else if (b2) pet.declineFarewell();
     }
     choiceKind = 0;
@@ -1728,7 +1756,7 @@ void onTap(int16_t x, int16_t y) {
   }
   if (confirmUntil) {        // dialogo "soltar?": SI / NO
     if (timeLeft(confirmUntil) && x >= 118 && x <= 218 && y >= 252 && y <= 304) {
-      pet.release();
+      startPetEnding(CER_RELEASE);
     }
     confirmUntil = 0;
     return;
@@ -1758,7 +1786,7 @@ void onTap(int16_t x, int16_t y) {
   // botones de final (mismo recuadro): escapada directa; despedida abre dialogo
   if (x >= FAR_BTN_X && x <= FAR_BTN_X + FAR_BTN_W &&
       y >= FAR_BTN_Y && y <= FAR_BTN_Y + FAR_BTN_H) {
-    if (pet.canRunawayNow()) { pet.startRunaway(); return; }
+    if (pet.canRunawayNow()) { startPetEnding(CER_RUNAWAY); return; }
     if (pet.wantFarewellButton()) { choiceKind = 2; choiceUntil = millis() + 12000; return; }
   }
   for (int i = 0; i < 4; i++) {
@@ -1866,9 +1894,10 @@ bool render() {
     // Also invalidate on the first frame after expiry to erase the overlay.
     if ((int32_t)(controlToastUntil - millis()) <= 0) controlToastVisible = false;
   }
-  // la ficha es de un bicho vivo: con huevo o ceremonia no hay nada que mostrar (un
-  // BYE/RUN por serie la deja abierta; renderCardProfile leeria DEX_TBL[-1] y, ya
-  // elegido el huevo nuevo, el boton Huevos se podria cambiar con el huevo a la vista)
+  // la ficha es de un bicho vivo: con huevo o ceremonia no hay nada que mostrar
+  // (renderCardProfile leeria DEX_TBL[-1] y, ya elegido el huevo nuevo, el boton Huevos se
+  // podria cambiar con el huevo a la vista). Every ending closes it as it starts
+  // (closeForEnding, #33); this stays as the last guard.
   if (cardOpen && (pet.isEgg() || pet.ceremony)) cardOpen = false;
   if (staticScreen()) {
     uint32_t k = screenKey();

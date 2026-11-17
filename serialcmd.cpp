@@ -40,6 +40,14 @@ static void printScene() {
                 wxParticlesLive(frameIntervalMs(powerCtx(millis()))) ? 1 : 0, standby ? 1 : 0);
 }
 
+// TIME or RTCSET with text that is not a time the clock can take (clockEpochParse, #65): an
+// ERR line naming it (its first 24 characters), and nothing set. `petNote`: TIME's line also
+// says the pet's saved time is unchanged, as for a time the clock refuses.
+static void printEpochRefused(const char *arg, bool petNote) {
+  Serial.printf("ERR clock not set: '%.24s' is not a time from 2025 to 2099 in seconds since 1970%s\n", arg,
+                petNote ? "; the pet's saved time is unchanged" : "");
+}
+
 void handleSerial() {
   if (!Serial.available()) return;
   String line = Serial.readStringUntil('\n');
@@ -74,9 +82,11 @@ void handleSerial() {
     pet.ageMinutes = (uint32_t)line.substring(4).toInt() * MINUTES_PER_LEVEL;
     Serial.println("DONE");
   } else if (line.startsWith("TIME ")) {
-    uint32_t e = (uint32_t)line.substring(5).toInt();
+    uint32_t e = 0;
     // the pet's saved time and the bedtime clock follow only if the clock took it (clockset.h)
-    if (setWallClock(pet, e, bedClockSet)) {
+    if (!clockEpochParse(line.c_str() + 5, e)) {  // not a time the clock can take (#65)
+      printEpochRefused(line.c_str() + 5, true);
+    } else if (setWallClock(pet, e, bedClockSet)) {
       if (clockOpen) loadClockFields(rtcEpoch());  // the open screen shows the time just set
     } else {  // nothing changes, not even what the player is editing on the clock screen
       Serial.printf("ERR clock not set: it did not take %lu; the pet's saved time is unchanged\n",
@@ -85,17 +95,25 @@ void handleSerial() {
     Serial.printf("rtc=%u\n", rtcEpoch());
     Serial.println("DONE");
   } else if (line.startsWith("RTCSET ")) {  // solo RTC (simular apagados en pruebas)
-    rtcSetEpoch((uint32_t)line.substring(7).toInt());
+    uint32_t e = 0;
+    if (clockEpochParse(line.c_str() + 7, e)) rtcSetEpoch(e);
+    else printEpochRefused(line.c_str() + 7, false);  // #65
     Serial.printf("rtc=%u\n", rtcEpoch());
     Serial.println("DONE");
   } else if (line == "TIME") {
     Serial.printf("rtc=%u\n", rtcEpoch());
     Serial.println("DONE");
   } else if (line == "GAL") {
-    galleryOpen = !galleryOpen;
-    galleryDetail = 0;
-    galleryDirty = true;
-    if (!galleryOpen) galleryPmd.unload();
+    // never opened over an ending (#33): everything over the scene closed as it started
+    // (ending.h), and nothing opens over it until it is over
+    if (!galleryOpen && pet.ceremony != CER_NONE) {
+      Serial.println("ERR gallery not opened: an ending is on screen");
+    } else {
+      galleryOpen = !galleryOpen;
+      galleryDetail = 0;
+      galleryDirty = true;
+      if (!galleryOpen) galleryPmd.unload();
+    }
     Serial.println("DONE");
   } else if (line == "EGGS") {
     // simula 20 tiradas de huevo (no cambia el estado del juego)
@@ -142,11 +160,11 @@ void handleSerial() {
     pet.caress();
     Serial.printf("streak=%u bond=%u medals=0x%X\n", pet.streak, pet.bond, pet.medals);
     Serial.println("DONE");
-  } else if (line == "BYE") {
-    pet.startFarewell();
+  } else if (line == "BYE") {  // closes what is open first, as every ending does (#33)
+    startPetEnding(CER_FAREWELL);
     Serial.println("DONE");
   } else if (line == "RUN") {
-    pet.startRunaway();
+    startPetEnding(CER_RUNAWAY);
     Serial.println("DONE");
   } else if (line == "CARE?") {  // read-only: relaxed pace / bedtime settings and whether it is bedtime now
     uint32_t e = rtcEpoch();

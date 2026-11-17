@@ -115,23 +115,24 @@ static void finishGame() {
   gameOverUntil = millis() + 4000;
 }
 
-// The screen went dark with a minigame open (#94; MiniGames::endDark). The game ends here
-// and the pet gets what its score so far earns, as the game's own end pays (Pet::playGame:
-// joy, speed, the energy and food it costs, the weight it burns, bond and the day's care),
-// but with no result screen to draw and no sound, and the game's screen closes: no 240 MHz
-// with the screen off, and the screen comes back on to the creature. A game nobody touched
-// pays nothing; the result screen only closes (paid at its end). A finger still on the glass
-// does nothing as it lifts, as after the exit chip.
-static void gameScreenOff() {
+// The screen went dark with a minigame open (#94; MiniGames::endDark), or an ending is
+// starting over it (#33, ending.h). The game ends here and the pet gets what its score so far
+// earns, as the game's own end pays (Pet::playGame: joy, speed, the energy and food it costs,
+// the weight it burns, bond and the day's care), but with no result screen to draw and no
+// sound, and the game's screen closes: no 240 MHz with the screen off, and the screen comes
+// back on to the creature (or to the ending). A game nobody touched pays nothing; the result
+// screen only closes (paid at its end). A finger still on the glass does nothing as it lifts,
+// as after the exit chip. `why` ends the serial line: " (screen off)" or " (ending)".
+static void gameEndNow(const char *why) {
   if (!gameOpen) return;
   if (!games.over()) {  // over: on its result screen, paid by finishGame()
     uint8_t g = games.game();
     if (games.endDark()) {
       uint16_t score = games.score();
       uint8_t gain = pet.playGame(g, score);
-      Serial.printf("Play: %s score=%u speed=+%u (screen off)\n", GAME_KEYS[g], score, gain);
+      Serial.printf("Play: %s score=%u speed=+%u%s\n", GAME_KEYS[g], score, gain, why);
     } else {
-      Serial.printf("Play: %s untouched (screen off)\n", GAME_KEYS[g]);
+      Serial.printf("Play: %s untouched%s\n", GAME_KEYS[g], why);
     }
   }
   gameOpen = false;
@@ -207,20 +208,23 @@ static void finishExercise(uint32_t now) {
   if (!trainOverUntil) trainOverUntil = 1;  // 0 means "still training"
 }
 
-// The screen went dark during an exercise (#88). The session ends here and pays for what
-// was done, as the exit does, but with no result screen to draw and no sound to go with it,
-// and the training screen closes: no 240 MHz and no touch capture with the screen off, and
-// the screen comes back on to the creature. The result screen only closes (paid already).
-static void exerciseScreenOff() {
+// The screen went dark during an exercise (#88), or an ending is starting over it (#33).
+// The session ends here and pays for what was done, as the exit does, but with no result
+// screen to draw and no sound to go with it, and the training screen closes: no 240 MHz and
+// no touch capture with the screen off, and the screen comes back on to the creature (or to
+// the ending). The result screen only closes (paid already). `why` ends the serial line.
+static void exerciseEndNow(const char *why) {
   if (!trainOpen) return;
-  if (!trainOverUntil) payExercise(" (screen off)");
+  if (!trainOverUntil) payExercise(why);
   leaveTraining();
 }
 
-void playScreenOff() {
-  gameScreenOff();
-  exerciseScreenOff();
+void playEndNow(const char *why) {
+  gameEndNow(why);
+  exerciseEndNow(why);
 }
+
+void playScreenOff() { playEndNow(" (screen off)"); }
 
 void exerciseTap(uint32_t at) {
   if (!trainOpen || trainOverUntil || trainKind != EX_PUNCH) return;

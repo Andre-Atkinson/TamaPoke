@@ -705,11 +705,16 @@ prints them as CSV; `PORTING.md` (*Measuring battery life*) has the steps of a b
 ## Serial console (115200, debug)
 
 `STATS` (full state) · `SPEC <dex>` (change species) · `LVL <n>` · `HATCH` ·
-`SHINY` · `NICK <x>` · `BYE` / `RUN` (farewell / runaway) · `ABANDON` (force the
+`SHINY` · `NICK <x>` · `BYE` / `RUN` (farewell / runaway; whatever is open over the
+creature closes first, as for every ending: a minigame or an exercise is paid for what was
+done) · `ABANDON` (force the
 runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio test) ·
-`REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery) · `CAREDAY` ·
-`TIME <epoch>` (sets the clock and the pet's saved time; a time the clock does not take
-gets `ERR clock not set: ...` and changes nothing) / `RTCSET <epoch>` · `HEALTH` (uptime + heap for the soak test) ·
+`REG` (Pokédex) · `EGGS` (simulate 20 eggs) · `GAL` (gallery; not during a farewell or
+run-away: `ERR gallery not opened: ...`) · `CAREDAY` ·
+`TIME <epoch>` (sets the clock and the pet's saved time; `<epoch>` is seconds since 1970 in
+digits only, from 2025 to 2099, and anything else, or a time the clock does not take, gets
+`ERR clock not set: ...` and changes nothing) / `RTCSET <epoch>` (the clock only, the same
+check) · `HEALTH` (uptime + heap for the soak test) ·
 `SAVE` (write pending pet changes now) · `OWNER <name>` (the player's name in the
 speech bubbles; `OWNER` alone clears it) · `OWNER?` (read-only: `owner=<name>`) ·
 `BDAY <month> <day>` (the player's birthday for the special days; `BDAY 0 0` clears it) ·

@@ -1,0 +1,262 @@
+# An ending closes everything over the scene before it starts (#33, ending.h). For both
+# boards:
+#   tools/sim.sh --board 175c --lang en --script ending-closes-overlays --out shots/
+#   tools/sim.sh --board 175 --lang en --script ending-closes-overlays --out shots/
+# Each section opens one overlay (shot NN-...-open), starts an ending over it with the serial
+# BYE or RUN or the player's own buttons, and shows the ceremony (NN-...-ending): the
+# farewell, run-away or goodbye, never the overlay. 20 s later the next egg shows, with
+# nothing left open over it, and three taps hatch it for the next section.
+# The serial log (shots/serial.log) has, in this order:
+#   Play: peek score=N speed=+M (ending)      A. the minigame paid before the run-away
+#   Training: punch count=2 gain=3 ... (ending)  B. the exercise paid before the farewell
+#   Play: keepy score=0 speed=+0              K. the result screen's own line, then no
+#                                                "(ending)" line: paid once, at its end
+#   lim=0 ... then lim=100                    L. STATS before the bath and during the
+#                                                run-away: the bath finished first
+#   ERR gallery not opened: an ending is on screen   M. GAL during the farewell
+# The scores differ from run to run (the games' dice follow the time and the board).
+
+clock 2026-11-13 10:00
+battery 64
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# A. a minigame being played (Peekaboo, taps round the bushes), then RUN
+game peek
+tap 202 404
+tap 169 320
+wait 1700ms
+tap 150 190
+tap 316 190
+tap 100 300
+tap 233 300
+tap 366 300
+shot A1-minigame-open
+serial RUN
+wait 1s
+shot A2-minigame-ending
+wait 20s
+shot A3-minigame-next-egg
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# B. the rhythm punch, two punches on the beat, then BYE
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 300ms
+tap 233 240
+wait 800ms
+tap 233 240
+shot B1-exercise-open
+serial BYE
+wait 1s
+shot B2-exercise-ending
+wait 20s
+shot B3-exercise-next-egg
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# C. the gallery, then RUN
+swipe right
+wait 500ms
+shot C1-gallery-open
+serial RUN
+wait 1s
+shot C2-gallery-ending
+wait 20s
+shot C3-gallery-next-egg
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# D. the rename keyboard (the card's name), then BYE: no rename
+swipe up
+tap 233 40
+wait 300ms
+shot D1-keyboard-open
+serial BYE
+wait 1s
+shot D2-keyboard-ending
+wait 20s
+shot D3-keyboard-next-egg
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# E. the clock and settings screen, then RUN: no new time
+swipe down
+wait 300ms
+shot E1-clock-open
+serial RUN
+wait 1s
+shot E2-clock-ending
+wait 20s
+shot E3-clock-next-egg
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# F. the card's Care page, then BYE
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+wait 300ms
+shot F1-care-page-open
+serial BYE
+wait 1s
+shot F2-care-page-ending
+wait 20s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# G. the Fitness page's exercise choice (TRAIN), then RUN
+swipe up
+swipe left
+tap 233 320
+wait 300ms
+shot G1-exercise-choice-open
+serial RUN
+wait 1s
+shot G2-exercise-choice-ending
+wait 20s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# H. the food strip (the treats), then BYE
+tap 140 390
+wait 300ms
+shot H1-food-strip-open
+serial BYE
+wait 1s
+shot H2-food-strip-ending
+wait 20s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# I. the release dialog (a long press on the pet), then RUN
+hold 233 200 3500ms
+shot I1-release-dialog-open
+serial RUN
+wait 1s
+shot I2-release-dialog-ending
+wait 20s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# J. the evolve choice, then BYE. The choice lasts 12 s and the farewell 10: J3 is the
+# egg about 0.6 s after the farewell, with the choice still within its 12 s had it stayed
+serial SPEC 4
+serial LVL 30
+wait 1s
+tap 233 204
+wait 300ms
+shot J1-evolve-choice-open
+serial BYE
+wait 1s
+shot J2-evolve-choice-ending
+wait 9600ms
+shot J3-evolve-choice-egg-after
+wait 10s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# K. a minigame on its result screen (keepy-uppy, one tap that missed, three drops: it ends
+# and shows its result for 4 s, as in game-screen-off.txt), then BYE: it only closes, paid
+# at its end
+game keepy
+tap 202 404
+tap 169 320
+wait 1700ms
+tap 40 233
+wait 11s
+shot K1-game-result-open
+serial BYE
+wait 1s
+shot K2-game-result-ending
+wait 20s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# L. the player's run-away button, tapped during a bath: the bath finishes first (STATS
+# lim=0, then lim=100 during the run-away)
+serial ABANDON
+wait 1s
+serial STATS
+tap 326 390
+wait 300ms
+shot L1-bath-runaway-button
+tap 233 205
+wait 1s
+serial STATS
+shot L2-bath-runaway-ending
+wait 20s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# M. the player's farewell: a final form old enough, its button, its choice, "farewell";
+# then GAL during the farewell is refused (ERR) and the farewell stays on screen
+serial SPEC 6
+serial LVL 80
+wait 1s
+tap 233 205
+wait 300ms
+shot M1-farewell-choice-open
+tap 233 232
+wait 1s
+serial GAL
+wait 300ms
+shot M2-farewell-gal-refused
+wait 20s
+
+# N. BYE on an egg starts nothing, so it closes nothing: the gallery opened over the egg
+# stays open; a swipe closes it
+swipe right
+wait 500ms
+serial BYE
+wait 1s
+shot N1-egg-gallery-stays
+swipe right
+wait 300ms
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# O. the player's release: a long press, YES: the goodbye
+hold 233 200 3500ms
+tap 168 278
+wait 1s
+shot O1-release-goodbye
+wait 20s
+shot O2-release-next-egg

@@ -51,9 +51,12 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
 - **The board is the owner's.** Unless the owner asks in this session, don't
   flash it (`esptool`, `tools/flash_175c.sh`, `arduino-cli upload`), don't
   open its serial port, and don't send it anything. Each state-changing
-  command needs its own request: `WIPE`, `BYE`, `RUN`, `HATCH`, `SPEC`,
-  `LVL`, `NICK`, `SHINY`, `CAREDAY`, `ABANDON`, `TIME <epoch>`, `RTCSET`,
-  `GAL`, `BEEP`, `TRAINTRACE ON|OFF`, `SAVE` (writes pending pet changes to
+  command needs its own request: `WIPE`, `BYE` and `RUN` (close whatever is
+  open over the pet first, paying an open minigame or exercise, as every
+  ending does), `HATCH`, `SPEC`, `LVL`, `NICK`, `SHINY`, `CAREDAY`,
+  `ABANDON`, `TIME <epoch>` and `RTCSET <epoch>` (digits only, 2025-2099;
+  anything else gets `ERR clock not set: ...` and sets nothing), `GAL`
+  (`ERR` during an ending), `BEEP`, `TRAINTRACE ON|OFF`, `SAVE` (writes pending pet changes to
   NVS), `OWNER <name>` (writes the player's name to NVS; `OWNER` alone clears
   it), `BDAY <month> <day>` (writes the player's birthday to NVS; `BDAY 0 0`
   clears it), `SCENE <place|auto> [weather|auto] [season|auto]` (forces the scene's

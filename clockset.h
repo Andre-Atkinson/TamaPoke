@@ -20,3 +20,23 @@ inline bool setWallClock(Pet &pet, uint32_t e, void (*bedClockFollow)(uint32_t))
   bedClockFollow(e);
   return true;
 }
+
+// The time in a serial TIME or RTCSET line (#65), the text after the command: seconds since
+// 1970 and nothing else (one digit or more: no sign, no space, nothing after them), inside
+// the clock's range (clockEpochValid). The value is refused as soon as it passes that range,
+// so a number of any length cannot overflow. These lines used String::toInt(), which is
+// atol() with the ESP32's 32-bit long: a digit too many clamped to 2147483647 (2038-01-19)
+// and a minus sign wrapped round to a time in 2025-2099, both of which the clock took, and
+// every real time from 2038-01-19 to 2099 clamped to 2038.
+// Returns whether it is such a time; `e` is set only then.
+inline bool clockEpochParse(const char *s, uint32_t &e) {
+  uint64_t v = 0;  // "" stays 0: outside the range below
+  for (; *s; s++) {
+    if (*s < '0' || *s > '9') return false;
+    v = v * 10 + (uint64_t)(*s - '0');
+    if (v >= CLOCK_EPOCH_END) return false;  // more digits only make it bigger
+  }
+  if (!clockEpochValid((int64_t)v)) return false;
+  e = (uint32_t)v;
+  return true;
+}
