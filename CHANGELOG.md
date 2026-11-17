@@ -1,12 +1,18 @@
 # Changelog
 
 All notable changes to the firmware. Versions match the number shown at the
-bottom of the clock/settings screen (swipe down) and `web/manifest.json`.
+bottom of the clock/settings screen (swipe down) and the `TamaPoke fw v<version>`
+line printed over USB serial at boot.
 
-Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
-**without** ticking "Erase device" keeps your Pokémon.
+On the 1.75C, `tools/update_175c.sh` updates the firmware and keeps your Pokémon
+(it writes only the app). The [web installer](https://socquique.github.io/TamaPoke/web/)
+is upstream's, for the original 1.75: updating from it **without** ticking "Erase
+device" keeps your Pokémon, but it installs upstream's firmware, not this fork's.
+`web/` here still holds upstream's 1.19 build and is not hosted.
 
 ## [Unreleased]
+
+## [1.20] - 2026-11-17
 
 ### Added
 
@@ -273,6 +279,74 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   `game-screen-off.txt` and `exercise-screen-off.txt` now check what was only read in
   `serial.log` before: PWR, the pocket lock and a flat battery each pay a minigame or an
   exercise once, with its own line, and nothing pays it again later.
+
+- **LiPo charge profile on the AXP2101** (both boards). Charging is enabled at
+  4.20 V. Constant current is **300 mA on the 1.75C** (the AXP2101 power-on
+  default, 0.6C for its 500 mAh cell; there is no battery temperature sensor,
+  so the factory rate is used) and 400 mA on the original 1.75 (1100 mAh pack; owner's choice, upstream left the chip default),
+  `CHARGE_CURRENT_*` in `board.h`. Termination is the chip default, **125 mA** (reg `0x63` =
+  `0x15`): 25 mA never crossed the taper on this board, so the charger stayed
+  in CV at 4.20 V and `isCharging()` stayed true. USB input limit is **900 mA**
+  (reg `0x16` = 2). With a 500 mA input limit the charge current plus the system
+  load can reach the limit, which puts the chip in input-current regulation, and
+  the datasheet disables termination for as long as that lasts; 900 mA avoids it. Precharge stays at
+  the 125 mA reset value. The TS pin is taken out of battery-temperature mode
+  (the 1.75C has no NTC) and the button-cell charger is forced off. Rails are
+  not retargeted. The `HEALTH` line adds charger state, die temp (`22+(7274-raw)/20`, raw
+  included; the datasheet only specifies 0.1 mV/LSB), which rails are on, and
+  CPU MHz when built with `-DTAMAPOKE_CHG_DEBUG=1`, which also prints every 60 s
+  plus FreeRTOS run-time stats. Release builds (the default, 0) print the plain
+  5-minute line.
+
+- **Battery as a number.** The clock screen cycles the header between the
+  existing icon and a percent (`87%`, with a `+` while charging). The choice
+  is saved. The default is still the icon.
+
+- **Automatic touch lock.** After the screen has been off for 10 s (the
+  default on the 1.75C; off on the original 1.75), 0 s, 30 s or 60 s, touches no longer wake it. A short PWR press
+  wakes the screen and clears the lock. The clock pill cycles those delays
+  and off. The CST9217 is put to sleep only once the lock engages, and a
+  wake re-inits it. While the lock is on the touch interrupt is detached and
+  light sleep no longer polls or arms it as a wake source (a sleeping CST9217
+  leaves TP_INT open drain, which reads low). The triple-press pocket lock is
+  unchanged.
+
+- **Screen-off timeout.** The clock screen cycles 60 s (the default on the
+  1.75C; the original 1.75 defaults to never), 30 s, 15 s and never. The panel dims at half that time and turns off at the end,
+  including while the clock, keyboard or gallery is open. USB does not disable
+  it; USB only skips light sleep. Never keeps the existing 90 s dim and 5 min
+  near-off. A minigame is left running.
+
+- **CPU frequency scaling.** 240 MHz while the pet is in use, 160 MHz once the
+  panel has dimmed or the pet is asleep, 80 MHz with the screen off or at the
+  5 min near-off step. With the default 60 s timeout that is 160 MHz from 30 s
+  (the dim) and 80 MHz from 60 s (screen off), on battery. A minigame stays at 240 MHz. USB stays at 240 MHz while
+  the screen is on, and drops to 80 MHz with the screen off, same as on battery.
+  Light sleep stays off while USB is connected, so the serial port stays up.
+  With the screen off the loop waits 100 ms instead of 20 ms.
+  Not changed while a sound is playing or queued, as a precaution: the I2S
+  source on the S3 is PLL_F160M by default, not the CPU clock.
+
+- **Codec and I2S stay on; only the amplifier is gated.** An earlier
+  version also powered the ES8311 down (REG0D) and stopped I2S while muted or
+  idle. On the real 1.75C that left the board silent after a BOOT mute then
+  unmute, and no ES8311 driver source was available to get the wake sequence
+  right, so that gating was removed: the PA pin still drops while the pet
+  sleeps, the screen is dimmed or off, or sound is muted, as before.
+  `audioBusy()` now also covers a sound that is playing or queued.
+
+- **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
+  build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
+  `boards/175c/partitions.csv`). Sprites come from a LittleFS partition in flash
+  instead of the microSD slot it doesn't have, and time comes from a software
+  clock (no PCF85063). 1.75C only: triple-press PWR locks the screen and touch
+  for your pocket (hold 4 s still powers off), BOOT toggles sound, and strength
+  training counts taps anywhere on the screen with a 1-second "Hold to exit"
+  button. The default build is still the original 1.75 and is unchanged. See
+  `PORTING.md`.
+- **Volume levels** (#21). The sound button on the clock/settings screen now
+  shows a speaker with three bars and cycles **high** (as before), **medium**,
+  **low** and **off**. The level is saved, so it survives a restart or update.
 
 ### Changed
 
@@ -577,76 +651,6 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   1.75C lock blank now send `0x51=0`, display off `0x28`, wait 120 ms, and
   sleep-in `0x10`. Wake is sleep-out `0x11`, wait 120 ms, display on `0x29`,
   then brightness. DCDC1 is not switched off.
-
-### Added
-
-- **LiPo charge profile on the AXP2101** (both boards). Charging is enabled at
-  4.20 V. Constant current is **300 mA on the 1.75C** (the AXP2101 power-on
-  default, 0.6C for its 500 mAh cell; there is no battery temperature sensor,
-  so the factory rate is used) and 400 mA on the original 1.75 (1100 mAh pack; owner's choice, upstream left the chip default),
-  `CHARGE_CURRENT_*` in `board.h`. Termination is the chip default, **125 mA** (reg `0x63` =
-  `0x15`): 25 mA never crossed the taper on this board, so the charger stayed
-  in CV at 4.20 V and `isCharging()` stayed true. USB input limit is **900 mA**
-  (reg `0x16` = 2). With a 500 mA input limit the charge current plus the system
-  load can reach the limit, which puts the chip in input-current regulation, and
-  the datasheet disables termination for as long as that lasts; 900 mA avoids it. Precharge stays at
-  the 125 mA reset value. The TS pin is taken out of battery-temperature mode
-  (the 1.75C has no NTC) and the button-cell charger is forced off. Rails are
-  not retargeted. The `HEALTH` line adds charger state, die temp (`22+(7274-raw)/20`, raw
-  included; the datasheet only specifies 0.1 mV/LSB), which rails are on, and
-  CPU MHz when built with `-DTAMAPOKE_CHG_DEBUG=1`, which also prints every 60 s
-  plus FreeRTOS run-time stats. Release builds (the default, 0) print the plain
-  5-minute line.
-
-- **Battery as a number.** The clock screen cycles the header between the
-  existing icon and a percent (`87%`, with a `+` while charging). The choice
-  is saved. The default is still the icon.
-
-- **Automatic touch lock.** After the screen has been off for 10 s (the
-  default on the 1.75C; off on the original 1.75), 0 s, 30 s or 60 s, touches no longer wake it. A short PWR press
-  wakes the screen and clears the lock. The clock pill cycles those delays
-  and off. The CST9217 is put to sleep only once the lock engages, and a
-  wake re-inits it. While the lock is on the touch interrupt is detached and
-  light sleep no longer polls or arms it as a wake source (a sleeping CST9217
-  leaves TP_INT open drain, which reads low). The triple-press pocket lock is
-  unchanged.
-
-- **Screen-off timeout.** The clock screen cycles 60 s (the default on the
-  1.75C; the original 1.75 defaults to never), 30 s, 15 s and never. The panel dims at half that time and turns off at the end,
-  including while the clock, keyboard or gallery is open. USB does not disable
-  it; USB only skips light sleep. Never keeps the existing 90 s dim and 5 min
-  near-off. A minigame is left running.
-
-- **CPU frequency scaling.** 240 MHz while the pet is in use, 160 MHz once the
-  panel has dimmed or the pet is asleep, 80 MHz with the screen off or at the
-  5 min near-off step. With the default 60 s timeout that is 160 MHz from 30 s
-  (the dim) and 80 MHz from 60 s (screen off), on battery. A minigame stays at 240 MHz. USB stays at 240 MHz while
-  the screen is on, and drops to 80 MHz with the screen off, same as on battery.
-  Light sleep stays off while USB is connected, so the serial port stays up.
-  With the screen off the loop waits 100 ms instead of 20 ms.
-  Not changed while a sound is playing or queued, as a precaution: the I2S
-  source on the S3 is PLL_F160M by default, not the CPU clock.
-
-- **Codec and I2S stay on; only the amplifier is gated.** An earlier
-  version also powered the ES8311 down (REG0D) and stopped I2S while muted or
-  idle. On the real 1.75C that left the board silent after a BOOT mute then
-  unmute, and no ES8311 driver source was available to get the wake sequence
-  right, so that gating was removed: the PA pin still drops while the pet
-  sleeps, the screen is dimmed or off, or sound is muted, as before.
-  `audioBusy()` now also covers a sound that is playing or queued.
-
-- **Waveshare ESP32-S3-Touch-AMOLED-1.75C** (experimental community support):
-  build with `tools/build_175c.sh` (`-DBOARD_AMOLED_175C=1` plus
-  `boards/175c/partitions.csv`). Sprites come from a LittleFS partition in flash
-  instead of the microSD slot it doesn't have, and time comes from a software
-  clock (no PCF85063). 1.75C only: triple-press PWR locks the screen and touch
-  for your pocket (hold 4 s still powers off), BOOT toggles sound, and strength
-  training counts taps anywhere on the screen with a 1-second "Hold to exit"
-  button. The default build is still the original 1.75 and is unchanged. See
-  `PORTING.md`.
-- **Volume levels** (#21). The sound button on the clock/settings screen now
-  shows a speaker with three bars and cycles **high** (as before), **medium**,
-  **low** and **off**. The level is saved, so it survives a restart or update.
 
 ## [1.19] - 2026-11-11
 

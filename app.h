@@ -19,7 +19,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "1.19"
+#define FW_VERSION "1.20"
 
 #define CX 233  // centro de la pantalla redonda
 #define CY 233
