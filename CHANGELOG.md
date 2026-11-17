@@ -365,6 +365,15 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **`tools/send_sd.py` sends only the files you name** (#110). For example,
+  `python3 tools/send_sd.py ps151.bin` adds one species' shiny sprite to the 1.75C.
+  Before sending, it checks that the files fit in the board's free space (`SDINFO`; a file
+  it replaces counts as freed) and sends nothing if they don't. `--check` gives that answer
+  without sending anything. It prints one line per file, stops at the first that fails with
+  the command to send it again, and exits non-zero. It no longer needs pyserial: it uses
+  `tools/board.py`'s console. A bare run used to send all 303 files (41.7 MB), which can't
+  fit on the 1.75C. It now shows how to use it instead.
+
 - **An ending closes everything open over the creature first** (#33). A farewell, a
   run-away or a release now closes whatever is open before it starts: a minigame or an
   exercise ends and the creature keeps what it earned (as when the screen goes dark), a bath

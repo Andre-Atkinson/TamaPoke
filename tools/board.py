@@ -91,21 +91,52 @@ class Console:
             self._read(0.05)
         self.buf = b''
 
+    def write(self, data, timeout=5.0):
+        """Write all of `data`. The port is non-blocking, so one os.write can take only part of
+        a long write (send_sd.py's 2 KB blocks); wait for room for the rest, up to `timeout`."""
+        view = memoryview(data)
+        end = time.time() + timeout
+        while view:
+            left = end - time.time()
+            if left <= 0 or not select.select([], [self.fd], [], left)[1]:
+                raise TimeoutError(f'the board stopped taking data ({len(view)} bytes not sent)')
+            try:
+                view = view[os.write(self.fd, view):]
+            except BlockingIOError:
+                pass
+
+    def _pop_line(self):
+        """The next whole line waiting in the buffer, decoded and stripped ('' for a blank one)."""
+        raw, self.buf = self.buf.split(b'\n', 1)
+        return raw.decode('utf-8', 'replace').strip()
+
+    def read_line(self, timeout):
+        """The next non-blank line the board prints, or None if none comes within `timeout` s."""
+        end = time.time() + timeout
+        while True:
+            while b'\n' in self.buf:
+                text = self._pop_line()
+                if text:
+                    return text
+            left = end - time.time()
+            if left <= 0:
+                return None
+            self._read(min(left, 0.1))
+
     def command(self, line, timeout=3.0, on_line=None, idle=None):
         """Send one console line; return the reply lines up to (not incl.) DONE.
 
         on_line(text) is called as each line arrives. With idle set, a reply
         that has started and then goes quiet for that long also ends the call
         (for commands that never print DONE)."""
-        os.write(self.fd, line.encode('utf-8') + b'\n')
+        self.write(line.encode('utf-8') + b'\n')
         end = time.time() + timeout
         last = time.time()
         lines = []
         while time.time() < end:
             self._read(0.1)
             while b'\n' in self.buf:
-                raw, self.buf = self.buf.split(b'\n', 1)
-                text = raw.decode('utf-8', 'replace').strip()
+                text = self._pop_line()
                 if text == 'DONE':
                     return lines
                 if text:
