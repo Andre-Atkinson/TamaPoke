@@ -393,6 +393,7 @@ TEST(PunchLunge, AFrameThatDoesNotFitTheRoomKeepsTodaysLook) {
   // 64 x 64 at scale 4: ROOM_UP is 228 (gameui.cpp keeps it clear of the time bar), so a
   // 57-row frame is 228 px tall (the room), 58 rows is 232
   CHECK_EQ(PL::ROOM_UP, 57 * 4);
+  CHECK_EQ(PL::ROOM_SIDE, 30 * 4);
   LungeFrames tall(64, 64);
   tall.add(0, 57, 20, 40).add(1, 58, 20, 40);
   CHECK_MSG(tall.plan().ok, "exactly ROOM_UP tall fits");

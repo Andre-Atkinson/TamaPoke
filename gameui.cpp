@@ -246,11 +246,14 @@ static void planLunge() {
   punchLunge.plan(a.data, a.w, a.h, a.frames, can ? pmdScaleFor(idle.h, idle.h, TRAIN_PET_S) : 0);
 }
 
+// ensureMon() reloaded the sprite (#90): forget the lunge's plan, so drawPunch plans it again
+// from the new one. isFor() alone can't tell a reload that lands at the same address with
+// the same ATTACK size (a PUT of an updated sprite, or SPEC, mid-session).
+void exerciseSpriteChanged() { punchLunge = PunchLunge(); }
+
 void exerciseTap(uint32_t at) {
   if (!trainOpen || trainOverUntil || trainKind != EX_PUNCH) return;
-  if (punch.tap(at)) {
-    sfxPlay(SFX_PLAY);
-  }
+  if (punch.tap(at)) sfxPlay(SFX_PLAY);
 }
 
 bool exerciseExit() {

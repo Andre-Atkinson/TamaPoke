@@ -55,3 +55,10 @@ hold 233 240 240ms 13-c4-mid
 wait 800ms
 hold 233 240 700ms 14-c4-idle-again
 shot 15-c4-count
+
+# Mid-session the sprite changes (SPEC 25, Pikachu): ensureMon() reloads it and the punch
+# plans its lunge again from the new one (exerciseSpriteChanged, drawPunch). ~6.5 s: the
+# fifth swing's punch lands, and Pikachu strikes on its feet at its own size.
+serial SPEC 25
+wait 2200ms
+hold 233 240 60ms 16-c25-strike

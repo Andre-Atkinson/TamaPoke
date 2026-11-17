@@ -11,9 +11,10 @@
 //   after the strike would float above the ground by up to the whole spread of the frames'
 //   feet, 16-37 rows, or about 45-150 px at IDLE's scale: the pet would leap up on every
 //   punch.
-// - Its canvas is 80-88 px tall to make room for that move, so drawPmdActM() steps the scale
-//   down for 86 of the 151 species at the punch's cap (pmdScaleFor in sdmon.h). The art
-//   itself is drawn at IDLE's pixel size in every action.
+// - Its canvas is taller than IDLE's to make room for that move (56-152 px, mostly 72-80),
+//   so drawPmdActM() steps the scale down for 86 of the 151 species at the punch's cap
+//   (ATTACK's height times IDLE's scale is over 250: pmdScaleFor in sdmon.h). The art itself
+//   is drawn at IDLE's pixel size in every action.
 // So each frame stands on its own feet (its lowest opaque row) and is drawn at IDLE's scale.
 // The strike to the end runs 70-840 ms at the sprite's pace (median 350); the wind-up before
 // it, 280-1050 ms, is skipped so the pose never comes after the bag was hit.

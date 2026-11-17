@@ -32,6 +32,8 @@ void startExercise(uint8_t kind);
 // A touch-down while training, at the time it was captured (the 1.75C's HIT; the 1.75's
 // poll): on the punch screen it may land a punch. A release is never a tap.
 void exerciseTap(uint32_t at);
+// The pet's sprite was just reloaded (ensureMon): the punch's lunge is planned again (#90).
+void exerciseSpriteChanged();
 // The exit while training: ends the session and pays for what was done (nothing on the
 // result screen). True when the training screen has closed.
 bool exerciseExit();
