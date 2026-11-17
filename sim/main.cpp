@@ -173,6 +173,11 @@ int main(int argc, char **argv) {
   // expect / expect-not (#99): the shim copies what the firmware prints into the window,
   // from boot on, so the first check sees setup()'s lines too. Only when the script checks.
   SimSerialWindow window;
+  // Every way out of main() stops the capture, so the shim never keeps a pointer to `window`
+  // after it is gone (the early `return 1`s after a failed shot or check included).
+  struct CaptureOff {
+    ~CaptureOff() { mockSerialCapture(nullptr); }
+  } captureOff;
   const size_t checks = simCheckCount(script);
   size_t checksPassed = 0;  // counted as they run: a check that never ran is not a pass
   if (checks > 0) mockSerialCapture(&window.text);
@@ -304,7 +309,6 @@ int main(int argc, char **argv) {
         break;  // run above, before the power-off cut
     }
   }
-  mockSerialCapture(nullptr);
   fclose(serialLog);
   if (gSimPower.poweredOff) printf("sim: the PMU powered the board off (battery at 0%% without USB)\n");
   if (!o.quiet) {
