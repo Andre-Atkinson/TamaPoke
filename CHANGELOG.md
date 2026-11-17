@@ -6,9 +6,8 @@ line printed over USB serial at boot.
 
 On the 1.75C, `tools/update_175c.sh` updates the firmware and keeps your Pokémon
 (it writes only the app). The [web installer](https://socquique.github.io/TamaPoke/web/)
-is upstream's, for the original 1.75: updating from it **without** ticking "Erase
-device" keeps your Pokémon, but it installs upstream's firmware, not this fork's.
-`web/` here still holds upstream's 1.19 build and is not hosted.
+is upstream's, for the original 1.75, and installs upstream's firmware, not this
+fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
 
 ## [Unreleased]
 
@@ -344,6 +343,7 @@ device" keeps your Pokémon, but it installs upstream's firmware, not this fork'
   training counts taps anywhere on the screen with a 1-second "Hold to exit"
   button. The default build is still the original 1.75 and is unchanged. See
   `PORTING.md`.
+
 - **Volume levels** (#21). The sound button on the clock/settings screen now
   shows a speaker with three bars and cycles **high** (as before), **medium**,
   **low** and **off**. The level is saved, so it survives a restart or update.

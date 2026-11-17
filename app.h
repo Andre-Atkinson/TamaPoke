@@ -17,8 +17,10 @@
 #include "trainingcapture.h"
 #endif
 
-// Version del firmware. Subir este numero en cada release (y manifest.json para
-// el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
+// Version del firmware. Subir este numero en cada release, con su seccion
+// fechada en CHANGELOG.md. web/manifest.json describe la imagen 1.19 de upstream
+// en web/firmware/: no tocarlo salvo que esa imagen se reconstruya. Se muestra en
+// la pantalla de ajustes y por serie al arrancar.
 #define FW_VERSION "1.20"
 
 #define CX 233  // centro de la pantalla redonda
