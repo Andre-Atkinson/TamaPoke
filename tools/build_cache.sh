@@ -14,11 +14,12 @@
 #     checkout                  the checkout's path, written again by every firmware build there
 #
 # <cache> is ~/Library/Caches/tamapoke on macOS and ${XDG_CACHE_HOME:-~/.cache}/tamapoke
-# elsewhere. A build folder takes about 1.5 GB, so every firmware build (the
-# gate's, or tools/build_175c.sh on its own) deletes the cache folders of other
-# checkouts that no longer exist (a removed worktree), and those of git
-# worktrees with no firmware build for TP_CACHE_IDLE_DAYS days, and says what
-# it freed (tp_cache_prune). Any of them can also be deleted by hand while no
+# elsewhere. A build folder takes about 1.5 GB, and a checkout that ran both the
+# gate and a standalone build has three, plus two staged copies: so every
+# firmware build (the gate's, or tools/build_175c.sh on its own) deletes the
+# cache folders of other checkouts that no longer exist (a removed worktree),
+# and those of git worktrees with no firmware build for TP_CACHE_IDLE_DAYS
+# days, and says what it freed (tp_cache_prune). Any of them can also be deleted by hand while no
 # build uses it; the next build is then a full one, as with --clean.
 #
 # tools/build_175c.sh and the gate both build a staged copy of the working tree
@@ -142,15 +143,17 @@ tp_cache_remove() {  # tp_cache_remove <cache folder>
   fi
   checkout="$(cat "$dir/checkout" 2>/dev/null)" || true
   kb="$(du -sk "$dir" 2>/dev/null | awk '{ print $1 }')" || true
-  for entry in "$dir"/*; do
+  # Hidden entries too (a .DS_Store): bash 3.2 has no dotglob, and rmdir below
+  # would fail on one. An unmatched pattern stays literal, hence the -e test.
+  for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [[ -e "$entry" || -L "$entry" ]] || continue
     name="${entry##*/}"
     if [[ "$name" == checkout ]] || tp_is_cache_lock "$name"; then continue; fi
     rm -rf "$entry" 2>/dev/null || ok=0
   done
   if [[ "$ok" -eq 1 ]]; then rm -f "$dir/checkout" || ok=0; fi
   rm -rf "${taken[@]}"
-  if [[ "$ok" -eq 1 ]]; then
-    rmdir "$dir" 2>/dev/null || true
+  if [[ "$ok" -eq 1 ]] && rmdir "$dir" 2>/dev/null; then
     echo "Build cache: deleted the folder of $checkout ($why): $(tp_size "$kb") freed." >&2
   else
     echo "Build cache: could not delete all of $dir ($why); the next build tries again." >&2
@@ -195,7 +198,7 @@ tp_stage() {  # tp_stage <checkout root> <stage folder> <clean: 0|1>
     --exclude '/tools/*' \
     --exclude '/.git' --exclude '/.github' --exclude '/.claude' --exclude '/.venv' \
     --exclude '/test' --exclude '/sim' --exclude '/docs' --exclude '/web' \
-    --exclude '/out' --exclude '/backups' --exclude '/shots' \
+    --exclude '/out' --exclude '/build' --exclude '/backups' --exclude '/shots' \
     "$root/" "$stage/TamaPoke/"
 }
 

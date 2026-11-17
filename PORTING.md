@@ -70,8 +70,9 @@ again. `--clean` builds from scratch, as CI does. The image still lands in
 reads it. `tools/update_175c.sh` always builds with `--clean`, so the image
 that goes on the board never reuses an object from an earlier build.
 
-A checkout's cache folder takes up to about 3 GB (a build folder is about
-1.5 GB). Every firmware build, standalone or the gate's, deletes the folders of
+A checkout's cache folder takes up to about 5 GB (each build folder is about
+1.5 GB, and a checkout that ran both the gate and a standalone build has three,
+plus two staged copies). Every firmware build, standalone or the gate's, deletes the folders of
 checkouts that no longer exist and those of git worktrees with no firmware
 build for 7 days (the primary checkout's, and any other clone's, are never
 deleted for being idle), and prints one `Build cache:` line for each, with
