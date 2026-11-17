@@ -528,7 +528,8 @@ TEST(sick, the_serial_command_takes_on_off_and_minutes_up_to_the_run_away) {
   CHECK_EQ((int)sickCmdParse("SICK ON 1440", m), (int)SICKCMD_ON);
   CHECK_EQ(m, (uint16_t)SICK_RUNAWAY_MIN);
   for (const char *bad : { "SICK", "SICK ", "SICK ON ", "SICK ON 1441", "SICK ON 9999", "SICK ON 12345",
-                           "SICK ON -1", "SICK ON 7x", "SICK on", "SICK OFF 3", "SICK ON  5" }) {
+                           "SICK ON -1", "SICK ON 7x", "SICK on", "SICK OFF 3", "SICK ON  5",
+                           "SICK ON 00001", "SICK ON 4294967297" }) {  // 5 digits; one that would wrap to 1
     CHECK_MSG(sickCmdParse(bad, m) == SICKCMD_BAD, std::string("should be refused: ") + bad);
     CHECK_EQ(m, (uint16_t)0);
   }
