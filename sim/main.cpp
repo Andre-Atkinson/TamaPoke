@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
   // from boot on, so the first check sees setup()'s lines too. Only when the script checks.
   SimSerialWindow window;
   const size_t checks = simCheckCount(script);
-  size_t checksPassed = 0, checksFailed = 0;  // counted as they run: a skipped one is in neither
+  size_t checksPassed = 0;  // counted as they run: a check that never ran is not a pass
   if (checks > 0) mockSerialCapture(&window.text);
 
   setup();
@@ -200,7 +200,6 @@ int main(int argc, char **argv) {
       } else {
         fflush(stdout);  // in order with the run's own lines when both go to one log
         fprintf(stderr, "%s:%d: %s\n", o.script.c_str(), c.line, why.c_str());
-        checksFailed++;
       }
       continue;
     }
