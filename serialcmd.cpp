@@ -183,7 +183,7 @@ void handleSerial() {
     if (sickCmd == SICKCMD_BAD)
       Serial.printf("ERR usage: SICK ON [minutes 0-%u] | SICK OFF\n", (unsigned)SICK_RUNAWAY_MIN);
     else if (!pet.dbgSick(sickCmd == SICKCMD_ON, sickArg))
-      Serial.println("ERR sickness is off (Care page), or no pet to be sick");
+      Serial.println("ERR sickness is off (Care page), or no pet (an egg or an ending)");
     else
       Serial.printf("sick=%d sickmin=%u\n", pet.isSick() ? 1 : 0, pet.sickMinutes());
     Serial.println("DONE");

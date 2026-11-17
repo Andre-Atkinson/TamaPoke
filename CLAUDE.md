@@ -64,7 +64,7 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
   `BATLOG CLEAR` (erases the battery diary, NVS namespace `batlog`; not the
   pet), `SICK ON [minutes]` and `SICK OFF` (makes the pet sick now, with
   0-1440 counted minutes and no slip-up, or well, and saves; `ERR` while the
-  Care page's sickness setting is off or with no pet), `PUT`.
+  Care page's sickness setting is off, with no pet, or during an ending), `PUT`.
   Read-only: `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`,
   `CARE?` (prints `pace bed inbed stale egg picking sickness sick germ heal
   sickmin`), `OWNER?`, `BDAY?`

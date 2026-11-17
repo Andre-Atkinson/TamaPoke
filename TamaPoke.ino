@@ -1357,8 +1357,10 @@ bool petSceneFree() {
   return petGesturesLive(g);
 }
 
-// A touch onTap() would give to the pet: in the pet zone and not on the evolve, runaway or
-// farewell button drawn over it (the same hit tests, in the same order, as onTap).
+// A touch onTap() would give to the pet: in the pet zone and not on the evolve, run-away,
+// medicine or farewell button drawn over it (the same hit tests, in the same order, as
+// onTap). While a banner holds the buttons (petButtonsHeld) none is there: the whole pet zone
+// is the pet.
 static bool onPetBody(int16_t x, int16_t y) {
   if (!inPetZone(x, y)) return false;
   if (petButtonsHeld()) return true;  // a banner is up: no button is there (#15)

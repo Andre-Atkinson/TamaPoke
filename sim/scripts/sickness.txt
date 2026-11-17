@@ -54,6 +54,11 @@ serial CAREDAY
 serial CAREDAY
 wait 300ms
 shot 4-banner-holds-the-button
+# the sim's swipe is a straight line, so it cannot make a stroke (two turns); a rest of 300 ms,
+# then a slide of 80 px over 2.4 s, is the hold-then-drag, the other gesture only the pet
+# gets. Over the button's place, with the banner up, the pet is all there is: it drags.
+swipe 150 205 230 205 2400ms
+expect PET drag
 tap 233 205
 expect-not medicine: taken
 wait 15s
@@ -71,6 +76,11 @@ shot 6-better-evolve-button
 serial SICK ON 719
 wait 2s
 expect-once call sick: *
+# the same slide, now over the medicine button (no banner): the button is not the pet, so no
+# drag, and a drag that ended on it is no tap either (no pill)
+swipe 150 205 230 205 2400ms
+expect-not PET drag
+expect-not medicine: taken
 tap 400 140
 wait 40s
 tap 400 140
@@ -95,3 +105,33 @@ press pwr
 wait 1s
 expect-once sick: ran away
 shot 8-runs-away
+
+# F. a call's light alone does not send it away: the pet is left alone on the charger, so the
+# standby clock is up (a lit screen nobody has touched, on both boards, by 100 s); SICK OFF
+# then SICK ON 1440 is due to run away, and the "sick" and "sick-warning" calls light the
+# screen for a moment, which is no one looking: the pet stays. A touch off the pet and the
+# buttons (x 400, y 140) is someone looking: it goes. A new pet first (E ended with the
+# run-away; the setting is still on): the next egg shows after 20 s, three taps hatch it.
+battery 80
+wait 20s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+usb on
+charging on
+wait 100s
+serial SICK OFF
+serial SICK ON 1440
+wait 2s
+expect-once call sick+sick-warning: *
+expect-not sick: ran away
+wait 15s
+expect-not sick: ran away
+serial CARE?
+expect * sick=1 * sickmin=14*
+tap 400 140
+wait 1s
+tap 400 140
+wait 1s
+expect-once sick: ran away

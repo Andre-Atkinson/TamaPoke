@@ -755,7 +755,7 @@ is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on scree
 counted minutes in the red towards falling sick, and while sick the minutes out of the red
 towards the cure and the counted minutes sick) · `SICK ON [minutes]` / `SICK OFF` (sickness
 on now, with `minutes` counted already, 0–1440, and no slip-up, or better now; `ERR` while
-*Sickness* is off or with no creature) ·
+*Sickness* is off, with no creature, or during an ending) ·
 `SCENE <place|auto> [weather|auto] [season|auto]` (forces the place, `meadow beach forest
 volcano mountain snow`, the weather, `clear cloudy rain storm snow fog`, and the season,
 `spring summer autumn winter none`, in RAM only: `SCENE auto` or a restart gives them back

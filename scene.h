@@ -103,8 +103,9 @@ void drawPoops();
 // The top of the pet's head as drawPet() drew it this frame, hop included (#73): the emotes
 // (#22) and both bubbles point at it. Call it after drawPet(). 0 when no pet was drawn.
 int petHeadTop();
-// The evolve, run-away or farewell button is drawn over the pet (render()): the bubbles stay
-// above it (bubbleTipY in attention.h).
+// The evolve, run-away, medicine or farewell button is drawn over the pet (render()): the
+// bubbles stay above it (bubbleTipY in attention.h). False while a banner holds the buttons
+// (petButtonsHeld): none is drawn then.
 bool petButtonShown();
 bool petButtonsHeld();  // a medal's or a streak's banner shows: the buttons over the pet wait (#15)
 // The pet is huffing (the 12th quick tap on): its puffs of breath go by the head, so the
