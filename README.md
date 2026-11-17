@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://socquique.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v1.17-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v1.20-8A2BE2)
 [![CI](https://github.com/Andre-Atkinson/TamaPoke/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Andre-Atkinson/TamaPoke/actions/workflows/ci.yml)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-EN%20%7C%20PT-FFCB05)
