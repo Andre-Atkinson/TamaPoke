@@ -1576,13 +1576,18 @@ void handleTouch() {
     // into the pet zone and its items are not the pet: a touch that began on an open strip is
     // never a long press, even once the strip's own timeout has closed it under the finger
     // (stripAtDown is taken at touch-down, not re-read on every poll).
+    // The long press that offers "release?" starts on the pet's body: not on a button drawn
+    // over it (evolve, run-away, medicine, farewell), the same hit test a tap goes by
+    // (onPetBody). It used to take the whole pet zone, so 3 s on a button asked to release
+    // the pet (#15, owner's call 2026-11-17).
     bool longOk = !holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen &&
-                  inPetZone(touchG.x0, touchG.y0) && !pet.isEgg() && !confirmUntil && !stripAtDown &&
+                  onPetBody(touchG.x0, touchG.y0) && !pet.isEgg() && !confirmUntil && !stripAtDown &&
                   !pet.ceremony;
     TouchAct a = touchG.held(millis(), x, y, longOk);
     if (a == TOUCH_LONG_PRESS) {
       confirmUntil = millis() + 10000;
       holdFired = true;
+      Serial.println("release: asked");  // the "release?" dialog (a log line for the sim's checks)
     } else if (a != TOUCH_NONE) {
       petHeldGesture(a);
     }

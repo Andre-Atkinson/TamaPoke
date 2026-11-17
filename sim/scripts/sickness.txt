@@ -2,7 +2,8 @@
 # make the pet sick, and its minutes for a day left sick:
 #   A. the Care page's fourth row switches sickness on
 #   B. sick: one call, the HURT pose, the status line, the thermometer bubble, the medicine
-#      button, and the Progress page's "Get well to evolve"
+#      button (a long press on it is not one on the pet), and the Progress page's "Get well to
+#      evolve"
 #   C. a banner holds the buttons over the pet back; then the medicine: the pill, "Feeling
 #      better!", and the evolve button it was holding back
 #   D. it says so in a speech bubble; the warning call, halfway to running away
@@ -37,6 +38,14 @@ serial SICK ON
 wait 2s
 expect-once call sick: brighten chirp
 shot 2-sick
+# 3 s on the medicine button is not a long press on the pet: no "release?" (nor a pill). On
+# the pet's body, below the buttons' place, it is; the dialog closes by itself after 10 s.
+hold 233 205 3500ms
+expect-not release: asked
+expect-not medicine: taken
+hold 233 285 3500ms
+expect-once release: asked
+wait 11s
 swipe up
 swipe left
 swipe left
