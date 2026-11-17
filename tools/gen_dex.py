@@ -3,6 +3,8 @@
 
   python3 tools/gen_dex.py
 """
+import itertools
+import math
 import os
 import sys
 
@@ -14,6 +16,82 @@ from dex_stats import BASE_STATS
 def rgb565(hexcol):
     r, g, b = int(hexcol[1:3], 16), int(hexcol[3:5], 16), int(hexcol[5:7], 16)
     return (r >> 3) << 11 | (g >> 2) << 5 | (b >> 3)
+
+
+# Egg-choice spots (#34): an egg's spots show its type accent, so two accents
+# closer than this (CIE76) look alike on the shell, and one roll of three eggs
+# keeps them apart. Chosen in #34: 25 parts ground/rock, poison/ghost,
+# electric/ground and normal/rock (13.7 to 24.5) and leaves every other pair of
+# today's accents (27.4 and up) alone.
+EGG_SPOT_MIN_DE = 25
+
+
+def rgb888(c565):
+    """An RGB565 colour widened to 8 bits a channel by repeating its top bits."""
+    r, g, b = c565 >> 11, (c565 >> 5) & 0x3F, c565 & 0x1F
+    return (r << 3) | (r >> 2), (g << 2) | (g >> 4), (b << 3) | (b >> 2)
+
+
+def cielab(rgb):
+    """CIELAB (D65 white) of an sRGB colour."""
+    def linear(v):
+        v /= 255
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+
+    def f(t):
+        return t ** (1 / 3) if t > (6 / 29) ** 3 else t / (3 * (6 / 29) ** 2) + 4 / 29
+
+    r, g, b = (linear(v) for v in rgb)
+    x = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047)
+    y = f(0.2126 * r + 0.7152 * g + 0.0722 * b)
+    z = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883)
+    return 116 * y - 16, 500 * (x - y), 200 * (y - z)
+
+
+def delta_e76(a565, b565):
+    """CIE76 colour difference of two RGB565 colours."""
+    return math.dist(cielab(rgb888(a565)), cielab(rgb888(b565)))
+
+
+def egg_spot_alike_pairs():
+    """(dE, accent, accent, type, type) for every pair of type accents that look
+    alike as egg spots, closest first."""
+    accents = {}  # one name per RGB565 colour
+    for typ, hexcol in TYPE_ACCENTS.items():
+        accents.setdefault(rgb565(hexcol), typ)
+    pairs = []
+    for a, b in itertools.combinations(accents, 2):
+        de = delta_e76(a, b)
+        if de < EGG_SPOT_MIN_DE:
+            pairs.append((de, a, b, accents[a], accents[b]))
+    return sorted(pairs)
+
+
+def emit_egg_spots(out):
+    pairs = egg_spot_alike_pairs()
+    out.append(
+        "// Egg-choice spots (#34): an egg's spots show its type accent. Two accents whose\n"
+        "// CIE76 colour difference is under EGG_SPOT_MIN_DE look alike on the shell, so\n"
+        "// Pet::rollEggChoices() keeps them out of one roll. Measured on the RGB565 accent\n"
+        "// (each channel widened to 8 bits by repeating its top bits) as sRGB with a D65\n"
+        "// white, by tools/gen_dex.py. test/test_pet.cpp recomputes every pair.\n"
+        f"#define EGG_SPOT_MIN_DE {EGG_SPOT_MIN_DE}\n")
+    if not pairs:
+        out.append(
+            "inline bool eggSpotsLookAlike(uint16_t a, uint16_t b) { return a == b; }\n\n")
+        return
+    out.append("inline const uint16_t EGG_SPOT_ALIKE[][2] = {\n")
+    for de, a, b, ta, tb in pairs:
+        out.append(f"  {{ 0x{a:04X}, 0x{b:04X} }},  // {ta} / {tb}, dE {de:.1f}\n")
+    out.append(
+        "};\n\n"
+        "// true when spots of accents a and b would look alike (the same accent included)\n"
+        "inline bool eggSpotsLookAlike(uint16_t a, uint16_t b) {\n"
+        "  if (a == b) return true;\n"
+        "  for (const auto &p : EGG_SPOT_ALIKE)\n"
+        "    if ((p[0] == a && p[1] == b) || (p[0] == b && p[1] == a)) return true;\n"
+        "  return false;\n"
+        "}\n\n")
 
 
 # bioma de fondo por tipo (la luz la pone la hora real del RTC)
@@ -78,6 +156,8 @@ def main():
         "  if (dex < 1 || dex > DEX_COUNT) return DEX_TBL[0].name;\n"
         "  return DEX_TBL[dex].name;\n"
         "}\n\n")
+
+    emit_egg_spots(out)
 
     out.append("// el primer huevo de la partida: iniciales clasicos\n")
     out.append("inline const int16_t CLASSIC_DEX[] = { %s };\n" % ", ".join(map(str, CLASSIC)))

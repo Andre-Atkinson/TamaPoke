@@ -409,9 +409,13 @@ public:
   int16_t eggChoice(uint8_t i) const { return i < EGG_CHOICES ? eggCand[i] : (int16_t)-1; }
   void chooseEgg(uint8_t i);         // i fuera de rango o sin eleccion: no hace nada
   void cancelEggChoice();            // consola SPEC: sale de la eleccion sin elegir
-  // rellena out[] con tres especies de huevo distintas: `special` (la tirada de
-  // siempre) y dos comunes de otros colores de tipo, en orden aleatorio
+  // Fills out[] with three distinct egg species in random order: `special` (the
+  // usual roll) and two Commons, no two of the three with spots that look alike
+  // (eggSpotsLookAlike() in dex.h, #34) while the Commons allow it.
   void rollEggChoices(int16_t special, int16_t out[EGG_CHOICES]);
+  // The same with another look-alike rule, so a host test can leave no colour
+  // that passes it and reach the fallback passes (#34).
+  void rollEggChoices(int16_t special, int16_t out[EGG_CHOICES], bool (*lookAlike)(uint16_t, uint16_t));
   static bool validEggChoices(const int16_t c[EGG_CHOICES]);
   void factoryReset() { prefs.clear(); }  // borra la NVS (test: comando serie WIPE)
   void dbgRunawayReady() { fullness = joy = energy = hygiene = 0; neglectTicks = RUNAWAY_TICKS; }  // test

@@ -439,12 +439,21 @@ int16_t Pet::pickEggSpecies() {
   return CLASSIC_DEX[random(NUM_CLASSIC_DEX)];  // inalcanzable, por si acaso
 }
 
-// los tres huevos a elegir: `special` es la tirada normal (pickEggSpecies) y
-// los otros dos son comunes, de especie y color de tipo distintos (el color es
-// la pista que se ve en la cascara). Como pickEggSpecies, prefieren lineas
-// evolutivas incompletas; si no se puede todo a la vez, cede primero la linea
-// nueva y despues el color. Hay 47 comunes, asi que siempre sale algo.
+// The three eggs to choose from: `special` is the usual roll (pickEggSpecies) and
+// the other two are Common eggs of other species. An egg's spots show its type
+// colour, the hint the shell gives, so neither extra may have spots that look like
+// those of an egg already chosen, the special one included (`lookAlike`, by default
+// eggSpotsLookAlike() in dex.h, #34). Like pickEggSpecies they prefer incomplete
+// evolution lines; when both can't be had, the new line gives way before the
+// colour. With today's colours the colour rule always leaves a candidate (a host
+// test checks every case); passes 2 and 3 drop it anyway, so a roll always fills
+// all three slots.
 void Pet::rollEggChoices(int16_t special, int16_t out[EGG_CHOICES]) {
+  rollEggChoices(special, out, eggSpotsLookAlike);
+}
+
+void Pet::rollEggChoices(int16_t special, int16_t out[EGG_CHOICES],
+                         bool (*lookAlike)(uint16_t, uint16_t)) {
   // defensivo: las llamadas de newEgg() pasan una especie de huevo; load() puede
   // pasar un eggTarget danado que no lo sea (entonces se sortea uno)
   if (special < 1 || special > DEX_COUNT || DEX_TBL[special].rarity == R_EVO)
@@ -453,20 +462,21 @@ void Pet::rollEggChoices(int16_t special, int16_t out[EGG_CHOICES]) {
   for (int k = 1; k < EGG_CHOICES; k++) {
     out[k] = -1;
     for (int pass = 0; pass < 4 && out[k] < 0; pass++) {
-      bool newColour = pass < 2;               // pasadas 0 y 1
-      bool newLine = pass == 0 || pass == 2;   // pasadas 0 y 2
+      bool farColour = pass < 2;               // passes 0 and 1
+      bool newLine = pass == 0 || pass == 2;   // passes 0 and 2
       int16_t cand[DEX_COUNT];
       int n = 0;
       for (int16_t d = 1; d <= DEX_COUNT; d++) {
         if (DEX_TBL[d].rarity != R_COMUN) continue;
-        bool taken = false, sameColour = false;
+        bool taken = false, alike = false;
         for (int j = 0; j < k; j++) {
           if (out[j] == d) taken = true;
-          if (DEX_TBL[out[j]].accent == DEX_TBL[d].accent) sameColour = true;
+          if (lookAlike(DEX_TBL[out[j]].accent, DEX_TBL[d].accent)) alike = true;
         }
-        // `taken` es redundante con `sameColour` en las pasadas 0 y 1 (defensivo):
-        // solo cuenta en las pasadas 2 y 3, donde el color ya no se exige
-        if (taken || (newColour && sameColour)) continue;
+        // `taken` keeps the three species apart in every pass, whatever `lookAlike`
+        // says; in passes 0 and 1 eggSpotsLookAlike's `alike` covers it anyway (an
+        // accent looks like itself)
+        if (taken || (farColour && alike)) continue;
         if (newLine && !lineHasUnregistered(d)) continue;
         cand[n++] = d;
       }
