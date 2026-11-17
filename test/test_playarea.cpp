@@ -68,7 +68,8 @@ TEST(PlayArea, the_hops_are_half_a_sine) {
   // double-tap hop, 350 ms / 24 px
   CHECK_EQ(PET_TAP_HOP_MS, 350);
   CHECK_EQ(PET_TAP_HOP_PX, 24);
+  CHECK_EQ(PET_TAP_HOPS * PET_TAP_HOP_MS, 700);  // the reaction's length (startReact), as before #66
   CHECK_EQ(hopDy(43, 350, 24), -9);    // 24 * sin(pi * 43 / 350)  = 9.05
-  CHECK_EQ(hopDy(87, 350, 24), -16);   // 24 * sin(pi * 87 / 350)  = 16.88
+  CHECK_EQ(hopDy(87, 350, 24), -16);   // 24 * sin(pi * 87 / 350)  = 16.89
   CHECK_EQ(hopDy(262, 350, 24), -17);  // 24 * sin(pi * 262 / 350) = 17.04
 }

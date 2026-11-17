@@ -402,7 +402,7 @@ struct IdlePerks {
 #define IDLE_BALL_KICK_MAX (IDLE_BALL_KICK_MIN + IDLE_BALL_KICK_TRAIN + IDLE_BALL_KICK_SPAN - 1)
 
 struct IdleBall {
-  float x = 233, vx = 0;
+  float x = PLAY_MID_X, vx = 0;
 };
 
 // Rolls the ball for dt seconds (a long frame counts as at most 0.3 s). It always ends inside

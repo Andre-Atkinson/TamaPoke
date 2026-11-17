@@ -79,6 +79,8 @@ TEST(SkyLayout, the_game_screens_stars_stay_out_of_the_words) {
 TEST(SkyLayout, the_sky_hours_run_night_dawn_day_dusk) {
   CHECK(0 < SKY_NIGHT_TO && SKY_NIGHT_TO < SKY_DAWN_TO && SKY_DAWN_TO < SKY_DUSK_FROM);
   CHECK(SKY_DUSK_FROM < SKY_NIGHT_FROM && SKY_NIGHT_FROM < 24);
+  CHECK_EQ(SKY_DAWN_TO, 8);  // the sky's dawn and dusk hours, as before #66
+  CHECK_EQ(SKY_DUSK_FROM, 18);
   for (int h = 0; h < 24; h++)
     CHECK_MSG(skyNightHour(h) == (h < 6 || h >= 20), "night at " + std::to_string(h) + ":00");
 }

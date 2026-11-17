@@ -262,8 +262,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   column, the hop's shape, the Food button's x and the stamina blue were each written out
   in several files; each now has one name (`skylayout.h`, the new `playarea.h`,
   `caremenu.h`, `cardlayout.h`), and the build checks that the hungry pet's spot sits under
-  the Food button. Nothing changes on the screen: every simulator screenshot is the same,
-  byte for byte, on both boards.
+  the Food button. Nothing changes on the screen: the firmware draws every simulator
+  screenshot the same, byte for byte, on both boards. (The simulator's speech-bubble script
+  now shows its "Look at the stars!" shots under a clear night, the only sky the creature
+  says it under.)
 
 - **The unused `Pet::play()` is gone** (#87). The Play button runs the minigames
   (`playGame`), and only the host tests still called `play()`; they now test a game's
