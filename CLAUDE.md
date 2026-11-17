@@ -139,7 +139,9 @@ per build) fails the gate and CI's `Compile firmware`, which count them with
 that same script; only new warnings are findings, and a PR that changes the
 count updates the baseline. CI's `Game-logic tests (host, no board)` job builds
 the host tests with Linux g++, and its `No host build warnings` step fails on
-any `: warning: ` line, which macOS clang (and so the gate) may not show (#98).
+any `: warning: ` line. The gate's host tests fail the same way, on the same
+lines counted the same way (`N host build warning(s)` on their summary line),
+but macOS clang doesn't show every warning g++ does (#98).
 `ruff check tools/` and a
 generated-headers check (needs Pillow) run in CI but not in the gate: ask the
 owner before installing ruff (even into `.venv/`).

@@ -960,8 +960,12 @@ class FakeArduinoCliCase(unittest.TestCase):
         shutil.copy2(self.PARTS, os.path.join(root, 'boards', '175c', 'partitions.csv'))
         put(os.path.join(root, 'TamaPoke.ino'), b'void setup() {}\nvoid loop() {}\n')
         self.ran = os.path.join(self.tmp, 'ran')
+        # FAKE_TEST_LOG: a file whose text the stand-in suite prints (compiler warnings, say);
+        # FAKE_TEST_RC: its exit code (0 by default).
         stub = os.path.join(root, 'test', 'run_tests.sh')
-        put(stub, f'#!/usr/bin/env bash\necho tests >> "{self.ran}"\necho "TODO OK"\n'.encode())
+        put(stub, (f'#!/usr/bin/env bash\necho tests >> "{self.ran}"\n'
+                   f'[[ -n "${{FAKE_TEST_LOG:-}}" ]] && cat "$FAKE_TEST_LOG"\n'
+                   f'echo "TODO OK"\nexit "${{FAKE_TEST_RC:-0}}"\n').encode())
         os.chmod(stub, 0o755)
         put(os.path.join(root, 'tools', 'test_i18n_formats.py'),
             f'open({self.ran!r}, "a").write("i18n\\n")\n'.encode())
@@ -2083,6 +2087,51 @@ os.execv({real_du!r}, ['du'] + sys.argv[1:])
         r = self.build_175c(FAKE_PARTS='')
         self.assertNotEqual(r.returncode, 0, 'passed on a partition table an earlier build left')
         self.assertIn('wrong partition table', r.stderr)
+
+
+class TestGateHostWarnings(FakeArduinoCliCase):
+    """The gate's host tests fail on a host build warning, counted as CI's "No host build
+    warnings" step counts them (#98; TestSketchWarnings.test_ci_host_tests_fail_on_a_warning
+    runs that step on the same kinds of log): each different ': warning: ' line once, colour
+    codes stripped, and the count on the summary line."""
+
+    LINE = '../a.cpp:1:2: warning: x [-Wfoo]\n'
+    OTHER = '../b.cpp:3:4: warning: y [-Wbar]\n'
+    COLOURED = '../a.cpp:1:2: \033[01;35m\033[Kwarning: \033[m\033[Kx\n'
+    # the suite's own output says "warning" in test names: not a compiler warning
+    NAMES = ('  ok   run_away_warning_sounds_once_each_time_the_button_appears\n'
+             'test_ci_host_tests_fail_on_a_warning (__main__.TestSketchWarnings) ... ok\n')
+
+    def gate_with(self, text, **env):
+        root = getattr(self, 'root', None) or self.gate_root()
+        self.root = root
+        log = os.path.join(self.tmp, 'suite.log')
+        put(log, text.encode())
+        return self.gate(root, '--no-build', FAKE_TEST_LOG=log, **env)
+
+    def test_a_clean_suite_passes_and_says_none(self):
+        r = self.gate_with(self.NAMES)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('PASS  host tests (--asan)  (0 host build warning(s))', r.stdout)
+        self.assertIn('GATE GREEN', r.stdout)
+
+    def test_a_host_build_warning_fails_the_gate_counted_once_per_line(self):
+        for name, text, n in (('once', self.NAMES + self.LINE, 1),
+                              # the normal and the ASan build print the same line
+                              ('twice', self.LINE + self.NAMES + self.LINE, 1),
+                              ('two different', self.LINE + self.OTHER + self.LINE, 2),
+                              ('coloured', self.COLOURED, 1)):
+            with self.subTest(log=name):
+                self.fresh()
+                r = self.gate_with(text)
+                self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                self.assertIn(f'FAIL  host tests (--asan) (exit 1)  ({n} host build warning(s))', r.stdout)
+                self.assertIn('GATE FAILED', r.stdout)
+
+    def test_a_failing_suite_keeps_its_own_exit_code(self):
+        r = self.gate_with(self.LINE, FAKE_TEST_RC='3')
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn('FAIL  host tests (--asan) (exit 3)  (1 host build warning(s))', r.stdout)
 
 
 class TestGateSimChecks(FakeArduinoCliCase):

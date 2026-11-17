@@ -9,7 +9,7 @@
 #   TAMAPOKE_JOBS=8 tools/gate.sh   compile jobs per firmware build: default 3, 0 = all cores
 #
 # Steps, fastest first so most breakage shows in seconds: host tests
-# (+ASan/UBSan), i18n format check, no-network check over the firmware sources,
+# (+ASan/UBSan; any host build warning fails them, as in CI), i18n format check, no-network check over the firmware sources,
 # the desktop simulator for both boards (tools/sim.sh: it compiles the real
 # sketch on the host and shoots screens.txt), the simulator scripts that check
 # their own serial output (an expect or expect-not step, sim/script.h) on both
@@ -126,7 +126,14 @@ tp_strip_ansi <"$TMP/tests.log" \
          /warning|error|Warning|Error|FAIL|tests, |^Ran |^OK|skipped|Sanitizer|TODO OK|HAY FALLOS/{print}' \
   | tee "$TMP/tests.f"
 [[ "$rc" -ne 0 ]] && tail_if_empty "$(wc -l <"$TMP/tests.f")" "$TMP/tests.log"
-record "host tests (--asan)" "$rc"
+# Host build warnings, counted as CI's "No host build warnings" step counts them
+# (#98, .github/workflows/ci.yml): each different ": warning: " line once, colour
+# codes stripped. CI allows none, and neither does the gate. The lines themselves
+# are in the filtered output above. macOS clang doesn't show every warning Linux
+# g++ does, so a clean count here doesn't promise a clean CI.
+hw="$(tp_strip_ansi <"$TMP/tests.log" | grep -E ': warning: ' | sort -u | wc -l | tr -d ' ')"
+if [[ "$rc" -eq 0 && "$hw" -ne 0 ]]; then rc=1; fi
+record "host tests (--asan)" "$rc" "$hw host build warning(s)"
 
 # ---------------------------------------------------------------- i18n
 echo "== i18n formats =="
