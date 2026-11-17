@@ -81,6 +81,10 @@ void bathFinishNow();  // an ending is starting (#33): a bath under way ends now
 uint32_t pmdActTotalMs(const PmdAct &a);  // one run of an action's animation, ms
 void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS);
 void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS);
+// Frame fi of action actId of m at scale s, standing on its own feet (its lowest opaque row
+// + 1, `feet`) on groundY, its canvas centred on cx like drawPmdActM's: the rhythm punch's
+// lunge (punchlunge.h, #90). Nothing for a frame the action doesn't have.
+void drawPmdFrame(const PmdMon &m, uint8_t actId, uint8_t fi, uint8_t feet, int cx, int groundY, uint8_t s);
 void drawPoops();
 // The top of the pet's head as drawPet() drew it this frame, hop included (#73): the emotes
 // (#22) and both bubbles point at it. Call it after drawPet(). 0 when no pet was drawn.

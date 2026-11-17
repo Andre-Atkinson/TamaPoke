@@ -257,6 +257,15 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Changed
 
+- **A landed punch is a real strike** (#90). In the rhythm punch, each punch that lands
+  now plays the creature's own attack, from the moment it strikes, while it leans into the
+  bag: Charmeleon swings its tail at it, Pikachu and Snorlax crouch into the blow. It plays
+  for a moment (at most 0.7 s) and the creature is standing still again well before the bag
+  lights up for the next punch, so it never gets in the way of the timing. Every species
+  does it at its usual size, standing on the ground (drawn the plain way, most would have
+  shrunk and leapt into the air). A tap that doesn't land still shows nothing and costs
+  nothing. Looks only: the punches, the points and the save are unchanged.
+
 - **The unused `Pet::play()` is gone** (#87). The Play button runs the minigames
   (`playGame`), and only the host tests still called `play()`; they now test a game's
   reward instead. The two warnings Linux g++ gave on the host tests are fixed too (#98),
