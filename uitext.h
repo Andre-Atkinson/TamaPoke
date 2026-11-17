@@ -1,6 +1,6 @@
 // Text on the panel (#41: moved out of TamaPoke.ino). The classic 5x7 font, plus the
-// 12 Portuguese letters it lacks (ptglyphs.h), which printT() draws from their own
-// small font. setCur()'s y is the top of the text.
+// 12 Portuguese letters it lacks and its E-acute redrawn (ptglyphs.h), which printT()
+// draws from their own small font. setCur()'s y is the top of the text.
 #pragma once
 #include <stdint.h>
 

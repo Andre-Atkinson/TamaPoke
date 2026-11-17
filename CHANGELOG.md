@@ -324,6 +324,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **Portuguese accented capitals at full height** (#85): the accented capitals, and the
+  font's own É, now stand as tall as the other capitals, so FORMA FÍSICA, NÍVEL and
+  FÔLEGO no longer read as lowercase.
+
 - **Every new medal gets its banner, and a streak's shows its whole time** (#82, #83). When
   several medals came at once (an older creature can reach level 10, IN SHAPE and a training
   ribbon in the same minute), the banner named only one of them; and a streak milestone that

@@ -546,10 +546,13 @@ apart on the settings screen (swipe down): the language pill shows `EN | PT` wit
 the active one filled. The Portuguese uses *tu* throughout and has every letter
 it needs: the classic 5x7 font (CP437) lacks ã, õ and most accented capitals, so
 `ptglyphs.h` adds those 12 (ã õ Á À Â Ã Ê Í Ó Ô Õ Ú) as extra glyphs, one byte
-each, drawn by `printT()`. Pokémon names stay in English, as in the Portuguese
-games. Until #61 the firmware also shipped Spanish, French, German, Italian,
-Japanese and Korean; a board set to one of those shows English after the update
-(the stored choice is kept, see `i18n.h`).
+each, drawn by `printT()`. Its accented capitals stand taller than the lowercase
+letters, with the accent squeezed in above them, so upper-case words such as
+FORMA FÍSICA stay upper-case; it redraws the font's own É to match (#85).
+Pokémon names stay in English, as in the Portuguese games. Until #61 the firmware
+also shipped Spanish, French, German, Italian, Japanese and Korean; a board set to
+one of those shows English after the update (the stored choice is kept, see
+`i18n.h`).
 
 ## Backgrounds: places, weather + real time
 
@@ -611,8 +614,8 @@ set after a power cut.
 - `TamaPoke.ino` — init, game loop, hardware bring-up, buttons and power, the care glue (bedtime, attention calls, clock prompt), touch and gestures, and `render()`, which picks the screen to draw
 - `app.h` — what `TamaPoke.ino` shares with the modules split out of it (#41)
 - `serialcmd.h` / `serialcmd.cpp` — the USB serial console (SD provisioning and debug commands)
-- `uitext.h` / `uitext.cpp` — text size, cursor and `printT()`, which draws the 12 extra Portuguese letters
-- `ptglyphs.h` — those 12 letters (ã õ and the accented capitals CP437 lacks) as 5x7 art, packed at compile time (#61)
+- `uitext.h` / `uitext.cpp` — text size, cursor and `printT()`, which draws the 12 extra Portuguese letters and the redrawn É
+- `ptglyphs.h` — those 12 letters (ã õ and the accented capitals CP437 lacks) and the redrawn É as 5x7 art, packed at compile time (#61, #85)
 - `scene.h` / `scene.cpp` — the main screen: sky and biome, the pet's PMD animation and walk, bath, poops, header, bars, buttons, the endings and their buttons
 - `weather.h` — the place of each day, its made-up weather, the date and the season, from the clock (#60); `scene.cpp` draws them
 - `skylayout.h` — where the header, the sun, the moon and the stars sit on the round screen (#70)
