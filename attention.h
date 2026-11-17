@@ -89,6 +89,37 @@ class AttnArm {
   uint8_t armed_ = 0, waiting_ = 0;
 };
 
+// Sickness's calls (#15). Two, each once per sickness: when the pet falls sick
+// (SICKCALL_ILL) and, as a warning, once it has been sick long enough to be halfway to running
+// away (SICKCALL_WARN; `pastWarn`: Pet::sickMinutes() >= SICK_WARN_MIN). They go out like a
+// need's call (attnDecide: they wait while the sketch can't deliver them, and are spent
+// silently in quiet hours or under the pocket lock).
+//  - First sample (boot): nothing calls. A pet already sick, or already past the warning,
+//    called before the restart.
+//  - Well again (the medicine, or better by itself): anything waiting is dropped, and the next
+//    sickness calls afresh.
+//  - `away` (as for AttnArm): what is waiting is dropped; it does not call later.
+enum : uint8_t { SICKCALL_ILL = 1, SICKCALL_WARN = 2 };
+class SickCall {
+ public:
+  uint8_t update(bool sick, bool pastWarn, bool away) {
+    bool warn = sick && pastWarn;
+    if (have_ && sick && !wasSick_) waiting_ |= SICKCALL_ILL;
+    if (have_ && warn && !wasWarn_) waiting_ |= SICKCALL_WARN;
+    if (!sick || away) waiting_ = 0;
+    wasSick_ = sick;
+    wasWarn_ = warn;
+    have_ = true;
+    return waiting_;
+  }
+  uint8_t waiting() const { return waiting_; }
+  void done() { waiting_ = 0; }
+
+ private:
+  bool have_ = false, wasSick_ = false, wasWarn_ = false;
+  uint8_t waiting_ = 0;
+};
+
 // Quiet hours: the bedtime window if one is set, otherwise 22:00-07:00 (the same window
 // as bedtime preset 2). A clock that isn't known (no clock, or stale after a full
 // power-off until someone sets it) counts as quiet: better a silent call than a chirp

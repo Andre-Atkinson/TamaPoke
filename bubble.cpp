@@ -13,6 +13,7 @@
 static_assert((int)S_SAY_HUNGRY + (int)BUB_LOVE_NAME == (int)S_SAY_LOVE_FMT &&
                   (int)S_SAY_HUNGRY + (int)BUB_LOVE == (int)S_SAY_LOVE,
               "the S_SAY_* strings follow BubbleLine");
+static_assert((int)S_SAY_HUNGRY + (int)BUB_SICK == (int)S_SAY_SICK, "the sick line (#15) follows BubbleLine too");
 // each greeting has two strings, with the name and without, in BubbleLine order (#26):
 // bubbleStrOffset() finds them
 static_assert((int)S_SAY_HUNGRY + bubbleStrOffset(BUB_CHRISTMAS, true) == (int)S_SAY_CHRISTMAS_FMT &&
@@ -81,6 +82,7 @@ void bubbleLoop(uint32_t now, bool free) {
   if (!bubbleTimer.update(now, free, [] { return (uint32_t)random(BUBBLE_GAP_SPAN_MS); })) return;
   BubbleIn in;
   in.needs = attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene);
+  in.sick = pet.isSick();  // #15
   // the loop refreshes lastSeenEpoch from the clock every 30 s: no I2C read here
   uint32_t e = pet.lastSeenEpoch;
   in.clockKnown = e && !bedEdge.stale();

@@ -10,6 +10,16 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Sickness and medicine** (#15), on the stat card's Care page (*Sickness*, off by
+  default). Left with its hygiene bar in the red for 6 hours (counted only while it is awake,
+  outside quiet hours and with the clock set, on either pace) the creature falls sick: it
+  looks poorly, says so, calls once, and can't evolve until it is better. Being sick costs: a
+  slip-up when it falls sick and one every hour it stays sick, and its happiness falls a
+  little faster. The green *Give medicine* button cures it at once; kept clean, it also gets
+  better by itself after 12 hours. Left sick for a day it runs away by itself the next time
+  you look (a warning call comes at 12 hours). It never dies. Off, nothing changes; an old
+  save loads with it off.
+
 - **Natures show in play.** A newly hatched creature's first speech bubble names its nature
   ("I'm playful!", the same word as on the stat card), and now and then (about one bubble in
   five) it says a line of its nature: "Berries are the best!", "Catch me if you can!",
@@ -366,6 +376,14 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   within about 7 px.
 
 ### Fixed
+
+- **A banner is no longer hidden under a button over the creature** (#15). A medal's or a
+  streak's banner used to be drawn under the evolve, farewell or run-away button, which hid
+  its text. Those buttons now wait while a banner shows, and a tap there is a pat.
+
+- **A long press on a button over the creature no longer asks to release it** (#15). Three
+  seconds on the evolve, farewell, run-away or medicine button offered "Release?"; the long
+  press now has to start on the creature itself.
 
 - **`tools/send_sd.py` sends only the files you name** (#110). For example,
   `python3 tools/send_sd.py ps151.bin` adds one species' shiny sprite to the 1.75C.

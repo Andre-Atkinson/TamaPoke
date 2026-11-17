@@ -52,6 +52,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Listen...", "Your turn!",
     // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
     "I'm hungry!", "I need a bath!", "I'm tired...", "I'm bored...",
+    "I don't feel well...",  // sick (#15)
     "Good morning!", "Look at the stars!",
     "Sleepy... warm milk?",  // the warm-milk hint (#13)
     "Hi there!", "I'm happy!", "Pat me!",
@@ -70,6 +71,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Sound on", "Muted", "Locked", "Unlocked",
     // the standby clock's date (#60)
     "%s %u %s",
+    // sickness and medicine (#15)
+    "SICKNESS", "On", "Not feeling well...", "Give medicine", "Feeling better!", "Get well to evolve",
   },
   // ---------------- PT (European Portuguese, #61) ----------------
   // One form of address throughout: "tu" (toca, desliza, escolhe, ouve, mantem),
@@ -122,6 +125,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Ouve...", "A tua vez!",
     // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
     "Tenho fome!", "Preciso de um banho!", "Estou com sono...", "Que t\202dio...",
+    "N\343o me sinto bem...",  // sick (#15)
     "Bom dia!", "Olha as estrelas!",
     "Sono... leite quentinho?",  // the warm-milk hint (#13)
     "Ol\240!", "Estou feliz!", "Faz-me festinhas!",
@@ -140,6 +144,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Som ligado", "Sem som", "Bloqueado", "Desbloqueado",
     // the standby clock's date (#60)
     "%s, %u %s",
+    // sickness and medicine (#15)
+    "DOEN\200AS", "Ligado", "Est\240 adoentado...", "Dar rem\202dio", "J\240 est\240 melhor!", "Tem de melhorar primeiro",
   },
 };
 

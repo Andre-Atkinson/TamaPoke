@@ -15,7 +15,7 @@ swipe left
 swipe left
 swipe left
 swipe left
-tap 233 288
+tap 233 238
 shot card-open
 serial RUN
 wait 1s

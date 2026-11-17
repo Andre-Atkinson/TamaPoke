@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <Preferences.h>
+#include <string.h>    // strcmp, strncmp: sickCmdParse (#15)
 #include "clockprompt.h"  // CLOCK_EPOCH_END
 #include "gamecore.h"  // GameId, records and normalised scores of the Play minigames
 #include "nature.h"    // NAT_*, the drains, care boosts and training bonus of each nature (#25)
@@ -346,6 +347,17 @@ public:
   // left sick SICK_RUNAWAY_MIN counted minutes: the sketch starts the run-away. Awake only,
   // as canRunawayNow(): a pet put to bed (or loaded asleep) waits until it wakes.
   bool sickRunawayDue() const { return sick && sickMin >= SICK_RUNAWAY_MIN && ceremony == CER_NONE && !isEgg() && !sleeping; }
+  // The medicine button over the pet (#15), in the farewell and run-away buttons' place: while
+  // it is sick and awake. The run-away button, when it shows, keeps that place: one care makes
+  // it go, and then the medicine shows.
+  bool wantMedicineButton() const { return sick && !sleeping && ceremony == CER_NONE && !isEgg() && !canRunawayNow(); }
+  // the counts for the serial CARE? (read-only): towards sickness while well, towards the cure while sick
+  uint16_t germMinutes() const { return sick ? 0 : germMin; }
+  uint16_t healMinutes() const { return sick ? healMin : 0; }
+  // The serial SICK command (a test hook): sick now with `minutes` counted already (capped at
+  // SICK_RUNAWAY_MIN), with no slip-up, or well again. False, and nothing changed, while the
+  // setting is off, as an egg (a starter or egg choice included) or in a ceremony. Saves at once.
+  bool dbgSick(bool on, uint16_t minutes);
   void clean();
   void caress();  // tocar al bicho
   void eggTap();  // tocar el huevo: 3 toques y eclosiona
@@ -383,7 +395,9 @@ public:
   bool canFarewellNow() const;  // forma final + 7 dias: lista para despedirse (boton)
   bool canRunawayNow() const;   // abandono total 1h: lista para escaparse (boton triste)
   // el usuario decide en un dialogo; "mantener/quedaros" pospone y re-ofrece luego
-  bool wantEvolveButton() const { return canEvolveNow() && level() > evoDeclinedLv; }
+  // ...not while it takes the medicine's pill (#15, review R2-6): cured, a pet ready to evolve
+  // would get the evolve button at once, where the medicine button just was, under the finger
+  bool wantEvolveButton() const { return canEvolveNow() && level() > evoDeclinedLv && !takingMedicine(); }
   // a sick pet (#15) says goodbye once it is better: the button waits
   bool wantFarewellButton() const { return canFarewellNow() && !sick && ageMinutes >= farDeclinedAge; }
   void declineEvolve() { evoDeclinedLv = level(); }              // re-ofrece al subir de nivel
@@ -536,6 +550,29 @@ private:
   void load();
   static uint8_t clamp100(int v) { return v < 0 ? 0 : (v > 100 ? 100 : v); }
 };
+
+// The serial SICK command (#15, a test hook; serialcmd.cpp): "SICK OFF", "SICK ON", or
+// "SICK ON <minutes>" with 1 to 4 digits and a value up to SICK_RUNAWAY_MIN (the counted
+// minutes already sick: 720 reaches the warning, 1440 the run-away). Anything else is
+// SICKCMD_BAD. Pure, so it is tested on the PC.
+enum SickCmd : uint8_t { SICKCMD_NONE = 0, SICKCMD_OFF, SICKCMD_ON, SICKCMD_BAD };
+inline SickCmd sickCmdParse(const char *line, uint16_t &minutes) {
+  minutes = 0;
+  if (strncmp(line, "SICK", 4) != 0 || (line[4] != 0 && line[4] != ' ')) return SICKCMD_NONE;
+  if (strcmp(line, "SICK OFF") == 0) return SICKCMD_OFF;
+  if (strcmp(line, "SICK ON") == 0) return SICKCMD_ON;
+  if (strncmp(line, "SICK ON ", 8) != 0) return SICKCMD_BAD;
+  const char *d = line + 8;
+  uint32_t v = 0;
+  int n = 0;
+  for (; d[n]; n++) {
+    if (d[n] < '0' || d[n] > '9' || n >= 4) return SICKCMD_BAD;
+    v = v * 10 + (uint32_t)(d[n] - '0');
+  }
+  if (!n || v > SICK_RUNAWAY_MIN) return SICKCMD_BAD;
+  minutes = (uint16_t)v;
+  return SICKCMD_ON;
+}
 
 // "Ready to evolve" chime (the sketch, fed wantEvolveButton(), speciesId and level() on
 // every loop pass): it sounds when the button appears, at most once per level for each

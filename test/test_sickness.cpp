@@ -7,6 +7,7 @@
 #include "shim/Arduino.h"
 #include "../pet.h"
 #include "../dex.h"
+#include <string>
 
 // a freshly hatched easygoing pet (as test_pet.cpp's makePet), with a clean NVS
 static void hatchPet(Pet &p, int16_t dex) {
@@ -554,6 +555,90 @@ TEST(sick, an_egg_loads_well_whatever_the_save_says) {
   CHECK(!b.isSick());
 }
 
+// ---------------------------------------------------------------- the UI's side (part 2)
+TEST(sick, a_sick_pet_is_sad_unless_it_eats_or_sleeps) {
+  Pet p;
+  hatchPet(p, 4);
+  makeSick(p);
+  p.fullness = p.joy = p.energy = p.hygiene = 80;
+  CHECK_EQ((int)p.mood(), (int)MOOD_SAD);  // the HURT pose and the calm repertoire
+  p.giveMedicine();
+  CHECK_EQ((int)p.mood(), (int)MOOD_EATING);  // takes the pill
+  mockAdvanceMillis(EAT_ANIM_MS);
+  p.update(millis());
+  CHECK_EQ((int)p.mood(), (int)MOOD_HAPPY);
+  makeSick(p);
+  p.toggleLight();
+  CHECK_EQ((int)p.mood(), (int)MOOD_SLEEPING);
+}
+
+TEST(sick, the_medicine_button_shows_while_it_is_sick_and_awake_and_the_run_away_button_wins) {
+  Pet p;
+  hatchPet(p, 4);
+  p.setSickMode(SICK_ON);
+  CHECK(!p.wantMedicineButton());
+  makeSick(p);
+  CHECK(p.wantMedicineButton());
+  p.toggleLight();
+  CHECK(!p.wantMedicineButton());
+  p.toggleLight();
+  p.dbgRunawayReady();  // every need at 0 for an hour: the run-away button
+  CHECK(p.canRunawayNow());
+  CHECK(!p.wantMedicineButton());
+  p.fullness = 50;  // one care: that button goes, the medicine's shows
+  CHECK(p.wantMedicineButton());
+  p.giveMedicine();
+  CHECK(!p.wantMedicineButton());
+  makeSick(p);
+  p.startRunaway();
+  CHECK(!p.wantMedicineButton());
+}
+
+TEST(sick, the_serial_hook_makes_it_sick_with_no_slip_up_or_well_and_saves) {
+  Pet p;
+  hatchPet(p, 4);
+  CHECK(!p.dbgSick(true, 0));  // the setting is off
+  CHECK(!p.isSick());
+  p.setSickMode(SICK_ON);
+  CHECK(p.dbgSick(true, SICK_WARN_MIN));
+  CHECK(p.isSick());
+  CHECK_EQ(p.sickMinutes(), (uint16_t)SICK_WARN_MIN);
+  CHECK_EQ(p.careMistakes, (uint8_t)0);
+  CHECK(!p.savePending());
+  Pet q;
+  q.begin();
+  CHECK(q.isSick());
+  CHECK_EQ(q.sickMinutes(), (uint16_t)SICK_WARN_MIN);
+  CHECK(p.dbgSick(true, 60000));
+  CHECK_EQ(p.sickMinutes(), (uint16_t)SICK_RUNAWAY_MIN);  // capped
+  CHECK(p.dbgSick(false, 0));
+  CHECK(!p.isSick());
+  p.startRunaway();  // during an ending (review R2-2)
+  CHECK(!p.dbgSick(true, 0));
+  CHECK(!p.isSick());
+  p.newEgg();
+  CHECK(!p.dbgSick(true, 0));  // an egg can't be sick
+}
+
+TEST(sick, the_serial_command_takes_on_off_and_minutes_up_to_the_run_away) {
+  uint16_t m = 99;
+  CHECK_EQ((int)sickCmdParse("SICK OFF", m), (int)SICKCMD_OFF);
+  CHECK_EQ((int)sickCmdParse("SICK ON", m), (int)SICKCMD_ON);
+  CHECK_EQ(m, (uint16_t)0);
+  CHECK_EQ((int)sickCmdParse("SICK ON 720", m), (int)SICKCMD_ON);
+  CHECK_EQ(m, (uint16_t)720);
+  CHECK_EQ((int)sickCmdParse("SICK ON 1440", m), (int)SICKCMD_ON);
+  CHECK_EQ(m, (uint16_t)SICK_RUNAWAY_MIN);
+  for (const char *bad : { "SICK", "SICK ", "SICK ON ", "SICK ON 1441", "SICK ON 9999", "SICK ON 12345",
+                           "SICK ON -1", "SICK ON 7x", "SICK on", "SICK OFF 3", "SICK ON  5",
+                           "SICK ON 00001", "SICK ON 4294967297" }) {  // 5 digits; one that would wrap to 1
+    CHECK_MSG(sickCmdParse(bad, m) == SICKCMD_BAD, std::string("should be refused: ") + bad);
+    CHECK_EQ(m, (uint16_t)0);
+  }
+  for (const char *other : { "SICKX", "SCENE?", "STATS", "" })
+    CHECK_MSG(sickCmdParse(other, m) == SICKCMD_NONE, std::string("not SICK: ") + other);
+}
+
 // Round 2 (R2-1): the powered-off catch-up leaves a sick pet as it was: no minute sick, no
 // slip-up, and no cure, awake or asleep, even past SICK_HEAL_MIN.
 TEST(sick, the_powered_off_catch_up_never_counts_a_sick_pet) {
@@ -593,5 +678,21 @@ TEST(sick, falling_sick_and_getting_better_ask_for_a_save) {
   minutesAt(p, 1, CLEAN);
   CHECK(!p.isSick());
   CHECK_MSG(p.savePending(), "getting better asks for a save");
+}
+
+// Review R2-6: cured, a pet ready to evolve gets the evolve button only once the pill is taken,
+// not at once in the medicine button's place, under the finger that just tapped it
+TEST(sick, the_evolve_button_waits_for_the_pill) {
+  Pet p;
+  hatchPet(p, 4);  // Charmander: evolves at 16 plus its slip-ups
+  makeSick(p);
+  p.ageMinutes = 40u * MINUTES_PER_LEVEL;
+  p.fullness = p.joy = p.energy = p.hygiene = 80;
+  CHECK(p.giveMedicine());
+  CHECK(p.canEvolveNow());
+  CHECK_MSG(!p.wantEvolveButton(), "no evolve button while it takes the pill");
+  mockAdvanceMillis(EAT_ANIM_MS);
+  p.update(millis());
+  CHECK(p.wantEvolveButton());
 }
 

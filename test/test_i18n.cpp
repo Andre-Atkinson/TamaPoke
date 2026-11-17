@@ -10,6 +10,7 @@
 #include <algorithm>
 #include "../ptglyphs.h"
 #include "../cardlayout.h"
+#include "../skylayout.h"  // HEADER_STATUS_Y
 #include <ctype.h>
 #include <string.h>
 #include <functional>
@@ -514,13 +515,46 @@ TEST(host, char_is_unsigned_like_the_esp32s3) {
 }
 
 // las etiquetas de la pagina Care van en botones de 320 px a tamano 4 (24 px por letra)
+// The Care page's rows (cardlayout.h, #15 made them four): the values at size 3 (18 px a
+// letter) and the labels at size 2 leave 10 px clear at each end of a CARE_BTN_W button. The
+// bedtime windows ("21:00-07:00") are digits, the same in every language.
 TEST(i18n, los_valores_de_la_pagina_care_caben_en_el_boton) {
-  const StrId vals[] = { S_PACE_NORMAL, S_PACE_RELAXED, S_BED_OFF, S_EGG_CHOOSE, S_EGG_SURPRISE };
+  const StrId vals[] = { S_PACE_NORMAL, S_PACE_RELAXED, S_BED_OFF, S_EGG_CHOOSE, S_EGG_SURPRISE, S_ON };
+  const StrId labels[] = { S_PACE, S_BEDTIME, S_EGGS, S_SICKNESS };
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;
-    for (StrId id : vals) CHECK_MSG(strlen(T(id)) * 24 <= 300, std::string("demasiado ancho: ") + T(id));
+    for (StrId id : vals)
+      CHECK_MSG((int)strlen(T(id)) * 18 <= CARE_BTN_W - 20, std::string("demasiado ancho: ") + T(id));
+    for (StrId id : labels)
+      CHECK_MSG((int)strlen(T(id)) * CARD_LETTER_W <= CARE_BTN_W - 20, std::string("demasiado ancho: ") + T(id));
   }
+  CHECK((int)strlen("21:00-07:00") * 18 <= CARE_BTN_W - 20);
   gLang = LANG_DEFAULT;
+}
+
+// The four rows (#15): each button on the card's disc (its rounded corners, radius 16, may cut
+// the disc's edge by at most 5 px), apart, under the title (size 3 at y 44, 21 px tall) and
+// above the page dots (y 369); a tap finds the row it is on and nothing in the gaps.
+TEST(cardlayout, the_care_rows_sit_on_the_disc_and_a_tap_finds_its_row) {
+  for (uint8_t r = 0; r < CARE_ROWS; r++) {
+    int y0 = careRowY(r), y1 = y0 + CARE_BTN_H;
+    const int cx[2] = { CARE_BTN_X + 5, CARE_BTN_X + CARE_BTN_W - 5 }, cy[2] = { y0 + 5, y1 - 5 };
+    for (int a = 0; a < 2; a++)
+      for (int b = 0; b < 2; b++) {
+        int dx = cx[a] - CARD_C, dy = cy[b] - CARD_C;
+        CHECK_MSG(dx * dx + dy * dy <= CARD_R * CARD_R, "row " + std::to_string(r) + ": a corner off the disc");
+      }
+    if (r) CHECK(y0 > careRowY(r - 1) + CARE_BTN_H);
+    CHECK_EQ(careRowAt(CARD_C, y0), (int)r);
+    CHECK_EQ(careRowAt(CARD_C, y1), (int)r);
+    CHECK_EQ(careRowAt(CARE_BTN_X, y0 + CARE_BTN_H / 2), (int)r);
+    CHECK_EQ(careRowAt(CARE_BTN_X - 1, y0 + CARE_BTN_H / 2), -1);
+    CHECK_EQ(careRowAt(CARE_BTN_X + CARE_BTN_W + 1, y0 + CARE_BTN_H / 2), -1);
+    CHECK_EQ(careRowAt(CARD_C, y1 + 1), -1);  // the gap below it
+  }
+  CHECK(careRowY(0) > 44 + 21);
+  CHECK(careRowY(CARE_ROWS - 1) + CARE_BTN_H < 369);
+  CHECK_EQ(careRowAt(CARD_C, careRowY(0) - 1), -1);
 }
 
 // pantalla de eleccion de huevo, tamano 2 (12 px por letra): el titulo va a y=84,
@@ -699,6 +733,25 @@ TEST(i18n, los_botones_de_despedida_y_escapada_dejan_margen_con_el_nombre_mas_la
       int len = snprintf(buf, sizeof buf, T(id), name.c_str());
       CHECK_MSG(len * 12 <= TEST_FAR_BTN_W - 12, std::string("no margin in ") + LANG_NAME[lang] + ": " + buf);
     }
+  }
+  gLang = LANG_DEFAULT;
+}
+
+// Sickness's texts (#15) fit where they are drawn: the status line ("Not feeling well...",
+// "Feeling better!") at size 2 on the round edge at HEADER_STATUS_Y; the medicine button's
+// text at size 3 after its 40 px pill and a 12 px gap, with 6 px clear at each end of a
+// FAR_BTN_W button; the Progress page's "Get well to evolve" at size 2 at y 256, inside the
+// card's disc.
+TEST(i18n, the_sickness_texts_fit_where_they_are_drawn) {
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    int statusRoom = 2 * cardHalfWidth(HEADER_STATUS_Y, HEADER_STATUS_Y + 14, CARD_LETTER_W, 1000);
+    for (StrId id : { S_SICK, S_BETTER })
+      CHECK_MSG((int)strlen(T(id)) * CARD_LETTER_W <= statusRoom, std::string("status too wide: ") + T(id));
+    CHECK_MSG((int)strlen(T(S_GIVE_MEDICINE)) * 18 + 40 + 12 <= TEST_FAR_BTN_W - 12,
+              std::string("medicine button too wide: ") + T(S_GIVE_MEDICINE));
+    int evoRoom = 2 * cardHalfWidth(256, 256 + 14, CARD_LETTER_W, 1000);
+    CHECK_MSG((int)strlen(T(S_EVO_SICK)) * CARD_LETTER_W <= evoRoom, std::string("too wide: ") + T(S_EVO_SICK));
   }
   gLang = LANG_DEFAULT;
 }

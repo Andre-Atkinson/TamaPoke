@@ -316,6 +316,17 @@ void Pet::sickTick(bool awake) {
   }
 }
 
+bool Pet::dbgSick(bool on, uint16_t minutes) {
+  if (sickMode != SICK_ON || isEgg() || ceremony != CER_NONE) return false;
+  clearSickness();
+  if (on) {
+    sick = true;
+    sickMin = minutes > SICK_RUNAWAY_MIN ? (uint16_t)SICK_RUNAWAY_MIN : minutes;
+  }
+  save();
+  return true;
+}
+
 void Pet::clearSickness() {
   sick = false;
   germMin = healMin = sickMin = 0;
@@ -962,7 +973,7 @@ void Pet::eggTap() {
 PetMood Pet::mood() const {
   if (sleeping) return MOOD_SLEEPING;
   if (eating()) return MOOD_EATING;
-  if (lowestStat() < 25) return MOOD_SAD;
+  if (lowestStat() < 25 || sick) return MOOD_SAD;  // sick (#15): the HURT pose, the calm repertoire
   return MOOD_HAPPY;
 }
 

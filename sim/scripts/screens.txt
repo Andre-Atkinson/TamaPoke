@@ -151,7 +151,7 @@ swipe left
 swipe left
 swipe left
 swipe left
-tap 233 288
+tap 233 238
 swipe up
 serial RUN
 wait 12s

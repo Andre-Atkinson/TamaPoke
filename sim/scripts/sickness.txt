@@ -1,0 +1,191 @@
+# Sickness and medicine (#15). The serial SICK hook stands in for the 6 hours in the red that
+# make the pet sick, and its minutes for a day left sick:
+#   A. the Care page's fourth row switches sickness on
+#   B. sick: one call, the HURT pose, the status line, the thermometer bubble, the medicine
+#      button (a long press on it is not one on the pet), the sick line said by itself, and
+#      the Progress page's "Get well to evolve"
+#   C. a banner holds the buttons over the pet back; then the medicine: the pill, "Feeling
+#      better!", and the evolve button it was holding back, which a banner holds back too
+#   D. it says so in a speech bubble; the warning call, halfway to running away; asleep it
+#      calls no one, not even once it wakes
+#   E. left sick a day it runs away, but only once someone looks at the screen
+#   F. a call's light alone is not someone looking: it stays until a touch
+#   tools/sim.sh --script sickness --out shots/          (and --lang pt for the texts)
+battery 80
+
+# new game: pick Charmander, hatch the egg (the clock is 2026-11-13 10:00, outside quiet hours)
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# A. off until the Care page turns it on: SICK says so
+serial SICK ON
+expect ERR sickness is off*
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+tap 233 304
+expect sickness on
+shot 1-care-sickness-on
+swipe up
+
+# B. sick, at level 20 (ready to evolve but for the sickness): the call goes out once
+serial LVL 20
+serial SICK ON
+wait 2s
+expect-once call sick: brighten chirp
+shot 2-sick
+# 3 s on the medicine button is not a long press on the pet: no "release?" (nor a pill). On
+# the pet's body, below the buttons' place, it is; the dialog closes by itself after 10 s.
+hold 233 205 3500ms
+expect-not release: asked
+expect-not medicine: taken
+hold 233 285 3500ms
+expect-once release: asked
+wait 11s
+# The bubble loop says the sick line by itself (no "say" step): bubbles come 1 to 2 minutes
+# apart, so taps off the pet and the buttons (x 400, y 140) keep the screen lit and undimmed
+# until one does.
+tap 400 140
+wait 25s
+tap 400 140
+wait 25s
+tap 400 140
+wait 25s
+tap 400 140
+wait 25s
+tap 400 140
+wait 25s
+expect say sick
+swipe up
+swipe left
+swipe left
+swipe left
+shot 3-progress-get-well
+swipe up
+
+# C. a banner first: three days' care in a row (CAREDAY moves the clock a day and pats) brings
+# the "3 DAY STREAK!" banner, then any medal that care earned. While a banner shows, the
+# buttons over the pet wait, drawn and tapped alike: a tap where the medicine button goes is a
+# pat. Once the banners are over, the same tap gives the medicine (the button is at y 176-234):
+# the pill, then the evolve button it was holding back.
+serial CAREDAY
+serial CAREDAY
+serial CAREDAY
+wait 300ms
+shot 4-banner-holds-the-button
+# the sim's swipe is a straight line, so it cannot make a stroke (two turns); a rest of 300 ms,
+# then a slide of 80 px over 2.4 s, is the hold-then-drag, the other gesture only the pet
+# gets. Over the button's place, with the banner up, the pet is all there is: it drags.
+swipe 150 205 230 205 2400ms
+expect PET drag
+tap 233 205
+expect-not medicine: taken
+wait 15s
+tap 233 205
+expect medicine: taken
+wait 500ms
+shot 5-taking-medicine
+wait 3s
+serial CARE?
+expect * sickness=1 sick=0 germ=0 heal=0 sickmin=0
+shot 6-better-evolve-button
+# The evolve button waits under a banner too: four more days' care in a row (CAREDAY) make
+# the 7-day streak, its banner and its medal's. A tap on the evolve button's place is a pat
+# then; after the banners, the same tap opens the evolve/keep dialog, which closes by itself.
+serial CAREDAY
+serial CAREDAY
+serial CAREDAY
+serial CAREDAY
+wait 300ms
+tap 233 204
+expect-not evolve: asked
+wait 10s
+tap 233 204
+expect-once evolve: asked
+wait 13s
+
+# D. sick again, a minute short of the warning: the "sick" call, then the warning. A tap off
+# the pet and the buttons (x 400, y 140) keeps the screen lit: the 1.75C turns it off at 60 s.
+serial SICK ON 719
+wait 2s
+expect-once call sick: *
+# the same slide, now over the medicine button (no banner): the button is not the pet, so no
+# drag, and a drag that ended on it is no tap either (no pill)
+swipe 150 205 230 205 2400ms
+expect-not PET drag
+expect-not medicine: taken
+tap 400 140
+wait 40s
+tap 400 140
+wait 1s
+say sick
+wait 300ms
+shot 7-says-so
+wait 24s
+expect-once call sick-warning: *
+serial CARE?
+expect * sickness=1 sick=1 * sickmin=72*
+
+# Asleep, falling sick calls no one, and nothing calls later when it wakes: the moon's strip
+# puts it to bed (lights out, the strip's first item), SICK ON while it sleeps, then the moon
+# wakes it.
+serial SICK OFF
+tap 264 404
+wait 300ms
+tap 231 320
+wait 1s
+serial SICK ON
+wait 2s
+expect-not call sick
+tap 264 404
+wait 2s
+expect-not call sick
+
+# E. due to run away (SICK ON 1440) with the screen turned off with PWR, as the player leaves
+# it: nobody is looking, so it waits. PWR again (someone looks) and it goes.
+press pwr
+serial SICK ON 1440
+wait 2s
+expect-not sick: ran away
+serial CARE?
+expect * sick=1 * sickmin=1440
+press pwr
+wait 1s
+expect-once sick: ran away
+shot 8-runs-away
+
+# F. a call's light alone does not send it away: the pet is left alone on the charger, so the
+# standby clock is up (a lit screen nobody has touched, on both boards, by 100 s); SICK OFF
+# then SICK ON 1440 is due to run away, and the "sick" and "sick-warning" calls light the
+# screen for a moment, which is no one looking: the pet stays. A touch off the pet and the
+# buttons (x 400, y 140) is someone looking: it goes. A new pet first (E ended with the
+# run-away; the setting is still on): the next egg shows after 20 s, three taps hatch it.
+battery 80
+wait 20s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+usb on
+charging on
+wait 100s
+serial SICK OFF
+serial SICK ON 1440
+wait 2s
+expect-once call sick+sick-warning: *
+expect-not sick: ran away
+wait 15s
+expect-not sick: ran away
+serial CARE?
+expect * sick=1 * sickmin=14*
+tap 400 140
+wait 1s
+tap 400 140
+wait 1s
+expect-once sick: ran away

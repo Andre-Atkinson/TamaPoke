@@ -65,6 +65,27 @@ While **awake**, per minute:
 - **Care slip-up** = letting any stat hit **≤ 10** (60-min cooldown so it counts once).
   Each slip-up **delays evolution by 1 level** and cools the bond.
 
+### Sickness and medicine (optional; stat card, *Care* page → *Sickness*, off by default)
+Sickness is meant to punish neglect, more than the rest of the game does, but it never ends
+the creature any way other than the run-away below.
+- **Falling sick:** the HYG bar left **in the red (under 25) for 6 hours in a row**. Only
+  hours awake count, outside quiet hours (the bedtime window, or 22:00–07:00 with bedtime
+  off) and with the clock set: the hours its calls can reach you (the 1.75C's pocket lock,
+  which silences them, still counts). Asleep or in quiet hours the count waits;
+  any bath starts it again. Both paces count the same (relaxed only makes the bar go red
+  later), and time powered off never counts. On the charger, self-care keeps it clean.
+- **Sick:** it looks poorly (its hurt pose), the status line and a "!" bubble with a
+  thermometer say so, it says "I don't feel well...", and it calls once. Falling sick is a
+  **slip-up**, and so is **every hour it stays sick** (awake, outside quiet hours), on top
+  of the needs' own. JOY falls 1 more a minute (sickness alone never takes it under 30). It
+  can't evolve, and the farewell waits, until it is better.
+- **Medicine:** the green **Give medicine** button over it. One tap: it takes the pill, +10
+  JOY, a heart, bond, and it counts as the day's care. Left alone, it also gets better by
+  itself after **12 hours with the HYG bar out of the red** (asleep counts too).
+- **Left sick a day** (24 counted hours; a second call warns at 12): it **runs away by
+  itself** the next time you look at the screen, with the run-away's ending and egg. The
+  medicine saves it right up to then.
+
 ### Actions
 - 🍎 **Berry** (3 flavors): +25 FOOD. Each species has a **hidden favorite flavor**
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
@@ -266,12 +287,14 @@ While **awake**, per minute:
 - You can **decline** ("keep form"); it re-offers at the next level.
 - *Eevee* branches toward whichever evolution you're still missing.
 
-### The three endings (you choose & witness each — none auto-fire)
+### The three endings (you witness each; only sickness's run-away comes by itself)
 - 💛 **Farewell** — when it's a **final form** that has lived **3 days**. A button
   appears; triggering it **blesses your next egg**. You can **postpone** ("stay
   together", re-offered in a day). The good ending.
 - 💔 **Run-away** — if you let **all four stats sit at 0 for a full hour**. A single
   act of care cancels it. It **curses the next egg** (forces Common). The sad ending.
+  With *Sickness* on, a creature left **sick for a day** (above) runs away by itself the
+  next time you look at the screen: the same ending and egg.
 - 👋 **Release** — long-press the creature to let it go on your terms (neutral).
 
 After any ending, a **new egg** appears.
@@ -498,8 +521,9 @@ themselves after 6 s.
 - Horizontal swipe = open the **Pokédex / gallery**.
 - Vertical swipe up = open the **stat card** (5 pages: Profile / Fitness / Medals /
   Progress / Care; swipe between them; tap the name on Profile to rename; on Fitness the
-  "Train" button offers the punch and the hold; on Care two big buttons cycle the pace
-  Normal ↔ Relaxed and the bedtime Off → 21–07 → 22–07 → 23–08).
+  "Train" button offers the punch and the hold; on Care four buttons cycle the pace
+  Normal ↔ Relaxed, the bedtime Off → 21–07 → 22–07 → 23–08, the eggs Surprise ↔ Choose
+  and sickness Off ↔ On).
 - Swipe down = **set the clock** and the **settings**. The first row is sound, brightness and
   language. Under it, each pill shows an icon and a number: the touch lock (a padlock and the
   seconds after the screen goes off, `0s` = as it goes off; an open padlock and "off" = never),
@@ -773,7 +797,12 @@ speech bubbles; `OWNER` alone clears it) · `OWNER?` (read-only: `owner=<name>`)
 `BDAY?` (read-only: `bday=<month> <day>|none today=<none december christmas newyear valentine
 easter halloween> birthday=<0|1>`, today's day on the clock; `none` on an ordinary day, while the clock is not set and during a farewell or run-away) · `CARE?` (read-only: `pace=<0|1> bed=<0-3>
 inbed=<0|1> stale=<0|1> egg=<0|1> picking=<0|1>`, stale = bedtime paused until the clock
-is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on screen) ·
+is set, egg = *Eggs* set to *Choose*, picking = the three-egg choice is on screen, then
+`sickness=<0|1> sick=<0|1> germ= heal= sickmin=`: the *Sickness* setting, sick or not, the
+counted minutes in the red towards falling sick, and while sick the minutes out of the red
+towards the cure and the counted minutes sick) · `SICK ON [minutes]` / `SICK OFF` (sickness
+on now, with `minutes` counted already, 0–1440, and no slip-up, or better now; `ERR` while
+*Sickness* is off, with no creature, or during an ending) ·
 `SCENE <place|auto> [weather|auto] [season|auto]` (forces the place, `meadow beach forest
 volcano mountain snow`, the weather, `clear cloudy rain storm snow fog`, and the season,
 `spring summer autumn winter none`, in RAM only: `SCENE auto` or a restart gives them back

@@ -983,6 +983,48 @@ void drawRunawayButton() {
   printT(buf);
 }
 
+// A capsule pill (#15): `w` wide, `h` high, centred at (cx, cy), its left half red, the other
+// white, outlined in `edge`. Shapes, so it is the same in every language.
+static void drawPill(int cx, int cy, int w, int h, uint16_t edge) {
+  int x = cx - w / 2, y = cy - h / 2, r = h / 2;
+  gfx->fillRoundRect(x, y, w, h, r, UI_WHITE);
+  gfx->fillRoundRect(x, y, w / 2 + r, h, r, UI_BAR_BAD);
+  gfx->fillRect(cx, y, r, h, UI_WHITE);
+  gfx->drawRoundRect(x, y, w, h, r, edge);
+  gfx->drawFastVLine(cx, y + 1, h - 2, edge);
+}
+
+// The medicine button (#15): soft green with a pill and "Give medicine", in the farewell and
+// run-away buttons' place (FAR_BTN_*), with a gentle pulse like theirs.
+#define MED_BTN_FILL C565(0x9c, 0xe6, 0xc8)
+#define MED_BTN_EDGE C565(0x2e, 0x7d, 0x5f)
+#define MED_BTN_INK C565(0x1d, 0x4a, 0x3a)
+void drawMedicineButton() {
+  uint32_t now = millis();
+  int p = (int)(4 * sinf(now * 0.005f));
+  int x = FAR_BTN_X - p, y = FAR_BTN_Y - p, w = FAR_BTN_W + 2 * p, h = FAR_BTN_H + 2 * p;
+  gfx->fillRoundRect(x, y, w, h, 16, MED_BTN_FILL);
+  gfx->drawRoundRect(x, y, w, h, 16, MED_BTN_EDGE);
+  const char *t = T(S_GIVE_MEDICINE);
+  const int pillW = 40, gap = 12;
+  int left = CX - (textW(t, 3) + pillW + gap) / 2, cy = y + h / 2;
+  drawPill(left + pillW / 2, cy, pillW, 20, MED_BTN_EDGE);
+  gfx->setTextColor(MED_BTN_INK);
+  setSize(3);
+  setCur(left + pillW + gap, cy - 11);
+  printT(t);
+}
+
+// A thermometer as shapes (#15), in the "!" bubble's 32x32 icon box at (x, y): the sick
+// pet's bubble once no need is low.
+static void drawThermometer(int x, int y, uint16_t ink) {
+  gfx->fillRoundRect(x + 11, y, 10, 25, 5, ink);
+  gfx->fillRoundRect(x + 13, y + 2, 6, 21, 3, UI_WHITE);
+  gfx->fillRect(x + 14, y + 11, 4, 14, UI_BAR_BAD);
+  gfx->fillCircle(x + 16, y + 26, 6, ink);
+  gfx->fillCircle(x + 16, y + 26, 4, UI_BAR_BAD);
+}
+
 // animacion epica de evolucion: halo radial + rayos giratorios + parpadeo del
 // sprite acelerando + chispas que salen disparadas + fogonazo final
 static void drawEvolveFX(uint32_t now) {
@@ -1200,8 +1242,16 @@ int petHeadTop() {
   return headNow.pmd ? PET_GROUND + headNow.dy - pmdHeight(headNow.act, 5) : headNow.top;
 }
 
+// A medal's or a streak's banner (drawCelebration, y 150-246) covers the place of the buttons
+// drawn over the pet (evolve, run-away, medicine, farewell; y 167-241 at their biggest pulse).
+// While one shows, those buttons wait, drawn and tapped alike: the banner can be read, and a tap
+// there can't press a button nobody can see (it is a pat, as anywhere on the pet). The owner's
+// call, 2026-11-17 (#15): before, the button was drawn over the banner and hid it.
+bool petButtonsHeld() { return pet.bannerShown() != BANNER_NONE; }
+
 bool petButtonShown() {
-  return pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton();
+  if (petButtonsHeld()) return false;
+  return pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantMedicineButton() || pet.wantFarewellButton();
 }
 
 // frame fi of action a of m at scale s, the canvas's top left at (x0, y0)
@@ -1390,7 +1440,9 @@ void drawPoops() {
 void drawAttnBubble() {
   static const char *const *const ICONS[ATTN_NEEDS] = { SPR_ICON_FOOD, SPR_ICON_CLEAN, SPR_ICON_LIGHT, SPR_ICON_PLAY };
   uint8_t need = attnShown(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene));
-  if (need >= ATTN_NEEDS || bubbleShowing()) return;
+  // sick (#15) with no need low: the same bubble with a thermometer, as the status line says
+  bool sickOnly = need >= ATTN_NEEDS && pet.isSick();
+  if ((need >= ATTN_NEEDS && !sickOnly) || bubbleShowing()) return;
   if (pet.sleeping || pet.eating() || pet.playingToy() || pet.showHeart() || pet.evolving() || timeLeft(bathUntil) ||
       pet.showMedal() || pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(menuUntil) ||
       (choiceKind && timeLeft(choiceUntil)) ||
@@ -1411,7 +1463,8 @@ void drawAttnBubble() {
   // a red "!" drawn as shapes (no font: the same in every language) and the 16x16 icon at x2
   gfx->fillRoundRect(b.x + 12, b.y + 7, 8, 21, 3, UI_BAR_BAD);
   gfx->fillRoundRect(b.x + 12, b.y + 31, 8, 7, 3, UI_BAR_BAD);
-  drawMap(ICONS[need], 16, b.x + 30, b.y + 6, 2, false);
+  if (sickOnly) drawThermometer(b.x + 30, b.y + 6, ink);
+  else drawMap(ICONS[need], 16, b.x + 30, b.y + 6, 2, false);
 }
 
 void drawBars() {
@@ -1475,6 +1528,8 @@ static void drawTreatBy(int petX, int groundY) {
     drawMap(SPR_ICON_PLUSH, 16, petX + side * 72 - 24, groundY - 48 + dy, 3, false);
   } else if (pet.drinkingMilk()) {
     drawMap(SPR_ICON_MILK, 16, petX + side * 64 - 24, groundY - 48, 3, false);
+  } else if (pet.takingMedicine()) {  // the pill (#15), where the mug stands
+    drawPill(petX + side * 64, groundY - 16, 44, 20, inkColor());
   }
 }
 
@@ -1500,6 +1555,7 @@ const char *statusMsg() {
   if (pet.evolving()) return T(S_EVOLVING);
   if (bathUntil) return "Splish splash!";  // onomatopeya universal
   if (pet.sleeping) return "Zzz...";
+  if (pet.takingMedicine()) return T(S_BETTER);  // the pill (#15), not "Yum yum!"
   if (pet.eating()) return T(S_EATING);
   if (heartShown(millis())) return T(S_LIKES);  // not over a huff (#21)
   // the same need the "!" bubble shows (attnShown), so the text and the bubble can't disagree
@@ -1510,6 +1566,7 @@ const char *statusMsg() {
     case ATTN_JOY: return T(S_SAD);
     default: break;
   }
+  if (pet.isSick()) return T(S_SICK);  // #15: after the needs, as the "!" bubble shows it
   if (pet.weight > PET_CHUBBY_WEIGHT) return T(S_CHUBBY);
   if (pet.shiny && pet.ageMinutes < 15) return T(S_IS_SHINY);
   return T(S_HAPPY);

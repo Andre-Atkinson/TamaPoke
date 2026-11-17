@@ -116,6 +116,11 @@ BedEdge bedEdge;                 // horario de dormir: convierte la hora en even
 BedEvent bedPending = BED_NONE;  // evento a la espera de que no haya minijuego ni dialogo abiertos
 // Attention calls (attention.h, #9): see attnLoop()
 AttnArm attnArm;
+SickCall sickCall;            // sickness's two calls (#15): falling sick and the warning
+// Someone has woken the screen (a touch, PWR or BOOT) since this boot (wakeUI): the sickness
+// run-away (#15) waits for it, so a reset nobody saw (a crash or a watchdog in a pocket) doesn't
+// send the pet away on the screen that boot lights by itself (review R2-7)
+bool wokenSinceBoot = false;
 uint32_t attnShowUntil = 0;   // a call lights (or brightens) the screen until this millis() (0 = none)
 bool screenOffByPwr = false;  // the screen went dark with a PWR press, not the timeout: calls leave it dark
 ClockPrompt clockPrompt;      // asks for the time after a reseed (clockprompt.h, #10)
@@ -767,7 +772,8 @@ void attnLoop(uint32_t now) {
   if (attnShowUntil && !attnShowing(now)) attnShowUntil = 0;
   bool away = pet.sleeping || pet.isEgg() || pet.ceremony || pet.awaitingStarter() || pet.awaitingEgg();
   uint8_t calls = attnArm.update(attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene), away);
-  if (!calls) return;
+  uint8_t sickCalls = sickCall.update(pet.isSick(), pet.sickMinutes() >= SICK_WARN_MIN, away);  // #15
+  if (!calls && !sickCalls) return;
 
   AttnScene s;
   s.busy = careBusy();
@@ -779,6 +785,7 @@ void attnLoop(uint32_t now) {
   if (a.wait) return;  // asked again next pass; dropped if the need recovers or the pet goes away
 
   attnArm.done();
+  sickCall.done();
   if (a.closeViews) attnCloseViews();
   if (a.peek || a.brighten) {
     attnShowUntil = now + ATTN_PEEK_MS;
@@ -795,10 +802,12 @@ void attnLoop(uint32_t now) {
   if (a.chirp) sfxPlay(SFX_CALL);  // silent anyway if the sound is off
 
   static const char *const NAMES[ATTN_NEEDS] = { "food", "hygiene", "energy", "joy" };
-  char what[32] = "";  // "food+hygiene+energy+joy" at most
+  char what[48] = "";  // "food+hygiene+energy+joy+sick+sick-warning" at most
   int n = 0;
   for (uint8_t i = 0; i < ATTN_NEEDS; i++)
     if (calls & (1u << i)) n += snprintf(what + n, sizeof what - n, "%s%s", n ? "+" : "", NAMES[i]);
+  if (sickCalls & SICKCALL_ILL) n += snprintf(what + n, sizeof what - n, "%ssick", n ? "+" : "");
+  if (sickCalls & SICKCALL_WARN) n += snprintf(what + n, sizeof what - n, "%ssick-warning", n ? "+" : "");
   Serial.printf("call %s: %s%s\n", what, a.peek ? "peek" : a.brighten ? "brighten" : a.chirp ? "dark" : "silent",
                 a.chirp ? (audioEnabled() ? " chirp" : " (muted)") : s.quiet ? " (quiet)" : " (locked)");
 }
@@ -949,6 +958,14 @@ void loop() {
   // updateBrightness() (dimStage is this pass's, so a screen that has just dimmed is not
   // free in the pass that lowers the panel), before render().
   bubbleLoop(now, bubbleFree(now));
+  // Left sick a day (#15): it runs away the next time someone is looking, on the main screen,
+  // lit by a touch, PWR or BOOT, free and undimmed (petSceneFree, so awake), not just lit for
+  // a call (attnShow), nor only by a boot (wokenSinceBoot, at wakeUI). The run-away's own
+  // ending, as total neglect's: SFX_BYE and its egg.
+  if (pet.sickRunawayDue() && petSceneFree() && !attnShow && wokenSinceBoot) {
+    Serial.println("sick: ran away");
+    startPetEnding(CER_RUNAWAY);
+  }
 
   // bateria al limite seguro (sin USB): se guarda la partida y se apaga el PMU antes de que la
   // celda baje mas; el RTC conserva la hora
@@ -1147,6 +1164,7 @@ static bool standbyShown(uint32_t now) { return standby && !attnShowing(now); }
 // frame de un ritmo lento) y el amplificador se enciende antes de que suene nada
 void wakeUI() {
   if (screenIsLocked()) return;
+  wokenSinceBoot = true;
   standby = false;  // a touch, BOOT or PWR on: the pet again (standby.h)
   uint32_t now = millis();
   uint32_t iv = frameIntervalMs(powerCtx(now));
@@ -1345,13 +1363,16 @@ bool petSceneFree() {
   return petGesturesLive(g);
 }
 
-// A touch onTap() would give to the pet: in the pet zone and not on the evolve, runaway or
-// farewell button drawn over it (the same hit tests, in the same order, as onTap).
+// A touch onTap() would give to the pet: in the pet zone and not on the evolve, run-away,
+// medicine or farewell button drawn over it (the same hit tests, in the same order, as
+// onTap). While a banner holds the buttons (petButtonsHeld) none is there: the whole pet zone
+// is the pet.
 static bool onPetBody(int16_t x, int16_t y) {
   if (!inPetZone(x, y)) return false;
+  if (petButtonsHeld()) return true;  // a banner is up: no button is there (#15)
   if (pet.wantEvolveButton() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
       y >= EVO_BTN_Y && y <= EVO_BTN_Y + EVO_BTN_H) return false;
-  if ((pet.canRunawayNow() || pet.wantFarewellButton()) && x >= FAR_BTN_X &&
+  if ((pet.canRunawayNow() || pet.wantMedicineButton() || pet.wantFarewellButton()) && x >= FAR_BTN_X &&
       x <= FAR_BTN_X + FAR_BTN_W && y >= FAR_BTN_Y && y <= FAR_BTN_Y + FAR_BTN_H) return false;
   return true;
 }
@@ -1561,13 +1582,18 @@ void handleTouch() {
     // into the pet zone and its items are not the pet: a touch that began on an open strip is
     // never a long press, even once the strip's own timeout has closed it under the finger
     // (stripAtDown is taken at touch-down, not re-read on every poll).
+    // The long press that offers "release?" starts on the pet's body: not on a button drawn
+    // over it (evolve, run-away, medicine, farewell), the same hit test a tap goes by
+    // (onPetBody). It used to take the whole pet zone, so 3 s on a button asked to release
+    // the pet (#15, owner's call 2026-11-17).
     bool longOk = !holdFired && !swallowGesture && !galleryOpen && !cardOpen && !kbOpen && !clockOpen &&
-                  inPetZone(touchG.x0, touchG.y0) && !pet.isEgg() && !confirmUntil && !stripAtDown &&
+                  onPetBody(touchG.x0, touchG.y0) && !pet.isEgg() && !confirmUntil && !stripAtDown &&
                   !pet.ceremony;
     TouchAct a = touchG.held(millis(), x, y, longOk);
     if (a == TOUCH_LONG_PRESS) {
       confirmUntil = millis() + 10000;
       holdFired = true;
+      Serial.println("release: asked");  // the "release?" dialog (a log line for the sim's checks)
     } else if (a != TOUCH_NONE) {
       petHeldGesture(a);
     }
@@ -1779,16 +1805,26 @@ void onTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     return;
   }
-  // boton de evolucion: abre el dialogo evolucionar/mantener
-  if (pet.wantEvolveButton() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
+  // boton de evolucion: abre el dialogo evolucionar/mantener. None of the buttons over the pet
+  // while a banner shows (petButtonsHeld, #15): the tap goes on to the pet below.
+  bool overPetButtons = !petButtonsHeld();
+  if (overPetButtons && pet.wantEvolveButton() && x >= EVO_BTN_X && x <= EVO_BTN_X + EVO_BTN_W &&
       y >= EVO_BTN_Y && y <= EVO_BTN_Y + EVO_BTN_H) {
     choiceKind = 1; choiceUntil = millis() + 12000;
+    Serial.println("evolve: asked");  // the evolve/keep dialog (a log line for the sim's checks)
     return;
   }
   // botones de final (mismo recuadro): escapada directa; despedida abre dialogo
-  if (x >= FAR_BTN_X && x <= FAR_BTN_X + FAR_BTN_W &&
+  if (overPetButtons && x >= FAR_BTN_X && x <= FAR_BTN_X + FAR_BTN_W &&
       y >= FAR_BTN_Y && y <= FAR_BTN_Y + FAR_BTN_H) {
     if (pet.canRunawayNow()) { startPetEnding(CER_RUNAWAY); return; }
+    if (pet.wantMedicineButton()) {  // #15: one tap, no dialog; it takes the pill
+      if (pet.giveMedicine()) {
+        sfxPlay(SFX_EAT);
+        Serial.println("medicine: taken");
+      }
+      return;
+    }
     if (pet.wantFarewellButton()) { choiceKind = 2; choiceUntil = millis() + 12000; return; }
   }
   for (int i = 0; i < 4; i++) {
@@ -1879,7 +1915,8 @@ static uint32_t screenKey() {
                         (uint32_t)pet.fullness, (uint32_t)pet.joy, (uint32_t)pet.energy, (uint32_t)pet.hygiene,
                         (uint32_t)pet.berryKnown, (uint32_t)pet.punchHi, (uint32_t)gLang,
                         (uint32_t)pet.gameHi, (uint32_t)pet.catchHi, (uint32_t)pet.peekHi, (uint32_t)pet.songHi,
-                        (uint32_t)pet.pace, (uint32_t)pet.bedPreset, (uint32_t)pet.eggPickMode })
+                        (uint32_t)pet.pace, (uint32_t)pet.bedPreset, (uint32_t)pet.eggPickMode,
+                        (uint32_t)pet.sickMode, (uint32_t)pet.isSick() })  // #15: the Care row, the Progress line
       h = mixKey(h, v);
     for (const char *c = pet.nick; *c; c++) h = mixKey(h, (uint8_t)*c);
   }
@@ -2010,8 +2047,11 @@ bool render() {
     drawBars();
     drawButtons();
     drawCelebration();
-    if (pet.wantEvolveButton()) drawEvolveButton();        // CTA rojo: evolucionar
+    if (petButtonsHeld()) {
+      // a medal's or a streak's banner is up, where the buttons go: they wait (scene.cpp)
+    } else if (pet.wantEvolveButton()) drawEvolveButton();  // CTA rojo: evolucionar
     else if (pet.canRunawayNow()) drawRunawayButton();     // CTA sombrio: escapada (abandono)
+    else if (pet.wantMedicineButton()) drawMedicineButton();  // #15: green, the pill
     else if (pet.wantFarewellButton()) drawFarewellButton();  // CTA dorado: despedida
   }
 
