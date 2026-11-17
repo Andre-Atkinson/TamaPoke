@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "bedtime.h"
+#include "playarea.h"  // PET_WALK_MIN..MAX, PLAY_MID_X (#66)
 
 // Attention calls (#9). Pure logic (no hardware, no clock reads) so it can be tested on
 // the PC (test/test_attention.cpp). The sketch samples the needs on every loop pass,
@@ -210,10 +211,10 @@ struct AttnBubble {
 };
 
 inline AttnBubble attnBubbleAt(int petX, int headTop, bool button) {
-  if (petX < 150) petX = 150;  // the walk range (IDLE_WALK_MIN..MAX in idleplan.h)
-  if (petX > 325) petX = 325;
+  if (petX < PET_WALK_MIN) petX = PET_WALK_MIN;  // the walk range (playarea.h)
+  if (petX > PET_WALK_MAX) petX = PET_WALK_MAX;
   AttnBubble b;
-  b.right = petX <= 233;  // the screen's centre column
+  b.right = petX <= PLAY_MID_X;  // the screen's centre column
   b.w = ATTN_BUBBLE_W;
   b.h = ATTN_BUBBLE_H;
   int y = bubbleTipY(headTop, button) - ATTN_BUBBLE_TAIL - ATTN_BUBBLE_H;

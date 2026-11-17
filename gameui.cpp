@@ -4,6 +4,7 @@
 #include "app.h"
 #include "audio.h"
 #include "blit.h"
+#include "cardlayout.h"  // FIT_STA_COLOR
 #include "dex.h"
 #include "exercise.h"
 #include "gameui.h"
@@ -162,8 +163,7 @@ static void planLunge();
 #define GAME_BAR_W 200              // ...and its width, centred
 #define TRAIN_GROUND 372            // the pet's feet on both exercise screens
 #define TRAIN_PET_S 4               // ...and its largest scale (a minigame's is 3)
-#define STAMINA_COL 0x4C98          // the stamina colour: the stat card's DEF bar
-#define STAMINA_COL_NIGHT C565(0x9c, 0xcc, 0xf4)  // ...lighter, on the night sky
+#define STAMINA_COL_NIGHT C565(0x9c, 0xcc, 0xf4)  // the stamina blue (FIT_STA_COLOR), lighter at night
 
 void startExercise(uint8_t kind) {
   if (pet.isEgg() || pet.sleeping || pet.ceremony || (kind != EX_PUNCH && kind != EX_HOLD)) return;
@@ -405,7 +405,7 @@ static void drawExerciseResult(uint16_t ink) {
   printT(b);
   char g[24];
   snprintf(g, sizeof(g), T(p ? S_STR_GAIN_FMT : S_STA_GAIN_FMT), trainGain);
-  gfx->setTextColor(p ? UI_BAR_BAD : gameNight() ? STAMINA_COL_NIGHT : STAMINA_COL);
+  gfx->setTextColor(p ? UI_BAR_BAD : gameNight() ? STAMINA_COL_NIGHT : FIT_STA_COLOR);
   setSize(3);
   setCur(centerX(g, 3), 210);
   printT(g);
@@ -506,7 +506,7 @@ void renderTrainPick() {
   printT(T(S_EX_TITLE));
   for (uint8_t k = 0; k < 2; k++) {
     int y = PICK_Y[k];
-    gfx->fillRoundRect(PICK_X, y, PICK_W, PICK_H, 14, k == EX_HOLD ? STAMINA_COL : UI_BAR_BAD);
+    gfx->fillRoundRect(PICK_X, y, PICK_W, PICK_H, 14, k == EX_HOLD ? FIT_STA_COLOR : UI_BAR_BAD);
     gfx->setTextColor(UI_BG_DAY);
     const char *name = T(k == EX_HOLD ? S_EX_HOLD : S_EX_PUNCH);
     const char *what = T(k == EX_HOLD ? S_EX_STA : S_EX_STR);
@@ -530,30 +530,22 @@ uint8_t trainPickAt(int16_t x, int16_t y) {
 // card or a result is over it, so its night sky has no stars (gameStarShown, skylayout.h)
 static void drawGameScene(bool words) {
   int hh = sceneHour();
-  bool night = hh < 6 || hh >= 20;
+  bool night = skyNightHour(hh);
   uint16_t top, bot;
-  if (night)       { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
-  else if (hh < 8) { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }
-  else if (hh < 18){ top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }
-  else             { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }
+  skyColors(hh, night, top, bot);  // the main scene's sky (scene.cpp)
   int hor = 376;
   for (int y = 0; y < hor; y += 8)
     gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, hor));
   if (night && sceneStarsOut())  // not under cloud, rain, snow or fog (#60)
     for (auto &st : STARS)  // out of the HUD and the words (#84)
       if (gameStarShown(st[1], words)) gfx->fillRect(st[0], st[1], SKY_STAR_SIZE, SKY_STAR_SIZE, UI_WHITE);
-  uint8_t bio = scenePlace();  // where the pet is today (#60), not always its home
-  uint16_t soil = BIOME_SOIL[bio < 6 ? bio : 0];
-  if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
+  uint16_t soil = soilColor(scenePlace(), night);  // where the pet is today (#60), not always its home
   gfx->fillRect(0, hor, 466, 466 - hor, soil);
 }
 
 // ---------- dibujo de los minijuegos ----------
 
-static bool gameNight() {
-  int h = sceneHour();
-  return h < 6 || h >= 20;
-}
+static bool gameNight() { return skyNightHour(sceneHour()); }
 static uint16_t gameInk() { return gameNight() ? UI_INK_NIGHT : UI_INK; }
 
 

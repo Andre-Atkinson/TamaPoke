@@ -113,9 +113,13 @@ wait 300ms
 shot 16-menu-no-bubble
 wait 6s
 
-# night: 22:00 (TIME moves the scene at once)
+# night: 22:00 (TIME moves the scene at once). This night's weather is rain, and the game
+# says the stars line only under a clear sky (BubbleIn::starsOut), so SCENE forces a clear
+# night for 17-18 and gives the clock's weather back after them. Each serial step runs 50 ms,
+# taken off the wait after it, so the later shots keep their times.
 serial TIME 1794607200
-wait 300ms
+serial SCENE auto clear auto
+wait 250ms
 say stars
 wait 300ms
 shot 17-night-stars
@@ -123,7 +127,8 @@ say love
 wait 300ms
 shot 18-night-love
 say hungry
-wait 300ms
+serial SCENE auto
+wait 250ms
 shot 19-night-hungry
 
 # asleep (the light button's strip, #13: lights out): no bubble; the same button wakes it

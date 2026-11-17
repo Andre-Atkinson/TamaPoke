@@ -29,6 +29,9 @@ enum : uint8_t { MOON_LIGHTS = 0, MOON_MILK, MOON_ITEMS };
 #define MENU_ICON_IN 9
 #define MENU_ICON_Y (MENU_Y + 8)
 #define MENU_RADIUS 14
+// The Food button's centre x (buttons[] in TamaPoke.ino): the hungry pet's spot sits under it
+// (IDLE_SEEK_X, idleplan.h; idlelife.cpp checks it does).
+#define CARE_FOOD_BTN_X 140
 
 inline uint8_t menuItems(uint8_t kind) {
   if (kind == MENU_FOOD) return FOOD_ITEMS;
@@ -39,9 +42,9 @@ inline uint8_t menuItems(uint8_t kind) {
 inline int menuW(uint8_t kind) { return menuItems(kind) * MENU_ITEM_W; }
 
 // The strip's left edge. The food strip stays where it always was, centred on the screen (x
-// 101): centred over its button (x 140) it would run off the round panel. The two-item strips
-// are centred over the button that opens them (`buttonCx`), so each one shows which button
-// it belongs to.
+// 101): centred over its button (CARE_FOOD_BTN_X) it would run off the round panel. The
+// two-item strips are centred over the button that opens them (`buttonCx`), so each one shows
+// which button it belongs to.
 inline int menuLeft(uint8_t kind, int buttonCx) {
   return kind == MENU_FOOD ? 233 - menuW(kind) / 2 : buttonCx - menuW(kind) / 2;
 }

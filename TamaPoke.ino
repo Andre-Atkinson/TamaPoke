@@ -138,7 +138,7 @@ int flashIdxForDex(int16_t dex) {
 }
 
 Btn buttons[4] = {
-  { 140, 390, SPR_ICON_FOOD },   // comer
+  { CARE_FOOD_BTN_X, 390, SPR_ICON_FOOD },  // comer
   { 202, 404, SPR_ICON_PLAY },   // jugar
   { 264, 404, SPR_ICON_LIGHT },  // luz
   { 326, 390, SPR_ICON_CLEAN },  // bano
@@ -573,7 +573,7 @@ void ensureMon() {
   monShinyFor = pet.shiny;
   mon.unload();
   pmd.unload();
-  beh.x = beh.targetX = 233;
+  beh.x = beh.targetX = PLAY_MID_X;
   beh.mode = 0;
   beh.until = 0;
   beh.fast = false;
@@ -1132,7 +1132,7 @@ static uint32_t standbyEpoch() {
 // shows a moon then too).
 static bool sceneNight() {
   int h = sceneHour();
-  return pet.sleeping || h < 6 || h >= 20;
+  return pet.sleeping || skyNightHour(h);
 }
 
 // The battery diary's time stamp (batdiary.h): the wall clock, or 0 while it is not trusted
@@ -1381,7 +1381,7 @@ bool reacting(uint32_t now) {
 // fingerX: where the finger touched, so a huff can turn away from it
 static void startReact(uint8_t kind, int fingerX) {
   uint32_t now = millis();
-  uint32_t ms = kind == REACT_HOP ? 700 : kind == REACT_GIGGLE ? 1400 : 1600;
+  uint32_t ms = kind == REACT_HOP ? PET_TAP_HOPS * PET_TAP_HOP_MS : kind == REACT_GIGGLE ? 1400 : 1600;
   // the same reaction again (stroking on, tickling on, huffing on) keeps running; a hop starts over
   if (kind == REACT_HOP || petReact.kind != kind || !reacting(now)) {
     petReact.t0 = now;
@@ -1444,7 +1444,7 @@ void reactOffset(uint32_t now, bool animated, int &dx, int &dy) {
   if (!reacting(now)) return;
   uint32_t e = now - petReact.t0;
   if (petReact.kind == REACT_HOP) {
-    dy -= (int)(24.0f * sinf((float)(e % 350) * (float)PI / 350.0f));  // two little hops
+    dy += hopDy(e, PET_TAP_HOP_MS, PET_TAP_HOP_PX);  // two little hops (touchgesture.h)
   } else if (petReact.kind == REACT_GIGGLE) {
     dx += ((e / 60) % 2) ? 3 : -3;              // shaking with giggles
     if (!animated) dy -= ((e / 120) % 2) ? 4 : 0;
@@ -1853,7 +1853,7 @@ static uint32_t screenKey() {
   } else if (pet.awaitingEgg()) {
     int hr = sceneHour();
     h = mixKey(h, (uint32_t)(eggSel + 1));
-    h = mixKey(h, (hr < 6 || hr >= 20) ? 1 : 0);
+    h = mixKey(h, skyNightHour(hr) ? 1 : 0);
     h = mixKey(h, gLang);
     for (uint8_t i = 0; i < EGG_CHOICES; i++) h = mixKey(h, (uint32_t)(uint16_t)pet.eggChoice(i));
   } else if (kbOpen) {
