@@ -455,10 +455,10 @@ python3 tools/send_sd.py --ls                # read-only: what the board holds, 
 - **If a send fails part-way** (or you press Ctrl-C), the board may hold only part of that
   file, or none of it, because `PUT` deletes the old copy first, and it can't use a partial
   file. The creature keeps the sprite the board already has loaded until the board loads it
-  again (after a restart, or when the creature changes). Then a shiny form shows a "?" and
-  "No sprites" instead of its sprite (the nine species of the three starter lines show a
-  small built-in sprite), or, if the board refused the send and no file is left, the normal
-  sprite. The script waits for the board to give up on the file, then prints the command
+  again (after a restart, when the creature changes, or once another file arrives whole).
+  Then a shiny form shows a "?" and "No sprites" instead of its sprite (the nine species of
+  the three starter lines show a small built-in sprite), or, if the board refused the send
+  and no file is left, the normal sprite. The script waits for the board to give up on the file, then prints the command
   that sends it again.
 - It refuses a file the board would not load: one that doesn't start with the right four
   bytes for its name, or is too small or too big (`psNNN.bin` and `pNNN.bin` 7 bytes to

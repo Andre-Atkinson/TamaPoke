@@ -3110,6 +3110,9 @@ class TestSendSd(unittest.TestCase):
             self.assertIn('keeps the sprite it has loaded until it loads that creature again',
                           text)
             self.assertIn('"?" and "No sprites"', text)
+        # a later file that arrives whole sets sdDirty, and ensureMon() reloads the sprite
+        for text in (shiny, normal, self.sd.unusable('thumbs.bin')):
+            self.assertIn('once another file arrives whole', text)
         self.assertIn("that species' shiny form shows", shiny)
         self.assertIn('the old copy is gone and the normal sprite shows instead', shiny)
         self.assertIn('that species shows', normal)

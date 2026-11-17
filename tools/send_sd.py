@@ -261,14 +261,14 @@ def unusable(name):
     broken). A PUT that fails leaves sdDirty false (sdmon.cpp), so the board keeps showing the
     sprite it already loaded until it loads that creature again."""
     if name == 'thumbs.bin':
-        return 'After a restart the gallery shows no thumbnails.'
+        return 'After a restart, or once another file arrives whole, the gallery shows no thumbnails.'
     if not name.startswith('p'):
         return 'The board cannot load it.'
     who = "that species' shiny form" if name.startswith('ps') else 'that species'
     gone = (' If the board refused the PUT, the old copy is gone and the normal sprite shows '
             'instead.' if name.startswith('ps') else '')
     return (f'The board keeps the sprite it has loaded until it loads that creature again (after '
-            f'a restart, or when the creature changes); then {who} shows a "?" and "No sprites" '
+            f'a restart, when the creature changes, or once another file arrives whole); then {who} shows a "?" and "No sprites" '
             f'where its sprite goes (the nine starter-line species show their small built-in '
             f'sprite).{gone}')
 
