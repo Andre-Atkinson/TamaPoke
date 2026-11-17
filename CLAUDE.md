@@ -108,17 +108,17 @@ step (checks on the serial output, `sim/script.h`; no `--lang`, so the script's
 own `lang` applies), one `sim checks <board>` line each: every run must exit 0
 and print `sim: checks N/N passed`, where N is the number of lines matching
 `^[[:space:]]*expect(-not)?([[:space:]]|$)` in that script. With no such script
-it records `SKIP  sim checks`. When `sdl2-config` works it also builds the interactive simulator window and runs
-its `--selftest` (synthetic SDL events, `SDL_VIDEODRIVER=dummy`) for both
-boards, one `window <board>` line each; without SDL2 it records `SKIP  window
-(no SDL2)`. SDL2 is opt-in and only the window needs it: ask the owner before
-installing it. The builds run from a staged copy of
-the working tree in a folder named `TamaPoke`, because arduino-cli rejects a
-sketch whose folder name differs from the `.ino` (every agent worktree).
-`tools/build_175c.sh` on its own stages the same way, so it and
-`tools/update_175c.sh` work from any worktree as it is. Never
-run the builds by hand through a `grep` pipe: it hides failures and the exit
-code becomes grep's.
+it records `SKIP  sim checks`. When `sdl2-config` works it also builds the
+interactive simulator window and runs its `--selftest` (synthetic SDL events,
+`SDL_VIDEODRIVER=dummy`) for both boards, one `window <board>` line each;
+without SDL2 it records `SKIP  window (no SDL2)`. SDL2 is opt-in and only the
+window needs it: ask the owner before installing it. The builds run from a
+staged copy of the working tree in a folder named `TamaPoke`, because
+arduino-cli rejects a sketch whose folder name differs from the `.ino` (every
+agent worktree). `tools/build_175c.sh` on its own stages the same way, so it
+and `tools/update_175c.sh` work from any worktree as it is. Never run the
+builds by hand through a `grep` pipe: it hides failures and the exit code
+becomes grep's.
 
 Both builds compile with `--jobs ${TAMAPOKE_JOBS:-3}`, one after the other
 (`tools/build_175c.sh` honours the same variable on its own). arduino-cli's
