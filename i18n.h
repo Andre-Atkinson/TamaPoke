@@ -95,7 +95,9 @@ enum StrId : uint8_t {
   S_HINT_KEEPY, S_HINT_CATCH, S_HINT_PEEK, S_HINT_SONG,
   S_SONG_LISTEN, S_SONG_TURN,
   // speech bubbles (#23): what the pet says, in BubbleLine order (bubble.h)
-  S_SAY_HUNGRY, S_SAY_BATH, S_SAY_TIRED, S_SAY_BORED, S_SAY_MORNING, S_SAY_STARS,
+  S_SAY_HUNGRY, S_SAY_BATH, S_SAY_TIRED, S_SAY_BORED,
+  S_SAY_SICK,  // sick (#15)
+  S_SAY_MORNING, S_SAY_STARS,
   S_SAY_MILK,  // the warm-milk hint (#13)
   S_SAY_HI, S_SAY_HAPPY, S_SAY_PAT, S_SAY_LOVE_FMT, S_SAY_LOVE,
   // the natures' lines (#86), three for each nature in NAT_* order: the first names it with
@@ -112,6 +114,9 @@ enum StrId : uint8_t {
   S_TOAST_SOUND_ON, S_TOAST_MUTED, S_TOAST_LOCKED, S_TOAST_UNLOCKED,
   // the standby clock's date (#60): weekday, day, month ("Sat 15 Nov"; see formatDate())
   S_DATE_FMT,
+  // sickness and medicine (#15): the Care page's row (label and "On"; "Off" is S_BED_OFF), the
+  // status line, the medicine button, the status while it takes it, and the Progress page
+  S_SICKNESS, S_ON, S_SICK, S_GIVE_MEDICINE, S_BETTER, S_EVO_SICK,
   STR_COUNT
 };
 

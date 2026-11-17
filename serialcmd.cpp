@@ -66,6 +66,8 @@ void handleSerial() {
   OwnerCmd ownerCmd;
   Birthday bdayArg;  // the date of a BDAY <month> <day> line (holiday.h)
   BdayCmd bdayCmd;
+  uint16_t sickArg;  // the minutes of a SICK ON <minutes> line (#15, sickCmdParse in pet.h)
+  SickCmd sickCmd;
   if (line == "HATCH") {
     pet.eggTap(); pet.eggTap(); pet.eggTap();
     Serial.println("DONE");
@@ -168,9 +170,22 @@ void handleSerial() {
     Serial.println("DONE");
   } else if (line == "CARE?") {  // read-only: relaxed pace / bedtime settings and whether it is bedtime now
     uint32_t e = rtcEpoch();
-    Serial.printf("pace=%u bed=%u inbed=%d stale=%d egg=%u picking=%d\n", pet.pace, pet.bedPreset,
+    Serial.printf("pace=%u bed=%u inbed=%d stale=%d egg=%u picking=%d", pet.pace, pet.bedPreset,
                   e && isBedtime(pet.bedPreset, bedMinuteOfDay(e)) ? 1 : 0, bedEdge.stale() ? 1 : 0,
                   pet.eggPickMode, pet.awaitingEgg() ? 1 : 0);
+    // sickness (#15): the setting, sick or not, and the counts (towards sickness while well;
+    // the cure's and the minutes sick while sick)
+    Serial.printf(" sickness=%u sick=%d germ=%u heal=%u sickmin=%u\n", pet.sickMode, pet.isSick() ? 1 : 0,
+                  pet.germMinutes(), pet.healMinutes(), pet.sickMinutes());
+    Serial.println("DONE");
+  } else if ((sickCmd = sickCmdParse(line.c_str(), sickArg)) != SICKCMD_NONE) {
+    // a test hook (#15): sick now (with sickArg counted minutes) or well, with no slip-up
+    if (sickCmd == SICKCMD_BAD)
+      Serial.printf("ERR usage: SICK ON [minutes 0-%u] | SICK OFF\n", (unsigned)SICK_RUNAWAY_MIN);
+    else if (!pet.dbgSick(sickCmd == SICKCMD_ON, sickArg))
+      Serial.println("ERR sickness is off (Care page), or no pet to be sick");
+    else
+      Serial.printf("sick=%d sickmin=%u\n", pet.isSick() ? 1 : 0, pet.sickMinutes());
     Serial.println("DONE");
   } else if (line == "BATLOG?") {  // read-only: the battery diary as CSV (batdiary.h, #14)
     batLogPrint();  // ends with DONE, sent under the dump's own transmit wait

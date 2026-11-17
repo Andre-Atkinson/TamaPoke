@@ -36,6 +36,7 @@
 // in AttnNeed order.
 enum BubbleLine : uint8_t {
   BUB_HUNGRY = 0, BUB_BATH, BUB_TIRED, BUB_BORED,  // = BUB_HUNGRY + AttnNeed
+  BUB_SICK,                                        // "I don't feel well..." (#15), with no need low
   BUB_MORNING, BUB_STARS,
   BUB_MILK,                                        // "Sleepy... warm milk?" (#13, MilkHint)
   BUB_HI, BUB_HAPPY, BUB_PAT,                      // the friendly lines
@@ -75,7 +76,7 @@ constexpr bool bubbleTakesName(uint8_t line, bool named) {
 #define BUB_FRIENDLY 3
 // each line's name in the serial log ("say hungry") and in the simulator's "say" step
 inline const char *const BUBBLE_KEYS[BUB_LINES] = {
-  "hungry", "bath", "tired", "bored", "morning", "stars", "milk", "hi", "happy", "pat", "love-name", "love",
+  "hungry", "bath", "tired", "bored", "sick", "morning", "stars", "milk", "hi", "happy", "pat", "love-name", "love",
   "easygoing-1", "easygoing-2", "easygoing-3", "greedy-1", "greedy-2", "greedy-3",
   "playful-1", "playful-2", "playful-3", "tidy-1", "tidy-2", "tidy-3", "lazy-1", "lazy-2", "lazy-3",
   "christmas", "newyear", "valentine", "easter", "halloween", "birthday",
@@ -107,11 +108,13 @@ struct BubbleIn {
   bool milkHint = false;  // the warm-milk hint is due (MilkHint::due, #13)
   uint8_t nature = NAT_EASYGOING;  // the pet's (Pet::nature, #86); out of range counts as easygoing
   bool hatchLine = false;  // the pet just hatched: the nature's first line is due (#86)
+  bool sick = false;  // the pet is sick (Pet::isSick, #15)
 };
 
 // r: any random number. A special day's greeting that is due comes first, even before a
 // need: it is rare (holiday.h) and the need's "!" bubble is back as soon as it ends.
-// Then a low need, then right after a hatch the line that names the pet's nature (#86), then
+// Then a low need, then sickness (#15: as the "!" bubble and the status line, after the needs;
+// it repeats while it lasts, as a need does), then right after a hatch the line that names the pet's nature (#86), then
 // the warm-milk hint when it is due (#13). Otherwise r % 100 picks the kind: 30% a time line
 // when one applies (r % 100 under 30), 20% a line of the pet's nature (30-49), 20% love
 // (80-99), and the rest friendly (30% with a time line, 60% without); r / 100 picks which
@@ -122,6 +125,7 @@ inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
   if (in.greet >= BUB_GREET_FIRST && in.greet < BUB_LINES) return in.greet;
   uint8_t need = attnShown(in.needs);
   if (need < ATTN_NEEDS) return (uint8_t)(BUB_HUNGRY + need);
+  if (in.sick) return BUB_SICK;
   uint8_t naming = bubbleNatureLine(in.nature, 0);
   if (in.hatchLine && in.last != naming) return naming;
   if (in.milkHint && in.last != BUB_MILK) return BUB_MILK;

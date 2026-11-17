@@ -10,6 +10,16 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Added
 
+- **Sickness and medicine** (#15), on the stat card's Care page (*Sickness*, off by
+  default). Left with its hygiene bar in the red for 6 hours (counted only while it is awake,
+  outside quiet hours and with the clock set, on either pace) the creature falls sick: it
+  looks poorly, says so, calls once, and can't evolve until it is better. Being sick costs: a
+  slip-up when it falls sick and one every hour it stays sick, and its happiness falls a
+  little faster. The green *Give medicine* button cures it at once; kept clean, it also gets
+  better by itself after 12 hours. Left sick for a day it runs away by itself the next time
+  you look (a warning call comes at 12 hours). It never dies. Off, nothing changes; an old
+  save loads with it off.
+
 - **Natures show in play.** A newly hatched creature's first speech bubble names its nature
   ("I'm playful!", the same word as on the stat card), and now and then (about one bubble in
   five) it says a line of its nature: "Berries are the best!", "Catch me if you can!",

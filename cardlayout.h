@@ -92,3 +92,27 @@ inline CardRect medalTile(uint8_t i) {
 inline int medalTextRoom(uint8_t i) {
   return medalTile(i).w - (i < MEDAL_CARE ? MEDAL_TEXT_X : RIBBON_TEXT_X) - MEDAL_TEXT_PAD;
 }
+
+// ---------------------------------------------------------------- Care page
+// Four rows (#15 added the fourth, sickness), each a button that cycles one setting: pace,
+// bedtime, eggs and sickness. 60 px rows, 6 apart, under the size-3 title at y 44: the label
+// at size 2, the value at size 3, so the last row ends at y 334, clear of the page dots
+// (y 369). careRowAt() is the tap's row (renderCardCare and careTap, screens.cpp).
+#define CARE_ROWS 4
+#define CARE_BTN_X 73
+#define CARE_BTN_W 320
+#define CARE_BTN_H 60
+#define CARE_ROW_Y 76     // the first row's top
+#define CARE_ROW_STEP 66  // from one row's top to the next
+#define CARE_LABEL_DY 6   // the size-2 label, from the row's top
+#define CARE_VALUE_DY 28  // the size-3 value
+enum : uint8_t { CARE_ROW_PACE = 0, CARE_ROW_BED, CARE_ROW_EGGS, CARE_ROW_SICK };
+
+inline int careRowY(uint8_t row) { return CARE_ROW_Y + row * CARE_ROW_STEP; }
+// The row under (x, y), or -1 (the gaps between rows, and off the buttons, are no row).
+inline int careRowAt(int x, int y) {
+  if (x < CARE_BTN_X || x > CARE_BTN_X + CARE_BTN_W) return -1;
+  for (uint8_t r = 0; r < CARE_ROWS; r++)
+    if (y >= careRowY(r) && y <= careRowY(r) + CARE_BTN_H) return r;
+  return -1;
+}

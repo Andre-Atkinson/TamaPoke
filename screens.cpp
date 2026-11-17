@@ -707,7 +707,8 @@ static void renderCardProgress() {
   } else {
     int needed = d.evolveLevel + pet.careMistakes;
     if (pet.level() >= needed) {
-      if (pet.lowestStat() >= 40) { evo = T(S_EVO_READY); evoCol = UI_BAR_OK; }
+      if (pet.isSick()) { evo = T(S_EVO_SICK); evoCol = UI_BAR_BAD; }  // it evolves once it is better (#15)
+      else if (pet.lowestStat() >= 40) { evo = T(S_EVO_READY); evoCol = UI_BAR_OK; }
       else { evo = T(S_EVO_BLOCKED); evoCol = UI_BAR_BAD; }
     } else {
       snprintf(evoBuf, sizeof(evoBuf), T(S_EVO_IN_FMT), needed - pet.level());
@@ -726,16 +727,10 @@ static void renderCardProgress() {
   printT(ms);
 }
 
-// pagina 4: cuidados. Tres botones que ciclan un ajuste cada uno (se guardan al
+// pagina 4: cuidados. Cuatro botones que ciclan un ajuste cada uno (se guardan al
 // tocar): ritmo normal <-> relajado, hora de dormir apagado -> 21-07 -> 22-07 ->
-// 23-08, y huevos sorpresa <-> elegir. 72 px de alto para que el tercero acabe en
-// y=324, lejos de los puntos de pagina (y=374); ahi el circulo mide 424 px.
-#define CARE_BTN_X 73
-#define CARE_BTN_W 320
-#define CARE_BTN_H 72
-#define CARE_PACE_Y 92
-#define CARE_BED_Y 172
-#define CARE_EGG_Y 252
+// 23-08, huevos sorpresa <-> elegir, and sickness off <-> on (#15). Where they go:
+// cardlayout.h (CARE_*, careRowAt).
 static const char *const BED_TXT[BED_PRESETS] = { "", "21:00-07:00", "22:00-07:00", "23:00-08:00" };
 
 static void drawCareBtn(int y, const char *label, const char *value) {
@@ -743,11 +738,11 @@ static void drawCareBtn(int y, const char *label, const char *value) {
   gfx->drawRoundRect(CARE_BTN_X, y, CARE_BTN_W, CARE_BTN_H, 16, UI_INK);
   gfx->setTextColor(UI_TRACK);
   setSize(2);
-  setCur(centerX(label, 2), y + 8);
+  setCur(centerX(label, 2), y + CARE_LABEL_DY);
   printT(label);
   gfx->setTextColor(UI_INK);
-  setSize(4);
-  setCur(centerX(value, 4), y + 32);
+  setSize(3);
+  setCur(centerX(value, 3), y + CARE_VALUE_DY);
   printT(value);
 }
 
@@ -757,22 +752,27 @@ static void renderCardCare() {
   setCur(centerX(T(S_CARE), 3), 44);
   printT(T(S_CARE));
   uint8_t bed = pet.bedPreset < BED_PRESETS ? pet.bedPreset : 0;
-  drawCareBtn(CARE_PACE_Y, T(S_PACE), T(pet.pace == PACE_RELAXED ? S_PACE_RELAXED : S_PACE_NORMAL));
-  drawCareBtn(CARE_BED_Y, T(S_BEDTIME), bed ? BED_TXT[bed] : T(S_BED_OFF));
-  drawCareBtn(CARE_EGG_Y, T(S_EGGS), T(pet.eggPickMode == EGGPICK_ON ? S_EGG_CHOOSE : S_EGG_SURPRISE));
+  drawCareBtn(careRowY(CARE_ROW_PACE), T(S_PACE), T(pet.pace == PACE_RELAXED ? S_PACE_RELAXED : S_PACE_NORMAL));
+  drawCareBtn(careRowY(CARE_ROW_BED), T(S_BEDTIME), bed ? BED_TXT[bed] : T(S_BED_OFF));
+  drawCareBtn(careRowY(CARE_ROW_EGGS), T(S_EGGS), T(pet.eggPickMode == EGGPICK_ON ? S_EGG_CHOOSE : S_EGG_SURPRISE));
+  drawCareBtn(careRowY(CARE_ROW_SICK), T(S_SICKNESS), T(pet.sickMode == SICK_ON ? S_ON : S_BED_OFF));
 }
 
 // toque en la pagina de cuidados: true si cayo en un boton (cicla, guarda y suena)
 bool careTap(int16_t x, int16_t y) {
-  if (x < CARE_BTN_X || x > CARE_BTN_X + CARE_BTN_W) return false;
-  if (y >= CARE_PACE_Y && y <= CARE_PACE_Y + CARE_BTN_H) {
+  int row = careRowAt(x, y);
+  if (row == CARE_ROW_PACE) {
     pet.setPace(pet.pace == PACE_RELAXED ? PACE_NORMAL : PACE_RELAXED);
-  } else if (y >= CARE_BED_Y && y <= CARE_BED_Y + CARE_BTN_H) {
+  } else if (row == CARE_ROW_BED) {
     pet.setBedPreset((pet.bedPreset + 1) % BED_PRESETS);
     uint32_t e = rtcEpoch();
     if (e) bedSample(e);  // vuelve a tomar la referencia: cambiar el horario no duerme ni despierta por si solo
-  } else if (y >= CARE_EGG_Y && y <= CARE_EGG_Y + CARE_BTN_H) {
+  } else if (row == CARE_ROW_EGGS) {
     pet.setEggPickMode(pet.eggPickMode == EGGPICK_ON ? EGGPICK_OFF : EGGPICK_ON);  // vale para el proximo final
+  } else if (row == CARE_ROW_SICK) {
+    // #15: off cures the pet at once (Pet::setSickMode); on starts counting from now
+    pet.setSickMode(pet.sickMode == SICK_ON ? SICK_OFF : SICK_ON);
+    Serial.printf("sickness %s\n", pet.sickMode == SICK_ON ? "on" : "off");
   } else {
     return false;
   }

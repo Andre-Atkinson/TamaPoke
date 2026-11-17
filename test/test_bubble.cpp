@@ -160,6 +160,26 @@ TEST(Bubble, a_line_other_than_a_need_is_never_said_twice_in_a_row) {
 // after a low need.
 static uint32_t at(uint32_t day, uint8_t h, uint8_t m = 0) { return day * 86400u + h * 3600u + m * 60u; }
 
+// Sickness (#15): "I don't feel well..." once no need is low, before the hatch line, the milk
+// hint and the rest, and again while it lasts; never when it is well.
+TEST(Bubble, a_sick_pet_says_so_after_a_low_need_and_before_the_other_lines) {
+  CHECK_EQ((int)S_SAY_HUNGRY + BUB_SICK, (int)S_SAY_SICK);
+  CHECK_EQ(std::string(BUBBLE_KEYS[BUB_SICK]), std::string("sick"));
+  for (uint32_t r = 0; r < 1000; r += 7) {
+    BubbleIn in = calm(true, 20, true, BUB_SICK);
+    in.sick = true;
+    in.milkHint = true;
+    in.hatchLine = true;
+    CHECK_EQ(bubblePick(in, r), (uint8_t)BUB_SICK);
+    in.needs = attnLevels(80, 80, 80, 20);  // in the red: the need's own line first
+    CHECK_EQ(bubblePick(in, r), (uint8_t)BUB_BATH);
+    in.needs = attnLevels(80, 80, 80, 80);
+    in.sick = false;
+    in.milkHint = in.hatchLine = false;
+    CHECK(bubblePick(in, r) != BUB_SICK);
+  }
+}
+
 TEST(Bubble, the_milk_hint_comes_after_a_low_need_and_before_the_other_lines) {
   for (uint32_t r = 0; r < 1000; r += 7) {
     BubbleIn in = calm(true, 20, true);

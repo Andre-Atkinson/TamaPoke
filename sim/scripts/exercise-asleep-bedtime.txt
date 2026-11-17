@@ -25,7 +25,7 @@ swipe left
 swipe left
 swipe left
 swipe left
-tap 233 208
+tap 233 172
 shot 60-bedtime-21
 
 # back to Fitness, TRAIN: the choice

@@ -412,3 +412,42 @@ TEST(Attention, bubble_sits_on_the_roomier_side_of_the_pet) {
   CHECK(!b.right);
   CHECK_EQ(b.x + b.w, 325 - ATTN_BUBBLE_GAP);
 }
+
+// ---------------------------------------------------------------- sickness's calls (#15)
+TEST(sickcall, falling_sick_calls_once_and_the_warning_once) {
+  SickCall c;
+  CHECK_EQ(c.update(false, false, false), (uint8_t)0);
+  CHECK_EQ(c.update(true, false, false), (uint8_t)SICKCALL_ILL);
+  c.done();
+  CHECK_EQ(c.update(true, false, false), (uint8_t)0);
+  CHECK_EQ(c.update(true, true, false), (uint8_t)SICKCALL_WARN);
+  c.done();
+  CHECK_EQ(c.update(true, true, false), (uint8_t)0);
+}
+
+TEST(sickcall, a_call_waits_until_done_and_is_dropped_when_it_is_better) {
+  SickCall c;
+  c.update(false, false, false);
+  CHECK_EQ(c.update(true, false, false), (uint8_t)SICKCALL_ILL);
+  CHECK_EQ(c.update(true, false, false), (uint8_t)SICKCALL_ILL);  // not delivered yet: still waiting
+  CHECK_EQ(c.update(false, false, false), (uint8_t)0);             // the medicine: dropped
+  CHECK_EQ(c.update(true, false, false), (uint8_t)SICKCALL_ILL);  // sick again: a new call
+}
+
+TEST(sickcall, the_first_sample_never_calls) {
+  SickCall c;
+  CHECK_EQ(c.update(true, true, false), (uint8_t)0);  // sick and past the warning at boot
+  CHECK_EQ(c.update(true, true, false), (uint8_t)0);
+  SickCall d;
+  CHECK_EQ(d.update(true, false, false), (uint8_t)0);
+  CHECK_EQ(d.update(true, true, false), (uint8_t)SICKCALL_WARN);  // the warning still comes
+}
+
+TEST(sickcall, away_drops_what_waits_and_it_does_not_call_later) {
+  SickCall c;
+  c.update(false, false, false);
+  CHECK_EQ(c.update(true, false, true), (uint8_t)0);  // asleep, say
+  CHECK_EQ(c.update(true, false, false), (uint8_t)0);
+  CHECK_EQ(c.waiting(), (uint8_t)0);
+}
+

@@ -1,0 +1,86 @@
+# Sickness and medicine (#15). The serial SICK hook stands in for the 6 hours in the red that
+# make the pet sick, and its minutes for a day left sick:
+#   A. the Care page's fourth row switches sickness on
+#   B. sick: one call, the HURT pose, the status line, the thermometer bubble, the medicine
+#      button, and the Progress page's "Get well to evolve"
+#   C. the medicine: the pill, "Feeling better!", and the evolve button it was holding back
+#   D. it says so in a speech bubble; the warning call, halfway to running away
+#   E. left sick a day it runs away, but only once someone looks at the screen
+#   tools/sim.sh --script sickness --out shots/          (and --lang pt for the texts)
+battery 80
+
+# new game: pick Charmander, hatch the egg (the clock is 2026-11-13 10:00, outside quiet hours)
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# A. off until the Care page turns it on: SICK says so
+serial SICK ON
+expect ERR sickness is off*
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+tap 233 304
+expect sickness on
+shot 1-care-sickness-on
+swipe up
+
+# B. sick, at level 20 (ready to evolve but for the sickness): the call goes out once
+serial LVL 20
+serial SICK ON
+wait 2s
+expect-once call sick: brighten chirp
+shot 2-sick
+swipe up
+swipe left
+swipe left
+swipe left
+shot 3-progress-get-well
+swipe up
+
+# C. the medicine button (in the farewell button's place, y 176-234): the pill, then the
+# evolve button
+wait 1s
+tap 233 205
+expect medicine: taken
+wait 500ms
+shot 4-taking-medicine
+wait 3s
+serial CARE?
+expect * sickness=1 sick=0 germ=0 heal=0 sickmin=0
+shot 5-better-evolve-button
+
+# D. sick again, a minute short of the warning: the "sick" call, then the warning. A tap off
+# the pet and the buttons (x 400, y 140) keeps the screen lit: the 1.75C turns it off at 60 s.
+serial SICK ON 719
+wait 2s
+expect-once call sick: *
+tap 400 140
+wait 40s
+tap 400 140
+wait 1s
+say sick
+wait 300ms
+shot 6-says-so
+wait 24s
+expect-once call sick-warning: *
+serial CARE?
+expect * sickness=1 sick=1 * sickmin=72*
+
+# E. due to run away (SICK ON 1440) with the screen turned off with PWR, as the player leaves
+# it: nobody is looking, so it waits. PWR again (someone looks) and it goes.
+press pwr
+serial SICK ON 1440
+wait 2s
+expect-not sick: ran away
+serial CARE?
+expect * sick=1 * sickmin=1440
+press pwr
+wait 1s
+expect-once sick: ran away
+shot 7-runs-away

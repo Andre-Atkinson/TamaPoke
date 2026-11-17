@@ -87,6 +87,7 @@ void drawChoiceDialog();
 void drawEvolveButton();
 void drawFarewellButton();
 void drawRunawayButton();
+void drawMedicineButton();  // #15: in the farewell and run-away buttons' place
 void drawPet();
 void startBath();
 void drawBath();
