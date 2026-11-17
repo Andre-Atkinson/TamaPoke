@@ -324,6 +324,10 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **Portuguese accented capitals at full height** (#85): the accented capitals, and the
+  font's own É, now stand as tall as the other capitals, so FORMA FÍSICA, NÍVEL and
+  FÔLEGO no longer read as lowercase.
+
 - **Turning the screen off ends a minigame** (#94), as it already ends an exercise. PWR
   during a Play minigame (or the 1.75C's pocket lock) left it open in the dark with the CPU
   at full speed, and bedtime then took it away with no prize; if the battery ran out

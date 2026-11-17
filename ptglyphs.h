@@ -1,4 +1,5 @@
-// The 12 letters European Portuguese needs that the classic 5x7 font lacks (#61).
+// The 12 letters European Portuguese needs that the classic 5x7 font lacks (#61), and
+// the font's own E-acute, redrawn to match them (#85).
 //
 // The UI font is Arduino_GFX's classic 5x7 font, a CP437 table. It has every
 // Portuguese lowercase accent except a~ and o~, and of the accented capitals only
@@ -9,16 +10,32 @@
 // code point, so "N\303O" is NAO with a tilde and any Latin-1 table confirms it. In
 // CP437 those bytes are box-drawing pieces, pi and the bottom half of an integral,
 // which no UI string uses. One byte per letter keeps the strlen(t)*6 centring.
-// Every other accented letter keeps its CP437 byte (\240 a-acute, \207 c-cedilla...).
+// Every other accented letter keeps its CP437 byte (\240 a-acute, \207 c-cedilla...),
+// E-acute included: its entry below only redraws the glyph of byte \220.
 //
 // printT() (uitext.cpp) draws these bytes from PT_GLYPH_BITS through a small
 // Adafruit-style GFXfont and every other byte from the classic font, so nothing
 // already on screen moves. owner.h maps the same letters in the player's name.
 //
-// The look follows the font's own accented letters: an acute or grave capital has its
-// accent on row 0, a blank row and a 5-row letter (like E-acute); a tilde or a
-// circumflex takes 2 rows, a blank row and a 4-row letter (like the font's o^). The
-// tilde is a wave, so a~ never looks like a^ (the font draws a^ with a flat bar).
+// The look (#85). The classic font's capitals are 7 rows tall (rows 0-6) and its short
+// lowercase letters (a e o u...) 5 (rows 2-6), and the cell has no row above the capitals for
+// an accent. So letter and accent together ink every row 0-6 with no blank row between them,
+// as the font's own O-umlaut does: taller than a short lowercase letter, so an upper-case
+// word stays upper-case.
+//  - acute and grave: one pixel above a top corner of a 6-row letter (rows 1-6), where its
+//    top row has no ink, so it reads as a mark rather than a bump (U' has it right of centre,
+//    off the stem; E' has a 4-column E, like the font's E-acute, so the corner is free)
+//  - circumflex: a two-row hat (a peak, then its two shoulders) on a flat-topped 5-row A or E
+//    (rows 2-6), which keep their capital shape at 5 rows, as the classic font's 5-row E-acute
+//    did. The flat top keeps the hat apart from the letter: a one-pixel hat on a 6-row A was
+//    one pixel from the plain A and faint on the E, and on a round-topped A the hat merged into
+//    the peak the plain A already has. O^ is a full-height O whose top is the peak
+//  - tilde: a flat bar over a 6-row letter, in the shape of the bar the font draws over its
+//    own N-tilde; that N has a blank row under the bar and these do not, the cell has no room
+// C-cedilla stays the font's: its C is 6 rows from the top, the cedilla below, a capital already.
+// The two lowercase letters follow the font's o' and o^: the accent in rows 0-1, a blank row
+// and a 4-row letter. Their tilde is a wave, so a~ never looks like a^ (the font draws a^ with
+// a flat bar).
 // Header-only and pure, so the tests check the bitmaps and the lookup.
 #pragma once
 #include <stddef.h>
@@ -29,28 +46,32 @@
 #define PTG_BYTES ((PTG_COLS * PTG_ROWS + 7) / 8)  // one glyph packed row by row, MSB first
 
 struct PtGlyph {
-  uint8_t code;                      // its byte in a string: Latin-1 = Unicode code point
+  // its byte in a string: the Latin-1 code (= its code point) of a letter CP437 lacks, or the
+  // CP437 byte of a letter it only redraws (0x90 E')
+  uint8_t code;
   char art[PTG_ROWS][PTG_COLS + 1];  // '#' = ink, '.' = background
 };
 
 inline constexpr PtGlyph PT_GLYPHS[] = {
   {0xE3, {".##.#.", "#..#..", "......", ".###..", "#..#..", "#..#..", ".####.", "......"}},  // a~
   {0xF5, {".##.#.", "#..#..", "......", ".###..", "#...#.", "#...#.", ".###..", "......"}},  // o~
-  {0xC1, {"..##..", "......", ".###..", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A'
-  {0xC0, {".##...", "......", ".###..", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A`
-  {0xC2, {"..#...", ".#.#..", "......", ".###..", "#...#.", "#####.", "#...#.", "......"}},  // A^
-  {0xC3, {".##.#.", "#..#..", "......", ".###..", "#...#.", "#####.", "#...#.", "......"}},  // A~
-  {0xCA, {"..#...", ".#.#..", "......", "####..", "###...", "#.....", "####..", "......"}},  // E^
-  {0xCD, {"..##..", "......", ".###..", "..#...", "..#...", "..#...", ".###..", "......"}},  // I'
-  {0xD3, {"..##..", "......", ".###..", "#...#.", "#...#.", "#...#.", ".###..", "......"}},  // O'
-  {0xD4, {"..#...", ".#.#..", "......", ".###..", "#...#.", "#...#.", ".###..", "......"}},  // O^
-  {0xD5, {".##.#.", "#..#..", "......", ".###..", "#...#.", "#...#.", ".###..", "......"}},  // O~
-  {0xDA, {"..##..", "......", "#...#.", "#...#.", "#...#.", "#...#.", ".###..", "......"}},  // U'
+  {0xC1, {"....#.", ".###..", "#...#.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A'
+  {0xC0, {"#.....", ".###..", "#...#.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A`
+  {0xC2, {"..#...", ".#.#..", "#####.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A^
+  {0xC3, {"#####.", ".###..", "#...#.", "#...#.", "#####.", "#...#.", "#...#.", "......"}},  // A~
+  {0xCA, {"..#...", ".#.#..", "#####.", "#.....", "####..", "#.....", "#####.", "......"}},  // E^
+  {0xCD, {"....#.", ".###..", "..#...", "..#...", "..#...", "..#...", ".###..", "......"}},  // I'
+  {0xD3, {"....#.", ".###..", "#...#.", "#...#.", "#...#.", "#...#.", ".###..", "......"}},  // O'
+  {0xD4, {"..#...", ".#.#..", "#...#.", "#...#.", "#...#.", "#...#.", ".###..", "......"}},  // O^
+  {0xD5, {"#####.", ".###..", "#...#.", "#...#.", "#...#.", "#...#.", ".###..", "......"}},  // O~
+  {0xDA, {"...#..", "#...#.", "#...#.", "#...#.", "#...#.", "#...#.", ".###..", "......"}},  // U'
+  // E' on the classic font's own byte (\220): only its glyph is redrawn (#85)
+  {0x90, {"....#.", "####..", "#.....", "###...", "#.....", "#.....", "####..", "......"}},  // E'
 };
 constexpr int PTG_COUNT = (int)(sizeof(PT_GLYPHS) / sizeof(PT_GLYPHS[0]));
 
-// The 12 codes alone. ptGlyphIndex() reads this, not PT_GLYPHS, so the art stays a compile-time
-// input (PT_GLYPH_BITS) and nothing but these 12 bytes and the packed bits reaches the image.
+// The codes alone. ptGlyphIndex() reads this, not PT_GLYPHS, so the art stays a compile-time
+// input (PT_GLYPH_BITS) and nothing but these bytes and the packed bits reaches the image.
 struct PtGlyphCodes {
   uint8_t c[PTG_COUNT];
 };

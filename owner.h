@@ -6,7 +6,8 @@
 // ASCII plus the accented letters below, which are the classic 5x7 font's (a CP437
 // table) and the 12 Portuguese letters it draws from ptglyphs.h (a~ o~ and the accented
 // capitals A' A` A^ A~ E^ I' O' O^ O~ U', #61). ae and sharp s are in CP437 but are not
-// accented letters, so they are left out.
+// accented letters, so they are left out. E-acute stays a CP437 letter on byte 0x90;
+// ptglyphs.h only redraws its glyph (#85).
 // A name also needs at least one letter (an ASCII letter or one of the accented ones), so
 // "?" or "123" is no name. Anything else is refused, and a stored name that fails the
 // check (a damaged page, an older or other firmware) loads as no name.

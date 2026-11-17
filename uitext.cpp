@@ -17,7 +17,7 @@ uint16_t textW(const char *s, uint8_t size) { return (uint16_t)strlen(s) * 6 * s
 // x del cursor para dejar el texto centrado en CX
 int centerX(const char *s, uint8_t size) { return CX - textW(s, size) / 2; }
 
-// ---------- the 12 Portuguese letters the classic font lacks (#61) ----------
+// ---------- the Portuguese letters the classic font lacks (#61), and its E-acute (#85) ----------
 // They are drawn from a small Adafruit-style GFXfont built from ptglyphs.h, swapped
 // in for that one character. Arduino_GFX then draws it with the text colour and size
 // and moves the cursor exactly as it does for a classic glyph:
@@ -28,7 +28,7 @@ int centerX(const char *s, uint8_t size) { return CX - textW(s, size) / 2; }
 //  - yAdvance 8 is the classic line height, used only if a line wraps.
 // With a background colour (a two-argument setTextColor()) the GFXfont path of
 // Arduino_GFX::drawChar() fills a box that starts baseline * size above the cursor, its
-// baseline being yAdvance * 2 / 3 (5 rows here), so it would be misplaced behind these 12
+// baseline being yAdvance * 2 / 3 (5 rows here), so it would be misplaced behind these
 // letters only.
 // No text in the UI sets a background: test_tools.py checks that every setTextColor()
 // has one argument.
@@ -54,7 +54,7 @@ static constexpr bool ptMetricsAre(uint16_t w, uint8_t xAdv, int8_t xOff, int8_t
   }
   return true;
 }
-// The metrics above must stay the classic font's cell, or these 12 letters would sit
+// The metrics above must stay the classic font's cell, or these letters would sit
 // or advance differently from the rest of a line. Checked when the sketch is built.
 static_assert(ptMetricsAre(6, 6, 0, 0),
               "PT glyph metrics: width and xAdvance must be 6 (the classic font's 6 px cell, so the cursor advance and the wrap test match), xOffset and yOffset 0 (column 0 and row 0 go at the cursor, as in the classic font)");
@@ -78,7 +78,7 @@ static const GFXfont PT_FONT = {(uint8_t *)PT_GLYPH_BITS.b, (GFXglyph *)PT_GFX_G
 static void writeByte(uint8_t c) {
   int i = ptGlyphIndex(c);
   if (i < 0) {
-    gfx->write(c);  // the classic font: every byte but the 12
+    gfx->write(c);  // the classic font: every byte but ptglyphs.h's
     return;
   }
   gfx->setFont(&PT_FONT);

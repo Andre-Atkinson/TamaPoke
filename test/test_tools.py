@@ -199,9 +199,12 @@ def pt_glyph_codes():
 class TestPtGlyphs(unittest.TestCase):
     """ptglyphs.h (#61): the extra glyphs are exactly the European Portuguese letters the
     classic font (a CP437 table) lacks, each on its Latin-1 byte, so "\\303" in a string
-    is the letter a Latin-1 table says it is."""
+    is the letter a Latin-1 table says it is; plus the CP437 letters it only redraws (#85:
+    E-acute, so the accented capitals match), each on its CP437 byte."""
 
-    def test_the_glyphs_are_the_portuguese_letters_cp437_lacks(self):
+    REDRAWN = 'É'
+
+    def test_the_glyphs_are_the_letters_cp437_lacks_and_the_redrawn_ones(self):
         portuguese = 'áàâãçéêíóôõúÁÀÂÃÇÉÊÍÓÔÕÚ'
 
         def in_cp437(ch):
@@ -213,8 +216,11 @@ class TestPtGlyphs(unittest.TestCase):
 
         codes = pt_glyph_codes()
         self.assertEqual(len(codes), len(set(codes)), 'a glyph is listed twice')
-        # ord() of these letters is both their code point and their Latin-1 byte
-        self.assertEqual(sorted(codes), sorted(ord(ch) for ch in portuguese if not in_cp437(ch)))
+        # ord() of these letters is both their code point and their Latin-1 byte; a redrawn
+        # letter keeps its CP437 byte
+        want = [ord(ch) for ch in portuguese if not in_cp437(ch)]
+        want += [ch.encode('cp437')[0] for ch in self.REDRAWN]
+        self.assertEqual(sorted(codes), sorted(want))
 
 
 def strip_c_comments(text):
@@ -256,7 +262,7 @@ def call_args(text, open_paren):
 
 
 class TestTextColorHasNoBackground(unittest.TestCase):
-    """uitext.cpp draws the 12 Portuguese letters through Arduino_GFX's GFXfont path, which
+    """uitext.cpp draws the ptglyphs.h letters through Arduino_GFX's GFXfont path, which
     with a background colour fills a box starting baseline * size above the cursor: behind
     those letters only, and misplaced. So every setTextColor() takes one argument."""
 
@@ -295,7 +301,8 @@ class TestOwnerLetters(unittest.TestCase):
 
     The name's letters must be exactly the ones the UI font draws: every CP437 byte
     0x80-0xFF that is one ASCII letter plus one accent, on that byte, and the 12
-    Portuguese letters of ptglyphs.h, on their Latin-1 byte (= their code point)."""
+    Portuguese letters of ptglyphs.h, on their Latin-1 byte (= their code point). A CP437
+    letter ptglyphs.h only redraws (#85: E-acute) stays on its CP437 byte."""
 
     def test_the_table_is_the_fonts_accented_letters(self):
         import unicodedata
@@ -311,7 +318,11 @@ class TestOwnerLetters(unittest.TestCase):
             d = unicodedata.normalize('NFD', ch)
             if unicodedata.category(ch).startswith('L') and len(d) == 2 and d[0].isascii() and d[0].isalpha():
                 want[ord(ch)] = b
+        redrawn = {ch.encode('cp437')[0] for ch in TestPtGlyphs.REDRAWN}
         for code in pt_glyph_codes():
+            if code in redrawn:
+                self.assertIn(code, want.values(), 'a redrawn letter that CP437 lacks')
+                continue
             self.assertNotIn(code, want, 'a ptglyphs.h letter that CP437 already has')
             want[code] = code
         self.assertEqual(dict(rows), want)
