@@ -107,6 +107,7 @@ shot 08-keepy-result
 # paid at its end, with no PWR press in it
 expect Play: keepy score=
 expect-not Play: keepy*(screen off)
+expect-not Play: peek
 press pwr
 shot 09-result-pwr-off
 wait 2s
@@ -129,6 +130,7 @@ tap 233 350
 press pwr 3
 shot 11-game-locked
 expect Play: catch score=* (screen off)
+expect-not Play: keepy
 wait 3s
 press pwr 3
 tap 40 233

@@ -41,6 +41,7 @@ shot 40-punch-two
 press pwr
 shot 41-punch-pwr-off
 expect Training: punch count=2 gain=3*(screen off)
+expect-not Training: hold
 wait 5s
 # PWR again: the creature, not the exercise (no result screen, nothing resumed)
 press pwr
@@ -58,6 +59,7 @@ hold 233 270 2200ms 44-hold-held
 press pwr
 shot 45-hold-pwr-off
 expect Training: hold count=1 gain=1*(screen off)
+expect-not Training: punch
 wait 5s
 press pwr
 wait 1s
@@ -77,6 +79,7 @@ tap 233 240
 press pwr 3
 shot 47-punch-locked
 expect Training: punch count=1 gain=1*(screen off)
+expect-not Training: hold
 wait 3s
 press pwr 3
 tap 40 233
@@ -148,6 +151,7 @@ press pwr
 wait 500ms
 shot 56-ribbon-banner-after-pwr
 expect Training: punch count=2 gain=3*(screen off)
+expect-not Training: hold
 
 # The battery runs out mid-punch (0 %, no USB): the punch is paid before the power-off.
 swipe up
@@ -160,3 +164,4 @@ battery 0
 wait 2s
 # paid before the power-off (the simulator stops running the firmware there; the check still runs)
 expect Training: punch count=1 gain=1*(screen off)
+expect-not Training: hold
