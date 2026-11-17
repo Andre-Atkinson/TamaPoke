@@ -2609,7 +2609,8 @@ class FakeSdBoard:
     and says nothing, then ERR once no data has come for STALL s (the firmware waits 5 s);
     'nodone' acks every block and never says DONE; 'ignore' says nothing at all to the PUT;
     'late' takes that block and acks it only LATE s after (the firmware's own 5 s wait for the
-    next block then starts from the late ack). chatter puts a HEALTH heartbeat before every
+    next block then starts from the late ack); 'slowok' says OK only LATE s after the PUT and
+    then takes the file as usual (ERR once no data has come for STALL s). chatter puts a HEALTH heartbeat before every
     answer and every ack. noinfo answers SDINFO with only DONE.
 
     STALL is the longest the fake waits for the next block before it gives up on the file,
@@ -2693,6 +2694,8 @@ class FakeSdBoard:
             return
         name = path[len('mons/'):]
         self.files.pop(name, None)              # PUT deletes the old copy first
+        if what == 'slowok':
+            time.sleep(self.LATE)
         self.say('OK')
         got, block = b'', 0
         while len(got) < size:
@@ -2943,6 +2946,7 @@ class TestSendSd(unittest.TestCase):
         self.assertIn('"?"', code)
         self.assertIn(f'python3 tools/send_sd.py --port {board.port} {a} {b}', code)
         self.assertIn('keeps the sprite it has loaded', code)
+        self.assertNotIn('wait 10 seconds', code, 'the board said ERR: it is reading commands')
 
     def test_a_refused_put_and_a_missing_done_are_failures(self):
         for what, why in (('refuse', 'the board refused it (ERR)'),
@@ -2986,6 +2990,78 @@ class TestSendSd(unittest.TestCase):
         self.assertIn('it stopped after 2 KB of 9 KB (no answer)', out)
         self.assert_waited_for_the_boards_err(board, ended)
 
+    def test_a_late_ok_starts_the_wait_for_the_boards_err_again(self):
+        # The board says OK after the script gave up on it (0.5 s), at 2.0 s: it is inside the
+        # PUT from then on, waiting for data, and says ERR STALL s later (4.5 s). The script's
+        # wait from giving up would end at 3.5 s; the late OK moves it to 5.0 s.
+        self.patch_stall(2.5)
+        self.patch('OK_TIMEOUT', 0.5)
+        self.patch('RESYNC_TIMEOUT', 3)
+        board = FakeSdBoard(self, trouble={'mons/ps151.bin': ('slowok', None)})
+        code, out, _ = self.run_send(self.sprite('ps151.bin', 5000), board=board)
+        ended = time.time()
+        self.assertIsInstance(code, str)
+        self.assertIn('ps151.bin: FAILED: no answer to PUT', out)
+        self.assert_waited_for_the_boards_err(board, ended)
+        self.assertNotIn('wait 10 seconds', code, 'the board said ERR: it is reading commands')
+
+    def test_a_file_whose_last_answers_come_late_counts_as_sent(self):
+        # The board acks the last block only after the script gave up on it, then says DONE:
+        # remaining == 0 in sdmon.cpp, so the file is whole and nothing needs sending again.
+        self.patch('ACK_TIMEOUT', 1.0)
+        self.patch('RESYNC_TIMEOUT', 3)
+        a, b = self.sprite('ps151.bin', 5000), self.sprite('ps025.bin', 3000)
+        board = FakeSdBoard(self, trouble={'mons/ps151.bin': ('late', 2)})   # 3 blocks: 0, 1, 2
+        code, out, _ = self.run_send(a, b, board=board)
+        self.assertEqual(code, 0, out)
+        self.assertIn('ps151.bin: sent', out)
+        self.assertNotIn('FAILED', out)
+        self.assertEqual(len(board.files['ps151.bin']), 5000)
+        self.assertEqual(len(board.files['ps025.bin']), 3000)
+
+    def test_ctrl_c_on_a_file_that_arrives_whole_says_sent_and_stops(self):
+        # Ctrl-C right after the last block went out: the board still says '#' and DONE, so
+        # the file is whole; the run stops there as asked, and names what was not sent.
+        def write(original, data, timeout=5.0):
+            original(data, timeout=timeout)
+            if len(data) == 5000 - 2 * 2048:      # the last block of ps151.bin (904 bytes)
+                time.sleep(0.3)                   # the fake has read it
+                raise KeyboardInterrupt
+        self.hook_console(write=write)
+        a, b = self.sprite('ps151.bin', 5000), self.sprite('ps025.bin', 3000)
+        board = FakeSdBoard(self)
+        code, out, _ = self.run_send(a, b, board=board)
+        self.assertIsInstance(code, str, 'a Ctrl-C must exit non-zero')
+        self.assertIn('ps151.bin: sent', out)
+        self.assertNotIn('FAILED', out)
+        self.assertEqual(code, 'send_sd.py: interrupted (Ctrl-C). Not sent: ps025.bin.')
+        self.assertEqual(board.puts(), ['PUT mons/ps151.bin 5000'])
+
+    def test_output_still_queued_is_thrown_away_after_a_failure_and_only_then(self):
+        # Bytes still queued for the port would reach the board as file data, or as command
+        # lines once its PUT has ended; tcflush(TCOFLUSH) drops them on every failure path.
+        import termios
+        calls = []
+        real = termios.tcflush
+        self.addCleanup(setattr, termios, 'tcflush', real)
+        termios.tcflush = lambda fd, queue: (calls.append(queue), real(fd, queue))[1]
+        self.patch('RESYNC_TIMEOUT', 0.5)
+        code, _, _ = self.run_send(self.sprite('ps151.bin', 9000), board=FakeSdBoard(self))
+        self.assertEqual((code, calls), (0, []), 'nothing to throw away after a good send')
+        for what, hook in (('a silent board', None),
+                           ('a write that times out', TimeoutError('stopped taking data')),
+                           ('Ctrl-C', KeyboardInterrupt())):
+            with self.subTest(what):
+                calls.clear()
+                if hook is not None:
+                    self.hook_console(write=self.raise_on_second_block(hook))
+                self.patch('ACK_TIMEOUT', 0.5)
+                trouble = {'mons/ps151.bin': ('silent', 1)} if hook is None else None
+                board = FakeSdBoard(self, trouble=trouble)
+                code, _, _ = self.run_send(self.sprite('ps151.bin', 9000), board=board)
+                self.assertIsInstance(code, str)
+                self.assertEqual(calls, [termios.TCOFLUSH])
+
     def test_the_wait_for_the_boards_err_gives_up_when_the_board_only_prints_heartbeats(self):
         # A board that is not inside the PUT prints a HEALTH line now and then and never
         # says ERR: its heartbeat must not keep the script waiting.
@@ -3007,6 +3083,7 @@ class TestSendSd(unittest.TestCase):
         self.assertIsInstance(code, str)
         self.assertIn('FAILED: no answer to PUT', out)
         self.assertLess(time.time() - started, 4.0)
+        self.assertIn('wait 10 seconds before you send it again', code, 'no ERR came: say so')
 
     def test_a_write_that_times_out_waits_for_the_boards_err_and_says_how_to_recover(self):
         # Console.write gives up when the board stops taking data. The board still waits for the
@@ -3022,6 +3099,7 @@ class TestSendSd(unittest.TestCase):
         self.assertIsInstance(code, str, 'a failed file must exit non-zero')
         self.assertIn('ps151.bin: FAILED: the board stopped taking data', out)
         self.assertIn('did not arrive whole', code)
+        self.assertNotIn('wait 10 seconds', code, 'the board said ERR: it is reading commands')
         self.assertIn('Not sent: ps025.bin', code)
         self.assertIn(f'python3 tools/send_sd.py --port {board.port} {a} {b}', code)
         self.assertEqual(board.puts(), ['PUT mons/ps151.bin 9000'], 'went on after a failure')
@@ -3038,6 +3116,7 @@ class TestSendSd(unittest.TestCase):
         self.assertIsInstance(code, str, 'an interrupted file must exit non-zero')
         self.assertIn('ps151.bin: FAILED: interrupted with Ctrl-C', out)
         self.assertIn('did not arrive whole', code)
+        self.assertNotIn('wait 10 seconds', code, 'the board said ERR: it is reading commands')
         self.assertIn('Not sent: ps025.bin', code)
         self.assertIn(f'python3 tools/send_sd.py --port {board.port} {a} {b}', code)
         self.assertEqual(board.puts(), ['PUT mons/ps151.bin 9000'])
@@ -3062,6 +3141,7 @@ class TestSendSd(unittest.TestCase):
         self.assertIn('it stopped after 2 KB of 9 KB (no answer)', out)
         self.assertIn('did not arrive whole', code)
         self.assertLess(time.time() - started, 2.0, 'waited for the ERR after the Ctrl-C')
+        self.assertIn('wait 10 seconds before you send it again', code, 'the wait was cut short')
 
     def test_ctrl_c_before_a_file_is_sent_exits_without_a_traceback(self):
         board = FakeSdBoard(self)

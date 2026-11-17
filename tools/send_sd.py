@@ -206,31 +206,59 @@ def resync(con):
     after 5 s without data and says ERR (or, if its last answer was only late, DONE). Gives up
     itself after RESYNC_TIMEOUT s with no sign from the board that it is inside the PUT: every
     'OK' or '#' it prints (a late answer) starts that wait again, because its own 5 s start
-    again with it. A Ctrl-C here, or a port that fails, ends the wait."""
+    again with it. A Ctrl-C here, or a port that fails, ends the wait.
+
+    Returns the board's last word: 'ERR', or 'DONE' when the file arrived whole after all (only
+    its answers were late), or None when the wait ended without either, so that the board may
+    still be inside the PUT."""
     try:
         end = time.time() + RESYNC_TIMEOUT
         while True:
             text = con.read_line(max(0.0, end - time.time()))
             if text in (None, 'ERR', 'DONE'):
-                return
+                return text
             if text in ('OK', '#'):
                 end = time.time() + RESYNC_TIMEOUT
     except (OSError, KeyboardInterrupt):
+        return None
+
+
+def discard_output(con):
+    """Throw away what is still queued for the port after a failure. It would reach the board
+    as part of the file, or as command lines once the PUT has ended, and a close() with output
+    still queued can wait for it."""
+    try:
+        termios.tcflush(con.fd, termios.TCOFLUSH)
+    except (OSError, termios.error):
         pass
 
 
+class Interrupted(Exception):
+    """A Ctrl-C during a PUT, raised once the board has been waited for; `end` is what resync()
+    returned ('DONE': the file arrived whole all the same)."""
+
+    def __init__(self, end):
+        super().__init__('interrupted with Ctrl-C')
+        self.end = end
+
+
 def put(con, name, data):
-    """Send one file with PUT (sdmon.cpp's sdSerialCommand). None once the board has it
-    whole, else what went wrong. A Ctrl-C part-way is passed on (as KeyboardInterrupt) once
-    the board has been waited for."""
+    """Send one file with PUT (sdmon.cpp's sdSerialCommand). Returns (why, settled): why is
+    None once the board has the file whole, else what went wrong; settled is False when the
+    board may still be inside the PUT (it never said ERR). A Ctrl-C part-way raises
+    Interrupted once the board has been waited for."""
     size = len(data)
 
     def failed(why, got):
         # Unless the board said ERR itself, it may still be waiting for data: let it give up
         # and say ERR, so that it doesn't take the next command as part of the file.
-        if got != 'ERR':
-            resync(con)
-        return why
+        if got == 'ERR':
+            return why, True
+        discard_output(con)
+        end = resync(con)
+        if end == 'DONE':          # only its answers were late: the file is whole
+            return None, True
+        return why, end == 'ERR'
 
     try:
         con.write(f'PUT mons/{name} {size}\n'.encode())
@@ -247,12 +275,12 @@ def put(con, name, data):
         if got != 'DONE':
             return failed('the board said ERR after the last block' if got
                           else 'no DONE after the last block', got)
-        return None
+        return None, True
     except OSError as e:  # the port failed, or a write timed out because the board stopped reading
         return failed(str(e), None)
     except KeyboardInterrupt:
-        resync(con)
-        raise
+        discard_output(con)
+        raise Interrupted(resync(con)) from None
 
 
 def unusable(name):
@@ -276,19 +304,28 @@ def unusable(name):
 def send(con, files, port):
     for i, (arg, name, data) in enumerate(files):
         started = time.time()
+        interrupted = False
         try:
-            why = put(con, name, data)
-        except KeyboardInterrupt:  # put() has waited for the board to stop listening for data
-            why = 'interrupted with Ctrl-C'
+            why, settled = put(con, name, data)
+        except Interrupted as e:  # put() has waited for the board to stop listening for data
+            interrupted = True
+            why, settled = (None if e.end == 'DONE' else str(e)), e.end is not None
         if why is None:
             print(f'{name}: sent, {kb(len(data))} in {time.time() - started:.1f} s', flush=True)
+            if interrupted:   # the file made it, but stop here as asked
+                left = ', '.join(n for _, n, _ in files[i + 1:])
+                sys.exit('send_sd.py: interrupted (Ctrl-C).' + (f' Not sent: {left}.' if left else ''))
             continue
         print(f'{name}: FAILED: {why}', flush=True)
         rest = [a for a, _, _ in files[i:]]
         again = shlex.join(['python3', sys.argv[0], *(['--port', port] if port else []), *rest])
+        # Without the board's ERR it may still be reading the file: up to 5 s for the rest of a
+        # block, then 5 s for the next one (Stream::readBytes), taking any command as data.
+        wait = ('' if settled else ' The board may still be waiting for the rest of the file: '
+                'wait 10 seconds before you send it again or run another board command.')
         msg = (f'{name} did not arrive whole. PUT deletes the copy the board had before it '
                'starts, so the board may now hold only part of it, or none, and it cannot use a '
-               f'partial file. {unusable(name)} Send it again (PUT replaces it):\n  {again}')
+               f'partial file. {unusable(name)}{wait} Send it again (PUT replaces it):\n  {again}')
         if len(rest) > 1:
             msg = f'Not sent: {", ".join(n for _, n, _ in files[i + 1:])}.\n{msg}'
         sys.exit(msg)

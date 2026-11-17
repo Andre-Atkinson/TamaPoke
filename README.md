@@ -458,8 +458,11 @@ python3 tools/send_sd.py --ls                # read-only: what the board holds, 
   again (after a restart, when the creature changes, or once another file arrives whole).
   Then a shiny form shows a "?" and "No sprites" instead of its sprite (the nine species of
   the three starter lines show a small built-in sprite), or, if the board refused the send
-  and no file is left, the normal sprite. The script waits for the board to give up on the file, then prints the command
-  that sends it again.
+  and no file is left, the normal sprite. The script waits for the board to give up on the
+  file, then prints the command that sends it again. If the board never said so (a second
+  Ctrl-C, or no answer), it tells you to wait 10 seconds first: until then the board may
+  still take what you send as part of the file. A file whose last answers only came late
+  counts as sent.
 - It refuses a file the board would not load: one that doesn't start with the right four
   bytes for its name, or is too small or too big (`psNNN.bin` and `pNNN.bin` 7 bytes to
   3 MiB, `thumbs.bin` 10 bytes to 2 MiB).
