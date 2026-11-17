@@ -11,6 +11,7 @@
 #include "i18n.h"
 #include "idlelife.h"
 #include "idleplan.h"
+#include "playarea.h"  // PET_WALK_MIN..MAX (the finger drag), PLAY_MID_X
 #include "power.h"
 #include "rtcbat.h"
 #include "scene.h"
@@ -20,8 +21,8 @@
 #include "standby.h"
 #include "uitext.h"
 
-#define PET_WALK_MIN IDLE_WALK_MIN  // where the pet may walk to (idleplan.h, and after a finger)
-#define PET_WALK_MAX IDLE_WALK_MAX
+// the play area's own copy of the screen's centre column (playarea.h) is CX
+static_assert(PLAY_MID_X == CX, "playarea.h's centre column must be app.h's CX");
 #define PET_FOLLOW_PX_S 120.0f  // walking after a finger (a stroll is 30 px/s)
 
 // Used only in this file, and called above their definitions (in TamaPoke.ino the
@@ -73,6 +74,18 @@ static int isqrt(int v) {
 int sceneHour() {
   uint32_t e = pet.lastSeenEpoch;
   return e ? (int)((e / 3600) % 24) : 13;
+}
+
+void skyColors(int h, bool night, uint16_t &top, uint16_t &bot) {
+  if (night)                  { top = SKY_NIGHT_TOP;            bot = C565(0x1e, 0x26, 0x46); }
+  else if (h < SKY_DAWN_TO)   { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }  // amanecer
+  else if (h < SKY_DUSK_FROM) { top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }  // dia
+  else                        { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }  // atardecer
+}
+
+uint16_t soilColor(uint8_t biome, bool night) {
+  uint16_t soil = BIOME_SOIL[biome < 6 ? biome : 0];
+  return night ? lerp565(soil, SCENE_NIGHT_TINT, 9, 16) : soil;
 }
 
 // ---------- travelling and weather (weather.h, #60) ----------
@@ -228,7 +241,7 @@ static void drawSeasonGround(uint8_t ground, uint8_t biome, bool night, uint16_t
   if (ground == GROUND_FLOWERS || ground == GROUND_AUTUMN) {
     static const uint16_t FLOWERS[3] = { C565(0xf4, 0x9c, 0xc8), C565(0xff, 0xff, 0xff), C565(0xc8, 0xa8, 0xf0) };
     static const uint16_t LEAVES[3] = { C565(0xe8, 0x84, 0x2c), C565(0xc8, 0x40, 0x2c), C565(0xe8, 0xb8, 0x38) };
-    uint16_t dusk = C565(0x16, 0x1c, 0x30);
+    uint16_t dusk = SCENE_NIGHT_TINT;
     for (int i = 0; i < 10; i++) {
       int x = GROUND_SPOTS[i][0], y = GROUND_SPOTS[i][1];
       if (ground == GROUND_FLOWERS) {  // four petals round a yellow heart
@@ -267,7 +280,7 @@ static void drawSeasonFx(uint32_t now, uint8_t fx, bool night) {
       int y = (int)((fall + i * 53) % 330) - 14;
       int x = (int)((i * 71 + now / 60) % 500) - 17 + sway(now, petals ? 2600 : 1800, i * 377, petals ? 12 : 18);
       uint16_t c = petals ? C565(0xf6, 0xb4, 0xd4) : LEAVES[i % 4];
-      if (night) c = lerp565(c, C565(0x16, 0x1c, 0x30), 8, 16);
+      if (night) c = lerp565(c, SCENE_NIGHT_TINT, 8, 16);
       bool turned = ((now + i * 211) / 300) % 2;  // a leaf tumbles, a petal flutters
       if (petals) gfx->fillRect(x, y, turned ? 3 : 4, turned ? 3 : 2, c);
       else gfx->fillRect(x, y, turned ? 3 : 5, turned ? 5 : 3, c);
@@ -307,7 +320,6 @@ static void drawSeasonFx(uint32_t now, uint8_t fx, bool night) {
 // twinkling; the snow and the bats are left out. At night the decorations darken with the
 // scene, except what glows: the tree's lights and star, and the pumpkin's face.
 
-#define HOL_DUSK C565(0x16, 0x1c, 0x30)  // what the night scene darkens toward (the seasons')
 
 // Christmas, all December: a small tree on the right, below the sun and the moon, with
 // coloured lights (they twinkle at the full frame rate) and a star.
@@ -316,8 +328,8 @@ static void drawXmasTree(uint32_t now, bool night, bool live) {
   const int x = XMAS_TREE_X;
   uint16_t green = C565(0x2a, 0x7a, 0x44), trunk = C565(0x6e, 0x4a, 0x2c);
   if (night) {
-    green = lerp565(green, HOL_DUSK, 8, 16);
-    trunk = lerp565(trunk, HOL_DUSK, 8, 16);
+    green = lerp565(green, SCENE_NIGHT_TINT, 8, 16);
+    trunk = lerp565(trunk, SCENE_NIGHT_TINT, 8, 16);
   }
   gfx->fillRect(x - 5, 284, 10, 14, trunk);
   gfx->fillTriangle(x, 222, x - 32, 288, x + 32, 288, green);
@@ -351,14 +363,14 @@ static void drawBalloons(uint32_t now, bool night, bool live) {
   }
   for (int i = 0; i < 3; i++) {
     int x = AT[i][0] + (live ? sway(now, 4000 + i * 700, i * 900, 3) : 0), y = AT[i][1];
-    uint16_t c = night ? lerp565(COLS[i], HOL_DUSK, 6, 16) : COLS[i];
+    uint16_t c = night ? lerp565(COLS[i], SCENE_NIGHT_TINT, 6, 16) : COLS[i];
     gfx->fillEllipse(x, y, 12, 15, c);
     gfx->fillTriangle(x, y + 14, x - 3, y + 19, x + 3, y + 19, c);  // the knot
     gfx->fillEllipse(x - 4, y - 6, 3, 4, lerp565(c, UI_WHITE, 9, 16));  // a shine
   }
-  uint16_t box = night ? lerp565(C565(0xc8, 0x70, 0xd8), HOL_DUSK, 6, 16) : C565(0xc8, 0x70, 0xd8);
+  uint16_t box = night ? lerp565(C565(0xc8, 0x70, 0xd8), SCENE_NIGHT_TINT, 6, 16) : C565(0xc8, 0x70, 0xd8);
   gfx->fillRect(ax - 7, ay - 2, 14, 11, box);
-  gfx->fillRect(ax - 1, ay - 2, 3, 11, night ? lerp565(UI_WHITE, HOL_DUSK, 6, 16) : UI_WHITE);  // its ribbon
+  gfx->fillRect(ax - 1, ay - 2, 3, 11, night ? lerp565(UI_WHITE, SCENE_NIGHT_TINT, 6, 16) : UI_WHITE);  // its ribbon
 }
 
 // Halloween: a friendly pumpkin with a smile (it glows at night) and a small one beside it,
@@ -367,9 +379,9 @@ static void drawPumpkins(bool night) {
   uint16_t body = C565(0xf0, 0x8a, 0x24), lobe = C565(0xf8, 0xa0, 0x38), stem = C565(0x5a, 0x7a, 0x2c);
   uint16_t face = night ? C565(0xff, 0xd8, 0x50) : C565(0x4a, 0x24, 0x10);
   if (night) {
-    body = lerp565(body, HOL_DUSK, 6, 16);
-    lobe = lerp565(lobe, HOL_DUSK, 6, 16);
-    stem = lerp565(stem, HOL_DUSK, 6, 16);
+    body = lerp565(body, SCENE_NIGHT_TINT, 6, 16);
+    lobe = lerp565(lobe, SCENE_NIGHT_TINT, 6, 16);
+    stem = lerp565(stem, SCENE_NIGHT_TINT, 6, 16);
   }
   const int x = 404, y = 282;
   gfx->fillRect(x - 3, y - 22, 6, 9, stem);
@@ -419,8 +431,8 @@ static void drawEasterEggs(bool night) {
     int x = AT[i][0], y = AT[i][1];
     uint16_t b = BASE[i], d = BAND[i];
     if (night) {
-      b = lerp565(b, HOL_DUSK, 8, 16);
-      d = lerp565(d, HOL_DUSK, 8, 16);
+      b = lerp565(b, SCENE_NIGHT_TINT, 8, 16);
+      d = lerp565(d, SCENE_NIGHT_TINT, 8, 16);
     }
     gfx->fillEllipse(x, y, 9, 11, b);
     gfx->fillRect(x - 8, y - 3, 17, 4, d);  // a band, inside the egg's outline
@@ -444,7 +456,7 @@ static void drawHearts(uint32_t now, bool night, bool live) {
   for (int i = 0; i < 8; i++) {
     int y = 296 - (int)((t / 50 + i * 41) % 172);  // 20 px a second, from the grass to y 124
     int x = 40 + (i * 53) % 390 + sway(t, 3000 + i * 400, i * 600, 10);
-    uint16_t c = night ? lerp565(COLS[i % 3], HOL_DUSK, 4, 16) : COLS[i % 3];
+    uint16_t c = night ? lerp565(COLS[i % 3], SCENE_NIGHT_TINT, 4, 16) : COLS[i % 3];
     drawHeartShape(x, y, i % 2 ? 4 : 5, c);
   }
 }
@@ -520,11 +532,8 @@ void drawScene(uint32_t now, bool night) {
   // hours of the 31st (that night is the one before Halloween), so from noon on
   bool halloweenNight = night && h >= 12 && hol.day == HOL_HALLOWEEN;
   uint16_t top, bot;
-  if (halloweenNight)   { top = C565(0x1c, 0x0e, 0x2e); bot = C565(0x46, 0x24, 0x52); }
-  else if (night)       { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
-  else if (h < 8)       { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }  // amanecer
-  else if (h < 18)      { top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }  // dia
-  else                  { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }  // atardecer
+  if (halloweenNight) { top = C565(0x1c, 0x0e, 0x2e); bot = C565(0x46, 0x24, 0x52); }
+  else skyColors(h, night, top, bot);
   uint16_t fogCol = night ? WX_FOG_NIGHT : WX_FOG_DAY;
   if (grey) {
     uint16_t g = night ? WX_OVERCAST_NIGHT : WX_OVERCAST_DAY;
@@ -552,24 +561,23 @@ void drawScene(uint32_t now, bool night) {
     }
     if (wxStarsOut(wx))
       for (auto &st : STARS) gfx->fillRect(st[0], st[1], SKY_STAR_SIZE, SKY_STAR_SIZE, UI_WHITE);
-  } else if (h < 18) {
+  } else if (h < SKY_DUSK_FROM) {
     if (sunOut)
-      gfx->fillCircle(SKY_SUN_X, SKY_SUN_Y, SKY_SUN_R, h < 8 ? C565(0xff, 0xd9, 0x8a) : C565(0xff, 0xe7, 0x9f));
+      gfx->fillCircle(SKY_SUN_X, SKY_SUN_Y, SKY_SUN_R, h < SKY_DAWN_TO ? C565(0xff, 0xd9, 0x8a) : C565(0xff, 0xe7, 0x9f));
   } else if (sunOut) {
     gfx->fillCircle(233, HORIZON - 6, 34, C565(0xff, 0xf1, 0xc8));  // sol poniente
   }
   // nubes: las dos de siempre de dia con buen tiempo; mas, mayores y mas oscuras con el
   // tiempo que trae nubes, tambien al atardecer y de noche
-  uint8_t clouds = wxClouds(wx, (!night && h < 18) ? 2 : 0);
+  uint8_t clouds = wxClouds(wx, (!night && h < SKY_DUSK_FROM) ? 2 : 0);
   if (clouds) {
-    uint16_t light = night ? C565(0x44, 0x4c, 0x66) : h >= 18 ? C565(0xf2, 0xc8, 0xb0) : UI_WHITE;
+    uint16_t light = night ? C565(0x44, 0x4c, 0x66) : h >= SKY_DUSK_FROM ? C565(0xf2, 0xc8, 0xb0) : UI_WHITE;
     uint16_t dark = night ? C565(0x2a, 0x30, 0x40) : C565(0x74, 0x7c, 0x8c);
     drawClouds(now, clouds, 16 + grey * 3 / 4, lerp565(light, dark, grey, 16));
   }
 
   // mar de la playa: una franja de agua sobre la arena
-  uint16_t soil = BIOME_SOIL[biome < 6 ? biome : 0];
-  if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
+  uint16_t soil = soilColor(biome, night);
   uint8_t wet = wxWet(wx);
   if (wet) soil = lerp565(soil, C565(0x20, 0x28, 0x30), wet / 4, 16);  // ground darkened by the rain
   if (fog) soil = lerp565(soil, fogCol, fog / 3, 16);
@@ -592,7 +600,7 @@ void drawScene(uint32_t now, bool night) {
 
   // suelo
   gfx->fillRect(0, HORIZON, 466, 466 - HORIZON, soil);
-  uint16_t hill = lerp565(soil, night ? C565(0x0c, 0x12, 0x24) : C565(0xff, 0xff, 0xff), ground == GROUND_SNOW ? 8 : 3, 16);
+  uint16_t hill = lerp565(soil, night ? SKY_NIGHT_TOP : C565(0xff, 0xff, 0xff), ground == GROUND_SNOW ? 8 : 3, 16);
   gfx->fillRoundRect(-60, HORIZON - 14, 586, 60, 30, hill);
 
   // detalles del bioma

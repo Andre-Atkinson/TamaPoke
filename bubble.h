@@ -27,6 +27,8 @@
 #include "attention.h"
 #include "holiday.h"
 #include "nature.h"
+#include "playarea.h"   // PET_WALK_MIN..MAX, PLAY_MID_X (#66)
+#include "skylayout.h"  // skyNightHour, SKY_NIGHT_TO (#66)
 
 #define BUB_NAT_LINES 3  // each nature's lines (#86)
 
@@ -84,13 +86,11 @@ inline const char *const BUBBLE_KEYS[BUB_LINES] = {
 #define BUBBLE_GAP_MS 60000UL      // from one start to the next is this...
 #define BUBBLE_GAP_SPAN_MS 60000UL // ...plus up to this much (random)
 
-// The morning and night lines' hours. Night is the night scene's (render(): h < 6 or
-// h >= 20), and with BubbleIn::starsOut "look at the stars" only shows when the stars are
-// drawn (not under cloud, rain, snow or fog, #60).
-#define BUBBLE_MORNING_FROM 6
+// The morning and night lines' hours. Night is the night scene's (skyNightHour, skylayout.h),
+// and with BubbleIn::starsOut "look at the stars" only shows when the stars are drawn (not
+// under cloud, rain, snow or fog, #60). Morning starts as the night ends.
+#define BUBBLE_MORNING_FROM SKY_NIGHT_TO
 #define BUBBLE_MORNING_TO 10  // exclusive
-#define BUBBLE_NIGHT_FROM 20
-#define BUBBLE_NIGHT_TO 6     // exclusive, the next morning
 // The share of the ordinary picks (r % 100) a nature's line takes (#86): 20 %, always,
 // right after the time lines' 30 so it never takes their place.
 #define BUBBLE_NAT_FROM 30
@@ -130,7 +130,7 @@ inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
   uint8_t friendly = (uint8_t)(BUB_HI + which);
   uint8_t line;
   if (in.clockKnown && p < 30 && in.hour >= BUBBLE_MORNING_FROM && in.hour < BUBBLE_MORNING_TO) line = BUB_MORNING;
-  else if (in.clockKnown && in.starsOut && p < 30 && (in.hour >= BUBBLE_NIGHT_FROM || in.hour < BUBBLE_NIGHT_TO))
+  else if (in.clockKnown && in.starsOut && p < 30 && skyNightHour(in.hour))
     line = BUB_STARS;
   else if (p >= BUBBLE_NAT_FROM && p < BUBBLE_NAT_TO) line = bubbleNatureLine(in.nature, which);
   else if (p < 80) line = friendly;
@@ -363,8 +363,8 @@ struct BubbleBox {
 // BUBBLE_Y_MIN, slid toward the pet as far as it must to stay inside the round panel and
 // right of the clock badge (`badge`).
 inline BubbleBox bubbleBoxAt(int petX, int headTop, int textW, int lines, bool badge, bool button) {
-  if (petX < 150) petX = 150;  // the walk range (scene.cpp: PET_WALK_MIN..PET_WALK_MAX)
-  if (petX > 325) petX = 325;
+  if (petX < PET_WALK_MIN) petX = PET_WALK_MIN;  // the walk range (playarea.h)
+  if (petX > PET_WALK_MAX) petX = PET_WALK_MAX;
   int xMin = badge ? BUBBLE_X_MIN_BADGE : BUBBLE_X_MIN;
   BubbleBox b;
   b.w = (int16_t)(textW + 2 * BUBBLE_PAD_X);
@@ -374,7 +374,7 @@ inline BubbleBox bubbleBoxAt(int petX, int headTop, int textW, int lines, bool b
   int y = bubbleTipY(headTop, button) - BUBBLE_TAIL - b.h;
   if (y < BUBBLE_Y_MIN) y = BUBBLE_Y_MIN;
   b.y = (int16_t)y;
-  bool right = petX <= 233;  // the screen's centre column
+  bool right = petX <= PLAY_MID_X;  // the screen's centre column
   int x = right ? petX + BUBBLE_GAP : petX - BUBBLE_GAP - b.w;
   if (x + b.w > BUBBLE_X_MAX) x = BUBBLE_X_MAX - b.w;
   if (x < xMin) x = xMin;

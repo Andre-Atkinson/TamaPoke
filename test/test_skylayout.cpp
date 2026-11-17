@@ -73,3 +73,12 @@ TEST(SkyLayout, the_game_screens_stars_stay_out_of_the_words) {
   }
   CHECK_MSG(shown > 0, "during play the night sky keeps some stars");
 }
+
+// The sky's hours (#66): night, dawn, day and dusk follow each other round the clock, and
+// skyNightHour (what every screen reads) is the night scene's, from 20:00 to 6:00.
+TEST(SkyLayout, the_sky_hours_run_night_dawn_day_dusk) {
+  CHECK(0 < SKY_NIGHT_TO && SKY_NIGHT_TO < SKY_DAWN_TO && SKY_DAWN_TO < SKY_DUSK_FROM);
+  CHECK(SKY_DUSK_FROM < SKY_NIGHT_FROM && SKY_NIGHT_FROM < 24);
+  for (int h = 0; h < 24; h++)
+    CHECK_MSG(skyNightHour(h) == (h < 6 || h >= 20), "night at " + std::to_string(h) + ":00");
+}

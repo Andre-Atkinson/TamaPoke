@@ -26,6 +26,11 @@ struct PetBeh {
 
 #define C565(r, g, b) ((uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3)))
 
+// The night scene (#66: one copy each): its sky's top colour, and the deep blue its colours
+// darken toward (the soil, the seasons' flowers and leaves, the holidays' decorations).
+#define SKY_NIGHT_TOP C565(0x0c, 0x12, 0x24)
+#define SCENE_NIGHT_TINT C565(0x16, 0x1c, 0x30)
+
 // suelo de cada bioma de dia (de noche se mezcla hacia el azul nocturno)
 inline const uint16_t BIOME_SOIL[6] = {
   C565(0x7e, 0xc0, 0x7f),  // 0 pradera
@@ -43,6 +48,13 @@ extern uint32_t bathUntil;  // the bath runs until this millis()
 uint16_t inkColor();  // the UI ink for day or night
 uint16_t lerp565(uint16_t a, uint16_t b, int i, int n);
 int sceneHour();      // 0-23 from the last clock reading, 13 without one
+// The sky's gradient, top and bottom, at hour h (the hours: skylayout.h); `night` gives the
+// night sky whatever the hour (render() passes it for a sleeping pet too). The main scene
+// (drawScene) and the minigames' and exercises' sky (drawGameScene(), gameui.cpp) share it.
+void skyColors(int h, bool night, uint16_t &top, uint16_t &bot);
+// The ground's colour where the pet is (`biome`, BIOME_SOIL; out of range: the meadow's),
+// darkened at night. Both skies' ground starts from it.
+uint16_t soilColor(uint8_t biome, bool night);
 
 // Travelling, weather and seasons (weather.h, #60). The place, the weather and the season
 // come from the clock; the SCENE serial command can force each (SCENE_AUTO: the clock's).
