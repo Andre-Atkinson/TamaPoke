@@ -77,6 +77,7 @@ void drawRunawayButton();
 void drawPet();
 void startBath();
 void drawBath();
+void bathFinishNow();  // an ending is starting (#33): a bath under way ends now, paid
 uint32_t pmdActTotalMs(const PmdAct &a);  // one run of an action's animation, ms
 void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS);
 void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS);

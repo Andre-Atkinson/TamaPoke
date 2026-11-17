@@ -104,6 +104,10 @@ void wakeUI();
 // Closes the training screen with nothing more paid, and makes the rest of a contact
 // still on the glass do nothing (defined in TamaPoke.ino, #78).
 void leaveTraining();
+// Starts an ending, CER_FAREWELL, CER_RUNAWAY or CER_RELEASE (pet.h), the one way every path
+// starts one (ending.h, #33): everything over the scene closes first. False when the pet
+// cannot end now (an egg, or an ending already on). Defined in TamaPoke.ino.
+bool startPetEnding(uint8_t kind);
 // the pet's reactions to gestures (touchgesture.h), drawn by drawPet*
 uint8_t reactAct(uint8_t kind);
 bool reacting(uint32_t now);

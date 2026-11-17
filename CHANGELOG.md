@@ -339,6 +339,23 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Fixed
 
+- **An ending closes everything open over the creature first** (#33). A farewell, a
+  run-away or a release now closes whatever is open before it starts: a minigame or an
+  exercise ends and the creature keeps what it earned (as when the screen goes dark), a bath
+  finishes with the creature clean, and the gallery, the rename keyboard, the clock and
+  settings screen, the stat card and any menu strip or dialog close, so the ending always
+  shows on screen and nothing is left open over the next egg. A bath under way used to clean
+  the next creature instead, and a minigame left open lost its score. Normal play rarely
+  met this (the ending buttons only show on the main screen); the serial `BYE` and `RUN` did,
+  and `GAL` no longer opens the gallery over an ending.
+
+- **The serial clock commands take only a real time** (#65). `TIME <epoch>` and
+  `RTCSET <epoch>` now refuse anything but the digits of a time from 2025 to 2099, with
+  `ERR clock not set: ...`: an epoch with a digit too many was taken as 2038-01-19, a minus
+  sign could set a time in 2050, anything after the digits was silently ignored, and every
+  real time from 2038 on was set as 2038-01-19. `tools/board.py clock` always sent a
+  correct time and still does.
+
 - **Portuguese accented capitals at full height** (#85): the accented capitals, and the
   font's own É, now stand as tall as the other capitals, so FORMA FÍSICA, NÍVEL and
   FÔLEGO no longer read as lowercase.

@@ -1102,20 +1102,29 @@ void startBath() {
   }
 }
 
+// The bath is over: the pet is clean (pet.clean(), once per bath). True when it was cleaned now.
+static bool bathEnd() {
+  bathUntil = 0;
+  if (!bathPending) return false;
+  bathPending = false;
+  pet.clean();
+  return true;
+}
+
+// An ending is starting (#33, closeForEnding in TamaPoke.ino): a bath under way ends now, the
+// pet clean as at its own end, with no pose (the ending's screen follows). Otherwise drawBath()
+// would only pay it once the next pet had hatched: the ending's screen never draws the bath.
+void bathFinishNow() { bathEnd(); }
+
 void drawBath() {
   uint32_t now = millis();
   if (!timeLeft(bathUntil)) {
-    bathUntil = 0;
-    if (bathPending) {
-      bathPending = false;
-      pet.clean();
-      // pose de alegria al quedar limpio
-      if (pmd.has(PMD_POSE)) {
-        beh.mode = 2;
-        beh.act = PMD_POSE;
-        beh.t0 = now;
-        beh.until = now + pmdActTotalMs(pmd.acts[PMD_POSE]) * 2;
-      }
+    // pose de alegria al quedar limpio
+    if (bathEnd() && pmd.has(PMD_POSE)) {
+      beh.mode = 2;
+      beh.act = PMD_POSE;
+      beh.t0 = now;
+      beh.until = now + pmdActTotalMs(pmd.acts[PMD_POSE]) * 2;
     }
     return;
   }

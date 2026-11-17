@@ -42,6 +42,10 @@ bool exerciseExit();
 // exit), with no result screen and no sound, and closes its screen. A result screen only
 // closes (paid at its end). Nothing if neither is open.
 void playScreenOff();
+// The same, with `why` at the end of its serial line (" (screen off)" for playScreenOff()):
+// an ending is starting (#33, closeForEnding in TamaPoke.ino), and the pet is paid before the
+// ceremony, which takes nothing.
+void playEndNow(const char *why);
 #if !BOARD_AMOLED_175C
 // The 1.75's exit: a touch-down above this y (the top strip) leaves. The exercise screens
 // draw "tap: back" inside it, so it is no longer invisible, and end it above the hint.

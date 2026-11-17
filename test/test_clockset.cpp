@@ -171,3 +171,98 @@ TEST(ClockSet, a_valid_saved_time_still_counts_its_offline_time) {
   CHECK_EQ(c.p.ageMinutes, age + 600);
   CHECK_EQ(c.p.savedEpoch(), T0);
 }
+
+// ---------------------------------------------------------------- the serial TIME/RTCSET time
+// clockEpochParse (#65): the text after TIME or RTCSET. Before it the lines used
+// String::toInt(), atol() with the ESP32's 32-bit long: one digit too many clamped to
+// 2147483647 (2038-01-19) and a minus sign wrapped round, each to a time the clock took.
+// The host's long is 64-bit, so these test the parser, not toInt().
+static const uint32_t UNSET = 12345;  // `e` keeps it when the text is refused
+
+TEST(ClockEpochParse, takes_the_time_tools_board_py_sends) {
+  uint32_t e = UNSET;
+  CHECK(clockEpochParse("1794564000", e));  // 2026-11-13 10:00
+  CHECK_EQ(e, T0);
+}
+
+TEST(ClockEpochParse, takes_the_first_and_last_second_of_the_clock_range) {
+  uint32_t e = UNSET;
+  CHECK(clockEpochParse("1735689600", e));  // 2025-01-01 00:00:00
+  CHECK_EQ(e, CLOCK_EPOCH_MIN);
+  CHECK(clockEpochParse("4102444799", e));  // 2099-12-31 23:59:59
+  CHECK_EQ(e, CLOCK_EPOCH_END - 1);
+}
+
+// toInt() clamped every time from 2038-01-19 03:14:08 on to the second before it
+TEST(ClockEpochParse, a_time_after_2038_is_taken_whole) {
+  uint32_t e = UNSET;
+  CHECK(clockEpochParse("2524608000", e));  // 2050-01-01
+  CHECK_EQ(e, (uint32_t)2524608000UL);
+}
+
+TEST(ClockEpochParse, an_over_long_value_is_refused) {
+  uint32_t e = UNSET;
+  CHECK(!clockEpochParse("17945640000", e));  // a digit too many: 2538
+  CHECK(!clockEpochParse("21474836470", e));  // toInt() made it 2147483647, 2038-01-19
+  CHECK(!clockEpochParse("4102444800", e));   // 2100-01-01, the first second refused
+  CHECK_EQ(e, UNSET);
+}
+
+// 2^64 + T0: a counter with no guard would wrap round to T0 and take it
+TEST(ClockEpochParse, a_value_that_wraps_a_64_bit_counter_is_refused) {
+  uint32_t e = UNSET;
+  CHECK(!clockEpochParse("18446744075504115616", e));
+  CHECK(!clockEpochParse("1794564000000000000000000000000", e));
+  CHECK_EQ(e, UNSET);
+}
+
+// 2^32 + T0, a time in 2162 that is still under the range's end before its last digit: a
+// 32-bit counter would wrap round to T0 and take it
+TEST(ClockEpochParse, a_value_that_wraps_a_32_bit_counter_is_refused) {
+  uint32_t e = UNSET;
+  CHECK(!clockEpochParse("6089531296", e));
+  CHECK_EQ(e, UNSET);
+}
+
+TEST(ClockEpochParse, a_negative_value_is_refused) {
+  uint32_t e = UNSET;
+  CHECK(!clockEpochParse("-1763380000", e));  // toInt() then a uint32_t cast: 2050-03-22
+  CHECK(!clockEpochParse("-1", e));
+  CHECK_EQ(e, UNSET);
+}
+
+TEST(ClockEpochParse, trailing_junk_is_refused) {
+  uint32_t e = UNSET;
+  CHECK(!clockEpochParse("1794564000x", e));
+  CHECK(!clockEpochParse("1794564000 5", e));
+  CHECK(!clockEpochParse("1794564000.5", e));
+  CHECK(!clockEpochParse("17945e4000", e));
+  CHECK_EQ(e, UNSET);
+}
+
+// The characters either side of '0'..'9' ('/' and ':'), in values short enough that a digit
+// check one character too wide would still leave a time inside 2025-2099: it would take
+// "179456400:" as 1794564010 and "179456400/" as 1794563999.
+TEST(ClockEpochParse, the_characters_next_to_the_digits_are_refused) {
+  uint32_t e = UNSET;
+  CHECK(!clockEpochParse("179456400:", e));
+  CHECK(!clockEpochParse("179456400/", e));
+  CHECK_EQ(e, UNSET);
+}
+
+TEST(ClockEpochParse, anything_before_the_digits_is_refused) {
+  uint32_t e = UNSET;
+  CHECK(!clockEpochParse("+1794564000", e));
+  CHECK(!clockEpochParse(" 1794564000", e));  // TIME with two spaces
+  CHECK(!clockEpochParse("0x6AF7E9A0", e));
+  CHECK_EQ(e, UNSET);
+}
+
+TEST(ClockEpochParse, a_time_before_2025_or_no_digits_is_refused) {
+  uint32_t e = UNSET;
+  CHECK(!clockEpochParse("1735689599", e));  // the second before 2025
+  CHECK(!clockEpochParse("5", e));           // "TIME 5"
+  CHECK(!clockEpochParse("0", e));
+  CHECK(!clockEpochParse("", e));
+  CHECK_EQ(e, UNSET);
+}
