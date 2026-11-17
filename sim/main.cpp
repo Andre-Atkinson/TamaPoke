@@ -4,6 +4,8 @@
 //   tamapoke_sim [--lang pt] [--clock "2026-11-13 10:00"] [--script FILE]
 //                [--out DIR] [--sprites DIR] [--serial-log FILE] [--square] [--quiet]
 //
+// A script with checks (expect, expect-not, expect-once; script.h) ends with "sim: checks P/N passed",
+// also with --quiet, and exits 1 unless all N ran and passed (tools/gate.sh reads that line).
 // tools/sim.sh compila y llama a este programa.
 #include <Arduino.h>
 #include <fstream>
@@ -168,6 +170,18 @@ int main(int argc, char **argv) {
     printf("sim: %s, lang %s, clock %u, sprites %s\n", BOARD_AMOLED_175C ? "1.75C" : "1.75",
            lang >= 0 ? simLangCode(lang) : "default", clock, o.sprites.c_str());
 
+  // expect, expect-not, expect-once (#99): the shim copies what the firmware prints into the window,
+  // from boot on, so the first check sees setup()'s lines too. Only when the script checks.
+  SimSerialWindow window;
+  // Every way out of main() stops the capture, so the shim never keeps a pointer to `window`
+  // after it is gone (the early `return 1`s after a failed shot or check included).
+  struct CaptureOff {
+    ~CaptureOff() { mockSerialCapture(nullptr); }
+  } captureOff;
+  const size_t checks = simCheckCount(script);
+  size_t checksPassed = 0;  // counted as they run: a check that never ran is not a pass
+  if (checks > 0) mockSerialCapture(&window.text);
+
   setup();
 
   int shots = 0;
@@ -182,8 +196,22 @@ int main(int argc, char **argv) {
       printf("sim: %s%s\n", path.c_str(), simPanelVisible() ? "" : " (panel dark: screen off or locked)");
     return true;
   };
-  for (size_t i = first; i < script.cmds.size() && !gSimPower.poweredOff; i++) {
+  for (size_t i = first; i < script.cmds.size(); i++) {
     const SimCmd &c = script.cmds[i];
+    if (simIsCheck(c.op)) {
+      std::string why;
+      if (window.check(c, why)) {
+        checksPassed++;
+      } else {
+        fflush(stdout);  // in order with the run's own lines when both go to one log
+        fprintf(stderr, "%s:%d: %s\n", o.script.c_str(), c.line, why.c_str());
+      }
+      continue;
+    }
+    window.stepRuns();
+    // The PMU powered the board off: nothing runs any more, but the checks left still do,
+    // on what was printed up to then (a script checks what an ending paid before the power-off).
+    if (gSimPower.poweredOff) continue;
     switch (c.op) {
       case OP_LANG:
       case OP_CLOCK:
@@ -276,6 +304,10 @@ int main(int argc, char **argv) {
       case OP_SHOT:
         if (!shot(c.text)) return 1;
         break;
+      case OP_EXPECT:
+      case OP_EXPECT_NOT:
+      case OP_EXPECT_ONCE:
+        break;  // run above, before the power-off cut
     }
   }
   fclose(serialLog);
@@ -284,6 +316,15 @@ int main(int argc, char **argv) {
     printf("sim: done at %.1f s simulated, %d screenshot(s), serial log %s\n", mockMillis64() / 1000.0, shots, logPath.c_str());
     printf("sim: %u sound effect(s) would have played (last: %d), %u light sleep(s)\n", (unsigned)mockSfxCount(),
            mockLastSfx(), (unsigned)simLightSleeps());
+  }
+  // Also with --quiet: tools/gate.sh compares the count with the script's expect steps.
+  if (checks > 0) {
+    printf("sim: checks %zu/%zu passed\n", checksPassed, checks);
+    fflush(stdout);
+    if (checksPassed != checks) {
+      fprintf(stderr, "sim: %zu of %zu check(s) did not pass in %s\n", checks - checksPassed, checks, o.script.c_str());
+      return 1;
+    }
   }
   return 0;
 }

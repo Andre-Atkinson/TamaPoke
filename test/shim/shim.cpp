@@ -55,6 +55,8 @@ static FILE *gSerialOut = nullptr;  // nullptr = callada (por defecto en los tes
 static std::deque<uint8_t> gSerialIn;
 void mockSerialSilence(bool quiet) { gSerialOut = quiet ? nullptr : stdout; }
 void mockSerialOutput(FILE *f) { gSerialOut = f; }
+static std::string *gSerialCapture = nullptr;
+void mockSerialCapture(std::string *to) { gSerialCapture = to; }
 void mockSerialFeed(const char *text) {
   for (const char *p = text; *p; p++) gSerialIn.push_back((uint8_t)*p);
 }
@@ -92,6 +94,7 @@ size_t MockSerial::write(uint8_t c) {
   if (gTxRoom == 0) { gTxRefused++; return 0; }
   if (gTxRoom > 0) gTxRoom--;
   if (gSerialOut) fputc(c, gSerialOut);
+  if (gSerialCapture) gSerialCapture->push_back((char)c);
   return 1;
 }
 int MockSerial::available() { return (int)gSerialIn.size(); }

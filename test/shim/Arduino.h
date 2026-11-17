@@ -59,6 +59,9 @@ public:
 extern MockSerial Serial;
 void mockSerialSilence(bool quiet);   // true: descarta la salida (por defecto)
 void mockSerialOutput(FILE *f);       // nullptr = callada
+// Also appends every byte the host takes to *to (the simulator's expect checks, #99);
+// nullptr = no copy (the default).
+void mockSerialCapture(std::string *to);
 void mockSerialFeed(const char *text);  // encola entrada como si llegara por USB
 // The host takes only the next `bytes` bytes, then every write comes back short (a full USB
 // transmit buffer nobody reads); -1 = no limit. mockSerialTxRefused() counts the bytes refused.
