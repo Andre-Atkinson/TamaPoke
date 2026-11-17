@@ -157,7 +157,7 @@ static void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS);
 
 #define TRAIN_GROUND 372            // the pet's feet on both exercise screens
 #define TRAIN_PET_S 4               // ...and its largest scale (a minigame's is 3)
-#define STAMINA_COL_NIGHT C565(0x9c, 0xcc, 0xf4)  // the stamina colour (FIT_STA_COLOR), lighter on the night sky
+#define STAMINA_COL_NIGHT C565(0x9c, 0xcc, 0xf4)  // the stamina blue (FIT_STA_COLOR), lighter at night
 
 void startExercise(uint8_t kind) {
   if (pet.isEgg() || pet.sleeping || pet.ceremony || (kind != EX_PUNCH && kind != EX_HOLD)) return;

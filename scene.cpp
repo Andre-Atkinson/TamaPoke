@@ -77,7 +77,7 @@ int sceneHour() {
 }
 
 void skyColors(int h, bool night, uint16_t &top, uint16_t &bot) {
-  if (night)                  { top = SKY_NIGHT_TOP;            bot = C565(0x1e, 0x26, 0x46); }
+  if (night)                  { top = SKY_NIGHT_TOP;          bot = C565(0x1e, 0x26, 0x46); }
   else if (h < SKY_DAWN_TO)   { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }  // amanecer
   else if (h < SKY_DUSK_FROM) { top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }  // dia
   else                        { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }  // atardecer

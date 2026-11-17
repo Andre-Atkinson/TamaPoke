@@ -34,8 +34,8 @@ TEST(PlayArea, the_bubbles_and_the_emote_share_the_walk_range_and_the_middle) {
   }
 }
 
-// Both hops stay between the ground and their height, reach it mid-hop and land at the end
-// of each hop, and the idle hop is the shared shape with its own numbers.
+// Both hops stay between the ground and their height, reach it mid-hop, land at the end of
+// each hop and repeat exactly, and the idle hop is the shared shape with its own numbers.
 TEST(PlayArea, the_idle_and_the_double_tap_hops_share_one_shape) {
   for (uint32_t e = 0; e < 3 * IDLE_HOP_MS; e++) CHECK_EQ(idleHopDy(e), hopDy(e, IDLE_HOP_MS, IDLE_HOP_PX));
   struct Hop { uint32_t ms; int px; } hops[] = { { IDLE_HOP_MS, IDLE_HOP_PX }, { PET_TAP_HOP_MS, PET_TAP_HOP_PX } };
@@ -45,6 +45,7 @@ TEST(PlayArea, the_idle_and_the_double_tap_hops_share_one_shape) {
       int dy = hopDy(e, h.ms, h.px);
       CHECK_RANGE(dy, -h.px, 0);
       if (dy < lowest) lowest = dy;
+      CHECK_EQ(hopDy(e + h.ms, h.ms, h.px), dy);  // every hop the same, one straight after another
     }
     CHECK_EQ(lowest, -h.px);
     CHECK_EQ(hopDy(h.ms / 2, h.ms, h.px), -h.px);  // the top, mid-hop
