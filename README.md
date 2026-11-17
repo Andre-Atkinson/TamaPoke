@@ -390,7 +390,8 @@ tools/flash_175c.sh --port /dev/ttyACM0 --out ./out
 ```
 
 Sprites live in a LittleFS partition in flash (151 normal forms; shinies fall
-back to the normal sprite), the clock is a software clock set from the clock
+back to the normal sprite unless you add theirs, one species at a time, with
+`tools/send_sd.py`), the clock is a software clock set from the clock
 screen, and the 1.75C adds a triple-PWR pocket screen lock, BOOT-button mute
 and more reliable strength-training taps. The default build is still the
 original 1.75. Details, pins and flashing in [`PORTING.md`](PORTING.md).
@@ -411,8 +412,12 @@ ACK), so you don't have to remove the card (it formats the SD to FAT if needed).
 ```bash
 python3 tools/pack_pmd.py       # fetch + pack PMD sprites: the 151 + shiny -> tools/sdcard/mons/p[s]NNN.bin
 python3 tools/make_thumbs.py    # Pokédex thumbnails (from the PMD sprites) -> thumbs.bin
-python3 tools/send_sd.py        # send tools/sdcard/mons/* to the board's SD over USB
+python3 tools/send_sd.py tools/sdcard/mons/*.bin   # original 1.75: send them all to the SD over USB
 ```
+
+`send_sd.py` sends only the files you name, after checking that they fit. The
+1.75C gets its normal sprites from its sprite image instead
+(`tools/build_spritefs.sh`, above), and its shinies one species at a time (below).
 
 To make the **one-click web-installer bundle** instead of sending over USB:
 
@@ -423,6 +428,48 @@ python3 tools/pack_bundle.py    # bundle tools/sdcard/mons/* into web/sprites.pa
 Then load it from the web installer's **"Load sprites"** button (or `send_sd.py`
 above). `pack_pmd.py` also takes individual dex numbers, e.g. `pack_pmd.py 7 25`.
 (~40 MB total, all PMD. Versioned under `tools/sdcard/`.)
+
+### Add a shiny sprite for one species (1.75C)
+
+The 1.75C's sprite storage holds the 151 normal sprites and `thumbs.bin`, with
+about 8,700 KB to spare. That is room for roughly 60 of the 151 shiny sprites:
+each one is 53 to 484 KB, about 134 KB on average. A shiny creature whose shiny
+file isn't on the board shows its normal sprite. To add one, plug the board in
+over USB, make sure no other program has its port open, and run:
+
+```bash
+python3 tools/send_sd.py --check ps151.bin   # read-only: would Mew's shiny fit?
+python3 tools/send_sd.py ps151.bin           # send it
+python3 tools/send_sd.py --ls                # read-only: what the board holds, and the room left
+```
+
+- `psNNN.bin` is the shiny sprite of dex number NNN (`ps025.bin` is Pikachu's), and a plain
+  name is taken from `tools/sdcard/mons/`. Name several files to send several. A bare run
+  sends nothing and shows how to use it.
+- Before sending anything, the script checks that every file fits in the free space
+  (`SDINFO`). A file the board already has is replaced, so its space counts as free. If they
+  don't all fit, nothing is sent.
+- It prints one line per file, stops at the first one that fails, and exits non-zero.
+- The board shows a new sprite as soon as it arrives. The screen pauses while a file goes
+  over (the board's main loop is busy receiving it).
+- **If a send fails part-way** (or you press Ctrl-C), the board may hold only part of that
+  file, or none of it, because `PUT` deletes the old copy first, and it can't use a partial
+  file. The creature keeps the sprite the board already has loaded until the board loads it
+  again (after a restart, when the creature changes, or once another file arrives whole).
+  Then a shiny form shows a "?" and "No sprites" instead of its sprite (the nine species of
+  the three starter lines show a small built-in sprite), or, if the board refused the send
+  and no file is left, the normal sprite. The script waits for the board to give up on the
+  file, then prints the command that sends it again. If the board never said so (a second
+  Ctrl-C, or no answer), it tells you to wait 10 seconds first: until then the board may
+  still take what you send as part of the file. A file whose last answers only came late
+  counts as sent.
+- It refuses a file the board would not load: one that doesn't start with the right four
+  bytes for its name, or is too small or too big (`psNNN.bin` and `pNNN.bin` 7 bytes to
+  3 MiB, `thumbs.bin` 10 bytes to 2 MiB).
+- There is no command that deletes a file from the board. A shiny you sent stays until the
+  sprite image is flashed again (`tools/build_spritefs.sh`, then
+  `tools/flash_175c.sh --fs-only --out tools/build`, which flashes the image just built),
+  which puts back the 151 normal sprites and `thumbs.bin`, and nothing else.
 
 ## How to play
 
@@ -660,7 +707,7 @@ set after a power cut.
 - `pin_config.h` — the board's official pins
 - `tools/` — pipeline: `dex_data.py` (data), `dex_stats.py`, `gen_dex.py`,
   `sprites.py` (workshop), `pack_pmd.py` / `make_thumbs.py`
-  (packers), `pack_bundle.py` (web bundle), `send_sd.py` (SD upload), `touch_log.py`
+  (packers), `pack_bundle.py` (web bundle), `send_sd.py` (sends the sprite files you name over USB), `touch_log.py`
 - `tools/sdcard/mons/` — the generated .bin files (animated, shiny, PMD, thumbnails)
 - `web/` — the browser installer (ESP Web Tools + Web Serial sprite loader)
 
@@ -734,7 +781,8 @@ to the clock) · `SCENE?` (read-only: `place today home wx prev mix season clock
 `*` after a forced value) · `BATLOG?` (read-only: the battery diary, a `BATLOG rows= cap=
 unsaved= period_min=` line, a CSV header and the rows; `tools/board.py batlog` turns it into
 a CSV file) · `BATLOG CLEAR` (starts a new battery diary; the pet is not touched) ·
-`LS` / `PUT` (SD files). `tools/board.py`
+`SDINFO` / `LS` / `PUT` (the sprite files: free space, list, send one; `tools/send_sd.py`
+sends sprite files with them). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.
 
 To test fast: lower `PET_TICK_MS`, `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.

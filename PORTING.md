@@ -258,8 +258,21 @@ The repo pack at `tools/sdcard/mons/` is about **41.7 MB** with shinies and
 a 3 MB app in 32 MB, so the 1.75C image (`tools/build_spritefs.sh`) holds **all
 151 normal sprites and `thumbs.bin`** in the 28.875 MB `storage` partition.
 Shiny forms fall back to the normal sprite (the firmware already did that when a
-shiny file was missing). Roughly 7 MB is left for individual shiny files sent
-over USB with `tools/send_sd.py`.
+shiny file was missing). About 8,700 KB is left (`SDINFO` on the board:
+`total=30277632 used=21368832`). That is room for roughly 60 of the 151 shiny
+files (53 to 484 KB each), sent one species at a time over USB:
+`python3 tools/send_sd.py ps151.bin` sends Mew's (README, "Add a shiny sprite for
+one species"). The script sends only the files it is given, and only after
+checking with `SDINFO` and `LS` that they fit. It counts each file as whole 4 KB
+LittleFS blocks plus one more, keeps 64 KB spare, and counts a file it replaces
+as freed. There is no delete command. A shiny that was sent stays until the
+sprite image is flashed again, and a send that fails part-way leaves a partial
+file, which the firmware can't load. A shiny with a partial file shows a "?" (it
+does not fall back to the normal sprite), but only once the board loads that sprite
+again (a restart, the creature changing, or another file arriving whole): a failed
+`PUT` leaves `sdDirty` false, so the sprite already in memory stays. If the board refused the `PUT` after removing the
+old copy, no file is left and the shiny shows the normal sprite. Sending the file
+again fixes both.
 
 `sdBegin()` mounts LittleFS at `/littlefs` (label `storage`) and **does not
 auto-format**: a failed mount means the image hasn't been flashed yet. Paths
