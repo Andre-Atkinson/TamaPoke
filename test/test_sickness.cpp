@@ -553,3 +553,45 @@ TEST(sick, an_egg_loads_well_whatever_the_save_says) {
   CHECK(b.isEgg());
   CHECK(!b.isSick());
 }
+
+// Round 2 (R2-1): the powered-off catch-up leaves a sick pet as it was: no minute sick, no
+// slip-up, and no cure, awake or asleep, even past SICK_HEAL_MIN.
+TEST(sick, the_powered_off_catch_up_never_counts_a_sick_pet) {
+  Pet p;
+  hatchPet(p, 4);
+  makeSick(p);
+  p.setClock(1000u * 86400);
+  minutesAt(p, 30, RED);
+  uint8_t slips = p.careMistakes;
+  p.syncClock(1000u * 86400 + 600 * 60);  // 10 h off, awake
+  CHECK(p.isSick());
+  CHECK_EQ(p.sickMinutes(), (uint16_t)30);
+  CHECK_EQ(p.careMistakes, slips);
+  p.hygiene = CLEAN;
+  p.toggleLight();  // asleep: its floor of 45 keeps the hygiene out of the red
+  uint32_t t = 1000u * 86400 + 700 * 60;
+  p.setClock(t);
+  p.syncClock(t + 13 * 3600);  // 13 h off, more than SICK_HEAL_MIN
+  CHECK(p.hygiene >= SICK_DIRTY);
+  CHECK_MSG(p.isSick(), "the catch-up never cures it");
+}
+
+// Round 2 (R2-2): falling sick and getting better by itself each ask for a save at once (the
+// periodic one would come within five minutes anyway)
+TEST(sick, falling_sick_and_getting_better_ask_for_a_save) {
+  Pet p;
+  hatchPet(p, 4);
+  p.setSickMode(SICK_ON);
+  minutesAt(p, SICK_AFTER_MIN - 1, RED);
+  p.saveNow();
+  CHECK(!p.savePending());
+  minutesAt(p, 1, RED);
+  CHECK(p.isSick());
+  CHECK_MSG(p.savePending(), "falling sick asks for a save");
+  minutesAt(p, SICK_HEAL_MIN - 1, CLEAN);
+  p.saveNow();
+  minutesAt(p, 1, CLEAN);
+  CHECK(!p.isSick());
+  CHECK_MSG(p.savePending(), "getting better asks for a save");
+}
+

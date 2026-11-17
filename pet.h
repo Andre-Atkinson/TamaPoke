@@ -57,7 +57,8 @@
 // way but the run-away the game already has. All of it is Pet::sickTick(), once a minute.
 //  - Falling sick: the hygiene bar in the red (under SICK_DIRTY) for SICK_AFTER_MIN counted
 //    minutes in a row. A counted minute is a live one, awake, outside quiet hours (which
-//    include a stale or unknown clock): a minute the pet could have called the player. Asleep
+//    include a stale or unknown clock), the hours the attention calls stay silent. The 1.75C's
+//    pocket lock silences the calls too but still counts: the player locked it. Asleep
 //    or in quiet hours the count waits; any clean (hygiene back to SICK_DIRTY or more) starts
 //    it again. Both paces count alike: relaxed only makes the bar go red later. The
 //    powered-off catch-up (syncClock) never counts.

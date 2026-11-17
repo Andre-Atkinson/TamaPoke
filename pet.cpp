@@ -285,7 +285,8 @@ void Pet::addSlipUp() {
 
 // Sickness's minute (#15, SICK_* in pet.h). `awake`: from tick()'s awake minute; asleep only
 // the cure counts. A counted minute is awake and outside quiet hours (the sketch sets
-// quietHours, which holds for a stale or unknown clock too): one the pet could have called in.
+// quietHours, which holds for a stale or unknown clock too). The 1.75C's pocket lock, which
+// silences the calls too, still counts (pet.h, SICK_*).
 void Pet::sickTick(bool awake) {
   if (sickMode != SICK_ON) return;
   bool dirty = hygiene < SICK_DIRTY;
