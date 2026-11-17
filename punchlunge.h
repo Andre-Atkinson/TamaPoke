@@ -5,10 +5,12 @@
 //
 // Why ATTACK isn't drawn like the other actions (drawPmdActM). Sprite facts (the shipped
 // pack, 151 species and their shinies, 2026-11-17):
-// - Every ATTACK is the sheet's front-facing row (tools/pack_pmd.py), so its strike moves
-//   16-31 sprite px toward the viewer, down its canvas. Stood on its lowest pixel in any
-//   frame (PmdAct::base), the frames before and after the strike would float 50-120 px
-//   above the ground: the pet would leap up on every punch.
+// - Every ATTACK is the sheet's front-facing row (tools/pack_pmd.py), so its
+//   strike moves 13-31 sprite rows toward the viewer, down its canvas (frame 0 to the
+//   strike). Stood on its lowest pixel in any frame (PmdAct::base), the frames before and
+//   after the strike would float above the ground by up to the whole spread of the frames'
+//   feet, 16-37 rows, or about 45-150 px at IDLE's scale: the pet would leap up on every
+//   punch.
 // - Its canvas is 80-88 px tall to make room for that move, so drawPmdActM() steps the scale
 //   down for 86 of the 151 species at the punch's cap (pmdScaleFor in sdmon.h). The art
 //   itself is drawn at IDLE's pixel size in every action.
@@ -19,8 +21,9 @@
 // Owner's decisions (2026-11-17): every species lunges, a frame that doesn't fit the room
 // keeps today's look (the pet on IDLE); the lunge starts at the strike and is back to IDLE by
 // MAX_MS; a tap that doesn't land shows nothing (exercise.h: it does nothing and costs
-// nothing); the plan is worked out from the sprite on screen, here when a punch lands
-// (exerciseTap), not stored with the sprite or in a table.
+// nothing); the plan is worked out from the sprite on screen, once per punch session
+// (startExercise, and again if the sprite on screen changes), not stored with the sprite or
+// in a table.
 #pragma once
 #include <stdint.h>
 #include "exercise.h"
@@ -32,9 +35,9 @@ struct PunchLunge {
   static constexpr uint32_t MAX_MS = 700;
   static constexpr uint8_t MAX_FRAMES = 24;  // PmdAct::ms[]: a TPK2 action has at most 24
   // The room on the punch screen, from the pet's feet and its centre (gameui.cpp checks it
-  // against the layout): the tallest frame stays under the punch count, and neither side
-  // reaches past the round panel's edge.
-  static constexpr int ROOM_UP = 252;
+  // against the layout): the tallest frame stays under the time bar (57 rows at scale 4,
+  // with a small gap), and neither side reaches past the round panel's edge.
+  static constexpr int ROOM_UP = 228;
   static constexpr int ROOM_SIDE = 120;
 
   bool ok = false;     // a landed punch lunges with this plan

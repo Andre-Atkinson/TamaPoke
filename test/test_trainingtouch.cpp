@@ -390,12 +390,14 @@ TEST(PunchLunge, OnlyALandedPunchLunges) {
   CHECK_MSG(l.frameAt(p, RP::CONTACT_MS + 150, ms) == 2, "the first punch's lunge runs on");
 }
 TEST(PunchLunge, AFrameThatDoesNotFitTheRoomKeepsTodaysLook) {
-  // 64 x 64 at scale 4: a 63-row frame is 252 px tall (the room), 64 rows is 256
+  // 64 x 64 at scale 4: ROOM_UP is 228 (gameui.cpp keeps it clear of the time bar), so a
+  // 57-row frame is 228 px tall (the room), 58 rows is 232
+  CHECK_EQ(PL::ROOM_UP, 57 * 4);
   LungeFrames tall(64, 64);
-  tall.add(0, 63, 20, 40).add(1, 64, 20, 40);
+  tall.add(0, 57, 20, 40).add(1, 58, 20, 40);
   CHECK_MSG(tall.plan().ok, "exactly ROOM_UP tall fits");
   LungeFrames taller(64, 64);
-  taller.add(0, 63, 20, 40).add(0, 64, 20, 40);
+  taller.add(0, 57, 20, 40).add(0, 58, 20, 40);
   CHECK_MSG(!taller.plan().ok, "taller than the room: IDLE as today");
   // the canvas centre is 128 px in: columns from 2 (120 px left of it) to 62 (120 right) fit
   LungeFrames wide(64, 64);
@@ -429,6 +431,12 @@ TEST(PunchLunge, NothingToPlanFromKeepsTodaysLook) {
   CHECK(!l.ok);
   l.plan(f.px.data(), f.W, f.H, f.n, 0);
   CHECK(!l.ok);
+  // a plan that isn't ok still records the sprite it looked at (gameui.cpp plans a sprite
+  // once, and drawPunch asks isFor): scale 0 is "no PMD sprite", whose pointers may be null
+  CHECK_MSG(l.isFor(f.px.data(), f.W, f.H, f.n), "a plan with no scale knows its sprite");
+  l.plan(nullptr, 0, 0, 0, 0);
+  CHECK(!l.ok);
+  CHECK_MSG(l.isFor(nullptr, 0, 0, 0), "an unloaded sprite is planned once, not every frame");
   std::vector<uint8_t> many((size_t)f.W * f.H * (PL::MAX_FRAMES + 1), 1);
   l.plan(many.data(), f.W, f.H, PL::MAX_FRAMES + 1, 4);
   CHECK_MSG(!l.ok, "more frames than a TPK2 action holds");
@@ -458,6 +466,48 @@ TEST(PunchLunge, IsDrawnOnlyForTheSpriteItWasPlannedFrom) {
   CHECK(!l.isFor(f.px.data(), f.W + 1, f.H, f.n));
   CHECK(!l.isFor(f.px.data(), f.W, f.H + 1, f.n));
   CHECK(!l.isFor(f.px.data(), f.W, f.H, f.n - 1));
+}
+TEST(PunchLunge, PlanningAgainStartsFromScratch) {
+  // the firmware plans into one static, again when the sprite changes: nothing of the last
+  // plan may survive (every other test plans into a fresh object)
+  PL l;
+  LungeFrames a;  // fits; the strike is its third frame
+  a.add(0, 5).add(1, 6).add(4, 9).add(3, 8).add(2, 7);
+  l.plan(a.px.data(), a.W, a.H, a.n, 4);
+  CHECK(l.ok);
+  CHECK_EQ(l.strike, (uint8_t)2);
+  LungeFrames big(64, 64);  // doesn't fit (64 rows at scale 4); its strike is frame 1
+  big.add(0, 60, 20, 40).add(0, 64, 20, 40);
+  l.plan(big.px.data(), big.W, big.H, big.n, 4);
+  CHECK_MSG(!l.ok, "a plan that doesn't fit is not ok, whatever the one before was");
+  CHECK_EQ(l.strike, (uint8_t)1);
+  LungeFrames c;  // the lowest frame is frame 0
+  c.add(5, 9).add(2, 6).add(1, 5);
+  l.plan(c.px.data(), c.W, c.H, c.n, 4);
+  CHECK(l.ok);
+  CHECK_MSG(l.strike == 0, "the strike starts from frame 0 again: " + testStr(l.strike));
+  LungeFrames d;  // frame 0 is empty, before the strike
+  d.addEmpty().add(4, 9).add(2, 7);
+  l.plan(d.px.data(), d.W, d.H, d.n, 4);
+  CHECK(l.ok);
+  CHECK_MSG(l.feet[0] == 0, "an empty frame has no feet: " + testStr(l.feet[0]));
+  CHECK_EQ(l.strike, (uint8_t)1);
+}
+TEST(PunchLunge, ScaleRuleIsTheRenderers) {
+  // pmdScaleFor(idleH, actH, maxS): IDLE fills about 170 px (never under 2, never over the
+  // cap); a taller action steps down until it is at most 250 px, but not under 2
+  CHECK_EQ(pmdScaleFor(0, 0, 5), (uint8_t)5);     // no IDLE height: the cap
+  CHECK_EQ(pmdScaleFor(0, 0, 4), (uint8_t)4);
+  CHECK_EQ(pmdScaleFor(34, 34, 5), (uint8_t)5);   // 170 / 34
+  CHECK_EQ(pmdScaleFor(36, 36, 5), (uint8_t)4);   // 170 / 36 (180 / 36 would be 5)
+  CHECK_EQ(pmdScaleFor(42, 42, 4), (uint8_t)4);
+  CHECK_EQ(pmdScaleFor(100, 100, 5), (uint8_t)2); // 170 / 100 = 1: the floor
+  CHECK_EQ(pmdScaleFor(34, 50, 5), (uint8_t)5);   // 250 px: not over
+  CHECK_EQ(pmdScaleFor(34, 51, 5), (uint8_t)4);   // 255 px: one step down
+  CHECK_EQ(pmdScaleFor(42, 64, 4), (uint8_t)3);   // 256 px
+  CHECK_EQ(pmdScaleFor(42, 80, 4), (uint8_t)3);   // 320 px, 240 at scale 3
+  CHECK_EQ(pmdScaleFor(42, 88, 4), (uint8_t)2);   // 352 and 264 px: down to 2
+  CHECK_EQ(pmdScaleFor(42, 200, 4), (uint8_t)2);  // still over at 2: the floor
 }
 
 // The shipped sprite pack (tools/sdcard/mons, TPK2: PmdMon::load): every species and every
