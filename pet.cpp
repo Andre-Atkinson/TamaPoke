@@ -3,6 +3,10 @@
 #include "exercise.h"
 #include "audio.h"
 #include "bedtime.h"
+#include "attention.h"  // ATTN_LOW: sickness's "dirty" is the hygiene bar's red (#15)
+
+static_assert(SICK_DIRTY == ATTN_LOW, "sickness counts the minutes the hygiene bar is red and calling");
+static_assert(SICK_RUNAWAY_MIN % SICK_SLIP_MIN == 0, "the run-away comes on an hour's boundary");
 
 void Pet::begin() {
   prefs.begin("tamapoke", false);
@@ -45,6 +49,8 @@ void Pet::newEgg() {
   mistakeCooldown = 0;
   sleeping = false;
   milked = false;  // a new pet has had no milk (#13)
+  clearSickness();  // a new pet is well (#15)
+  medUntil = 0;
   save();
 }
 
@@ -125,6 +131,7 @@ void Pet::update(uint32_t nowMs) {
   endIfPast(evolveUntil);
   endIfPast(toyUntil);
   endIfPast(milkUntil);
+  endIfPast(medUntil);
   endIfPast(eatUntil);
   endIfPast(heartUntil);
   // fin de ceremonia: la criatura se va y queda un huevo nuevo
@@ -165,6 +172,7 @@ void Pet::tick() {
       joy = dropTo(joy, 1, 35);
     }
     if (ageMinutes % 3 == 0) hygiene = dropTo(hygiene, 1, 45);
+    sickTick(false);    // asleep it can only get better (#15)
     checkMedals(true);  // aun puede cruzar un nivel por edad mientras duerme
     if (++ticksSinceSave >= 5) pendingSave = true;
     return;
@@ -206,15 +214,16 @@ void Pet::tick() {
   // both paces: relaxed only halves the drain.
   if (selfCareOn) selfCare();
 
+  // Sickness (#15): after self-care, so a bath it gives this minute counts as clean, and before
+  // the needs' slip-up below, which it neither waits for nor shares a cooldown with.
+  sickTick(true);
+
   // Descuido: dejar una estadistica por los suelos cuenta como error de
   // cuidado (con enfriamiento para no contar el mismo descuido cada minuto)
   if (mistakeCooldown > 0) mistakeCooldown--;
   if (lowestStat() <= 10 && mistakeCooldown == 0) {
-    careMistakes++;
+    addSlipUp();  // el descuido enfria el vinculo, pero sin arrasarlo (-1)
     mistakeCooldown = 60;
-    if (bond > 1) bond--;  // el descuido enfria el vinculo, pero sin arrasarlo:
-                           // a -3 cada 30 min se perdia mucho mas de lo que se
-                           // podia ganar en todo un dia y el vinculo se atascaba
   }
 
   // la evolucion la dispara el usuario (canEvolveNow + tap), no el tick.
@@ -262,6 +271,53 @@ void Pet::drainJoy() {
   if (fullness < 30) dJoy -= 2;
   if (hygiene < 30) dJoy -= 2;
   joy = clamp100(joy + dJoy);
+  if (sick) joy = dropTo(joy, 1, SICK_JOY_FLOOR);  // #15: one more, never under the floor
+}
+
+// A slip-up: a need left at 10 or under (tick) or sickness (#15). Each one puts the evolution
+// a level later (canEvolveNow) and cools the bond by 1, never under 1: at -3 every 30 min far
+// more was lost than a whole day's care could win back, and the bond got stuck. careMistakes
+// is a byte, so it stops at 255 rather than wrap back to a spotless 0.
+void Pet::addSlipUp() {
+  if (careMistakes < 255) careMistakes++;
+  if (bond > 1) bond--;
+}
+
+// Sickness's minute (#15, SICK_* in pet.h). `awake`: from tick()'s awake minute; asleep only
+// the cure counts. A counted minute is awake and outside quiet hours (the sketch sets
+// quietHours, which holds for a stale or unknown clock too): one the pet could have called in.
+void Pet::sickTick(bool awake) {
+  if (sickMode != SICK_ON) return;
+  bool dirty = hygiene < SICK_DIRTY;
+  bool counted = awake && !quietHours;
+  if (!sick) {
+    if (!dirty) germMin = 0;  // any clean starts the count again
+    else if (counted && ++germMin >= SICK_AFTER_MIN) {
+      sick = true;
+      germMin = healMin = sickMin = 0;
+      addSlipUp();  // falling sick is a slip-up
+      Serial.println("sick: fell ill");
+      pendingSave = true;
+    }
+    return;
+  }
+  if (!dirty && ++healMin >= SICK_HEAL_MIN) {  // a red minute only pauses it
+    clearSickness();
+    Serial.println("sick: better by itself");
+    pendingSave = true;
+    return;
+  }
+  if (counted && sickMin < SICK_RUNAWAY_MIN) {
+    sickMin++;
+    // one more slip-up each hour sick; the hour it runs away has none
+    if (sickMin % SICK_SLIP_MIN == 0 && sickMin < SICK_RUNAWAY_MIN) addSlipUp();
+    if (sickMin == SICK_RUNAWAY_MIN) Serial.println("sick: runs away");
+  }
+}
+
+void Pet::clearSickness() {
+  sick = false;
+  germMin = healMin = sickMin = 0;
 }
 
 void Pet::setCharger(bool pmuOk, bool usb, uint32_t idleMs) {
@@ -621,6 +677,7 @@ void Pet::hatch() {
 // usuario tocando al bicho (evolve()), para que vea la transformacion.
 bool Pet::canEvolveNow() const {
   if (isEgg() || sleeping || ceremony != CER_NONE) return false;
+  if (sick) return false;  // it evolves once it is better (#15)
   const DexEntry &d = DEX_TBL[speciesId];
   if (d.evolvesTo == 0) return false;
   return level() >= (uint16_t)d.evolveLevel + careMistakes && lowestStat() >= 40;
@@ -709,6 +766,21 @@ bool Pet::giveMilk() {
   heartUntil = now + HEART_MS;
   eatUntil = milkUntil = now + EAT_ANIM_MS;
   milked = true;
+  addBond(1);
+  registerCare();
+  save();
+  return true;
+}
+
+// The medicine (#15): taken like the warm milk is drunk (eating() for EAT_ANIM_MS, the pill
+// while takingMedicine()). It is the player's care, so it saves at once.
+bool Pet::giveMedicine() {
+  if (!sick || ceremony != CER_NONE || isEgg() || sleeping) return false;
+  uint32_t now = millis();
+  clearSickness();
+  joy = clamp100(joy + SICK_MEDICINE_JOY);
+  heartUntil = now + HEART_MS;
+  eatUntil = medUntil = now + EAT_ANIM_MS;
   addBond(1);
   registerCare();
   save();
@@ -841,6 +913,16 @@ void Pet::setEggPickMode(uint8_t v) {
   prefs.putUChar("eggch", eggPickMode);
 }
 
+// Off cures the pet and clears the counts (#15), and saves them; on starts counting from 0
+void Pet::setSickMode(uint8_t v) {
+  sickMode = v < SICK_MODES ? v : (uint8_t)SICK_OFF;
+  prefs.putUChar("sickopt", sickMode);
+  if (sickMode == SICK_OFF && (sick || germMin || healMin || sickMin)) {
+    clearSickness();
+    save();
+  }
+}
+
 void Pet::clean() {
   if (ceremony != CER_NONE) return;
   poops = 0;
@@ -920,6 +1002,10 @@ void Pet::save() {
   prefs.putUShort("mgs", songHi);
   prefs.putUChar("phi", punchHi);
   prefs.putUShort("tdefm", goodTicks);
+  prefs.putBool("sick", sick);  // #15
+  prefs.putUShort("sickg", germMin);
+  prefs.putUShort("sickh", healMin);
+  prefs.putUShort("sickt", sickMin);
   prefs.putString("nick", nick);
 }
 
@@ -987,6 +1073,11 @@ void Pet::load() {
   pace = prefs.getUChar("pace", PACE_NORMAL);
   bedPreset = prefs.getUChar("bed", 0);
   eggPickMode = prefs.getUChar("eggch", EGGPICK_OFF);
+  sickMode = prefs.getUChar("sickopt", SICK_OFF);  // saves from before #15: none, off and well
+  sick = prefs.getBool("sick", false);
+  germMin = prefs.getUShort("sickg", 0);
+  healMin = prefs.getUShort("sickh", 0);
+  sickMin = prefs.getUShort("sickt", 0);
 
   // Range-check what came out of NVS before anything indexes with it. Normally
   // these were written by this firmware, but a different build flashed earlier
@@ -1011,11 +1102,19 @@ void Pet::load() {
   if (pace >= PACE_COUNT) pace = PACE_NORMAL;
   if (bedPreset >= BED_PRESETS) bedPreset = 0;
   if (eggPickMode >= EGGPICK_COUNT) eggPickMode = EGGPICK_OFF;
+  // Sickness (#15): a count no minute of the game can reach reads as 0, which never makes the
+  // pet sick sooner. A damaged recovery count read as 0 makes it wait longer; it never fakes a
+  // cure, a run-away or a sickness.
+  if (sickMode >= SICK_MODES) sickMode = SICK_OFF;
+  if (germMin >= SICK_AFTER_MIN) germMin = 0;
+  if (healMin >= SICK_HEAL_MIN) healMin = 0;
+  if (sickMin > SICK_RUNAWAY_MIN) sickMin = 0;
   if (eggTarget < 1 || eggTarget > DEX_COUNT) eggTarget = pickEggSpecies();
   if (speciesId == 0 || speciesId < -1 || speciesId > DEX_COUNT) {
     newEgg();  // that pet doesn't exist in this firmware: start a fresh egg
     return;
   }
+  if (sickMode == SICK_OFF || isEgg()) clearSickness();  // nothing counts while it's off; an egg is well
   // A pending egg choice only makes sense on an egg with no starter choice open
   // (if a damaged save has both, the starter screen wins). Candidates that are
   // not three distinct egg species are rolled again around the saved roll (eggTarget,
