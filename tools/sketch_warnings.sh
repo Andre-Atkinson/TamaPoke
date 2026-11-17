@@ -21,7 +21,7 @@
 # are counted must compile every sketch file: CI builds from scratch, and the
 # gate's incremental builds compile the sketch again every run
 # (tools/build_cache.sh). The core and libraries they reuse never counted.
-TP_WARN_BASELINE="${WARN_BASELINE:-18}"
+TP_WARN_BASELINE="${WARN_BASELINE:-17}"
 TP_SKETCH_WARN_RE='TamaPoke/[^:]+:[0-9]+:[0-9]+: warning:'
 # Same rule as TAMAPOKE_JOBS: no leading zeros (bash (( )) reads 08 and 010 as
 # octal) and a bounded length (no overflow).

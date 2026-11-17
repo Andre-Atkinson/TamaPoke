@@ -257,6 +257,12 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Changed
 
+- **The unused `Pet::play()` is gone** (#87). The Play button runs the minigames
+  (`playGame`), and only the host tests still called `play()`; they now test a game's
+  reward instead. The two warnings Linux g++ gave on the host tests are fixed too (#98),
+  and CI now fails on any new one. One of them was also a firmware warning, so each
+  firmware build has 17 instead of 18. Nothing changes on the screen or in the save.
+
 - **Calmer exercises** (#78). The stat card's button is now *Train*, and it offers
   two exercises instead of tapping the bag as fast as possible:
   - **Punch** (strength): the bag swings in to the creature and back, 12 times. Tap as it
