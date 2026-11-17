@@ -1170,7 +1170,10 @@ class TestSketchWarnings(unittest.TestCase):
         self.assertEqual(len(suites), 1, 'expected one step that runs the suite')
         self.assertRegex(suites[0], r'\n        shell: bash\n', 'a tee without pipefail hides a failed suite')
         self.assertRegex(suites[0], re.compile(r'2>&1 \| tee "\$RUNNER_TEMP/tests\.log"$', re.M))
-        checks = [st for st in steps if st.startswith('name: No host build warnings')]
+        # the check below looks only for warnings: a failing test fails the job through this step
+        self.assertNotIn('continue-on-error', suites[0])
+        self.assertNotRegex(suites[0], r'\n        if:')
+        checks =[st for st in steps if st.startswith('name: No host build warnings')]
         self.assertEqual(len(checks), 1, 'expected the warning check step')
         check = checks[0]
         self.assertIn('$RUNNER_TEMP/tests.log', check)
