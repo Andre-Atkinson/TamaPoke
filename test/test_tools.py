@@ -2714,6 +2714,14 @@ class TestSendSd(unittest.TestCase):
                             ('RESYNC_TIMEOUT', 0.5)):
             self.patch(name, value)
 
+        # Never the real board: a run that gets as far as looking for one without --port (a
+        # broken usage check) fails here instead of opening a board plugged into this computer.
+        def no_real_board(explicit=None):
+            if explicit:
+                return explicit
+            raise AssertionError('send_sd.py looked for a real board (no --port)')
+        self.patch('find_port', no_real_board)
+
     def patch(self, name, value):
         self.addCleanup(setattr, self.sd, name, getattr(self.sd, name))
         setattr(self.sd, name, value)
