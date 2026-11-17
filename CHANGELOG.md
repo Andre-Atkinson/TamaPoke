@@ -254,6 +254,13 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
   faster, and one with stamina keeps hopping a little longer. Serial `STATS` still
   prints the full ATK/DEF/SPD. The simulator's `train STR STA SPD` step sets the
   training for screenshots (`sim/scripts/fitness.txt`).
+- Simulator: `expect TEXT`, `expect-not TEXT` and `expect-once TEXT` steps check the serial
+  output (#99): some line, no line, or exactly one line printed since the previous check
+  contains TEXT (`*` stands for any run of characters). A failed check makes the run exit
+  1, and `tools/gate.sh` runs every script with a check on both boards.
+  `game-screen-off.txt` and `exercise-screen-off.txt` now check what was only read in
+  `serial.log` before: PWR, the pocket lock and a flat battery each pay a minigame or an
+  exercise once, with its own line, and nothing pays it again later.
 
 ### Changed
 

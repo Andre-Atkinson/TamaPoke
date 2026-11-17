@@ -102,18 +102,23 @@ It runs: `test/run_tests.sh --asan` (host logic + ASan/UBSan + tools tests),
 --warnings=all`) with `--warnings=all`, and the desktop simulator for both
 boards (`tools/sim.sh --board 175c` and `--board 175`, each with `--lang en
 --script sim/scripts/screens.txt --out <dir> --quiet`; the PNG count must equal
-the lines matching `^[[:space:]]*shot[[:space:]]` in that script). When
-`sdl2-config` works it also builds the interactive simulator window and runs
-its `--selftest` (synthetic SDL events, `SDL_VIDEODRIVER=dummy`) for both
-boards, one `window <board>` line each; without SDL2 it records `SKIP  window
-(no SDL2)`. SDL2 is opt-in and only the window needs it: ask the owner before
-installing it. The builds run from a staged copy of
-the working tree in a folder named `TamaPoke`, because arduino-cli rejects a
-sketch whose folder name differs from the `.ino` (every agent worktree).
-`tools/build_175c.sh` on its own stages the same way, so it and
-`tools/update_175c.sh` work from any worktree as it is. Never
-run the builds by hand through a `grep` pipe: it hides failures and the exit
-code becomes grep's.
+the lines matching `^[[:space:]]*shot[[:space:]]` in that script). Then, for
+both boards, every script in `sim/scripts/` with an `expect`, `expect-not` or
+`expect-once` step (checks on the serial output, `sim/script.h`; no `--lang`,
+so the script's own `lang` applies), one `sim checks <board>` line each: every
+run must exit 0 and print `sim: checks N/N passed`, where N is the number of
+lines matching `^[[:space:]]*expect(-not|-once)?([[:space:]]|$)` in that
+script. With no such script it records `SKIP  sim checks`. When `sdl2-config` works it also builds the
+interactive simulator window and runs its `--selftest` (synthetic SDL events,
+`SDL_VIDEODRIVER=dummy`) for both boards, one `window <board>` line each;
+without SDL2 it records `SKIP  window (no SDL2)`. SDL2 is opt-in and only the
+window needs it: ask the owner before installing it. The builds run from a
+staged copy of the working tree in a folder named `TamaPoke`, because
+arduino-cli rejects a sketch whose folder name differs from the `.ino` (every
+agent worktree). `tools/build_175c.sh` on its own stages the same way, so it
+and `tools/update_175c.sh` work from any worktree as it is. Never run the
+builds by hand through a `grep` pipe: it hides failures and the exit code
+becomes grep's.
 
 Both builds compile with `--jobs ${TAMAPOKE_JOBS:-3}`, one after the other
 (`tools/build_175c.sh` honours the same variable on its own). arduino-cli's
@@ -134,7 +139,9 @@ per build) fails the gate and CI's `Compile firmware`, which count them with
 that same script; only new warnings are findings, and a PR that changes the
 count updates the baseline. CI's `Game-logic tests (host, no board)` job builds
 the host tests with Linux g++, and its `No host build warnings` step fails on
-any `: warning: ` line, which macOS clang (and so the gate) may not show (#98).
+any `: warning: ` line. The gate's host tests fail the same way, on the same
+lines counted the same way (`N host build warning(s)` on their summary line),
+but macOS clang doesn't show every warning g++ does (#98).
 `ruff check tools/` and a
 generated-headers check (needs Pillow) run in CI but not in the gate: ask the
 owner before installing ruff (even into `.venv/`).
@@ -231,8 +238,8 @@ most two builds at a time, parallel sessions queued behind them. A
   firmware builds, so it includes the desktop simulator for both boards, which
   CI does not run. The simulator uses the host compiler, so it is not a
   firmware build and is outside the two-builds limit. Report the summary
-  lines (they include each board's screen count and host warning count) and
-  any `warning:` lines it prints.
+  lines (they include each board's screen count and host warning count, and
+  each board's `sim checks` count) and any `warning:` lines it prints.
 - **Checks CI** for the firmware builds: `gh pr checks <n> --repo
   Andre-Atkinson/TamaPoke` must list `Compile firmware` as passing, which also
   means both builds fit `app0` and neither has more sketch warnings than

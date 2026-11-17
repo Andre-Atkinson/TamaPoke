@@ -960,14 +960,25 @@ class FakeArduinoCliCase(unittest.TestCase):
         shutil.copy2(self.PARTS, os.path.join(root, 'boards', '175c', 'partitions.csv'))
         put(os.path.join(root, 'TamaPoke.ino'), b'void setup() {}\nvoid loop() {}\n')
         self.ran = os.path.join(self.tmp, 'ran')
+        # FAKE_TEST_LOG: a file whose text the stand-in suite prints (compiler warnings, say);
+        # FAKE_TEST_RC: its exit code (0 by default).
         stub = os.path.join(root, 'test', 'run_tests.sh')
-        put(stub, f'#!/usr/bin/env bash\necho tests >> "{self.ran}"\necho "TODO OK"\n'.encode())
+        put(stub, (f'#!/usr/bin/env bash\necho tests >> "{self.ran}"\n'
+                   f'[[ -n "${{FAKE_TEST_LOG:-}}" ]] && cat "$FAKE_TEST_LOG"\n'
+                   f'echo "TODO OK"\nexit "${{FAKE_TEST_RC:-0}}"\n').encode())
         os.chmod(stub, 0o755)
         put(os.path.join(root, 'tools', 'test_i18n_formats.py'),
             f'open({self.ran!r}, "a").write("i18n\\n")\n'.encode())
         # --window is the interactive window's --selftest. FAKE_WINDOW picks what the
         # stand-in does: ok (the default), fail (exit 1, says FAILED), exit1 (exit 1 after
         # printing the ok line) or silent (exit 0 but without the "selftest ok" line).
+        # A --script other than screens.txt is a script with checks (#99): the stand-in
+        # records "check-<board>-<name>" in `ran` and its arguments in `args`, and reports
+        # as many passed checks as the script has expect lines. FAKE_CHECKS picks otherwise,
+        # for the script FAKE_CHECKS_SCRIPT names (all of them if unset): fail (one check
+        # fails, exit 1), exit1 (all passed, exit 1), short (one fewer passed, exit 0),
+        # silent (no count, exit 0) or extra (one more passed than the script has).
+        self.args = os.path.join(self.tmp, 'args')
         sim = os.path.join(root, 'tools', 'sim.sh')
         put(sim, (f'#!/usr/bin/env bash\n'
                   f'if [[ " $* " == *" --window "* ]]; then\n'
@@ -978,9 +989,29 @@ class FakeArduinoCliCase(unittest.TestCase):
                   f'    exit1) echo "window selftest ok: stub"; exit 1 ;;\n'
                   f'    silent) ;;\n'
                   f'  esac\n'
-                  f'else\n'
-                  f'  echo sim >> "{self.ran}"\n'
-                  f'fi\n').encode())
+                  f'  exit 0\n'
+                  f'fi\n'
+                  f'script=""; board=175c; prev=""\n'
+                  f'for a in "$@"; do\n'
+                  f'  [[ "$prev" == --script ]] && script="$a"\n'
+                  f'  [[ "$prev" == --board ]] && board="$a"\n'
+                  f'  prev="$a"\n'
+                  f'done\n'
+                  f'name="$(basename "$script" .txt)"\n'
+                  f'if [[ "$name" == screens ]]; then echo sim >> "{self.ran}"; exit 0; fi\n'
+                  f'echo "check-$board-$name" >> "{self.ran}"\n'
+                  f'echo "$*" >> "{self.args}"\n'
+                  f"n=$(grep -cE '^[[:space:]]*expect(-not|-once)?([[:space:]]|$)' \"$script\")\n"
+                  f'mode=ok\n'
+                  f'[[ -z "${{FAKE_CHECKS_SCRIPT:-}}" || "$FAKE_CHECKS_SCRIPT" == "$name" ]] && mode="${{FAKE_CHECKS:-ok}}"\n'
+                  f'case "$mode" in\n'
+                  f'  ok) echo "sim: checks $n/$n passed" ;;\n'
+                  f'  fail) echo "$script:2: expect failed: stub" >&2; echo "sim: checks $((n - 1))/$n passed"; exit 1 ;;\n'
+                  f'  exit1) echo "sim: checks $n/$n passed"; exit 1 ;;\n'
+                  f'  short) echo "sim: checks $((n - 1))/$n passed" ;;\n'
+                  f'  silent) ;;\n'
+                  f'  extra) echo "sim: checks $((n + 1))/$((n + 1)) passed" ;;\n'
+                  f'esac\n').encode())
         os.chmod(sim, 0o755)
         return root
 
@@ -1180,6 +1211,8 @@ class TestSketchWarnings(unittest.TestCase):
         checks =[st for st in steps if st.startswith('name: No host build warnings')]
         self.assertEqual(len(checks), 1, 'expected the warning check step')
         check = checks[0]
+        # the gate's host tests count with the same function (TestGateHostWarnings)
+        self.assertIn('w="$(tp_host_warnings "$log")"', check)
         self.assertIn('$RUNNER_TEMP/tests.log', check)
         self.assertRegex(check, r'\n        shell: bash\n')
         self.assertRegex(check, r'\n        if: success\(\) \|\| failure\(\)\n', 'the check must run after a failed suite too')
@@ -1220,6 +1253,9 @@ class TestSketchWarnings(unittest.TestCase):
             gate = fh.read()
         self.assertIn('. "$ROOT/tools/sketch_warnings.sh"', gate)
         self.assertNotIn('WARN_BASELINE=', gate, 'the gate has its own baseline again')
+        # host build warnings: the function CI's "No host build warnings" step counts with
+        self.assertIn('hw="$(tp_host_warnings "$TMP/tests.log" | wc -l', gate)
+        self.assertNotIn("grep -E ': warning: '", gate, 'the gate counts host warnings its own way again')
 
 
 class TestBuildCache(FakeArduinoCliCase):
@@ -2056,6 +2092,149 @@ os.execv({real_du!r}, ['du'] + sys.argv[1:])
         r = self.build_175c(FAKE_PARTS='')
         self.assertNotEqual(r.returncode, 0, 'passed on a partition table an earlier build left')
         self.assertIn('wrong partition table', r.stderr)
+
+
+class TestGateHostWarnings(FakeArduinoCliCase):
+    """The gate's host tests fail on a host build warning, counted as CI's "No host build
+    warnings" step counts them (#98; TestSketchWarnings.test_ci_host_tests_fail_on_a_warning
+    runs that step on the same kinds of log): each different ': warning: ' line once, colour
+    codes stripped, and the count on the summary line."""
+
+    LINE = '../a.cpp:1:2: warning: x [-Wfoo]\n'
+    OTHER = '../b.cpp:3:4: warning: y [-Wbar]\n'
+    COLOURED = '../a.cpp:1:2: \033[01;35m\033[Kwarning: \033[m\033[Kx\n'
+    # the suite's own output says "warning" in test names: not a compiler warning
+    NAMES = ('  ok   run_away_warning_sounds_once_each_time_the_button_appears\n'
+             'test_ci_host_tests_fail_on_a_warning (__main__.TestSketchWarnings) ... ok\n')
+
+    def gate_with(self, text, **env):
+        root = getattr(self, 'root', None) or self.gate_root()
+        self.root = root
+        log = os.path.join(self.tmp, 'suite.log')
+        put(log, text.encode())
+        return self.gate(root, '--no-build', FAKE_TEST_LOG=log, **env)
+
+    def test_a_clean_suite_passes_and_says_none(self):
+        r = self.gate_with(self.NAMES)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('PASS  host tests (--asan)  (0 host build warning(s))', r.stdout)
+        self.assertIn('GATE GREEN', r.stdout)
+
+    def test_a_host_build_warning_fails_the_gate_counted_once_per_line(self):
+        for name, text, n in (('once', self.NAMES + self.LINE, 1),
+                              # the normal and the ASan build print the same line
+                              ('twice', self.LINE + self.NAMES + self.LINE, 1),
+                              ('two different', self.LINE + self.OTHER + self.LINE, 2),
+                              ('coloured', self.COLOURED, 1)):
+            with self.subTest(log=name):
+                self.fresh()
+                r = self.gate_with(text)
+                self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                self.assertIn(f'FAIL  host tests (--asan) (exit 1)  ({n} host build warning(s))', r.stdout)
+                self.assertIn('GATE FAILED', r.stdout)
+
+    def test_a_failing_suite_keeps_its_own_exit_code(self):
+        r = self.gate_with(self.LINE, FAKE_TEST_RC='3')
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn('FAIL  host tests (--asan) (exit 3)  (1 host build warning(s))', r.stdout)
+
+
+class TestGateSimChecks(FakeArduinoCliCase):
+    """The gate's "sim checks" step (#99): every simulator script with an expect or
+    expect-not step runs on both boards, and fails the gate unless it exits 0 and reports
+    as many passed checks as it has check steps. The stand-in simulator is gate_root's."""
+
+    def scripts(self, root, **texts):
+        for name, text in texts.items():
+            put(os.path.join(root, 'sim', 'scripts', name + '.txt'), text.encode())
+
+    def checks_root(self):
+        root = self.gate_root()
+        self.scripts(root,
+                     a_game='wait 1s\nexpect Play: song untouched (screen off)\nexpect-not Play: keepy\n',
+                     b_train='  expect-not Training:\n# expect in a comment is not a check\nwait 1s\n'
+                             'expect\tTRAIN: asleep\nexpect-once Training: punch\n',
+                     no_checks='wait 1s\nshot x\n# expect nothing here\nserial expect\n')
+        return root
+
+    def order(self):
+        """What the gate ran, in order (gate_root's stand-ins write it to self.ran)."""
+        with open(self.ran) as fh:
+            return fh.read().split()
+
+    def test_every_script_with_a_check_runs_on_both_boards(self):
+        root = self.checks_root()
+        r = self.gate(root, '--no-firmware')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.order(), ['tests', 'i18n', 'sim', 'sim',
+                                      'check-175c-a_game', 'check-175c-b_train',
+                                      'check-175-a_game', 'check-175-b_train'])
+        self.assertIn('PASS  sim checks 175c  (2 scripts, 5/5 checks)', r.stdout)
+        self.assertIn('PASS  sim checks 175  (2 scripts, 5/5 checks)', r.stdout)
+        self.assertNotIn('SKIP  sim checks', r.stdout)
+        # the script's own `lang` step decides: the gate passes no --lang
+        with open(self.args) as fh:
+            for line in fh:
+                self.assertNotIn('--lang', line)
+                self.assertIn('--quiet', line)
+
+    def test_one_script_with_a_check_is_reported_in_the_singular(self):
+        root = self.gate_root()
+        self.scripts(root, only_game='wait 1s\nexpect Play: song untouched (screen off)\n',
+                     no_checks='wait 1s\nshot x\n')
+        r = self.gate(root, '--no-firmware')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('PASS  sim checks 175c  (1 script, 1/1 checks)', r.stdout)
+        self.assertIn('PASS  sim checks 175  (1 script, 1/1 checks)', r.stdout)
+        self.assertNotIn('1 scripts', r.stdout)
+
+    def test_the_whole_gate_runs_the_checks_before_the_firmware_builds(self):
+        root = self.checks_root()
+        r = self.gate(root, FAKE_ORDER_LOG=self.ran)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.order(), ['tests', 'i18n', 'sim', 'sim',
+                                      'check-175c-a_game', 'check-175c-b_train',
+                                      'check-175-a_game', 'check-175-b_train', 'compile', 'compile'])
+
+    def test_a_failing_check_fails_the_gate_and_names_the_script(self):
+        root = self.checks_root()
+        r = self.gate(root, '--no-firmware', FAKE_CHECKS='fail', FAKE_CHECKS_SCRIPT='b_train')
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn('FAIL  sim checks 175c (exit 1)  (4/5 checks; failed: b_train)', r.stdout)
+        self.assertIn('FAIL  sim checks 175 (exit 1)  (4/5 checks; failed: b_train)', r.stdout)
+        self.assertIn('b_train.txt:2: expect failed: stub', r.stdout)   # what the simulator said
+        self.assertIn('GATE FAILED', r.stdout)
+        # the other script still ran on both boards
+        self.assertEqual([x for x in self.order() if x.startswith('check-')],
+                         ['check-175c-a_game', 'check-175c-b_train', 'check-175-a_game', 'check-175-b_train'])
+
+    def test_a_run_that_does_not_report_every_check_passed_fails_the_gate(self):
+        root = self.checks_root()
+        for mode in ('exit1', 'short', 'silent', 'extra'):
+            with self.subTest(mode=mode):
+                self.fresh()
+                r = self.gate(root, '--no-firmware', FAKE_CHECKS=mode, FAKE_CHECKS_SCRIPT='a_game')
+                self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                self.assertIn('FAIL  sim checks 175c', r.stdout)
+                self.assertIn('FAIL  sim checks 175 ', r.stdout)
+                self.assertIn('failed: a_game)', r.stdout)
+                self.assertIn('GATE FAILED', r.stdout)
+
+    def test_no_script_with_a_check_is_a_skip_line(self):
+        root = self.gate_root()
+        self.scripts(root, no_checks='wait 1s\n# expect nothing\nserial expect\n')
+        r = self.gate(root, '--no-firmware')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('SKIP  sim checks (no script in sim/scripts has an expect step)', r.stdout)
+        self.assertEqual(self.order(), ['tests', 'i18n', 'sim', 'sim'])
+
+    def test_no_build_skips_the_checks_with_the_simulator(self):
+        root = self.checks_root()
+        r = self.gate(root, '--no-build')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('SKIP  simulator', r.stdout)
+        self.assertNotIn('sim checks', r.stdout)
+        self.assertEqual(self.order(), ['tests', 'i18n'])
 
 
 class TestBoardPy(unittest.TestCase):

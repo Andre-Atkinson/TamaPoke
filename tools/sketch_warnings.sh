@@ -41,6 +41,12 @@ tp_warn_baseline_ok() {
 # its output). tools/gate.sh uses it too.
 tp_strip_ansi() { sed "s/$(printf '\033')\\[[0-9;]*[A-Za-z]//g"; }
 
+# tp_host_warnings <log>: each different host build warning in the host tests'
+# output (a ": warning: " line, colour codes stripped) once, sorted; nothing if
+# there is none. CI's "No host build warnings" step and the gate's host tests
+# both count with it (#98), so the two can't count differently.
+tp_host_warnings() { tp_strip_ansi <"$1" | grep -E ': warning: ' | sort -u || true; }
+
 # tp_sketch_warnings <log>: print "N sketch warning(s), baseline B", set
 # TP_WARN_COUNT to N; return 0 if N <= B, 1 if over, 2 on bad input.
 tp_sketch_warnings() {

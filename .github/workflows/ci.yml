@@ -197,8 +197,8 @@ jobs:
       # Linux g++ warns about code that macOS clang, and so the gate, accepts
       # (#98): this is where a new host warning shows up, and none is allowed.
       # It runs even when the suite failed, and counts each different line once,
-      # as tools/sketch_warnings.sh does (colour codes stripped with its
-      # tp_strip_ansi). It is not in the Makefile or
+      # colour codes stripped, with tools/sketch_warnings.sh's tp_host_warnings,
+      # which the gate's host tests count with too. It is not in the Makefile or
       # run_tests.sh, because a mutation that only adds a warning would then
       # fail like a caught one.
       - name: No host build warnings
@@ -211,7 +211,7 @@ jobs:
             echo "::error::no suite output to check for warnings"
             exit 1
           fi
-          w="$(tp_strip_ansi <"$log" | grep -E ': warning: ' | sort -u || true)"
+          w="$(tp_host_warnings "$log")"
           if [[ -n "$w" ]]; then
             printf '%s\n' "$w"
             echo "::error::$(printf '%s\n' "$w" | wc -l) host build warning(s) (each line once; the suite's output above shows where): fix them, CI allows none"
