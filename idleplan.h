@@ -4,7 +4,9 @@
 #include "attention.h"  // ATTN_BUBBLE_Y_MIN: the play area's top, under the status line
 #include "nature.h"     // NAT_* (#86: the nature's small biases)
 #include "pet.h"        // PET_CHUBBY_WEIGHT
+#include "playarea.h"   // PET_WALK_MIN..MAX, PLAY_MID_X, hopDy (#66)
 #include "sdmon.h"      // PMD_* (the sprite's actions)
+#include "skylayout.h"  // skyNightHour (#66)
 
 // A life of its own (#22): what the pet does on the main screen while nobody touches it.
 // Pure logic (no drawing, no clock or millis() reads, no random()) so test/test_idleplan.cpp
@@ -88,13 +90,15 @@ enum IdleEmote : uint8_t {
 #define IDLE_HUNGRY 40   // fullness under this: goes to the food button
 #define IDLE_CHUBBY PET_CHUBBY_WEIGHT  // weight over this (the "chubby" status): rests more, plays less
 #define IDLE_GREEDY_HUNGRY 50  // a greedy pet (#86) goes to the food button from here
-#define IDLE_NIGHT_FROM 20  // the night scene (render(): hour < 6 or >= 20): dozier
-#define IDLE_NIGHT_TO 6
+// At night (the night scene's hours, skyNightHour in skylayout.h) it is dozier: idleNight.
 
-// where it goes (x of the pet's centre); scene.cpp's walk and attnBubbleAt() use this range
-#define IDLE_WALK_MIN 150
-#define IDLE_WALK_MAX 325
-#define IDLE_SEEK_X IDLE_WALK_MIN  // the food button (x 140) is at the walk's left end
+// where it goes (x of the pet's centre): anywhere in the pet's walk range (playarea.h)
+#define IDLE_WALK_MIN PET_WALK_MIN
+#define IDLE_WALK_MAX PET_WALK_MAX
+// Hungry, it walks to a spot IDLE_SEEK_X..IDLE_SEEK_X + IDLE_SEEK_SPAN, at the walk's left end
+// and under the food button (CARE_FOOD_BTN_X, caremenu.h; idlelife.cpp checks it is).
+#define IDLE_SEEK_X IDLE_WALK_MIN
+#define IDLE_SEEK_SPAN 10
 // A tidy pet's strolls while there are poops (#86): the poops lie at the bottom left
 // (drawPoops, scene.cpp: x 36..192 for three), so it keeps to the right part of its range.
 // This is where its centre stops: at rest, all but 2 of the 151 sprites (Dugtrio, Moltres:
@@ -166,9 +170,7 @@ inline bool idleCanWalk(const IdleIn &in) { return idleHas(in, PMD_WALKL) && idl
 inline int8_t idleHour(uint32_t epoch, bool stale) {
   return (!epoch || stale) ? (int8_t)-1 : (int8_t)((epoch / 3600) % 24);
 }
-inline bool idleNight(int8_t hour) {
-  return hour >= 0 && (hour >= IDLE_NIGHT_FROM || hour < IDLE_NIGHT_TO);
-}
+inline bool idleNight(int8_t hour) { return hour >= 0 && skyNightHour(hour); }
 // Fullness under this: it goes to the food button (#86: a greedy pet a little sooner).
 inline uint8_t idleHungryAt(uint8_t nature) { return nature == NAT_GREEDY ? IDLE_GREEDY_HUNGRY : IDLE_HUNGRY; }
 // A tidy pet with poops on the ground, in the full repertoire (#86): its strolls keep clear of them.
@@ -307,7 +309,7 @@ inline IdlePick idlePickAct(const IdleIn &in, uint8_t act, uint32_t seed) {
     }
     case IDLE_SEEK:
       p.ms = IDLE_WALK_MS;  // the walk there; then IDLE_WISH_MS wishing (idlelife.cpp)
-      p.targetX = (int16_t)(IDLE_SEEK_X + r.below(11));
+      p.targetX = (int16_t)(IDLE_SEEK_X + r.below(IDLE_SEEK_SPAN + 1));
       break;
     default:  // IDLE_STAND: now and then it says how it feels
       p.ms = 2000 + r.below(3000);
@@ -340,12 +342,11 @@ inline bool idleDue(uint32_t now, uint32_t until) { return until == 0 || (int32_
 // LOOK: which still frame it holds with `leftMs` to go (one way, then the other).
 inline uint8_t idleLookAct(uint32_t leftMs) { return leftMs > IDLE_LOOK_MS / 2 ? PMD_WALKL : PMD_WALKR; }
 
-// HOP: how far up it is (px, 0 or negative), `elapsed` ms into the hop.
+// HOP: how far up it is (px, 0 or negative), `elapsed` ms into the hop (hopDy, playarea.h:
+// the double tap's hop has the same shape, its own numbers).
 #define IDLE_HOP_MS 450  // one hop
 #define IDLE_HOP_PX 20   // its height: the tallest pet's head stays under the status line
-inline int idleHopDy(uint32_t elapsed) {
-  return -(int)(IDLE_HOP_PX * sinf((float)(elapsed % IDLE_HOP_MS) * 3.14159265f / IDLE_HOP_MS));
-}
+inline int idleHopDy(uint32_t elapsed) { return hopDy(elapsed, IDLE_HOP_MS, IDLE_HOP_PX); }
 
 // ---------------------------------------------------------------- the perks
 // A finished doze gives a little energy, a finished ball game a little joy, at most
@@ -401,7 +402,7 @@ struct IdlePerks {
 #define IDLE_BALL_KICK_MAX (IDLE_BALL_KICK_MIN + IDLE_BALL_KICK_TRAIN + IDLE_BALL_KICK_SPAN - 1)
 
 struct IdleBall {
-  float x = 233, vx = 0;
+  float x = PLAY_MID_X, vx = 0;
 };
 
 // Rolls the ball for dt seconds (a long frame counts as at most 0.3 s). It always ends inside
@@ -486,7 +487,7 @@ inline IdleSpot idleEmoteAt(int petX, int headTop) {
   if (petX < IDLE_WALK_MIN) petX = IDLE_WALK_MIN;
   if (petX > IDLE_WALK_MAX) petX = IDLE_WALK_MAX;
   IdleSpot s;
-  s.right = petX <= 233;  // the screen's centre column
+  s.right = petX <= PLAY_MID_X;  // the screen's centre column
   s.x = (int16_t)(s.right ? petX + IDLE_EMOTE_DX : petX - IDLE_EMOTE_DX);
   int y = headTop - IDLE_EMOTE_UP;
   if (y < IDLE_EMOTE_YMIN) y = IDLE_EMOTE_YMIN;

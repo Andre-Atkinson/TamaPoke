@@ -275,6 +275,13 @@ TEST(IdlePlan, due_is_wrap_safe) {
   CHECK(idleDue(0x00000010u, 0xFFFFFF00u));   // set just before, now just after: over
 }
 
+// The planner's night is the night scene's (#66: skyNightHour, skylayout.h); with no trusted
+// clock (-1) there is none.
+TEST(IdlePlan, its_night_is_the_night_scenes) {
+  for (int8_t h = 0; h < 24; h++) CHECK_MSG(idleNight(h) == skyNightHour(h), "hour " + std::to_string(h));
+  CHECK(!idleNight(-1));
+}
+
 TEST(IdlePlan, look_turns_one_way_then_the_other_and_a_hop_stays_low) {
   CHECK_EQ(idleLookAct(IDLE_LOOK_MS), (uint8_t)PMD_WALKL);
   CHECK_EQ(idleLookAct(IDLE_LOOK_MS / 2 + 1), (uint8_t)PMD_WALKL);

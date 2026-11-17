@@ -117,7 +117,7 @@ uint16_t eggRarityColor(uint8_t rarity) {
 // tras un final (con el ajuste Care "Huevos" en Elegir): tres huevos a elegir
 void renderEggSelect() {
   int h = sceneHour();
-  gNight = h < 6 || h >= 20;  // un huevo no duerme: solo la hora
+  gNight = skyNightHour(h);  // un huevo no duerme: solo la hora
   uint16_t bg = gNight ? UI_BG_NIGHT : UI_BG_DAY;
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, bg);
@@ -551,7 +551,7 @@ static void renderCardProfile() {
 // The three trained stats (#76), in the order of their bars, their ribbons (MED_STR,
 // MED_STA, MED_SPD) and their medals-page tiles.
 enum : uint8_t { FIT_STR = 0, FIT_STA, FIT_SPD };  // FIT_STATS of them (cardlayout.h)
-static const uint16_t FIT_COLOR[FIT_STATS] = { UI_BAR_BAD, 0x4C98, UI_BAR_WARN };
+static const uint16_t FIT_COLOR[FIT_STATS] = { UI_BAR_BAD, FIT_STA_COLOR, UI_BAR_WARN };
 static const uint16_t FIT_RIBBON[FIT_STATS] = { MED_STR, MED_STA, MED_SPD };
 static const uint8_t FIT_GOAL[FIT_STATS] = { RIBBON_STR, RIBBON_STA, RIBBON_SPD };
 #define FIT_HINT_INK 0x8410  // the line under each bar: grey, quieter than the labels

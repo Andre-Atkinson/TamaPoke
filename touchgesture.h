@@ -57,6 +57,13 @@ enum PetTap : uint8_t {
 
 inline bool petTapEarnsPat(PetTap t) { return t != PET_TAP_HUFF; }
 
+// The double tap's hop (reactOffset(), TamaPoke.ino): PET_TAP_HOPS hops of PET_TAP_HOP_MS,
+// each PET_TAP_HOP_PX tall, shaped by hopDy (playarea.h) like the idle hop, but quicker and
+// higher. The reaction lasts exactly the hops, so it ends on the ground.
+#define PET_TAP_HOP_MS 350
+#define PET_TAP_HOP_PX 24
+#define PET_TAP_HOPS 2
+
 // When the pet gestures are live. Off for an egg, during a ceremony, evolution, a meal or a
 // bath, with the pet asleep, while choosing a starter or an egg, on any screen but the main
 // one, with a dialog or the feed menu open, and for a touch that only wakes the screen.

@@ -3,10 +3,16 @@
 #include <Arduino.h>
 #include "app.h"
 #include "bubble.h"
+#include "caremenu.h"  // CARE_FOOD_BTN_X
 #include "idlelife.h"
 #include "idleplan.h"
 #include "scene.h"
 #include "species.h"
+
+// A hungry pet wishes for food under the Food button (#66): every spot IDLE_SEEK picks keeps
+// its centre on the button (BTN_HALF either side of CARE_FOOD_BTN_X).
+static_assert(IDLE_SEEK_X >= CARE_FOOD_BTN_X - BTN_HALF && IDLE_SEEK_X + IDLE_SEEK_SPAN <= CARE_FOOD_BTN_X + BTN_HALF,
+              "the hungry pet's spot must be under the Food button");
 
 static IdlePerks perks;          // the hourly cap of the doze and ball perks (RAM: idleplan.h)
 static IdleBall ball;            // on the ground while beh.activity is IDLE_BALL

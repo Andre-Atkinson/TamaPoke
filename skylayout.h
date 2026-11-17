@@ -8,6 +8,18 @@
 #define SKY_PANEL_C 233  // the round panel's centre, x and y
 #define SKY_PANEL_R 233  // and its radius
 
+// The sky's hours (#66), one copy for every screen that shows the sky or reads the night: the
+// main scene (sceneNight() and screenKey() in TamaPoke.ino, drawScene() and skyColors() in
+// scene.cpp), the egg choice (screens.cpp), the minigames' and exercises' sky (gameui.cpp), the
+// idle planner (idleNight, idleplan.h) and the speech bubbles' lines (bubble.h). Night from
+// SKY_NIGHT_FROM to SKY_NIGHT_TO the next morning, then dawn until SKY_DAWN_TO, day until
+// SKY_DUSK_FROM and dusk until night (each _TO is exclusive).
+#define SKY_NIGHT_TO 6
+#define SKY_DAWN_TO 8
+#define SKY_DUSK_FROM 18
+#define SKY_NIGHT_FROM 20
+inline bool skyNightHour(int h) { return h < SKY_NIGHT_TO || h >= SKY_NIGHT_FROM; }
+
 // The width of the round panel's chord on row y, in px (0 outside the panel).
 inline int roundChordW(int y) {
   int dy = y - SKY_PANEL_C, v = SKY_PANEL_R * SKY_PANEL_R - dy * dy;

@@ -37,6 +37,8 @@ struct CardRect {
 #define FIT_HINT_DY 22   // the hint line, under its bar row
 #define FIT_WGT_Y 248    // the weight's bar row
 #define FIT_STATS 3
+// the stamina bar's blue (RGB565), which the stamina hold's screens (gameui.cpp) share
+#define FIT_STA_COLOR 0x4C98
 #define FIT_LABEL_X 96   // drawCardStat's label
 #define FIT_BAR_END 310  // drawCardStat's bar ends here
 #define FIT_BAR_MIN_W 100  // a bar never narrower than this: every label fits FIT_LABEL_MAX
