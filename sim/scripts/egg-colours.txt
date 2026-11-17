@@ -1,0 +1,111 @@
+# Egg choice (#34): five endings in a row, each offering three eggs. No two of a
+# roll's three eggs have spots that look alike: ground/rock, poison/ghost,
+# electric/ground and normal/rock never share a roll. Four rolls by day, the
+# fifth at night. CARE? checks that each ending opens the choice (picking=1)
+# and each pick closes it (picking=0); the colours are checked by eye in the
+# shots and by the host tests (eggpick).
+#   tools/sim.sh --lang en --script egg-colours --out shots/
+
+clock 2026-11-13 10:00
+
+# new game: Charmander, three taps hatch the egg
+wait 1s
+tap 233 220
+wait 500ms
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# Care page, Eggs -> Choose (the buttons are at y = 92 / 172 / 252, 72 px high)
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+tap 233 288
+swipe up
+serial CARE?
+expect egg=1 picking=0
+
+# each roll: a runaway (serial RUN), the three eggs, then the middle one picked
+# (tap to look, tap again to choose) and hatched
+serial RUN
+wait 12s
+serial CARE?
+expect egg=1 picking=1
+shot 01-roll1-day
+tap 233 220
+wait 500ms
+tap 233 220
+wait 1s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial CARE?
+expect picking=0
+
+serial RUN
+wait 12s
+serial CARE?
+expect egg=1 picking=1
+shot 02-roll2-day
+tap 233 220
+wait 500ms
+tap 233 220
+wait 1s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial CARE?
+expect picking=0
+
+serial RUN
+wait 12s
+serial CARE?
+expect egg=1 picking=1
+shot 03-roll3-day
+tap 233 220
+wait 500ms
+tap 233 220
+wait 1s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial CARE?
+expect picking=0
+
+serial RUN
+wait 12s
+serial CARE?
+expect egg=1 picking=1
+shot 04-roll4-day
+tap 233 220
+wait 500ms
+shot 05-roll4-look
+tap 233 220
+wait 1s
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial CARE?
+expect picking=0
+
+# 22:00: the egg choice draws the night sky
+serial TIME 1794607200
+wait 1s
+serial RUN
+wait 12s
+serial CARE?
+expect egg=1 picking=1
+shot 06-roll5-night
+tap 233 220
+wait 500ms
+shot 07-roll5-night-look
+# a first tap only looks: the choice stays open
+serial CARE?
+expect picking=1

@@ -184,6 +184,27 @@ inline const char *dexName(int16_t dex) {
   return DEX_TBL[dex].name;
 }
 
+// Egg-choice spots (#34): an egg's spots show its type accent. Two accents whose
+// CIE76 colour difference is under EGG_SPOT_MIN_DE look alike on the shell, so
+// Pet::rollEggChoices() keeps them out of one roll. Measured on the RGB565 accent
+// (each channel widened to 8 bits by repeating its top bits) as sRGB with a D65
+// white, by tools/gen_dex.py. test/test_pet.cpp recomputes every pair.
+#define EGG_SPOT_MIN_DE 25
+inline const uint16_t EGG_SPOT_ALIKE[][2] = {
+  { 0xB447, 0x9407 },  // tierra / roca, dE 13.7
+  { 0x8A73, 0x6AD3 },  // veneno / fantasma, dE 16.9
+  { 0xBCA1, 0xB447 },  // electrico / tierra, dE 19.5
+  { 0x8C4D, 0x9407 },  // normal / roca, dE 24.5
+};
+
+// true when spots of accents a and b would look alike (the same accent included)
+inline bool eggSpotsLookAlike(uint16_t a, uint16_t b) {
+  if (a == b) return true;
+  for (const auto &p : EGG_SPOT_ALIKE)
+    if ((p[0] == a && p[1] == b) || (p[0] == b && p[1] == a)) return true;
+  return false;
+}
+
 // el primer huevo de la partida: iniciales clasicos
 inline const int16_t CLASSIC_DEX[] = { 1, 4, 7, 25, 133 };
 #define NUM_CLASSIC_DEX 5
