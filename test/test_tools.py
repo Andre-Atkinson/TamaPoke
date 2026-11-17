@@ -852,7 +852,8 @@ class TestBoardScripts(unittest.TestCase):
 # that many seconds, FAKE_FAIL exits 1, FAKE_ORDER_LOG gets a "compile" line
 # per call (to check the order of the gate's steps), and FAKE_WARNINGS=N prints
 # N different warnings in the sketch (the last argument), one of them twice,
-# plus one in a library.
+# plus one in a library. Like the real one, it refuses a sketch (the last
+# argument) whose folder is not named after its main .ino.
 FAKE_ARDUINO_CLI = r'''#!/usr/bin/env python3
 import json, os, shutil, sys, time
 args = sys.argv[1:]
@@ -861,6 +862,9 @@ with open(os.environ['FAKE_CLI_LOG'], 'a') as fh:
 if os.environ.get('FAKE_ORDER_LOG'):
     with open(os.environ['FAKE_ORDER_LOG'], 'a') as fh:
         fh.write('compile\n')
+main = os.path.join(args[-1], os.path.basename(os.path.normpath(args[-1])) + '.ino')
+if not os.path.isfile(main):
+    sys.exit(f"Error opening sketch: main file missing from sketch: {main}")
 def opt(name):
     return args[args.index(name) + 1] if name in args else None
 for i in range(int(os.environ.get('FAKE_WARNINGS', '0'))):
@@ -1277,6 +1281,66 @@ class TestBuildCache(FakeArduinoCliCase):
         self.assertEqual(len(calls), 2, calls)
         return sorted(calls, key=lambda c: '16M' in self.opt(c, '--fqbn'))
 
+    DAY = 24 * 3600
+
+    def standalone(self, root, *args, **env):
+        """Run <root>'s own build_175c.sh; return its run and its one compile call."""
+        self.fresh()
+        r = subprocess.run([os.path.join(root, 'tools', 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out'), *args],
+                           env=dict(self.env, **env), capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (call,) = self.calls()
+        self.fresh()
+        return r, call
+
+    def checkout(self, name, git):
+        """A checkout of its own that a standalone build gave a cache folder: a
+        git worktree (git='worktree': its .git is a file), a clone ('clone': a
+        .git folder) or neither (None). Returns its root and cache folder."""
+        root = self.gate_root(name)
+        if git == 'worktree':
+            put(os.path.join(root, '.git'), b'gitdir: /elsewhere/.git/worktrees/x\n')
+        elif git == 'clone':
+            os.makedirs(os.path.join(root, '.git'))
+        _, call = self.standalone(root)
+        return root, os.path.dirname(self.opt(call, '--build-path'))
+
+    def last_built(self, cache, days_ago):
+        """Make the last firmware build that used <cache> <days_ago> days old;
+        return that time."""
+        then = time.time() - days_ago * self.DAY
+        os.utime(os.path.join(cache, 'checkout'), (then, then))
+        return then
+
+    def build_while_compiling(self, during):
+        """Run build_175c.sh with a slow compile; once arduino-cli is running (the
+        prune is over), call during(); then end the build. Returns its stderr."""
+        import signal
+        self.fresh()
+        p = subprocess.Popen([os.path.join(TOOLS, 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out')],
+                             env=dict(self.env, FAKE_SLEEP='30'), start_new_session=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            deadline = time.time() + 20
+            while not self.calls() and time.time() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(len(self.calls()), 1, 'the build never started compiling')
+            during()
+            # A build that already ended gave every lock back from its EXIT
+            # trap, so during() would have seen "given back" for nothing.
+            self.assertIsNone(p.poll(), 'the build had already exited: its EXIT trap may have given the locks back')
+        finally:
+            os.killpg(p.pid, signal.SIGTERM)
+            _, err = p.communicate(timeout=20)
+        for failure in ('Error opening sketch', 'Could not stage'):
+            self.assertNotIn(failure, err)
+        return err
+
+    @staticmethod
+    def files(folder):
+        """Every file under <folder>, as sorted relative paths."""
+        return sorted(os.path.relpath(os.path.join(d, f), folder) for d, _, fs in os.walk(folder) for f in fs)
+
     def test_each_checkout_keeps_one_build_folder_in_the_user_cache(self):
         xdg = os.path.join(self.tmp, 'xdg')
         for system, env, base in (
@@ -1353,6 +1417,8 @@ class TestBuildCache(FakeArduinoCliCase):
         stage = self.gate_calls(root)[1][-1]
         leftovers = [os.path.join(b, 'libraries', 'old.o') for b in [build] + gate_builds]
         leftovers.append(os.path.join(os.path.dirname(stage), 'old-stage-file'))
+        # build_175c.sh's own staged copy, beside its build folder
+        leftovers.append(os.path.join(os.path.dirname(build), 'stage', 'old-stage-file'))
         for path in leftovers:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             put(path)
@@ -1414,6 +1480,23 @@ class TestBuildCache(FakeArduinoCliCase):
         # --no-build touches no build folder, so it needs no lock
         r = self.gate(root, '--no-build')
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_a_standalone_build_takes_its_lock_before_it_stages(self):
+        # On its own, build-175c.lock covers the staged copy as well: a second run
+        # must be refused before it touches the stage the first one is compiling.
+        root = self.gate_root('wt')
+        _, call = self.standalone(root)
+        cache = os.path.dirname(self.opt(call, '--build-path'))
+        stage = call[-1]
+        staged = self.files(stage)
+        self.hold(os.path.join(cache, 'build-175c'), self.owner_of(os.getpid()))
+        put(os.path.join(root, 'new.cpp'))
+        r = subprocess.run([os.path.join(root, 'tools', 'build_175c.sh'), '--out', os.path.join(self.tmp, 'out')],
+                           env=self.env, capture_output=True, text=True, timeout=60)
+        self.assertNotEqual(r.returncode, 0, 'built in a folder another run holds')
+        self.assertIn('in use by another run', r.stderr)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.files(stage), staged, "the stage a running build reads was rewritten")
 
     def test_a_lock_whose_owner_is_gone_is_taken_over(self):
         gone = subprocess.Popen(['true'])
@@ -1508,6 +1591,273 @@ class TestBuildCache(FakeArduinoCliCase):
         self.gate_calls(roots['kept'])
         self.assertFalse(os.path.exists(caches['later']), "the gate kept a removed checkout's cache")
         self.assertTrue(os.path.exists(caches['busy']))
+
+    def test_an_idle_worktrees_cache_is_deleted_unless_a_run_holds_it(self):
+        # A worktree's cache folder takes up to about 5 GB, and an agent's worktree
+        # stays on disk long after its last build: a week without one, and it goes.
+        me = self.owner_of(os.getpid())   # a run that is still going: this test
+        dead = subprocess.Popen(['true'])
+        dead.wait()
+        roots, caches = {}, {}
+        for name, git in (('idle', 'worktree'), ('recent', 'worktree'), ('held', 'worktree'),
+                          ('held-inside', 'worktree'), ('dead-lock', 'worktree'), ('clone', 'clone'),
+                          ('no-git', None), ('removed', 'worktree')):
+            roots[name], caches[name] = self.checkout(name, git)
+        built = {name: self.last_built(cache, 7.1) for name, cache in caches.items()}
+        self.last_built(caches['recent'], 6.9)
+        shutil.rmtree(roots['removed'])
+        self.hold(os.path.join(caches['held'], 'gate'), me)                       # a gate running there
+        self.hold(os.path.join(caches['held-inside'], 'gate', 'build-175c'), me)  # that gate's own 1.75C build
+        self.hold(os.path.join(caches['dead-lock'], 'build-175c'), f'{dead.pid} Thu Jan  1 00:00:00 1970')
+        put(os.path.join(caches['idle'], 'build-175c', 'big.o'), b'\1' * (3 << 20))
+        # Finder's files: a folder with one is not deleted by a glob that skips hidden entries
+        put(os.path.join(caches['idle'], '.DS_Store'))
+        put(os.path.join(caches['idle'], '..odd'))
+        before = {name: self.files(caches[name]) for name in ('held', 'held-inside')}
+
+        def locks_given_back():
+            # The prune is over and this build is still compiling: the locks it
+            # claimed in a folder it then kept are back, or a build there would
+            # be refused "in use" for as long as this one runs.
+            self.assertFalse(os.path.exists(os.path.join(caches['held'], 'build-175c.lock')),
+                             'held: the lock taken before the held one was not given back')
+            with open(os.path.join(caches['held'], 'gate.lock', 'owner')) as fh:
+                self.assertEqual(fh.read().strip(), me, "held: another run's lock was touched")
+            for lock in ('build-175c.lock', 'gate.lock'):
+                self.assertFalse(os.path.exists(os.path.join(caches['held-inside'], lock)),
+                                 f'held-inside: {lock} was not given back')
+        # a firmware build in any checkout prunes: here build_175c.sh in this one
+        err = self.build_while_compiling(locks_given_back)
+        self.assertEqual({name for name, cache in caches.items() if os.path.exists(cache)},
+                         {'recent', 'held', 'held-inside', 'clone', 'no-git'},
+                         'only git worktrees idle for 7 days, and removed checkouts, go; never a held one')
+        for name, lock in (('held', 'gate.lock'), ('held-inside', os.path.join('gate', 'build-175c.lock'))):
+            self.assertEqual(self.files(caches[name]), before[name], f'{name}: a held folder was touched')
+            with open(os.path.join(caches[name], lock, 'owner')) as fh:
+                self.assertEqual(fh.read().strip(), me, f"{name}: another run's lock was touched")
+        # One line for each folder deleted: whose it was, why, and what it freed.
+        said = [line for line in err.splitlines() if line.startswith('Build cache:')]
+        self.assertEqual(len(said), 3, err)
+        for name in ('idle', 'dead-lock'):
+            when = time.strftime('%Y-%m-%d', time.localtime(built[name]))
+            self.assertIn(f'Build cache: deleted the folder of {roots[name]} (no firmware build there since {when}): ',
+                          err)
+        self.assertIn(f'Build cache: deleted the folder of {roots["removed"]} (its checkout no longer exists): ',
+                      err)
+        self.assertRegex(err, rf'folder of {re.escape(roots["idle"])} \([^)]*\): 3 MB freed\.')
+
+    def remove(self, folder):
+        """tp_cache_remove on <folder>, called as a prune would (the real prune only
+        calls it for a stale folder; here it is called regardless). Returns its run."""
+        return subprocess.run(['bash', '-c', 'source "$1/build_cache.sh"; tp_cache_remove "$2"', '_', TOOLS, folder],
+                              env=self.env, capture_output=True, text=True, timeout=30)
+
+    def test_a_folder_that_is_not_stale_after_all_is_kept_once_its_locks_are_held(self):
+        # A prune decides on a folder, then takes its locks: a build there may have
+        # written its record meanwhile (or another prune deleted the folder).
+        root, cache = self.checkout('wt', 'worktree')
+        before = self.files(cache)
+        r = self.remove(cache)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertEqual(self.files(cache), before, 'deleted a folder that is not stale')
+        self.assertEqual(r.stderr, '')
+        self.assertEqual(sorted(n for n in os.listdir(cache) if n.endswith('.lock')), [], 'left its locks behind')
+        # a folder another prune deleted: taking the locks made it again, empty
+        gone = os.path.join(os.path.dirname(cache), 'gone-0123456789ab')
+        r = self.remove(gone)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertFalse(os.path.exists(gone), 'left an empty folder behind')
+
+    def test_a_build_that_starts_while_its_folder_is_deleted_is_refused(self):
+        # While a prune deletes a worktree's folder it holds both locks the builds
+        # there take, by the names gate.sh and build_175c.sh really use: a gate or
+        # a standalone build that starts there then is refused, instead of
+        # building in a folder that is going away. du runs right before the
+        # deletion; a stand-in for it starts both builds there and then.
+        import json
+        root, cache = self.checkout('wt', 'worktree')
+        self.last_built(cache, 8)
+        seen = os.path.join(self.tmp, 'seen.json')
+        real_du = shutil.which('du')
+        put(os.path.join(self.bindir, 'du'), f'''#!/usr/bin/env python3
+import json, os, subprocess, sys
+if os.environ.get('IN_FAKE_DU'):
+    os.execv({real_du!r}, ['du'] + sys.argv[1:])
+folder = sys.argv[-1]
+def owners():
+    out = {{}}
+    for name in ('build-175c', 'gate'):
+        try:
+            with open(os.path.join(folder, name + '.lock', 'owner')) as fh:
+                out[name] = fh.read().strip()
+        except OSError:
+            out[name] = None
+    return out
+got = {{'before': owners()}}
+for script, args in (('build_175c.sh', ['--out', {os.path.join(self.tmp, 'out-wt')!r}]), ('gate.sh', [])):
+    r = subprocess.run([os.path.join({root!r}, 'tools', script), *args], env=dict(os.environ, IN_FAKE_DU='1'),
+                       capture_output=True, text=True, timeout=120)
+    got[script] = [r.returncode, r.stderr]
+got['after'] = owners()
+with open({seen!r}, 'w') as fh:
+    json.dump(got, fh)
+os.execv({real_du!r}, ['du'] + sys.argv[1:])
+'''.encode())
+        os.chmod(os.path.join(self.bindir, 'du'), 0o755)
+        r = self.build_175c()   # prunes the idle worktree's folder
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(seen) as fh:
+            got = json.load(fh)
+        owner = got['before']['build-175c']
+        self.assertIsNotNone(owner, 'the prune deleted without holding build-175c.lock')
+        self.assertEqual(got['before']['gate'], owner, 'the prune deleted without holding gate.lock')
+        for script, rc in (('build_175c.sh', 1), ('gate.sh', 2)):
+            code, err = got[script]
+            self.assertEqual(code, rc, f'{script} started in a folder being deleted: {err}')
+            self.assertIn('in use by another run', err)
+        self.assertEqual(got['after'], got['before'], "a refused build touched the prune's locks")
+        self.assertFalse(os.path.exists(cache))
+        self.assertIn(f'Build cache: deleted the folder of {root} (no firmware build there since', r.stderr)
+
+    def test_every_firmware_build_marks_its_cache_used(self):
+        # The idle prune goes by the age of the checkout record, so every
+        # firmware build must write it again, whether it changed or not.
+        root, cache = self.checkout('wt', 'worktree')
+        record = os.path.join(cache, 'checkout')
+        for how in ('build_175c.sh', 'gate'):
+            with self.subTest(how=how):
+                self.last_built(cache, 30)
+                if how == 'gate':
+                    self.gate_calls(root)
+                else:
+                    self.standalone(root)
+                self.assertLess(time.time() - os.stat(record).st_mtime, 60, f'{how} did not mark the cache used')
+        # a gate that builds no firmware uses no build folder
+        self.last_built(cache, 30)
+        r = self.gate(root, '--no-firmware')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertGreater(time.time() - os.stat(record).st_mtime, 29 * self.DAY)
+
+    @unittest.skipIf(os.geteuid() == 0, 'root deletes from a read-only folder anyway')
+    def test_a_deletion_that_could_not_finish_is_finished_by_the_next_build(self):
+        root, cache = self.checkout('wt', 'worktree')
+        self.last_built(cache, 8)
+        stuck = os.path.join(cache, 'build-175c', 'stuck')
+        os.makedirs(stuck)
+        put(os.path.join(stuck, 'file.o'))
+        os.chmod(stuck, 0o500)   # its file cannot be deleted
+
+        def given_back():
+            # The prune is over and this build is still compiling: the worktree's
+            # locks are back already, or a build there would be refused meanwhile.
+            for lock in ('build-175c.lock', 'gate.lock'):
+                self.assertFalse(os.path.exists(os.path.join(cache, lock)), f'{lock} was not given back')
+            self.assertTrue(os.path.exists(os.path.join(cache, 'checkout')),
+                            'the record went first: no later prune would find the rest')
+        try:
+            err = self.build_while_compiling(given_back)
+            self.assertIn(f'Build cache: could not delete all of {cache} (no firmware build there since', err)
+            self.assertIn(f"delete it by hand while no build runs: rm -rf '{cache}'", err)
+        finally:
+            os.chmod(stuck, 0o700)
+        r = self.build_175c()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(os.path.exists(cache), 'the next build did not finish the deletion')
+        self.assertIn(f'Build cache: deleted the folder of {root} (no firmware build there since', r.stderr)
+
+    def test_a_standalone_build_compiles_the_gates_narrowed_stage(self):
+        # Every agent worktree's folder is named otherwise than TamaPoke.ino,
+        # which arduino-cli refuses; and a file added or removed anywhere under
+        # the sketch folder made arduino-cli rebuild everything.
+        root = self.gate_root('agent-worktree')
+        for part in ('pet.cpp', 'test/test_x.cpp', 'sim/x.cpp', 'docs/x.md', 'web/x.json',
+                     '.claude/worktrees/other/y.h', 'tools/other.py',
+                     'build/esp32.esp32.esp32s3/x.bin'):   # arduino-cli's export folder, gitignored
+            os.makedirs(os.path.dirname(os.path.join(root, part)), exist_ok=True)
+            put(os.path.join(root, part))
+        _, call = self.standalone(root)
+        cache = os.path.dirname(self.opt(call, '--build-path'))
+        stage = call[-1]
+        self.assertEqual(stage, os.path.join(cache, 'stage', 'TamaPoke'))
+        self.assertEqual(self.opt(call, '--build-path'), os.path.join(cache, 'build-175c'))
+        staged = self.files(stage)
+        self.assertEqual(staged, sorted(['TamaPoke.ino', 'pet.cpp', os.path.join('boards', '175c', 'partitions.csv'),
+                                         os.path.join('tools', 'build_175c.sh'), os.path.join('tools', 'build_cache.sh')]))
+        self.assertEqual(self.files(self.gate_calls(root)[0][-1]), staged, "not the gate's narrowed copy")
+        # A file added or removed outside the sketch leaves the staged files as they
+        # were, so the next build stays incremental.
+        put(os.path.join(root, 'test', 'test_new.cpp'))
+        put(os.path.join(root, 'docs', 'new.md'))
+        os.remove(os.path.join(root, 'sim', 'x.cpp'))
+        _, call = self.standalone(root)
+        self.assertEqual(call[-1], stage, 'the staged copy moved')
+        self.assertEqual(self.files(stage), staged)
+        # One in the sketch arrives, uncommitted as it is, and a deleted one goes.
+        put(os.path.join(root, 'new.cpp'))
+        os.remove(os.path.join(root, 'pet.cpp'))
+        self.standalone(root)
+        self.assertEqual(self.files(stage), sorted(set(staged) - {'pet.cpp'} | {'new.cpp'}))
+
+    def test_flash_and_update_use_the_image_a_standalone_build_wrote(self):
+        # Without --out (and TAMAPOKE_OUT), build_175c.sh writes the image to the
+        # checkout's ../out, where flash_175c.sh and update_175c.sh read it,
+        # whatever the folder it built from. A fake esptool records what it would
+        # write, so no board is touched.
+        work = os.path.join(self.tmp, 'work')
+        root = os.path.join(work, 'agent-worktree')
+        shutil.copytree(TOOLS, os.path.join(root, 'tools'), ignore=shutil.ignore_patterns('build', '__pycache__'))
+        shutil.copytree(os.path.join(ROOT, 'boards'), os.path.join(root, 'boards'))
+        put(os.path.join(root, 'TamaPoke.ino'), b'void setup() {}\nvoid loop() {}\n')
+        put(os.path.join(root, 'tools', 'board.py'), b'print("clock set")\n')   # stands in for the board
+        esplog = os.path.join(self.tmp, 'esptool.log')
+        esptool = os.path.join(self.bindir, 'esptool')
+        put(esptool, (f'#!/usr/bin/env bash\necho "$*" >> "{esplog}"\nargs=("$@")\n'
+                      'for i in "${!args[@]}"; do\n'
+                      '  if [[ "${args[$i]}" == read-flash ]]; then head -c $(( ${args[$((i+2))]} )) /dev/zero > "${args[$((i+3))]}"; fi\n'
+                      'done\n').encode())
+        put(os.path.join(self.bindir, 'sleep'), b'#!/bin/sh\nexit 0\n')
+        for tool in ('esptool', 'sleep'):
+            os.chmod(os.path.join(self.bindir, tool), 0o755)
+        port = os.path.join(self.tmp, 'fake-port')
+        put(port)
+        env = dict(self.env, ESPTOOL=esptool, TAMAPOKE_BACKUP_DIR=os.path.join(self.tmp, 'backups'))
+        image = os.path.join(work, 'out', 'TamaPoke.ino.bin')
+
+        def run(script, *args):
+            if os.path.exists(esplog):
+                os.remove(esplog)
+            self.fresh()
+            r = subprocess.run([os.path.join(root, 'tools', script), *args], env=env,
+                               capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 0, f'{script}: {r.stdout}{r.stderr}')
+            if not os.path.exists(esplog):
+                return r, []
+            with open(esplog) as fh:
+                return r, [line.split() for line in fh if 'write-flash' in line]
+
+        def flashed(writes):
+            (write,) = writes
+            self.assertIn('0x10000', write)
+            return [os.path.normpath(a) for a in write if a.endswith('.bin')]
+
+        run('build_175c.sh')
+        self.assertTrue(os.path.isfile(image), 'the build did not write the image to ../out')
+        _, writes = run('flash_175c.sh', '--port', port, '--app-only')
+        self.assertEqual(flashed(writes), [image])
+        # The update builds from scratch and flashes what it built; and the
+        # player's update shows what a prune freed (here a removed checkout's folder).
+        os.remove(image)
+        gone = os.path.join(self.home, '.cache', 'tamapoke', 'gone-0123456789ab')
+        os.makedirs(gone)
+        put(os.path.join(gone, 'checkout'), os.path.join(self.tmp, 'gone').encode() + b'\n')
+        r, writes = run('update_175c.sh', '--port', port)
+        calls = self.calls()
+        self.assertEqual(len(calls), 1, calls)
+        call = calls[0]
+        self.assertIn('--clean', call)
+        self.assertEqual(os.path.normpath(self.opt(call, '--output-dir')), os.path.dirname(image))
+        self.assertEqual(flashed(writes), [image])
+        self.assertIn(f"Build cache: deleted the folder of {os.path.join(self.tmp, 'gone')}", r.stdout)
 
     def test_the_gate_stages_into_one_folder_that_mirrors_the_tree(self):
         root = self.gate_root()
