@@ -1114,17 +1114,17 @@ class TestSketchWarnings(unittest.TestCase):
             with self.subTest(n=n):
                 r = self.run_script(self.log(n))
                 self.assertEqual(r.returncode, 0, r.stderr)
-                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline 18')
+                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline 17')
 
     def test_more_than_the_baseline_fails(self):
-        for n, baseline, rc in ((18, None, 0), (19, None, 1), (21, '21', 0), (22, '21', 1), (1, '0', 1)):
+        for n, baseline, rc in ((17, None, 0), (18, None, 1), (21, '21', 0), (22, '21', 1), (1, '0', 1)):
             with self.subTest(n=n, baseline=baseline):
                 env = {'WARN_BASELINE': baseline} if baseline is not None else {}
                 r = self.run_script(self.log(n), **env)
                 self.assertEqual(r.returncode, rc, r.stdout + r.stderr)
-                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline {baseline or 18}')
+                self.assertEqual(r.stdout.strip(), f'{n} sketch warning(s), baseline {baseline or 17}')
                 if rc:
-                    self.assertIn(f'+{n - int(baseline or 18)} NEW', r.stderr)
+                    self.assertIn(f'+{n - int(baseline or 17)} NEW', r.stderr)
 
     def test_bad_input_is_an_error_not_a_pass(self):
         for args, env in (((os.path.join(self.tmp, 'missing.log'),), {}),
@@ -1160,6 +1160,60 @@ class TestSketchWarnings(unittest.TestCase):
         self.assertEqual(len(counts), 1, 'no warning count after the compiles')
         self.assertNotIn('if:', counts[0])
         self.assertNotIn('continue-on-error', counts[0])
+
+    def test_ci_host_tests_fail_on_a_warning(self):
+        """CI's host-test job keeps the suite's output and fails on any g++
+        warning in it (#98). Without "shell: bash" (pipefail) the tee hides a
+        failing suite, so the steps are pinned, and the check's own script is
+        run the way Actions runs it."""
+        with open(os.path.join(ROOT, '.github', 'workflows', 'ci.yml')) as fh:
+            ci = fh.read()
+        job = re.search(r'^  tests:\n(.*?)(?=^  \S|\Z)', ci, re.S | re.M).group(1)
+        steps = re.split(r'^      - ', job, flags=re.M)[1:]
+        suites = [st for st in steps if './test/run_tests.sh --asan' in st]
+        self.assertEqual(len(suites), 1, 'expected one step that runs the suite')
+        self.assertRegex(suites[0], r'\n        shell: bash\n', 'a tee without pipefail hides a failed suite')
+        self.assertRegex(suites[0], re.compile(r'2>&1 \| tee "\$RUNNER_TEMP/tests\.log"$', re.M))
+        # the check below looks only for warnings: a failing test fails the job through this step
+        self.assertNotIn('continue-on-error', suites[0])
+        self.assertNotRegex(suites[0], r'\n        if:')
+        checks =[st for st in steps if st.startswith('name: No host build warnings')]
+        self.assertEqual(len(checks), 1, 'expected the warning check step')
+        check = checks[0]
+        self.assertIn('$RUNNER_TEMP/tests.log', check)
+        self.assertRegex(check, r'\n        shell: bash\n')
+        self.assertRegex(check, r'\n        if: success\(\) \|\| failure\(\)\n', 'the check must run after a failed suite too')
+        self.assertNotIn('continue-on-error', check)
+
+        body = re.search(r'\n        run: \|\n(.*)', check, re.S).group(1)
+        body = '\n'.join(ln[10:] for ln in body.splitlines())
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        log = os.path.join(tmp, 'tests.log')
+        line = '../a.cpp:1:2: warning: x [-Wfoo]\n'
+        coloured = '../a.cpp:1:2: \033[01;35m\033[Kwarning: \033[m\033[Kx\n'
+
+        def run(text):
+            if os.path.exists(log):
+                os.remove(log)
+            if text is not None:
+                with open(log, 'w') as fh:
+                    fh.write(text)
+            # the flags Actions gives "shell: bash"
+            return subprocess.run(['bash', '--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', body],
+                                  cwd=ROOT, env=dict(os.environ, RUNNER_TEMP=tmp),
+                                  capture_output=True, text=True)
+
+        for name, text, rc, out in (
+                ('clean', 'ok\n1 warning-free line\n', 0, '0 host build warnings'),
+                # the normal and the ASan build print the same line
+                ('twice', 'ok\n' + line + line, 1, '1 host build warning(s)'),
+                ('coloured', coloured, 1, '1 host build warning(s)'),
+                ('missing', None, 1, 'no suite output')):
+            with self.subTest(log=name):
+                r = run(text)
+                self.assertEqual(r.returncode, rc, r.stdout + r.stderr)
+                self.assertIn(out, r.stdout + r.stderr)
 
     def test_the_gate_counts_with_it(self):
         with open(os.path.join(TOOLS, 'gate.sh')) as fh:
@@ -1822,11 +1876,11 @@ class TestBuildCache(FakeArduinoCliCase):
 
     def test_the_gate_fails_on_sketch_warnings_over_the_baseline(self):
         root = self.gate_root()
-        for n, env, green in ((18, {}, True), (19, {}, False), (21, {'WARN_BASELINE': '21'}, True)):
+        for n, env, green in ((17, {}, True), (18, {}, False), (21, {'WARN_BASELINE': '21'}, True)):
             with self.subTest(n=n, env=env):
                 self.fresh()
                 r = self.gate(root, FAKE_WARNINGS=str(n), **env)
-                base = env.get('WARN_BASELINE', '18')
+                base = env.get('WARN_BASELINE', '17')
                 self.assertEqual(r.returncode == 0, green, r.stdout + r.stderr)
                 for label in ('1.75C', '1.75'):
                     self.assertIn(f'{label}: {n} sketch warning(s), baseline {base}', r.stdout)

@@ -329,7 +329,7 @@ bool Pet::lineHasUnregistered(int16_t base) const {
 }
 
 uint8_t Pet::eggRarity() const {
-  return (eggTarget >= 1 && eggTarget <= 151) ? DEX_TBL[eggTarget].rarity : R_COMUN;
+  return (eggTarget >= 1 && eggTarget <= 151) ? DEX_TBL[eggTarget].rarity : (uint8_t)R_COMUN;
 }
 
 uint16_t Pet::eggAccent() const {
@@ -797,18 +797,6 @@ void Pet::exerciseDone(uint8_t work) {
   addBond(2);
   registerCare();
   exercised = true;  // el ejercicio quema peso: el proximo tick ve un IN SHAPE como del jugador (#44)
-  save();
-}
-
-void Pet::play() {
-  if (ceremony != CER_NONE) return;
-  if (isEgg() || sleeping) return;
-  joy = clamp100(joy + 25 + playJoyExtra());
-  energy = clamp100(energy - 10);
-  fullness = clamp100(fullness - 5);
-  heartUntil = millis() + HEART_MS;
-  addBond(2);
-  registerCare();
   save();
 }
 

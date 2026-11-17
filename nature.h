@@ -37,7 +37,7 @@ inline bool natureDrainMinute(uint32_t minute, bool relaxed) {
 
 // ---- the care boosts ----
 #define NAT_BERRY_EXTRA 5     // greedy: every berry fills 5 more (25 -> 30, the favourite 35 -> 40)
-#define NAT_PLAY_JOY_EXTRA 5  // playful: play and every Play minigame cheer it 5 more
+#define NAT_PLAY_JOY_EXTRA 5  // playful: the toy and every Play minigame cheer it 5 more
 #define NAT_BATH_JOY 10       // tidy: a bath also lifts joy by 10
 #define NAT_SLEEP_ENERGY 8    // lazy: asleep, energy comes back 8 a minute instead of 6
 
