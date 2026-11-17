@@ -1,0 +1,64 @@
+# The rhythm punch's lunge (#90, punchlunge.h): a landed punch plays the pet's own ATTACK
+# from its strike, standing on its feet at IDLE's size, and the pet is back on IDLE by
+# 0.7 s; a tap that doesn't land shows nothing. Charmeleon (#5), whose ATTACK the renderer
+# already draws at IDLE's scale, then Charmander (#4), whose ATTACK it would draw a size
+# smaller (drawPmdActM). For both boards, by day and by night:
+#   tools/sim.sh --board 175c --lang en --script punch-lunge --out shots/
+#   tools/sim.sh --board 175 --lang en --clock "2026-11-16 21:00" --script punch-lunge --out shots/
+# Timing: a tap is 80 ms down then 400 ms settling, and a hold's shot is taken at its end
+# with the finger still down. A punch lands when the finger goes down; the session starts
+# when the tap that chose it lifts, and its windows are 400-1100 ms into each 1.5 s swing
+# (exercise.h).
+
+# new game: pick Charmander, hatch the egg, then Charmeleon
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial SPEC 5
+wait 2s
+
+# the card's second page, TRAIN, the punch (about 400 ms in when the tap settles)
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+# ~550 ms: the first swing's punch lands, and 60 ms on the pet strikes
+wait 150ms
+hold 233 240 60ms 01-c5-strike
+# ~1.5 s: the second swing, before its window (1.9 s): nothing lands, the pet stays on IDLE
+wait 500ms
+hold 233 240 60ms 02-c5-early
+# ~1.97 s: lands; 240 ms on, the strike runs on
+hold 233 240 240ms 03-c5-mid
+# ~3.41 s: the third swing's punch; 700 ms on, the pet is back on IDLE
+wait 800ms
+hold 233 240 700ms 04-c5-idle-again
+# the session ends at 18 s, then its result, then back to the pet
+wait 14s
+wait 4s
+
+# Charmander: the same punches
+serial SPEC 4
+wait 2s
+swipe up
+swipe left
+tap 233 320
+tap 233 140
+wait 150ms
+hold 233 240 60ms 11-c4-strike
+wait 500ms
+hold 233 240 60ms 12-c4-early
+hold 233 240 240ms 13-c4-mid
+wait 800ms
+hold 233 240 700ms 14-c4-idle-again
+shot 15-c4-count
+
+# Mid-session the sprite changes (SPEC 25, Pikachu): ensureMon() reloads it and the punch
+# plans its lunge again from the new one (exerciseSpriteChanged, drawPunch). ~6.5 s: the
+# fifth swing's punch lands, and Pikachu strikes on its feet at its own size.
+serial SPEC 25
+wait 2200ms
+hold 233 240 60ms 16-c25-strike

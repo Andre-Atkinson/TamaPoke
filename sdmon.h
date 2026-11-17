@@ -31,6 +31,19 @@ struct PmdAct {
   const uint8_t *data = nullptr;  // frames * w * h en el blob
 };
 
+// The scale drawPmdActM() draws an action whose canvas is actH tall at, for a sprite whose
+// IDLE canvas is idleH tall, at most maxS: IDLE fills about 170 px, never under 2, and a
+// taller canvas steps down until it is at most 250 px (ATTACK's and HOP's have room for the
+// move, so they often draw smaller than IDLE). The rhythm punch's lunge draws ATTACK at
+// IDLE's (punchlunge.h, #90).
+inline uint8_t pmdScaleFor(uint8_t idleH, uint8_t actH, uint8_t maxS) {
+  uint8_t s = idleH ? 170 / idleH : 5;
+  if (s < 2) s = 2;
+  if (s > maxS) s = maxS;
+  while (s > 2 && actH * s > 250) s--;
+  return s;
+}
+
 // sprite PMD multi-accion cargado de la SD a PSRAM
 struct PmdMon {
   bool loaded = false;

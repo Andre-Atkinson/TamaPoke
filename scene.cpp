@@ -1183,12 +1183,7 @@ static uint8_t pmdFrameAt(const PmdAct &a, uint32_t t, bool loop) {
 
 // the scale drawPmdActM() draws action a of m at
 static uint8_t pmdScale(const PmdMon &m, const PmdAct &a, uint8_t maxS) {
-  uint8_t sBase = m.acts[PMD_IDLE].h ? 170 / m.acts[PMD_IDLE].h : 5;
-  if (sBase < 2) sBase = 2;
-  if (sBase > maxS) sBase = maxS;
-  uint8_t s = sBase;
-  while (s > 2 && a.h * s > 250) s--;  // acciones con frame grande (ataque)
-  return s;
+  return pmdScaleFor(m.acts[PMD_IDLE].h, a.h, maxS);
 }
 
 // How far above the ground the top of action actId of the main sprite is drawn, in px: its
@@ -1209,6 +1204,15 @@ bool petButtonShown() {
   return pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton();
 }
 
+// frame fi of action a of m at scale s, the canvas's top left at (x0, y0)
+static void blitPmdFrame(const PmdMon &m, const PmdAct &a, uint8_t fi, int x0, int y0, uint8_t s, bool sil) {
+  const uint8_t *fr = a.data + (uint32_t)fi * a.w * a.h;
+  for (int r = 0; r < a.h; r++) {
+    const uint8_t *row = fr + r * a.w;
+    forRuns(a.w, [&](int c) { return indexedKey(row[c], sil); },
+            [&](int c0, int len, int k) { gfx->fillRect(x0 + c0 * s, y0 + r * s, len * s, s, sil ? INK_K : m.pal[k]); });
+  }
+}
 // dibuja una accion anclada por la base (centro-x, suelo) y devuelve su escala
 // dibuja una accion de un PmdMon concreto (m); drawPmdAct usa el global pmd
 void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS) {
@@ -1216,15 +1220,14 @@ void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool
   if (!a.frames) return;
   uint8_t s = pmdScale(m, a, maxS);
   uint8_t fi = pmdFrameAt(a, t, loop);
-  const uint8_t *fr = a.data + (uint32_t)fi * a.w * a.h;
   // anclar por los pies (a.base), no por el alto del lienzo: asi las acciones
   // con padding distinto (Hurt, Eat...) quedan todas a la misma altura de suelo
-  int x0 = cx - a.w * s / 2, y0 = groundY - (a.base ? a.base : a.h) * s;
-  for (int r = 0; r < a.h; r++) {
-    const uint8_t *row = fr + r * a.w;
-    forRuns(a.w, [&](int c) { return indexedKey(row[c], sil); },
-            [&](int c0, int len, int k) { gfx->fillRect(x0 + c0 * s, y0 + r * s, len * s, s, sil ? INK_K : m.pal[k]); });
-  }
+  blitPmdFrame(m, a, fi, cx - a.w * s / 2, groundY - (a.base ? a.base : a.h) * s, s, sil);
+}
+void drawPmdFrame(const PmdMon &m, uint8_t actId, uint8_t fi, uint8_t feet, int cx, int groundY, uint8_t s) {
+  const PmdAct &a = m.acts[actId];
+  if (fi >= a.frames) return;
+  blitPmdFrame(m, a, fi, cx - a.w * s / 2, groundY - feet * s, s, false);
 }
 void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS) {
   drawPmdActM(pmd, actId, cx, groundY, t, loop, sil, maxS);

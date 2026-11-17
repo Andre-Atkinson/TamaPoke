@@ -1,6 +1,12 @@
 #include "framework.h"
 #include "../trainingtouch.h"
 #include "../exercise.h"
+#include "../punchlunge.h"
+#include "../sdmon.h"  // pmdScaleFor, PMD_*
+#include <dirent.h>
+#include <cstdio>
+#include <string>
+#include <vector>
 using T = TrainingTouch;
 TEST(TrainingTouch, OneHundredRapidTapsNoRepeatWhileHeld) {
   T t;
@@ -288,4 +294,287 @@ TEST(Exercise, EachPunchOrRepIsWorthOneAndAHalfPointsUpTo18) {
   CHECK_EQ(exerciseGain(EX_COUNT), (uint8_t)EX_GAIN_CAP);
   CHECK_EQ(exerciseGain(255), (uint8_t)EX_GAIN_CAP);
   CHECK_EQ(EX_GAIN_CAP, 18);
+}
+
+// ---------------------------------------------------------------- the punch's lunge (punchlunge.h, #90)
+using PL = PunchLunge;
+// A made-up ATTACK: frames of W x H palette indices (0xFF transparent), each one block.
+struct LungeFrames {
+  uint8_t W, H;
+  std::vector<uint8_t> px;
+  uint8_t n = 0;
+  explicit LungeFrames(uint8_t w = 8, uint8_t h = 10) : W(w), H(h) {}
+  // a frame whose opaque block covers rows [top, feet) and columns [lo, hi)
+  LungeFrames &add(uint8_t top, uint8_t feet, uint8_t lo = 2, uint8_t hi = 6) {
+    size_t at = px.size();
+    px.resize(at + (size_t)W * H, 0xFF);
+    for (int r = top; r < feet; r++)
+      for (int c = lo; c < hi; c++) px[at + (size_t)r * W + c] = 1;
+    n++;
+    return *this;
+  }
+  LungeFrames &addEmpty() {
+    px.resize(px.size() + (size_t)W * H, 0xFF);
+    n++;
+    return *this;
+  }
+  PL plan(uint8_t s = 4) const {
+    PL l;
+    l.plan(px.data(), W, H, n, s);
+    return l;
+  }
+};
+// a punch landed at `at`
+static RP landedAt(uint32_t at) {
+  RP p;
+  p.begin(at - RP::CONTACT_MS);
+  p.tap(at);
+  return p;
+}
+
+TEST(PunchLunge, EachFrameStandsOnItsOwnFeetAndTheStrikeIsTheFirstLowest) {
+  // the wind-up sits high on the canvas, the strike lowest (toward the viewer), then back up
+  LungeFrames f;
+  f.add(0, 5).add(1, 6).add(4, 9).add(4, 9).add(2, 7);
+  PL l = f.plan();
+  CHECK(l.ok);
+  CHECK_EQ(l.feet[0], (uint8_t)5);
+  CHECK_EQ(l.feet[1], (uint8_t)6);
+  CHECK_EQ(l.feet[2], (uint8_t)9);
+  CHECK_EQ(l.feet[4], (uint8_t)7);
+  CHECK_MSG(l.strike == 2, "the first of the two lowest frames: " + testStr(l.strike));
+  CHECK_EQ(l.s, (uint8_t)4);
+}
+TEST(PunchLunge, PlaysFromTheStrikeAtTheSpritesPace) {
+  LungeFrames f;
+  f.add(0, 5).add(1, 6).add(4, 9).add(3, 8).add(2, 7);
+  PL l = f.plan();
+  const uint16_t ms[] = {100, 100, 80, 90, 120};
+  RP p = landedAt(10000);
+  CHECK_EQ(l.frameAt(p, 10000, ms), 2);  // the strike at once: the pose never trails the hit
+  CHECK_EQ(l.frameAt(p, 10079, ms), 2);
+  CHECK_EQ(l.frameAt(p, 10080, ms), 3);
+  CHECK_EQ(l.frameAt(p, 10169, ms), 3);
+  CHECK_EQ(l.frameAt(p, 10170, ms), 4);
+  CHECK_EQ(l.frameAt(p, 10289, ms), 4);
+  CHECK_MSG(l.frameAt(p, 10290, ms) == -1, "back on IDLE once its last frame is done");
+}
+TEST(PunchLunge, BackOnIdleBeforeTheNextWindowCanOpen) {
+  // a slow ATTACK: 1.2 s from the strike to its end
+  LungeFrames f;
+  f.add(0, 5).add(4, 9).add(2, 7);
+  PL l = f.plan();
+  const uint16_t ms[] = {600, 600, 600};
+  RP p = landedAt(10000);
+  CHECK_EQ(l.frameAt(p, 10000 + PL::MAX_MS - 1, ms), 2);
+  CHECK_MSG(l.frameAt(p, 10000 + PL::MAX_MS, ms) == -1, "cut back to IDLE at MAX_MS");
+  // the latest a punch can land, and the moment the next window opens
+  RP q; q.begin(0);
+  CHECK(q.tap(RP::CONTACT_MS + RP::WINDOW_MS - 1));
+  uint32_t next = RP::SWING_MS + RP::CONTACT_MS - RP::WINDOW_MS;
+  CHECK(q.open(next));
+  CHECK_MSG(l.frameAt(q, next - 100, ms) == -1, "idle at least 100 ms before the next \"now!\"");
+}
+TEST(PunchLunge, OnlyALandedPunchLunges) {
+  LungeFrames f;
+  f.add(0, 5).add(4, 9).add(2, 7);
+  PL l = f.plan();
+  const uint16_t ms[] = {100, 100, 100};
+  RP p; p.begin(0);
+  CHECK_MSG(l.frameAt(p, 100, ms) == -1, "no punch yet: the pet stands on IDLE");
+  CHECK(!p.tap(RP::CONTACT_MS - RP::WINDOW_MS - 1));  // too early: lands nothing
+  CHECK_MSG(l.frameAt(p, RP::CONTACT_MS - RP::WINDOW_MS, ms) == -1, "a tap that doesn't land shows nothing");
+  CHECK(p.tap(RP::CONTACT_MS));
+  CHECK_EQ(l.frameAt(p, RP::CONTACT_MS, ms), 1);
+  CHECK(!p.tap(RP::CONTACT_MS + 150));  // a second tap in the same swing: no new lunge
+  CHECK_MSG(l.frameAt(p, RP::CONTACT_MS + 150, ms) == 2, "the first punch's lunge runs on");
+}
+TEST(PunchLunge, AFrameThatDoesNotFitTheRoomKeepsTodaysLook) {
+  // 64 x 64 at scale 4: ROOM_UP is 228 (gameui.cpp keeps it clear of the time bar), so a
+  // 57-row frame is 228 px tall (the room), 58 rows is 232
+  CHECK_EQ(PL::ROOM_UP, 57 * 4);
+  CHECK_EQ(PL::ROOM_SIDE, 30 * 4);
+  LungeFrames tall(64, 64);
+  tall.add(0, 57, 20, 40).add(1, 58, 20, 40);
+  CHECK_MSG(tall.plan().ok, "exactly ROOM_UP tall fits");
+  LungeFrames taller(64, 64);
+  taller.add(0, 57, 20, 40).add(0, 58, 20, 40);
+  CHECK_MSG(!taller.plan().ok, "taller than the room: IDLE as today");
+  // the canvas centre is 128 px in: columns from 2 (120 px left of it) to 62 (120 right) fit
+  LungeFrames wide(64, 64);
+  wide.add(40, 63, 2, 62).add(41, 64, 2, 62);
+  CHECK(wide.plan().ok);
+  LungeFrames left(64, 64);
+  left.add(40, 63, 2, 62).add(41, 64, 1, 62);
+  CHECK_MSG(!left.plan().ok, "wider than the room on the left");
+  LungeFrames right(64, 64);
+  right.add(40, 63, 2, 62).add(41, 64, 2, 63);
+  CHECK_MSG(!right.plan().ok, "wider than the room on the right");
+  // the strike itself is checked; a wind-up frame before it is never drawn, so it isn't
+  LungeFrames strike(64, 64);
+  strike.add(0, 64, 20, 40).add(1, 64, 20, 40);
+  CHECK_MSG(!strike.plan().ok, "a strike taller than the room");
+  LungeFrames high(80, 80);
+  high.add(0, 70, 30, 50).add(70, 80, 30, 50);
+  CHECK_MSG(high.plan().ok, "a frame before the strike isn't drawn, so it isn't checked");
+}
+TEST(PunchLunge, NothingToPlanFromKeepsTodaysLook) {
+  LungeFrames f;
+  f.add(0, 5).add(4, 9).add(2, 7);
+  PL l;
+  l.plan(nullptr, f.W, f.H, f.n, 4);
+  CHECK_MSG(!l.ok, "no ATTACK (or no PMD sprite)");
+  l.plan(f.px.data(), f.W, f.H, 0, 4);
+  CHECK(!l.ok);
+  l.plan(f.px.data(), 0, f.H, f.n, 4);
+  CHECK(!l.ok);
+  l.plan(f.px.data(), f.W, 0, f.n, 4);
+  CHECK(!l.ok);
+  l.plan(f.px.data(), f.W, f.H, f.n, 0);
+  CHECK(!l.ok);
+  // a plan that isn't ok still records the sprite it looked at (gameui.cpp plans a sprite
+  // once, and drawPunch asks isFor): scale 0 is "no PMD sprite", whose pointers may be null
+  CHECK_MSG(l.isFor(f.px.data(), f.W, f.H, f.n), "a plan with no scale knows its sprite");
+  l.plan(nullptr, 0, 0, 0, 0);
+  CHECK(!l.ok);
+  CHECK_MSG(l.isFor(nullptr, 0, 0, 0), "an unloaded sprite is planned once, not every frame");
+  std::vector<uint8_t> many((size_t)f.W * f.H * (PL::MAX_FRAMES + 1), 1);
+  l.plan(many.data(), f.W, f.H, PL::MAX_FRAMES + 1, 4);
+  CHECK_MSG(!l.ok, "more frames than a TPK2 action holds");
+  l.plan(many.data(), f.W, f.H, PL::MAX_FRAMES, 4);
+  CHECK(l.ok);
+  LungeFrames gap;
+  gap.add(0, 5).add(4, 9).addEmpty();
+  CHECK_MSG(!gap.plan().ok, "an empty frame after the strike: the pet would blink out");
+  LungeFrames before;
+  before.addEmpty().add(4, 9).add(2, 7);
+  CHECK_MSG(before.plan().ok, "an empty frame before the strike is never drawn");
+  LungeFrames none;
+  none.addEmpty().addEmpty();
+  CHECK(!none.plan().ok);
+  const uint16_t ms[] = {100, 100, 100};
+  RP p = landedAt(5000);
+  CHECK_MSG(none.plan().frameAt(p, 5000, ms) == -1, "a plan that isn't ok never lunges");
+}
+TEST(PunchLunge, IsDrawnOnlyForTheSpriteItWasPlannedFrom) {
+  LungeFrames f;
+  f.add(0, 5).add(4, 9).add(2, 7);
+  PL l = f.plan();
+  CHECK(l.isFor(f.px.data(), f.W, f.H, f.n));
+  LungeFrames g;
+  g.add(0, 5).add(4, 9).add(2, 7);
+  CHECK_MSG(!l.isFor(g.px.data(), f.W, f.H, f.n), "another sprite's frames");
+  CHECK(!l.isFor(f.px.data(), f.W + 1, f.H, f.n));
+  CHECK(!l.isFor(f.px.data(), f.W, f.H + 1, f.n));
+  CHECK(!l.isFor(f.px.data(), f.W, f.H, f.n - 1));
+}
+TEST(PunchLunge, PlanningAgainStartsFromScratch) {
+  // the firmware plans into one static, again when the sprite changes: nothing of the last
+  // plan may survive (every other test plans into a fresh object)
+  PL l;
+  LungeFrames a;  // fits; the strike is its third frame
+  a.add(0, 5).add(1, 6).add(4, 9).add(3, 8).add(2, 7);
+  l.plan(a.px.data(), a.W, a.H, a.n, 4);
+  CHECK(l.ok);
+  CHECK_EQ(l.strike, (uint8_t)2);
+  LungeFrames big(64, 64);  // doesn't fit (64 rows at scale 4); its strike is frame 1
+  big.add(0, 60, 20, 40).add(0, 64, 20, 40);
+  l.plan(big.px.data(), big.W, big.H, big.n, 4);
+  CHECK_MSG(!l.ok, "a plan that doesn't fit is not ok, whatever the one before was");
+  CHECK_EQ(l.strike, (uint8_t)1);
+  LungeFrames c;  // the lowest frame is frame 0
+  c.add(5, 9).add(2, 6).add(1, 5);
+  l.plan(c.px.data(), c.W, c.H, c.n, 4);
+  CHECK(l.ok);
+  CHECK_MSG(l.strike == 0, "the strike starts from frame 0 again: " + testStr(l.strike));
+  LungeFrames d;  // frame 0 is empty, before the strike
+  d.addEmpty().add(4, 9).add(2, 7);
+  l.plan(d.px.data(), d.W, d.H, d.n, 4);
+  CHECK(l.ok);
+  CHECK_MSG(l.feet[0] == 0, "an empty frame has no feet: " + testStr(l.feet[0]));
+  CHECK_EQ(l.strike, (uint8_t)1);
+}
+TEST(PunchLunge, ScaleRuleIsTheRenderers) {
+  // pmdScaleFor(idleH, actH, maxS): IDLE fills about 170 px (never under 2, never over the
+  // cap); a taller action steps down until it is at most 250 px, but not under 2
+  CHECK_EQ(pmdScaleFor(0, 0, 5), (uint8_t)5);     // no IDLE height: the cap
+  CHECK_EQ(pmdScaleFor(0, 0, 4), (uint8_t)4);
+  CHECK_EQ(pmdScaleFor(34, 34, 5), (uint8_t)5);   // 170 / 34
+  CHECK_EQ(pmdScaleFor(36, 36, 5), (uint8_t)4);   // 170 / 36 (180 / 36 would be 5)
+  CHECK_EQ(pmdScaleFor(42, 42, 4), (uint8_t)4);
+  CHECK_EQ(pmdScaleFor(100, 100, 5), (uint8_t)2); // 170 / 100 = 1: the floor
+  CHECK_EQ(pmdScaleFor(34, 50, 5), (uint8_t)5);   // 250 px: not over
+  CHECK_EQ(pmdScaleFor(34, 51, 5), (uint8_t)4);   // 255 px: one step down
+  CHECK_EQ(pmdScaleFor(42, 64, 4), (uint8_t)3);   // 256 px
+  CHECK_EQ(pmdScaleFor(42, 80, 4), (uint8_t)3);   // 320 px, 240 at scale 3
+  CHECK_EQ(pmdScaleFor(42, 88, 4), (uint8_t)2);   // 352 and 264 px: down to 2
+  CHECK_EQ(pmdScaleFor(42, 200, 4), (uint8_t)2);  // still over at 2: the floor
+}
+
+// The shipped sprite pack (tools/sdcard/mons, TPK2: PmdMon::load): every species and every
+// shiny lunges, at every scale cap up to 5 (gameui.cpp's TRAIN_PET_S is 4).
+struct TpkSprite {
+  std::vector<uint8_t> blob;
+  struct Act { uint8_t w = 0, h = 0, n = 0; uint16_t ms[24] = {}; const uint8_t *data = nullptr; } acts[PMD_NACTS];
+};
+static bool readTpk(const std::string &path, TpkSprite &t) {
+  FILE *f = fopen(path.c_str(), "rb");
+  if (!f) return false;
+  fseek(f, 0, SEEK_END);
+  long size = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  t.blob.resize(size > 0 ? (size_t)size : 0);
+  bool read = size > 7 && fread(t.blob.data(), 1, t.blob.size(), f) == t.blob.size();
+  fclose(f);
+  if (!read || memcmp(t.blob.data(), "TPK2", 4) != 0) return false;
+  const uint8_t *b = t.blob.data();
+  size_t p = 7 + (size_t)(b[5] | b[6] << 8) * 2, end = t.blob.size();
+  for (uint8_t i = 0; i < b[4]; i++) {
+    if (p + 4 > end || b[p] >= PMD_NACTS || b[p + 3] > 24) return false;
+    TpkSprite::Act &a = t.acts[b[p]];
+    a.w = b[p + 1];
+    a.h = b[p + 2];
+    a.n = b[p + 3];
+    p += 4;
+    if (p + 2 * a.n > end) return false;
+    for (uint8_t k = 0; k < a.n; k++, p += 2) a.ms[k] = (uint16_t)(b[p] | b[p + 1] << 8) ? (uint16_t)(b[p] | b[p + 1] << 8) : 100;
+    a.data = b + p;
+    p += (size_t)a.w * a.h * a.n;
+    if (p > end) return false;
+  }
+  return true;
+}
+TEST(PunchLunge, EveryShippedSpriteLungesAtIdlesSize) {
+  const std::string dir = "../tools/sdcard/mons/";
+  DIR *d = opendir(dir.c_str());
+  CHECK_MSG(d != nullptr, "the sprite pack is in the repo: " + dir);
+  if (!d) return;
+  std::vector<std::string> names;
+  while (dirent *e = readdir(d)) {
+    std::string n = e->d_name;
+    if (n.size() > 4 && n[0] == 'p' && n.compare(n.size() - 4, 4, ".bin") == 0) names.push_back(n);
+  }
+  closedir(d);
+  CHECK_MSG(names.size() >= 302, "151 species and their shinies: " + testStr(names.size()));
+  int shrinks = 0, species = 0;
+  for (const std::string &n : names) {
+    TpkSprite t;
+    CHECK_MSG(readTpk(dir + n, t), n);
+    const TpkSprite::Act &idle = t.acts[PMD_IDLE], &atk = t.acts[PMD_ATTACK];
+    CHECK_MSG(idle.n && atk.n, n + " has IDLE and ATTACK");
+    if (!idle.n || !atk.n) continue;
+    if (n[1] != 's') {  // the renderer's own scale for ATTACK, at the punch's cap: why #90 draws it itself
+      species++;
+      if (pmdScaleFor(idle.h, atk.h, 4) < pmdScaleFor(idle.h, idle.h, 4)) shrinks++;
+    }
+    for (uint8_t maxS = 2; maxS <= 5; maxS++) {
+      PL l;
+      l.plan(atk.data, atk.w, atk.h, atk.n, pmdScaleFor(idle.h, idle.h, maxS));
+      CHECK_MSG(l.ok, n + " lunges at scale cap " + testStr(maxS));
+      RP p = landedAt(20000);
+      CHECK_MSG(l.frameAt(p, 20000, atk.ms) == l.strike, n + " strikes as the punch lands");
+    }
+  }
+  CHECK_EQ(species, 151);
+  CHECK_MSG(shrinks == 86, "drawPmdActM() would draw ATTACK smaller than IDLE for 86 of 151: " + testStr(shrinks));
 }

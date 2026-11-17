@@ -10,6 +10,7 @@
 #include "gameui.h"
 #include "i18n.h"
 #include "minigames.h"
+#include "punchlunge.h"
 #include "scene.h"
 #include "sdmon.h"
 #include "species.h"
@@ -34,6 +35,7 @@ bool trainPick = false;
 static uint8_t trainKind = EX_PUNCH;
 static RhythmPunch punch;
 static StaminaHold hold;
+static PunchLunge punchLunge;      // the last landed punch's lunge (#90)
 static uint32_t trainOverUntil = 0;  // the result is on screen until this millis(); 0 while training
 static uint8_t trainCount = 0, trainGain = 0;
 static bool trainNewHi = false;
@@ -154,7 +156,11 @@ static uint16_t gameInk();
 static void drawGameScene(bool words);
 static void drawGameBar(uint32_t left, uint32_t total);
 static void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS);
+static void planLunge();
 
+#define GAME_BAR_Y 130              // the time bar (drawGameBar): its top, its height...
+#define GAME_BAR_H 10
+#define GAME_BAR_W 200              // ...and its width, centred
 #define TRAIN_GROUND 372            // the pet's feet on both exercise screens
 #define TRAIN_PET_S 4               // ...and its largest scale (a minigame's is 3)
 #define STAMINA_COL_NIGHT C565(0x9c, 0xcc, 0xf4)  // the stamina blue (FIT_STA_COLOR), lighter at night
@@ -169,6 +175,7 @@ void startExercise(uint8_t kind) {
 #endif
   uint32_t now = millis();
   trainKind = kind;
+  if (kind == EX_PUNCH) planLunge();  // once per session (punchlunge.h)
   punch.begin(now);
   hold.begin(now);
   trainOverUntil = 0;
@@ -226,6 +233,24 @@ void playEndNow(const char *why) {
 
 void playScreenOff() { playEndNow(" (screen off)"); }
 
+// The punch session plans its lunge from the sprite on screen (punchlunge.h, #90): its
+// ATTACK at IDLE's scale on the punch screen. It scans every frame, so it is done once, when
+// the session starts (startExercise) and again by drawPunch if the sprite on screen changed
+// (ensureMon() reloaded it). No PMD sprite, or no ATTACK: scale 0, a plan that isn't ok and
+// doesn't scan, but still records the sprite it looked at (isFor) so it isn't redone every
+// frame, and the pet stays on IDLE as before.
+static void planLunge() {
+  const PmdAct &a = pmd.acts[PMD_ATTACK];
+  const PmdAct &idle = pmd.acts[PMD_IDLE];
+  bool can = pmd.has(PMD_ATTACK) && pmd.has(PMD_IDLE);
+  punchLunge.plan(a.data, a.w, a.h, a.frames, can ? pmdScaleFor(idle.h, idle.h, TRAIN_PET_S) : 0);
+}
+
+// ensureMon() reloaded the sprite (#90): forget the lunge's plan, so drawPunch plans it again
+// from the new one. isFor() alone can't tell a reload that lands at the same address with
+// the same ATTACK size (a PUT of an updated sprite, or SPEC, mid-session).
+void exerciseSpriteChanged() { punchLunge = PunchLunge(); }
+
 void exerciseTap(uint32_t at) {
   if (!trainOpen || trainOverUntil || trainKind != EX_PUNCH) return;
   if (punch.tap(at)) sfxPlay(SFX_PLAY);
@@ -259,6 +284,7 @@ static bool exerciseHolding(uint32_t now) {
 }
 
 #define TRAIN_HINT_Y 46  // the hint's top, the same on both screens
+#define TRAIN_COUNT_Y 72  // ...and the count's (size 5: 40 px tall)
 #if !BOARD_AMOLED_175C
 // The 1.75's exit label "tap: back" (size 2, 16 px tall) sits at the very top of the round
 // panel, inside the exit strip and clear of the hint.
@@ -276,7 +302,7 @@ static void drawTrainHead(const char *hint, uint8_t count, uint16_t ink) {
   char b[4];
   snprintf(b, sizeof(b), "%u", count);
   setSize(5);
-  setCur(centerX(b, 5), 72);
+  setCur(centerX(b, 5), TRAIN_COUNT_Y);
   printT(b);
 }
 
@@ -290,7 +316,21 @@ static void drawTrainHead(const char *hint, uint8_t count, uint16_t ink) {
 #define BAG_IN (-0.62f)  // ...and at the pet: its near side reaches the pet's
 #define PUNCH_PET_X 186
 #define PUNCH_KNOCK_MS 400  // a punch knocks the bag back out for this long
-#define PUNCH_LUNGE_MS 250  // ...and the pet leans into it
+#define PUNCH_LEAN_MS 250   // ...and the pet leans into it
+#define PUNCH_LEAN_PX 16    // ...this far, at most
+// The lunge's room (punchlunge.h) on this screen: the tallest frame stays under the time bar
+// (which is under the count), with a small gap, and the room's four corners, the lean
+// included, are on the round panel (so all of it is).
+static_assert(TRAIN_GROUND - PunchLunge::ROOM_UP >= GAME_BAR_Y + GAME_BAR_H + 4, "the lunge stays under the time bar");
+static_assert(GAME_BAR_Y >= TRAIN_COUNT_Y + 40, "the time bar is under the count");
+static constexpr bool onRoundPanel(int x, int y) { return (x - CX) * (x - CX) + (y - CY) * (y - CY) <= CX * CX; }
+static_assert(onRoundPanel(PUNCH_PET_X - PunchLunge::ROOM_SIDE, TRAIN_GROUND - PunchLunge::ROOM_UP) &&
+                  onRoundPanel(PUNCH_PET_X - PunchLunge::ROOM_SIDE, TRAIN_GROUND) &&
+                  onRoundPanel(PUNCH_PET_X + PUNCH_LEAN_PX + PunchLunge::ROOM_SIDE, TRAIN_GROUND - PunchLunge::ROOM_UP) &&
+                  onRoundPanel(PUNCH_PET_X + PUNCH_LEAN_PX + PunchLunge::ROOM_SIDE, TRAIN_GROUND),
+              "the lunge stays on the round panel");
+// every shipped sprite's lunge is checked up to scale 5 (test_trainingtouch.cpp)
+static_assert(TRAIN_PET_S <= 5, "the lunge's sprite test covers this scale");
 
 static void drawPunch(uint32_t now, uint16_t ink) {
   drawTrainHead(T(S_PUNCH_HINT), punch.punches, ink);
@@ -316,9 +356,16 @@ static void drawPunch(uint32_t now, uint16_t ink) {
     gfx->drawRoundRect(x0 - 7, by - 7, BAG_W + 14, BAG_H + 14, 26, UI_BAR_WARN);
   }
 
-  int lunge = punch.punches && since < PUNCH_LUNGE_MS
-                  ? (int)(16.0f * sinf((float)since * 3.14159265f / PUNCH_LUNGE_MS)) : 0;
-  drawGamePet(PMD_IDLE, PUNCH_PET_X + lunge, TRAIN_GROUND, TRAIN_PET_S);
+  int lean = punch.punches && since < PUNCH_LEAN_MS
+                 ? (int)(PUNCH_LEAN_PX * sinf((float)since * 3.14159265f / PUNCH_LEAN_MS)) : 0;
+  // A landed punch: the pet's own ATTACK, from its strike, on its feet at IDLE's size
+  // (punchlunge.h, #90). The plan was made when the session started; a sprite that changed
+  // since (ensureMon() reloaded it) is planned again here, once (the plan records it either way).
+  const PmdAct &atk = pmd.acts[PMD_ATTACK];
+  if (!punchLunge.isFor(atk.data, atk.w, atk.h, atk.frames)) planLunge();
+  int fi = pmd.loaded ? punchLunge.frameAt(punch, now, atk.ms) : -1;
+  if (fi >= 0) drawPmdFrame(pmd, PMD_ATTACK, (uint8_t)fi, punchLunge.feet[fi], PUNCH_PET_X + lean, TRAIN_GROUND, punchLunge.s);
+  else drawGamePet(PMD_IDLE, PUNCH_PET_X + lean, TRAIN_GROUND, TRAIN_PET_S);
   if (knocked && since < 300) {  // the hit: a burst on the bag's near side
     int cx = x0 + 6, cy = by + BAG_H / 2;
     for (int i = 0; i < 8; i++) {
@@ -544,10 +591,10 @@ static void drawGameHud(uint16_t ink, uint16_t score) {
 
 // barra fina de lo que queda de partida (Berry Catch: tiempo; Peekaboo: apariciones)
 static void drawGameBar(uint32_t left, uint32_t total) {
-  const int bw = 200, by = 130;
+  const int bw = GAME_BAR_W, by = GAME_BAR_Y;
   int fw = total ? (int)((uint32_t)bw * left / total) : 0;
-  gfx->fillRoundRect(CX - bw / 2, by, bw, 10, 4, UI_TRACK);
-  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, by, fw, 10, 4, UI_BAR_OK);
+  gfx->fillRoundRect(CX - bw / 2, by, bw, GAME_BAR_H, 4, UI_TRACK);
+  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, by, fw, GAME_BAR_H, 4, UI_BAR_OK);
 }
 
 // "Mantener: salir", arriba en todos los juegos (como el de los ejercicios en la 1.75C). El

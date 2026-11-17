@@ -583,6 +583,7 @@ void ensureMon() {
     pmd.load(pet.speciesId, pet.shiny);          // principal: PMD
     if (!pmd.loaded) mon.load(pet.speciesId, pet.shiny);  // respaldo: B/N
   }
+  exerciseSpriteChanged();  // the punch's lunge plans again from the new sprite (#90)
 }
 
 // ---------- horario de dormir (bedtime.h) ----------

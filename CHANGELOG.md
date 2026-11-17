@@ -257,6 +257,15 @@ Updating from the [web installer](https://socquique.github.io/TamaPoke/web/)
 
 ### Changed
 
+- **A landed punch is a real strike** (#90). In the rhythm punch, each punch that lands
+  now plays the creature's own attack, from the moment it strikes, while it leans into the
+  bag: Charmeleon swings its tail at it, Pikachu and Snorlax crouch into the blow. It plays
+  for a moment (at most 0.7 s) and the creature is standing still again well before the bag
+  lights up for the next punch, so it never gets in the way of the timing. Every species
+  does it at its usual size, standing on the ground (drawn the plain way, most would have
+  shrunk and leapt into the air). A tap that doesn't land still shows nothing and costs
+  nothing. Looks only: the punches, the points and the save are unchanged.
+
 - **One copy of the scene's shared numbers** (#66). The night hours (20:00 to 6:00), the
   sky's dawn and dusk hours and colours, the pet's walk range and the screen's centre
   column, the hop's shape, the Food button's x and the stamina blue were each written out

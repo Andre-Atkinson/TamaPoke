@@ -85,7 +85,8 @@ While **awake**, per minute:
   12 punches or reps worth 1.5 points (+18 a session at most; its nature can add a quarter),
   and each tires it like a game:
   - **Punch** trains **STRENGTH**: tap as the swinging bag reaches the creature (it lights
-    up). Off-beat taps do nothing and cost nothing.
+    up), and the creature strikes it with its own attack. Off-beat taps do nothing and cost
+    nothing.
   - **Hold** trains **STAMINA**: keep a finger on the screen while it does reps; lifting
     only pauses it.
   Leaving early keeps what was earned, and so does turning the screen off (PWR, or the
@@ -644,6 +645,7 @@ set after a power cut.
 - `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the font can draw, and its NVS key
 - `holiday.h` / `holiday.cpp` — the special days (#26): Easter and the other dates, the player's birthday (`BDAY <month> <day>`) and its NVS key, and how often the greeting comes; `scene.cpp` draws the decorations
 - `gameui.h` / `gameui.cpp` — the minigames' screens and the calm exercises' (the rhythm punch and the stamina hold, #78; their rules are in `minigames.h` and `exercise.h`)
+- `punchlunge.h` — the rhythm punch's lunge (#90): which ATTACK frames a landed punch plays, standing each on its own feet at IDLE's size, and the room they must fit
 - `screens.h` / `screens.cpp` — the other screens: starter and egg choice, the pet card's pages, clock and settings, the nickname keyboard, the Pokédex gallery
 - `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)
 - `sdmon.h` / `sdmon.cpp` — TPK1 (animated) and TPK2 (PMD) sprites + thumbnails, and file reception over USB (PUT/LS)
