@@ -283,6 +283,20 @@ TEST(SimScript, hold_can_take_a_shot_before_the_finger_lifts) {
   CHECK(!simParseScript("hold 233 280\n").error.empty());
 }
 
+// "poops N" (#86): the poops on the ground, 0-3 as the game keeps them (Pet::poops)
+TEST(SimScript, poops_sets_how_many_are_on_the_ground) {
+  SimScript s = simParseScript("poops 0\npoops 3\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)2);
+  if (s.cmds.size() != 2) return;
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_POOPS);
+  CHECK_EQ(s.cmds[0].a, 0);
+  CHECK_EQ(s.cmds[1].a, 3);
+  CHECK_EQ(simParseScript("wait 1s\npoops 4\n", "r.txt").error, std::string("r.txt:2: usage: poops N (0-3)"));
+  for (const char *bad : { "poops\n", "poops -1\n", "poops two\n", "poops 1 2\n" })
+    CHECK_MSG(!simParseScript(bad).error.empty(), std::string("accepted: ") + bad);
+}
+
 // "nature NAME" (#25): the pet's nature, by its name in NATURE_KEYS (nature.h)
 TEST(SimScript, nature_names_a_nature) {
   SimScript s = simParseScript("nature easygoing\nnature tidy\n");

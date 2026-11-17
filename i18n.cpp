@@ -56,6 +56,12 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Sleepy... warm milk?",  // the warm-milk hint (#13)
     "Hi there!", "I'm happy!", "Pat me!",
     "I love you, %s!", "I love you!",
+    // the natures' lines (#86): the first names the nature as the stat card does
+    "I'm easygoing!", "Life is good!", "No rush, no worries!",
+    "I'm a bit greedy!", "Berries are the best!", "Dreaming of berries...",
+    "I'm playful!", "Catch me if you can!", "I love games!",
+    "I'm tidy!", "Neat and clean!", "A place for everything!",
+    "I'm a little lazy!", "So comfy here...", "Nice and slow...",
     // the special days' greetings (#26)
     "Merry Christmas, %s!", "Merry Christmas!", "Happy New Year, %s!", "Happy New Year!",
     "Happy Valentine's Day, %s!", "Happy Valentine's Day!", "Happy Easter, %s!", "Happy Easter!",
@@ -120,6 +126,12 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Sono... leite quentinho?",  // the warm-milk hint (#13)
     "Ol\240!", "Estou feliz!", "Faz-me festinhas!",
     "Adoro-te, %s!", "Adoro-te!",
+    // the natures' lines (#86): the first names the nature as the stat card does
+    "Sou tranquilo!", "A vida \202 bela!", "Sem pressas, tudo bem!",
+    "Sou um pouco guloso!", "As bagas s\343o o m\240ximo!", "A sonhar com bagas...",
+    "Sou brincalh\343o!", "Apanha-me se puderes!", "Adoro brincar!",
+    "Sou asseado!", "Tudo limpinho!", "Cada coisa no seu lugar!",
+    "Sou pregui\207oso!", "Que conforto...", "Devagarinho...",
     // the special days' greetings (#26)
     "Feliz Natal, %s!", "Feliz Natal!", "Feliz Ano Novo, %s!", "Feliz Ano Novo!",
     "Feliz Dia dos Namorados, %s!", "Feliz Dia dos Namorados!", "Feliz P\240scoa, %s!", "Feliz P\240scoa!",
