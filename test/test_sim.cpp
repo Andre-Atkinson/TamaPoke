@@ -1033,3 +1033,39 @@ TEST(SimChecks, the_shim_copies_what_the_firmware_prints) {
   Serial.print("after");
   CHECK_EQ(seen, std::string("Play: peek score=6\nPWR short\n"));
 }
+
+// expect-once: exactly one matching line in the window (an ending paid once, not twice)
+TEST(SimChecks, expect_once_needs_exactly_one_matching_line) {
+  SimScript s = simParseScript("wait 1s\nexpect-once   Play: peek * (screen off)  # a note\nexpect-oncex x\n", "o.txt");
+  CHECK_EQ(s.error, std::string("o.txt:3: unknown step 'expect-oncex'"));
+  s = simParseScript("wait 1s\nexpect-once   Play: peek * (screen off)  # a note\n", "o.txt");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)2);
+  if (s.cmds.size() != 2) return;
+  CHECK_EQ((int)s.cmds[1].op, (int)OP_EXPECT_ONCE);
+  CHECK_EQ(s.cmds[1].text, std::string("Play: peek * (screen off)"));
+  CHECK(simIsCheck(OP_EXPECT_ONCE));
+  CHECK(!simIsCheck(OP_SERIAL));
+  CHECK_EQ(simCheckCount(s), (size_t)1);
+  CHECK_EQ(simParseScript("expect-once\n", "o.txt").error,
+           std::string("o.txt:1: usage: expect-once TEXT (a part of a serial line; '*' stands for any run of characters)"));
+
+  SimSerialWindow w;
+  std::string why;
+  w.text = "PWR short\nPlay: peek score=6 speed=+1 (screen off)\nBTN 1\n";
+  CHECK(w.check(simCheckCmd(OP_EXPECT_ONCE, 3, "Play:"), why));
+  CHECK_EQ(why, std::string(""));
+  CHECK(!w.check(simCheckCmd(OP_EXPECT_ONCE, 4, "Play: song"), why));
+  CHECK_EQ(why, std::string("expect-once failed: none of the 3 lines printed since boot contains \"Play: song\":\n"
+                            "    PWR short\n    Play: peek score=6 speed=+1 (screen off)\n    BTN 1"));
+  w.stepRuns();
+  w.text += "Play: catch score=0 speed=+0 (screen off)\nPWR short\nPlay: catch score=0 speed=+0 (screen off)\n";
+  CHECK(!w.check(simCheckCmd(OP_EXPECT_ONCE, 7, "Play: catch"), why));  // paid twice
+  CHECK_EQ(why, std::string("expect-once failed: 2 of the 3 lines printed since the check on line 4 contain "
+                            "\"Play: catch\", not 1:\n    Play: catch score=0 speed=+0 (screen off)\n"
+                            "    Play: catch score=0 speed=+0 (screen off)"));
+  w.stepRuns();
+  CHECK(!w.check(simCheckCmd(OP_EXPECT_ONCE, 9, "Play:"), why));
+  CHECK_EQ(why, std::string("expect-once failed: nothing was printed since the check on line 7, so no line contains "
+                            "\"Play:\""));
+}

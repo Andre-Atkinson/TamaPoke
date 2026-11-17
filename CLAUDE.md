@@ -103,12 +103,12 @@ It runs: `test/run_tests.sh --asan` (host logic + ASan/UBSan + tools tests),
 boards (`tools/sim.sh --board 175c` and `--board 175`, each with `--lang en
 --script sim/scripts/screens.txt --out <dir> --quiet`; the PNG count must equal
 the lines matching `^[[:space:]]*shot[[:space:]]` in that script). Then, for
-both boards, every script in `sim/scripts/` with an `expect` or `expect-not`
-step (checks on the serial output, `sim/script.h`; no `--lang`, so the script's
-own `lang` applies), one `sim checks <board>` line each: every run must exit 0
-and print `sim: checks N/N passed`, where N is the number of lines matching
-`^[[:space:]]*expect(-not)?([[:space:]]|$)` in that script. With no such script
-it records `SKIP  sim checks`. When `sdl2-config` works it also builds the
+both boards, every script in `sim/scripts/` with an `expect`, `expect-not` or
+`expect-once` step (checks on the serial output, `sim/script.h`; no `--lang`,
+so the script's own `lang` applies), one `sim checks <board>` line each: every
+run must exit 0 and print `sim: checks N/N passed`, where N is the number of
+lines matching `^[[:space:]]*expect(-not|-once)?([[:space:]]|$)` in that
+script. With no such script it records `SKIP  sim checks`. When `sdl2-config` works it also builds the
 interactive simulator window and runs its `--selftest` (synthetic SDL events,
 `SDL_VIDEODRIVER=dummy`) for both boards, one `window <board>` line each;
 without SDL2 it records `SKIP  window (no SDL2)`. SDL2 is opt-in and only the

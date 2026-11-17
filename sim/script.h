@@ -62,6 +62,8 @@
 //   expect-not TEXT          the opposite: no line printed since the previous check contains
 //                            TEXT (same matching, same window). A typo makes it pass whatever
 //                            happens, so pair it with an expect in the same window where one fits.
+//   expect-once TEXT         exactly one line printed since the previous check contains TEXT
+//                            (same matching, same window): an ending paid once, not twice.
 //
 // Duraciones: 500ms, 2s, 5m, 2h, 1d y combinaciones (1h30m); un numero solo = ms.
 #pragma once
@@ -74,7 +76,7 @@ enum SimOp : uint8_t {
   OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING, OP_PMU,
   OP_TAP, OP_HOLD, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
   OP_WAIT, OP_SERIAL, OP_SHOT, OP_IDLE, OP_SAY, OP_NATURE,
-  OP_TRAIN, OP_GAME, OP_POOPS, OP_EXPECT, OP_EXPECT_NOT,
+  OP_TRAIN, OP_GAME, OP_POOPS, OP_EXPECT, OP_EXPECT_NOT, OP_EXPECT_ONCE,
 };
 
 struct SimCmd {
@@ -108,16 +110,18 @@ SimScript simParseScript(const std::string &text, const std::string &name = "scr
 // serial, shot): los anteriores (lang, clock, battery, usb, charging, pmu) son preparacion
 // y se aplican antes de setup(). Es el mismo corte que usa el lector para rechazar un
 // lang/clock/pmu tardio, asi que no pueden discrepar. cmds.size() si no hay ninguno.
-// A check (expect, expect-not) also ends the preparation: it looks at what setup() printed.
+// A check (expect, expect-not, expect-once) also ends the preparation: it looks at what setup() printed.
 size_t simPreBootEnd(const SimScript &script);
 
-// ---- checks on the serial output (expect, expect-not; #99) ----
+// ---- checks on the serial output (expect, expect-not, expect-once; #99) ----
 
 // True if `line` contains `pattern`, where each '*' in the pattern stands for any run of
 // characters, none included: "Play: peek * (screen off)". The parts between the stars are
 // found in order, left to right, without overlapping. A pattern of stars only matches any line.
 bool simLineMatches(const std::string &line, const std::string &pattern);
 
+// A check: expect, expect-not or expect-once.
+bool simIsCheck(SimOp op);
 // How many steps of the script are checks.
 size_t simCheckCount(const SimScript &script);
 
@@ -133,9 +137,10 @@ struct SimSerialWindow {
   // the line being printed: a line still open is seen whole by the next check.
   void stepRuns();
 
-  // One check (OP_EXPECT or OP_EXPECT_NOT; any other step: false). If it fails, `why` says
-  // what was looked for since which script line, and lists the lines it looked at (expect)
-  // or the ones that matched (expect-not), at most 20, each cut to 160 characters.
+  // One check (simIsCheck; any other step: false). If it fails, `why` says what was looked
+  // for since which script line, and lists the lines it looked at (none matched) or the ones
+  // that matched (expect-not, or expect-once with more than one), at most 20, each cut to
+  // 160 characters.
   bool check(const SimCmd &c, std::string &why);
 
  private:

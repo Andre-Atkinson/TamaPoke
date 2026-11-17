@@ -9,14 +9,15 @@
 #   TAMAPOKE_JOBS=8 tools/gate.sh   compile jobs per firmware build: default 3, 0 = all cores
 #
 # Steps, fastest first so most breakage shows in seconds: host tests
-# (+ASan/UBSan; any host build warning fails them, as in CI), i18n format check, no-network check over the firmware sources,
-# the desktop simulator for both boards (tools/sim.sh: it compiles the real
-# sketch on the host and shoots screens.txt), the simulator scripts that check
-# their own serial output (an expect or expect-not step, sim/script.h) on both
-# boards, the interactive simulator window when SDL2 is installed (built and
-# driven by synthetic events with --selftest under SDL's dummy video driver,
-# with no display needed; without SDL2 that line is a SKIP), then both
-# firmware builds (1.75C and the original 1.75, one after the other).
+# (+ASan/UBSan; any host build warning fails them, as in CI), i18n format
+# check, no-network check over the firmware sources, the desktop simulator for
+# both boards (tools/sim.sh: it compiles the real sketch on the host and shoots
+# screens.txt), the simulator scripts that check their own serial output (an
+# expect, expect-not or expect-once step, sim/script.h) on both boards, the
+# interactive simulator window when SDL2 is installed (built and driven by
+# synthetic events with --selftest under SDL's dummy video driver, with no
+# display needed; without SDL2 that line is a SKIP), then both firmware builds
+# (1.75C and the original 1.75, one after the other).
 #
 # The firmware builds run from a staged copy of the working tree (uncommitted
 # changes included; only the parts the firmware build reads) in a folder
@@ -126,12 +127,13 @@ tp_strip_ansi <"$TMP/tests.log" \
          /warning|error|Warning|Error|FAIL|tests, |^Ran |^OK|skipped|Sanitizer|TODO OK|HAY FALLOS/{print}' \
   | tee "$TMP/tests.f"
 [[ "$rc" -ne 0 ]] && tail_if_empty "$(wc -l <"$TMP/tests.f")" "$TMP/tests.log"
-# Host build warnings, counted as CI's "No host build warnings" step counts them
-# (#98, .github/workflows/ci.yml): each different ": warning: " line once, colour
-# codes stripped. CI allows none, and neither does the gate. The lines themselves
-# are in the filtered output above. macOS clang doesn't show every warning Linux
-# g++ does, so a clean count here doesn't promise a clean CI.
-hw="$(tp_strip_ansi <"$TMP/tests.log" | grep -E ': warning: ' | sort -u | wc -l | tr -d ' ')"
+# Host build warnings, counted with tp_host_warnings (tools/sketch_warnings.sh),
+# as CI's "No host build warnings" step counts them (#98): each different
+# ": warning: " line once, colour codes stripped. CI allows none, and neither does
+# the gate. The lines themselves are in the filtered output above. macOS clang
+# doesn't show every warning Linux g++ does, so a clean count here doesn't
+# promise a clean CI.
+hw="$(tp_host_warnings "$TMP/tests.log" | wc -l | tr -d ' ')"
 if [[ "$rc" -eq 0 && "$hw" -ne 0 ]]; then rc=1; fi
 record "host tests (--asan)" "$rc" "$hw host build warning(s)"
 
@@ -187,12 +189,13 @@ if [[ "$BUILD" -eq 1 ]]; then
     if [[ "$rc" -eq 0 && "$got" -ne "$want" ]]; then rc=1; fi
     record "simulator $b" "$rc" "$got/$want screens, $w host build warning(s)"
   done
-  # Scripts that check their own serial output (expect / expect-not, #99): every script in
-  # sim/scripts/ with such a step, on both boards, with the simulators built just above. No
-  # --lang: a script's own lang step applies. Each run must exit 0 and report as many passed
-  # checks as the script has check steps (sim: checks P/N passed), so a run that skips
-  # checks or stops early fails too.
-  CHECK_RE='^[[:space:]]*expect(-not)?([[:space:]]|$)'
+  # Scripts that check their own serial output (expect, expect-not, expect-once;
+  # #99): every script in sim/scripts/ with such a step, on both boards, with the
+  # simulators built just above. No --lang: a script's own lang step applies.
+  # Each run must exit 0 and report as many passed checks as the script has
+  # check steps (sim: checks P/N passed), so a run that skips checks or stops
+  # early fails too.
+  CHECK_RE='^[[:space:]]*expect(-not|-once)?([[:space:]]|$)'
   CHECK_SCRIPTS=()
   for f in sim/scripts/*.txt; do
     [[ -f "$f" ]] && grep -qE "$CHECK_RE" "$f" && CHECK_SCRIPTS+=("$f")

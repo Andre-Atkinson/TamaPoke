@@ -4,7 +4,7 @@
 //   tamapoke_sim [--lang pt] [--clock "2026-11-13 10:00"] [--script FILE]
 //                [--out DIR] [--sprites DIR] [--serial-log FILE] [--square] [--quiet]
 //
-// A script with checks (expect, expect-not; script.h) ends with "sim: checks P/N passed",
+// A script with checks (expect, expect-not, expect-once; script.h) ends with "sim: checks P/N passed",
 // also with --quiet, and exits 1 unless all N ran and passed (tools/gate.sh reads that line).
 // tools/sim.sh compila y llama a este programa.
 #include <Arduino.h>
@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
     printf("sim: %s, lang %s, clock %u, sprites %s\n", BOARD_AMOLED_175C ? "1.75C" : "1.75",
            lang >= 0 ? simLangCode(lang) : "default", clock, o.sprites.c_str());
 
-  // expect / expect-not (#99): the shim copies what the firmware prints into the window,
+  // expect, expect-not, expect-once (#99): the shim copies what the firmware prints into the window,
   // from boot on, so the first check sees setup()'s lines too. Only when the script checks.
   SimSerialWindow window;
   // Every way out of main() stops the capture, so the shim never keeps a pointer to `window`
@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
   };
   for (size_t i = first; i < script.cmds.size(); i++) {
     const SimCmd &c = script.cmds[i];
-    if (c.op == OP_EXPECT || c.op == OP_EXPECT_NOT) {
+    if (simIsCheck(c.op)) {
       std::string why;
       if (window.check(c, why)) {
         checksPassed++;
@@ -306,6 +306,7 @@ int main(int argc, char **argv) {
         break;
       case OP_EXPECT:
       case OP_EXPECT_NOT:
+      case OP_EXPECT_ONCE:
         break;  // run above, before the power-off cut
     }
   }

@@ -1001,7 +1001,7 @@ class FakeArduinoCliCase(unittest.TestCase):
                   f'if [[ "$name" == screens ]]; then echo sim >> "{self.ran}"; exit 0; fi\n'
                   f'echo "check-$board-$name" >> "{self.ran}"\n'
                   f'echo "$*" >> "{self.args}"\n'
-                  f"n=$(grep -cE '^[[:space:]]*expect(-not)?([[:space:]]|$)' \"$script\")\n"
+                  f"n=$(grep -cE '^[[:space:]]*expect(-not|-once)?([[:space:]]|$)' \"$script\")\n"
                   f'mode=ok\n'
                   f'[[ -z "${{FAKE_CHECKS_SCRIPT:-}}" || "$FAKE_CHECKS_SCRIPT" == "$name" ]] && mode="${{FAKE_CHECKS:-ok}}"\n'
                   f'case "$mode" in\n'
@@ -1211,6 +1211,8 @@ class TestSketchWarnings(unittest.TestCase):
         checks =[st for st in steps if st.startswith('name: No host build warnings')]
         self.assertEqual(len(checks), 1, 'expected the warning check step')
         check = checks[0]
+        # the gate's host tests count with the same function (TestGateHostWarnings)
+        self.assertIn('w="$(tp_host_warnings "$log")"', check)
         self.assertIn('$RUNNER_TEMP/tests.log', check)
         self.assertRegex(check, r'\n        shell: bash\n')
         self.assertRegex(check, r'\n        if: success\(\) \|\| failure\(\)\n', 'the check must run after a failed suite too')
@@ -1251,6 +1253,9 @@ class TestSketchWarnings(unittest.TestCase):
             gate = fh.read()
         self.assertIn('. "$ROOT/tools/sketch_warnings.sh"', gate)
         self.assertNotIn('WARN_BASELINE=', gate, 'the gate has its own baseline again')
+        # host build warnings: the function CI's "No host build warnings" step counts with
+        self.assertIn('hw="$(tp_host_warnings "$TMP/tests.log" | wc -l', gate)
+        self.assertNotIn("grep -E ': warning: '", gate, 'the gate counts host warnings its own way again')
 
 
 class TestBuildCache(FakeArduinoCliCase):
@@ -2148,7 +2153,7 @@ class TestGateSimChecks(FakeArduinoCliCase):
         self.scripts(root,
                      a_game='wait 1s\nexpect Play: song untouched (screen off)\nexpect-not Play: keepy\n',
                      b_train='  expect-not Training:\n# expect in a comment is not a check\nwait 1s\n'
-                             'expect\tTRAIN: asleep\n',
+                             'expect\tTRAIN: asleep\nexpect-once Training: punch\n',
                      no_checks='wait 1s\nshot x\n# expect nothing here\nserial expect\n')
         return root
 
@@ -2164,8 +2169,8 @@ class TestGateSimChecks(FakeArduinoCliCase):
         self.assertEqual(self.order(), ['tests', 'i18n', 'sim', 'sim',
                                       'check-175c-a_game', 'check-175c-b_train',
                                       'check-175-a_game', 'check-175-b_train'])
-        self.assertIn('PASS  sim checks 175c  (2 scripts, 4/4 checks)', r.stdout)
-        self.assertIn('PASS  sim checks 175  (2 scripts, 4/4 checks)', r.stdout)
+        self.assertIn('PASS  sim checks 175c  (2 scripts, 5/5 checks)', r.stdout)
+        self.assertIn('PASS  sim checks 175  (2 scripts, 5/5 checks)', r.stdout)
         self.assertNotIn('SKIP  sim checks', r.stdout)
         # the script's own `lang` step decides: the gate passes no --lang
         with open(self.args) as fh:
@@ -2195,8 +2200,8 @@ class TestGateSimChecks(FakeArduinoCliCase):
         root = self.checks_root()
         r = self.gate(root, '--no-firmware', FAKE_CHECKS='fail', FAKE_CHECKS_SCRIPT='b_train')
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
-        self.assertIn('FAIL  sim checks 175c (exit 1)  (3/4 checks; failed: b_train)', r.stdout)
-        self.assertIn('FAIL  sim checks 175 (exit 1)  (3/4 checks; failed: b_train)', r.stdout)
+        self.assertIn('FAIL  sim checks 175c (exit 1)  (4/5 checks; failed: b_train)', r.stdout)
+        self.assertIn('FAIL  sim checks 175 (exit 1)  (4/5 checks; failed: b_train)', r.stdout)
         self.assertIn('b_train.txt:2: expect failed: stub', r.stdout)   # what the simulator said
         self.assertIn('GATE FAILED', r.stdout)
         # the other script still ran on both boards

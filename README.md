@@ -774,9 +774,11 @@ and the other special days' greetings too),
 `catch`, `peek` or `song`, simulator only; see `sim/scripts/game-screen-off.txt`), and `shot NAME`.
 `expect Play: peek score=* (screen off)` checks the serial output: some line printed
 since the previous check contains the text, where `*` stands for any run of characters;
-`expect-not` checks that none does. A failed check prints what it looked at and the
-run exits 1 at its end; `tools/gate.sh` runs every script in `sim/scripts/` that has a
-check, on both boards (see `game-screen-off.txt` and `exercise-screen-off.txt`). `lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
+`expect-not` checks that none does, and `expect-once` that exactly one does. A failed
+check prints what it looked at and the run exits 1 at its end; `tools/gate.sh` runs every
+script in `sim/scripts/` that has a check, on both boards (see `game-screen-off.txt` and
+`exercise-screen-off.txt`).
+`lang`, `clock 2026-11-13 22:30` and `pmu none` (the power chip
 doesn't answer) set the language, the time and the PMU before boot, and only
 there (`clock none`: no time, as after a power-off; see `sim/scripts/clock-prompt.txt`);
 `battery`, `usb` and `charging` placed before the first step that

@@ -55,7 +55,8 @@ y los modulos que salieron de el: `scene.cpp`, `gameui.cpp`, `screens.cpp`,
 RTC/bateria (`rtcbat.cpp`). El `.ino` y esos modulos tampoco se compilan aqui:
 los compila el simulador (`tools/sim.sh`, ver la seccion "Simulator" del README)
 contra una placa simulada, y `tools/gate.sh` lo corre en las dos placas, con los
-guiones de `sim/scripts/` que comprueban su salida serie (`expect`, `expect-not`; #99).
+guiones de `sim/scripts/` que comprueban su salida serie (`expect`, `expect-not`,
+`expect-once`; #99).
 
 Los tests de este directorio y el simulador se compilan con `-funsigned-char`:
 en el ESP32-S3 `char` no tiene signo y en el Mac si, y sin el flag un byte

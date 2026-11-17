@@ -14,11 +14,14 @@
 #   Play: catch score=0 speed=+0 (screen off)   4. the pocket lock (one tap: played, so paid)
 #   Play: peek score=14 speed=+3 (screen off)   5. the speed ribbon (shot 15: its banner)
 #   Play: song score=0 speed=+0 (screen off)    6. the battery runs out mid-game
-# What must hold on every run, which the expect steps below check (#99; tools/gate.sh runs
-# this script on both boards and fails if one doesn't hold): line 1 says "untouched"; lines 2,
-# 4, 5 and 6 end in "(screen off)"; line 3 does not (shot 08 is the keepy's result screen, paid
-# at its end), and no line comes between 3 and 4; line 5 has speed=+1 or more (+1 completes
-# the ribbon in shot 15). Each check looks at the lines printed since the check before it.
+# What must hold on every run, which the checks below enforce (#99; tools/gate.sh runs this
+# script on both boards and fails if one doesn't hold): each line is printed once, in its own
+# section, and no other "Play:" line comes (each section's checks start with "expect-once
+# Play:", and the PWR presses on the keepy's result have "expect-not Play:"), so a game paid
+# twice, or paid again by a later press, fails; line 1 says "untouched"; lines 2, 4, 5 and 6
+# end in "(screen off)"; line 3 does not (shot 08 is the keepy's result screen, paid at its
+# end); line 5 has speed=+1 or more (+1 completes the ribbon in shot 15). Each check looks at
+# the lines printed since the check before it.
 # Each section names its game with the simulator's "game" step, so the bag's dice don't
 # decide which comes. The Play button is at (202, 404) and its strip's Poke Ball at
 # (169, 320) (#13); a game shows its title card for 1.2 s, then plays. In Peekaboo a tap on
@@ -42,6 +45,7 @@ wait 1700ms
 shot 01-untouched-game
 press pwr
 shot 02-untouched-pwr-off
+expect-once Play:
 expect Play: song untouched (screen off)
 wait 3s
 press pwr
@@ -83,6 +87,7 @@ tap 366 300
 shot 04-game-playing
 press pwr
 shot 05-game-pwr-off
+expect-once Play:
 expect Play: peek score=* (screen off)
 wait 5s
 press pwr
@@ -105,9 +110,9 @@ tap 40 233
 wait 11s
 shot 08-keepy-result
 # paid at its end, with no PWR press in it
+expect-once Play:
 expect Play: keepy score=
 expect-not Play: keepy*(screen off)
-expect-not Play: peek
 press pwr
 shot 09-result-pwr-off
 wait 2s
@@ -129,8 +134,8 @@ wait 1700ms
 tap 233 350
 press pwr 3
 shot 11-game-locked
+expect-once Play:
 expect Play: catch score=* (screen off)
-expect-not Play: keepy
 wait 3s
 press pwr 3
 tap 40 233
@@ -200,6 +205,7 @@ tap 366 300
 shot 13-ribbon-game
 press pwr
 shot 14-ribbon-pwr-off
+expect-once Play:
 expect Play: peek score=* (screen off)
 expect-not Play: peek score=* speed=+0 (screen off)
 wait 6s
@@ -218,4 +224,5 @@ tap 233 300
 battery 0
 wait 2s
 # paid before the power-off (the simulator stops running the firmware there; the check still runs)
+expect-once Play:
 expect Play: song score=* (screen off)

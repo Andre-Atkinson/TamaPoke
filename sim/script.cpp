@@ -290,7 +290,7 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
         if (w[1] == GAME_KEYS[i]) c.a = i;
       if (c.a < 0) return fail("usage: game keepy|catch|peek|song");
       c.op = OP_GAME;
-    } else if (op == "expect" || op == "expect-not") {
+    } else if (op == "expect" || op == "expect-not" || op == "expect-once") {
       // the rest of the line, trimmed: `line` already stops at a '#' (a comment), so a
       // trailing comment can't become part of the text and make an expect-not pass for good
       std::string rest = line.substr(line.find(op) + op.size());
@@ -298,7 +298,7 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       if (a == std::string::npos)
         return fail("usage: " + op + " TEXT (a part of a serial line; '*' stands for any run of characters)");
       size_t b = rest.find_last_not_of(" \t\r");
-      c.op = op == "expect" ? OP_EXPECT : OP_EXPECT_NOT;
+      c.op = op == "expect" ? OP_EXPECT : op == "expect-not" ? OP_EXPECT_NOT : OP_EXPECT_ONCE;
       c.text = rest.substr(a, b - a + 1);
     } else if (op == "shot") {
       if (n != 2) return fail("usage: shot NAME");
@@ -333,10 +333,12 @@ bool simLineMatches(const std::string &line, const std::string &pattern) {
   return true;
 }
 
+bool simIsCheck(SimOp op) { return op == OP_EXPECT || op == OP_EXPECT_NOT || op == OP_EXPECT_ONCE; }
+
 size_t simCheckCount(const SimScript &script) {
   size_t n = 0;
   for (const SimCmd &c : script.cmds)
-    if (c.op == OP_EXPECT || c.op == OP_EXPECT_NOT) n++;
+    if (simIsCheck(c.op)) n++;
   return n;
 }
 
@@ -378,23 +380,25 @@ static std::string listLines(const std::vector<std::string> &lines) {
 
 bool SimSerialWindow::check(const SimCmd &c, std::string &why) {
   why.clear();
-  if (c.op != OP_EXPECT && c.op != OP_EXPECT_NOT) return false;
+  if (!simIsCheck(c.op)) return false;
   afterCheck_ = true;
   lastCheckLine_ = c.line;
   std::vector<std::string> lines = windowLines(text), hits;
   for (const std::string &l : lines)
     if (simLineMatches(l, c.text)) hits.push_back(l);
-  bool expect = c.op == OP_EXPECT;
-  if (expect ? !hits.empty() : hits.empty()) return true;
+  bool pass = c.op == OP_EXPECT ? !hits.empty() : c.op == OP_EXPECT_NOT ? hits.empty() : hits.size() == 1;
+  if (pass) return true;
   std::string from = since_ ? "since the check on line " + std::to_string(since_) : "since boot";
   std::string what = "\"" + c.text + "\"";
-  if (!expect)
-    why = "expect-not failed: " + std::to_string(hits.size()) + " of the " + linesWord(lines.size()) + " printed " +
-          from + " " + (hits.size() == 1 ? "contains " : "contain ") + what + ":" + listLines(hits);
+  std::string step = c.op == OP_EXPECT ? "expect" : c.op == OP_EXPECT_NOT ? "expect-not" : "expect-once";
+  if (!hits.empty())  // expect-not, or expect-once with more than one
+    why = step + " failed: " + std::to_string(hits.size()) + " of the " + linesWord(lines.size()) + " printed " +
+          from + " " + (hits.size() == 1 ? "contains " : "contain ") + what +
+          (c.op == OP_EXPECT_ONCE ? ", not 1" : "") + ":" + listLines(hits);
   else if (lines.empty())
-    why = "expect failed: nothing was printed " + from + ", so no line contains " + what;
+    why = step + " failed: nothing was printed " + from + ", so no line contains " + what;
   else
-    why = "expect failed: none of the " + linesWord(lines.size()) + " printed " + from + " contains " + what + ":" +
+    why = step + " failed: none of the " + linesWord(lines.size()) + " printed " + from + " contains " + what + ":" +
           listLines(lines);
   return false;
 }
