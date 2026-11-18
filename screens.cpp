@@ -559,8 +559,13 @@ static_assert(S_STAT_STA == S_STAT_STR + 1 && S_STAT_SPD == S_STAT_STR + 2 &&
               S_TRAIN_HINT_STA == S_TRAIN_HINT_STR + 1 && S_TRAIN_HINT_SPD == S_TRAIN_HINT_STR + 2,
               "the fitness rows index the labels and the hints by FIT_*");
 static_assert(MED_STR == 1 << MED_CARE_COUNT && MED_STA == 1 << (MED_CARE_COUNT + 1) &&
-              MED_SPD == 1 << (MED_CARE_COUNT + 2) && MED_CARE_COUNT + FIT_STATS == MED_COUNT,
-              "the ribbons are the medals after the care ones, in FIT_* order");
+              MED_SPD == 1 << (MED_CARE_COUNT + 2) && MED_WALK == 1 << (MED_CARE_COUNT + 3) &&
+              MED_CARE_COUNT + FIT_STATS + 1 == MED_COUNT,
+              "the ribbons are the medals after the care ones, in FIT_* order, then the walking one (#117)");
+// The 1.75C's pages have the walks (#117): the Fitness page's steps and treats, the walking
+// ribbon on the medals page. The original 1.75 has no step counter, so neither shows there.
+static const bool WALKS = BOARD_AMOLED_175C != 0;
+#define WALK_RIBBON_COLOR 0x9AD6  // the walking ribbon's tails: amethyst, beside the stats' red, blue and orange
 
 // A rosette 12 px across centred at (x, y), its two tails spreading down and out to 13 px
 // below it: a training ribbon (#76). Won: green, with tails and heart in the stat's colour;
@@ -603,11 +608,25 @@ static void renderCardStats() {
   }
   drawCardStat(FIT_WGT_Y, T(S_STAT_WGT), pet.weight, 100, 0xB3C8);
 
+  if (WALKS) {  // today's steps and the walk treats banked (#117), the numbers as the language writes them
+    char n[12], line[32];
+    formatCount(n, sizeof n, pet.walk.steps);
+    snprintf(line, sizeof line, T(S_STEPS_TODAY_FMT), n);
+    gfx->setTextColor(UI_INK);
+    setSize(2);
+    setCur(centerX(line, 2), FIT_STEPS_Y);
+    printT(line);
+    snprintf(line, sizeof line, T(S_WALK_TREATS_FMT), (unsigned)pet.walk.bank);
+    setCur(centerX(line, 2), FIT_TREATS_Y);
+    printT(line);
+  }
+
   // the TRAIN button: opens the exercise choice (trainPick, #78)
-  gfx->fillRoundRect(96, 300, 274, 40, 12, UI_BAR_BAD);
+  int by = fitBtnY(WALKS), bh = fitBtnH(WALKS);
+  gfx->fillRoundRect(FIT_BTN_X, by, FIT_BTN_W, bh, 12, UI_BAR_BAD);
   gfx->setTextColor(UI_BG_DAY);
   setSize(2);
-  setCur(centerX(T(S_TRAIN), 2), 311);
+  setCur(centerX(T(S_TRAIN), 2), by + (bh - FIT_LINE_H) / 2);
   printT(T(S_TRAIN));
 }
 
@@ -616,17 +635,17 @@ static void renderCardStats() {
 // Play minigame's best. Tiles: cardlayout.h.
 static void renderCardMedals() {
   int got = 0;
-  for (int i = 0; i < MED_COUNT; i++)
+  for (int i = 0; i < MED_SHOWN; i++)  // the walking ribbon counts only where it can be earned (#117)
     if (pet.hasMedal(1 << i)) got++;
   char head[24];
-  snprintf(head, sizeof(head), T(S_MEDALS_FMT), got, MED_COUNT);
+  snprintf(head, sizeof(head), T(S_MEDALS_FMT), got, MED_SHOWN);
   gfx->setTextColor(UI_INK);
   setSize(3);
   setCur(centerX(head, 3), MEDAL_TITLE_Y);
   printT(head);
 
-  for (uint8_t i = 0; i < MED_COUNT; i++) {
-    CardRect r = medalTile(i);
+  for (uint8_t i = 0; i < MED_SHOWN; i++) {
+    CardRect r = medalTile(i, WALKS);
     bool g = pet.hasMedal(1 << i);
     gfx->fillRoundRect(r.x, r.y, r.w, r.h, 10, g ? UI_BAR_OK : UI_TRACK);
     int ty = r.y + r.h / 2 - 8;
@@ -644,7 +663,7 @@ static void renderCardMedals() {
       printT(medalDesc(i));
     } else {  // a training ribbon: its rosette and the stat's name, centred in the room left
       uint8_t k = i - MED_CARE_COUNT;
-      drawRosette(r.x + RIBBON_ROSETTE_X, r.y + 13, g, FIT_COLOR[k]);
+      drawRosette(r.x + RIBBON_ROSETTE_X, r.y + r.h / 2 - 6, g, k < FIT_STATS ? FIT_COLOR[k] : WALK_RIBBON_COLOR);
       const char *name = medalDesc(i);
       int room = r.w - RIBBON_TEXT_X - MEDAL_TEXT_PAD;
       setCur(r.x + RIBBON_TEXT_X + (room - textW(name, 2)) / 2, ty);
@@ -654,7 +673,7 @@ static void renderCardMedals() {
 
   // records de los minijuegos de Play: icono y mejor puntuacion de cada uno
   for (uint8_t g = 0; g < GAME_COUNT; g++) {
-    int x = 61 + g * 88, y = RECORDS_Y;
+    int x = 61 + g * 88, y = recordsY(WALKS);
     gfx->fillRoundRect(x, y, 80, 40, 10, UI_TRACK);
     drawMap(GAME_ICON[g], 16, x + 4, y + 4, 2, false);
     char n[8];

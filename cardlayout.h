@@ -46,15 +46,39 @@ struct CardRect {
 
 inline int fitRowY(uint8_t stat) { return FIT_ROW_Y + stat * FIT_ROW_H; }
 
+// The TRAIN button under the bars (x FIT_BTN_X, FIT_BTN_W wide). The 1.75C's page (walks,
+// #117) adds two size-2 lines between the weight row and the button, "Steps today: 3,240" at
+// FIT_STEPS_Y and "Walk treats: 12" at FIT_TREATS_Y, and the button moves down and loses 2
+// px of height to make room, clear of the page dots (y 369). `walks` picks the 1.75C's.
+#define FIT_BTN_X 96
+#define FIT_BTN_W 274
+#define FIT_BTN_Y 300
+#define FIT_BTN_H 40
+#define FIT_STEPS_Y 272
+#define FIT_TREATS_Y 292
+#define FIT_BTN_Y_WALK 316
+#define FIT_BTN_H_WALK 38
+#define FIT_LINE_H 14  // a size-2 line's height
+inline int fitBtnY(bool walks) { return walks ? FIT_BTN_Y_WALK : FIT_BTN_Y; }
+inline int fitBtnH(bool walks) { return walks ? FIT_BTN_H_WALK : FIT_BTN_H; }
+inline bool fitBtnHit(int x, int y, bool walks) {
+  return y >= fitBtnY(walks) && y <= fitBtnY(walks) + fitBtnH(walks) && x >= FIT_BTN_X && x <= FIT_BTN_X + FIT_BTN_W;
+}
+
 // ---------------------------------------------------------------- Medals page
 // The 8 care medals in a 2x4 grid (bits 0-7), then the 3 training ribbons in one row
 // (bits 8-10), then the Play minigames' records. A row's tiles follow the round edge.
+// The 1.75C's page (`walks`, #117) has a fourth ribbon, the walking one (bit 11): the ribbons
+// make two rows of two, and the grid and the ribbon rows are 4 px closer, so the records
+// still end clear of the page dots (y 369).
 #define MEDAL_TITLE_Y 44   // size 3
 #define MEDAL_CARE 8       // the grid's tiles
-#define MEDAL_RIBBONS 3    // the ribbon row's tiles
+#define MEDAL_RIBBONS 4    // the ribbons, the walking one included
 #define MEDAL_ROW_Y 74
 #define MEDAL_ROW_H 44     // from one grid row to the next
 #define MEDAL_TILE_H 38
+#define MEDAL_ROW_H_WALK 40   // the same on the 1.75C's page
+#define MEDAL_TILE_H_WALK 36
 #define MEDAL_GAP 10       // between the two tiles of a grid row
 #define RIBBON_GAP 6       // between two tiles of the ribbon row
 #define MEDAL_EDGE 6       // a row's outer tiles keep this far inside the disc
@@ -62,35 +86,46 @@ inline int fitRowY(uint8_t stat) { return FIT_ROW_Y + stat * FIT_ROW_H; }
 #define RIBBON_CAP 220     // half the ribbon row at most
 #define RIBBON_ROW_Y (MEDAL_ROW_Y + 4 * MEDAL_ROW_H + 2)
 #define RECORDS_Y (RIBBON_ROW_Y + MEDAL_TILE_H + 10)  // the minigames' records, 40 px tall
+#define RIBBON_ROW_Y_WALK (MEDAL_ROW_Y + 4 * MEDAL_ROW_H_WALK)  // the 1.75C's first ribbon row; the second is MEDAL_ROW_H_WALK under it
+#define RECORDS_Y_WALK (RIBBON_ROW_Y_WALK + 2 * MEDAL_ROW_H_WALK + 8)
 #define MEDAL_TEXT_X 38    // a care medal's text, from its tile's left (the tick goes before it)
 #define RIBBON_ROSETTE_X 16  // a ribbon's rosette, its centre from its tile's left
 #define RIBBON_TEXT_X 28   // a ribbon's name, from its tile's left (past the rosette's tails)
 #define MEDAL_TEXT_PAD 6   // kept clear at a tile's right end
 
-// Medal i's tile: 0-7 the grid, 8-10 the ribbon row.
-inline CardRect medalTile(uint8_t i) {
+// The ribbon tiles this page has: 3 on the original 1.75, 4 with the walking one.
+inline uint8_t medalRibbons(bool walks) { return walks ? MEDAL_RIBBONS : MEDAL_RIBBONS - 1; }
+inline int medalTileH(bool walks) { return walks ? MEDAL_TILE_H_WALK : MEDAL_TILE_H; }
+inline int recordsY(bool walks) { return walks ? RECORDS_Y_WALK : RECORDS_Y; }
+
+// Medal i's tile (0 to MEDAL_CARE + medalRibbons(walks) - 1): 0-7 the grid, then the ribbons,
+// in one row of 3 (the original 1.75) or two rows of 2 (`walks`, the 1.75C).
+inline CardRect medalTile(uint8_t i, bool walks) {
   CardRect r;
-  r.h = MEDAL_TILE_H;
+  int th = medalTileH(walks), rowH = walks ? MEDAL_ROW_H_WALK : MEDAL_ROW_H;
+  r.h = (int16_t)th;
   if (i < MEDAL_CARE) {
-    int y = MEDAL_ROW_Y + (i / 2) * MEDAL_ROW_H;
-    int hw = cardHalfWidth(y, y + MEDAL_TILE_H, MEDAL_EDGE, MEDAL_CAP);
+    int y = MEDAL_ROW_Y + (i / 2) * rowH;
+    int hw = cardHalfWidth(y, y + th, MEDAL_EDGE, MEDAL_CAP);
     r.y = (int16_t)y;
     r.w = (int16_t)(hw - MEDAL_GAP / 2);
     r.x = (int16_t)((i % 2) ? CARD_C + MEDAL_GAP / 2 : CARD_C - hw);
     return r;
   }
   uint8_t k = (uint8_t)(i - MEDAL_CARE);
-  int hw = cardHalfWidth(RIBBON_ROW_Y, RIBBON_ROW_Y + MEDAL_TILE_H, MEDAL_EDGE, RIBBON_CAP);
-  int w = (2 * hw - (MEDAL_RIBBONS - 1) * RIBBON_GAP) / MEDAL_RIBBONS;
-  r.y = RIBBON_ROW_Y;
+  uint8_t perRow = walks ? 2 : 3;
+  int y = (walks ? RIBBON_ROW_Y_WALK : RIBBON_ROW_Y) + (k / perRow) * rowH;
+  int hw = cardHalfWidth(y, y + th, MEDAL_EDGE, RIBBON_CAP);
+  int w = (2 * hw - (perRow - 1) * RIBBON_GAP) / perRow;
+  r.y = (int16_t)y;
   r.w = (int16_t)w;
-  r.x = (int16_t)(CARD_C - hw + k * (w + RIBBON_GAP));
+  r.x = (int16_t)(CARD_C - hw + (k % perRow) * (w + RIBBON_GAP));
   return r;
 }
 
 // The px medal i's text (medalDesc) may take in its tile.
-inline int medalTextRoom(uint8_t i) {
-  return medalTile(i).w - (i < MEDAL_CARE ? MEDAL_TEXT_X : RIBBON_TEXT_X) - MEDAL_TEXT_PAD;
+inline int medalTextRoom(uint8_t i, bool walks) {
+  return medalTile(i, walks).w - (i < MEDAL_CARE ? MEDAL_TEXT_X : RIBBON_TEXT_X) - MEDAL_TEXT_PAD;
 }
 
 // ---------------------------------------------------------------- Care page

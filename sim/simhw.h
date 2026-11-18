@@ -52,6 +52,9 @@ struct SimPower {
 extern SimPower gSimPower;
 void simClockSet(uint32_t epoch);  // pone el reloj de software (0 = sin hora, como tras un corte)
 
+// ---- contador de pasos (steps_sim.cpp, #117) ----
+void simStepsAdd(uint32_t n);  // el contador del chip sube n pasos (el paso `steps N` del guion)
+
 // ---- sistema de ficheros de sprites ----
 void simFsSetRoot(const char *dir);   // carpeta que hace de LittleFS/SD (tools/sdcard)
 void simFsHideShiny(bool hide);       // 1.75C: la imagen LittleFS no lleva ps*.bin

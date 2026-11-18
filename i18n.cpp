@@ -58,6 +58,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Hi there!", "I'm happy!", "Pat me!",
     "I love you, %s!", "I love you!",
     "My plant looks thirsty!", "My berries are ripe!",  // the berry garden (#115)
+    "That was a lovely walk!",  // after a good walk (#117)
     // the natures' lines (#86): the first names the nature as the stat card does
     "I'm easygoing!", "Life is good!", "No rush, no worries!",
     "I'm a bit greedy!", "Berries are the best!", "Dreaming of berries...",
@@ -81,6 +82,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "find its berry", "a 7-day streak", "a full bond", "reach level 10", "reach level 25",
     "reach level 50", "a ribbon or IN SHAPE",
     "NEW: %s!", "SWIPE UP: WARDROBE",
+    // walks (#117)
+    "Steps today: %s", "Walk treats: %u",
   },
   // ---------------- PT (European Portuguese, #61) ----------------
   // One form of address throughout: "tu" (toca, desliza, escolhe, ouve, mantem),
@@ -139,6 +142,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Ol\240!", "Estou feliz!", "Faz-me festinhas!",
     "Adoro-te, %s!", "Adoro-te!",
     "A minha planta tem sede!", "As bagas est\343o maduras!",  // the berry garden (#115)
+    "Que passeio t\343o bom!",  // after a good walk (#117)
     // the natures' lines (#86): the first names the nature as the stat card does
     "Sou tranquilo!", "A vida \202 bela!", "Sem pressas, tudo bem!",
     "Sou um pouco guloso!", "As bagas s\343o o m\240ximo!", "A sonhar com bagas...",
@@ -162,6 +166,8 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "achar a baga", "7 dias seguidos", "la\207o m\240ximo", "chegar ao n\241vel 10", "chegar ao n\241vel 25",
     "chegar ao n\241vel 50", "uma fita ou EM FORMA",
     "NOVO: %s!", "DESLIZA P/ CIMA: ROUPEIRO",
+    // walks (#117)
+    "Passos hoje: %s", "Petiscos: %u",
   },
 };
 
@@ -170,17 +176,17 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
 // page's ribbon row names the stat.
 static const char *const MED_NAME[LANG_COUNT][MED_COUNT] = {
   { "Lv.10", "Lv.25", "Lv.50", "BERRY", "7 STREAK", "BOND", "TOP FORM", "IN SHAPE",
-    "STRENGTH RIBBON", "STAMINA RIBBON", "SPEED RIBBON" },
+    "STRENGTH RIBBON", "STAMINA RIBBON", "SPEED RIBBON", "WALKING RIBBON" },
   { "N\241v.10", "N\241v.25", "N\241v.50", "BAGA", "SEQ 7", "LA\200O", "FORMA M\301X.", "EM FORMA",
-    "FITA DE FOR\200A", "FITA DE F\324LEGO", "FITA DE RAPIDEZ" },
+    "FITA DE FOR\200A", "FITA DE F\324LEGO", "FITA DE RAPIDEZ", "FITA DE PASSEIO" },
 };
 static const char *const MED_DSC[LANG_COUNT][MED_COUNT] = {
   { "LEVEL 10", "LEVEL 25", "LEVEL 50", "BERRY FOUND",
     "7 DAY STREAK", "MAX BOND", "FINAL FORM", "IN SHAPE",
-    "STRENGTH", "STAMINA", "SPEED" },
+    "STRENGTH", "STAMINA", "SPEED", "5,000 STEPS" },
   { "N\315VEL 10", "N\315VEL 25", "N\315VEL 50", "BAGA ACHADA",
     "7 DIAS A FIO", "LA\200O M\301X.", "FORMA FINAL", "EM FORMA",
-    "FOR\200A", "F\324LEGO", "RAPIDEZ" },
+    "FOR\200A", "F\324LEGO", "RAPIDEZ", "5000 PASSOS" },
 };
 
 // The standby clock's date (#60), short [language][...]: English as in "Sat 15 Nov",
@@ -203,6 +209,21 @@ void formatDate(char *buf, size_t n, uint8_t weekday, uint8_t day, uint8_t month
     return;
   }
   snprintf(buf, n, T(S_DATE_FMT), WEEKDAY[gLang][weekday], (unsigned)day, MONTH[gLang][month - 1]);
+}
+// 3240 as "3,240" (English) or "3240" (European Portuguese, which groups only from five digits
+// up, with a space: "12 345"). The room for the widest (WALK_DAY_STEPS_MAX) is 8 characters.
+void formatCount(char *buf, size_t n, uint32_t v) {
+  if (!n) return;
+  char d[12];
+  int len = snprintf(d, sizeof d, "%lu", (unsigned long)v);
+  bool group = gLang == LANG_PT ? len >= 5 : len >= 4;
+  char sep = gLang == LANG_PT ? ' ' : ',';
+  size_t o = 0;
+  for (int i = 0; i < len && o + 1 < n; i++) {
+    if (group && i && (len - i) % 3 == 0 && o + 2 < n) buf[o++] = sep;
+    buf[o++] = d[i];
+  }
+  buf[o] = 0;
 }
 static_assert(S_NAT_LAZY - S_NAT_EASYGOING == NAT_LAZY - NAT_EASYGOING && NAT_LAZY + 1 == NAT_COUNT,
               "the nature names follow NAT_* (nature.h)");

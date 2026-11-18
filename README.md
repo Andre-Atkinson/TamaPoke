@@ -639,6 +639,31 @@ it's happy. Nothing else changes: no need, perk or care balance depends on it.
 The serial `STATS` line still prints ATK/DEF/SPD, the gen-1 base × **genes**
 (90–110 %, rolled at hatch) + level + training.
 
+## Walks (1.75C only)
+
+The 1.75C's motion sensor counts the player's steps by itself (the QMI8658's step engine), so
+carrying the board about is a way to look after the creature. Nothing needs the screen on, and
+the original 1.75 has no step counter, so none of this is there.
+- **When it counts:** off the charger and outside bedtime (the Care page's schedule; with it off,
+  or while the clock is not set, all day). Steps taken on the charger or at bedtime are not saved
+  up for later. The count is read once a minute, so a minute is worth at most 300 steps.
+- **Today's steps** start again at midnight (the clock's local day, the one the streak counts by;
+  with the clock not set they keep adding to the same day). The Fitness page shows them, with the
+  **walk treats** banked.
+- **Walk treats:** one for every 250 counted steps, at most 40 earned a day; the bank holds 40
+  and keeps overnight. Off the charger, when a need falls under 40 the creature spends a
+  treat to bring it back to 50, in self-care's order (food, hygiene, energy, joy), at most one
+  a minute, and only awake: a bag on a desk still gets help, hours after the walk. A new creature
+  starts with none. On the charger, self-care does this job instead.
+- **Stamina:** +1 training point for every 1,000 counted steps, at most 5 a day. Minutes a
+  treat held up don't count as steady care until you next look after the creature.
+- **The walking ribbon** (Medals page, 12 medals on the 1.75C): 5,000 counted steps in one day.
+- **A good walk:** after 1,000 steps or more and then ten minutes with no new ones, the next time
+  the screen is free the creature says "That was a lovely walk!" (not saved: a restart drops it).
+
+The serial `STEPS?` line (read-only) shows it: `STEPS on=1 chip=1234 today=3240 day=20775 bank=12
+earned=12 counting=1`.
+
 ## Retention: streak, bond, medals, name
 
 - **Streak** (the player's, persists across creatures): the first care of each
@@ -646,7 +671,7 @@ The serial `STATS` line still prints ATK/DEF/SPD, the gen-1 base × **genes**
   day breaks it. Flame badge on the main screen.
 - **Bond** (the creature's): rises slowly with care and petting, drops with slip-ups.
 - **Medals** for the individual (level, berry, streak, bond, final form, fit, and
-  the strength, stamina and speed ribbons) + a global counter. Medals page of the
+  the strength, stamina and speed ribbons, and on the 1.75C the walking ribbon) + a global counter. Medals page of the
   stat card. A medal or streak banner earned while a minigame or an exercise is on screen
   waits for it to close.
 - **Name**: touch keyboard; the nickname rules the header and the card.
@@ -845,6 +870,9 @@ to the clock) · `SCENE?` (read-only: `place today home wx prev mix season clock
 `*` after a forced value) · `BATLOG?` (read-only: the battery diary, a `BATLOG rows= cap=
 unsaved= period_min=` line, a CSV header and the rows; `tools/board.py batlog` turns it into
 a CSV file) · `BATLOG CLEAR` (starts a new battery diary; the pet is not touched) ·
+`STEPS?` (read-only, the 1.75C's step counter: `STEPS on= chip= today= day= bank= earned=
+counting=`: the engine, the chip's count, today's counted steps, their day, the walk treats banked and
+earned today, and whether counting is open; the original 1.75 prints `on=0 chip=-`) ·
 `SDINFO` / `LS` / `PUT` (the sprite files: free space, list, send one; `tools/send_sd.py`
 sends sprite files with them). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.
@@ -887,7 +915,9 @@ A script is one step per line (the full list is in `sim/script.h`):
 `sim/scripts/idle-life.txt`), `say hungry` (a speech bubble now, simulator only; `say christmas`
 and the other special days' greetings too),
 `train 30 10 30` (the creature's strength, stamina and speed training, simulator only; see
-`sim/scripts/fitness.txt`), `game catch` (the next Play deals this minigame, `keepy`,
+`sim/scripts/fitness.txt`), `steps 300` (the 1.75C's step counter counts that many more, simulator
+only; see `sim/scripts/walks.txt`, and `board 175c` / `board 175` / `board both`, which marks the steps
+after it for one board, since only the 1.75C counts steps), `game catch` (the next Play deals this minigame, `keepy`,
 `catch`, `peek` or `song`, simulator only; see `sim/scripts/game-screen-off.txt`), and `shot NAME`.
 `expect Play: peek score=* (screen off)` checks the serial output: some line printed
 since the previous check contains the text, where `*` stands for any run of characters;

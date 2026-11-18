@@ -96,19 +96,14 @@ void handleSerial() {
     return;
   }
 #endif
-  if (line == "STEPS?") {  // read-only: the step counter (#117, steps.h)
-    stepsPrintStatus();
-    return;
-  }
-  if (line.startsWith("STEPRATE ")) {  // test builds (#117): the step engine's rate, in RAM only
-    String args = line.substring(9);
-    args.trim();
-    int sp = args.indexOf(' ');
-    String rate = sp < 0 ? args : args.substring(0, sp);
-    String prof = sp < 0 ? String("") : args.substring(sp + 1);
-    prof.trim();
-    if (stepsSetRate(rate.c_str(), prof.c_str())) stepsPrintStatus();
-    else Serial.println("ERR STEPRATE <lp21|lp128|31|62|125> [ds|lib|easy] (or no step counter)");
+  if (line == "STEPS?") {  // read-only: the step counter and what it made of today (#117, steps.h, walks.h)
+    uint32_t chip = 0;
+    bool read = stepsRead(&chip);  // false: no step counter on this board, or the read failed
+    char c[12] = "-";
+    if (read) snprintf(c, sizeof c, "%lu", (unsigned long)chip);
+    Serial.printf("STEPS on=%d chip=%s today=%lu day=%lu bank=%u earned=%u counting=%d\n", stepsOn() ? 1 : 0, c,
+                  (unsigned long)pet.walk.steps, (unsigned long)pet.walk.day, (unsigned)pet.walk.bank,
+                  (unsigned)pet.walk.earned, pet.walkCounting() ? 1 : 0);
     return;
   }
   if (sdSerialCommand(line)) return;

@@ -7,6 +7,8 @@
 #include "nature.h"    // NAT_*, the drains, care boosts and training bonus of each nature (#25)
 #include "accessory.h" // ACC_*, what earns each accessory (#116)
 #include "garden.h"    // the berry garden (#115): Pet::garden, saved with the pet
+#include "walks.h"     // walks (#117): Pet::walk, the step counter's ledger, saved with the pet
+#include "board.h"     // BOARD_AMOLED_175C: MED_SHOWN
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
 // (p. ej. 5000UL = las estadisticas caen 12x mas rapido).
@@ -114,14 +116,25 @@ enum PetMood : uint8_t { MOOD_HAPPY, MOOD_SAD, MOOD_EATING, MOOD_SLEEPING };
 // medallas del individuo (bitmask). Bits 8-10 are the training ribbons (#76): one per
 // trained stat, for reaching RIBBON_STR / RIBBON_STA / RIBBON_SPD training points. A save
 // from before them loads with those bits clear (Pet::load() keeps only MED_ALL), and a pet
-// already past a threshold earns its ribbon at the next medal check.
+// already past a threshold earns its ribbon at the next medal check. Bit 11 is the walking
+// ribbon (#117): WALK_RIBBON_STEPS counted steps in one day, on the 1.75C, whose motion
+// sensor counts them; the original 1.75 has no step counter, so it never earns it and its
+// medals page doesn't show it (MED_SHOWN). It is the player's doing, not time's, so it isn't
+// in MED_BY_TIME, and it earns no accessory (accessory.h).
 enum : uint16_t {
   MED_LV10 = 1 << 0, MED_LV25 = 1 << 1, MED_LV50 = 1 << 2,
   MED_BERRY = 1 << 3, MED_STREAK7 = 1 << 4, MED_BOND = 1 << 5,
   MED_FINAL = 1 << 6, MED_FIT = 1 << 7,
   MED_STR = 1 << 8, MED_STA = 1 << 9, MED_SPD = 1 << 10,
+  MED_WALK = 1 << 11,
 };
-#define MED_COUNT 11
+#define MED_COUNT 12
+// The medals this board can earn: the medals page counts and shows these only
+#if BOARD_AMOLED_175C
+#define MED_SHOWN MED_COUNT
+#else
+#define MED_SHOWN (MED_COUNT - 1)
+#endif
 #define MED_ALL ((uint16_t)((1u << MED_COUNT) - 1))
 #define MED_CARE_COUNT 8  // the medals page's grid: bits 0-7; the ribbons are bits 8 to MED_COUNT - 1
 static_assert(ACCM_LV10 == MED_LV10 && ACCM_LV25 == MED_LV25 && ACCM_LV50 == MED_LV50 &&
@@ -415,7 +428,29 @@ public:
   // update(): whether the PMU answered at boot, whether USB is in, and the time since
   // the last touch. A PMU that never answered counts as unplugged, because the
   // firmware's usbPresent() reports true in that case. RAM only, never saved.
-  void setCharger(bool pmuOk, bool usb, uint32_t idleMs);
+  // Walks (#117) read the same two inputs: with USB in (and the PMU answering) the step
+  // counter is closed and no walk treat is spent. `clockSet`: the clock is set and not stale,
+  // so today's date and the bedtime window mean something; without it the day of the steps
+  // never rolls and bedtime doesn't close the counter.
+  void setCharger(bool pmuOk, bool usb, uint32_t idleMs, bool clockSet = true);
+  // Walks (#117, walks.h): the QMI8658's step counter turned into steps today, walk treats,
+  // stamina and the walking ribbon. `stepSource` reads the chip's count (steps.h's stepsRead;
+  // false when the read fails, which counts nothing); the sketch sets it only where the board
+  // has a step counter, and walkStart() then takes the count as it stands as the baseline. With
+  // no source (the original 1.75, or a sensor that didn't start) nothing below ever changes.
+  // Once a minute, before the tick (update()), walkMinute() counts the steps since the last
+  // look while counting is open (walkCounting(): off USB and not bedtime), adds the stamina
+  // they earn (WALK_STAMINA_DAY_MAX a day) and banks treats (WALK_STEPS_PER_TREAT a step
+  // count, WALK_TREATS_DAY_MAX a day). A treat is spent in tick(), off the charger, on the
+  // first need under SELFCARE_BELOW, which goes to SELFCARE_LEVEL (spendTreat()).
+  WalkLedger walk;
+  bool (*stepSource)(uint32_t *chip) = nullptr;
+  void walkStart();
+  bool walkCounting() const;
+  // A walk treat has lifted a need and the player has not looked after the pet since: the
+  // good minutes stamina counts (#76) pause, as on the charger's self-care, until the next
+  // real care (registerCare: feeding, a bath, play, medicine, a pat...). RAM only.
+  bool treatHeld() const { return treatHeld_; }
   // Quiet hours (attnQuietAt, attention.h; #44): the sketch sets it on every loop pass,
   // before update(). While it holds, tick() keeps the sounds nobody asked for to itself:
   // the hourly level-up and a medal only time earned (MED_BY_TIME). RAM only, never saved.
@@ -592,6 +627,9 @@ private:
   uint8_t bondToday = 0;       // tope diario de subida de vinculo
   BannerQueue banners;         // the medal and streak banners (#82, #83); RAM only
   bool selfCareOn = false;     // setCharger(): on USB and untouched SELFCARE_IDLE_MS
+  bool usbIn = false;          // setCharger(): the PMU answered and USB is in (walks: counting closed, no treats)
+  bool clockSet_ = true;       // setCharger(): the clock is set and not stale (walks: the day, bedtime)
+  bool treatHeld_ = false;     // a walk treat held the needs up since the last real care (treatHeld())
 
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo
@@ -613,6 +651,9 @@ private:
   // per minute asleep: the nature's rate, and more after warm milk (#13)
   uint8_t sleepEnergy() const { return (nature == NAT_LAZY ? NAT_SLEEP_ENERGY : 6) + (milked ? MILK_SLEEP_ENERGY : 0); }
   void selfCare();   // one need back up to half while charging (#24), from tick()
+  bool liftNeed(const char *why);  // the first need under SELFCARE_BELOW goes to SELFCARE_LEVEL; false if none is
+  void spendTreat();  // a walk treat (#117), from tick(): off USB, one a minute, lifts a need with liftNeed()
+  void walkMinute();  // the step counter's minute (#117), from update(), before tick()
   void sickTick(bool awake);  // sickness's minute (#15): falls sick, slips up, gets better
   void clearSickness();       // well, every count at 0
   void addSlipUp();           // one more slip-up (careMistakes, capped at 255) and -1 bond

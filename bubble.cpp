@@ -14,6 +14,7 @@ static_assert((int)S_SAY_HUNGRY + (int)BUB_LOVE_NAME == (int)S_SAY_LOVE_FMT &&
                   (int)S_SAY_HUNGRY + (int)BUB_LOVE == (int)S_SAY_LOVE,
               "the S_SAY_* strings follow BubbleLine");
 static_assert((int)S_SAY_HUNGRY + (int)BUB_SICK == (int)S_SAY_SICK, "the sick line (#15) follows BubbleLine too");
+static_assert((int)S_SAY_HUNGRY + (int)BUB_WALK == (int)S_SAY_WALK, "the walk line (#117) follows BubbleLine too");
 // each greeting has two strings, with the name and without, in BubbleLine order (#26):
 // bubbleStrOffset() finds them
 static_assert((int)S_SAY_HUNGRY + bubbleStrOffset(BUB_CHRISTMAS, true) == (int)S_SAY_CHRISTMAS_FMT &&
@@ -84,6 +85,7 @@ void bubbleLoop(uint32_t now, bool free) {
   in.needs = attnLevels(pet.fullness, pet.joy, pet.energy, pet.hygiene);
   in.sick = pet.isSick();  // #15
   in.garden = pet.garden.say();  // the berry garden (#115): thirsty, wilting soon or ripe
+  in.walk = pet.walk.say.due();  // a good walk has ended (#117)
   // the loop refreshes lastSeenEpoch from the clock every 30 s: no I2C read here
   uint32_t e = pet.lastSeenEpoch;
   in.clockKnown = e && !bedEdge.stale();
@@ -100,6 +102,7 @@ void bubbleLoop(uint32_t now, bool free) {
   // (a greeting and the hatch line are counted before compose(): test_bubble.cpp proves every
   // line can be laid out)
   uint8_t line = bubbleChoose(in, (uint32_t)random(0x7FFFFFFF), greeter, hatchLine, clock, quiet, holidayNow().greet);
+  if (line == BUB_WALK) pet.walk.say.said();  // counted before compose(), as a greeting is: said once
   if (!compose(line)) {
     bubbleTimer.cancel();
     Serial.printf("say %s: too wide\n", BUBBLE_KEYS[line]);

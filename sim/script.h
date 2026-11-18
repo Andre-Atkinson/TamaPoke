@@ -45,6 +45,20 @@
 //   train STR STA SPD        the pet's training points (#76: strength, stamina, speed, each
 //                            0-100), set at once, as if earned; the ribbons follow at the next
 //                            medal check (the minute tick). Only the simulator has this.
+//   board 175c|175|both      the steps after it are for that board only, up to the next `board`
+//                            step (both, the default, is every board): the other board skips
+//                            them (the preparation steps before the first one that runs the
+//                            firmware apply to every board). A check (expect...) skipped that
+//                            way counts as passed, and
+//                            the run prints how many it skipped. For what only one board has:
+//                            the 1.75C's step counter (#117) counts steps, the original 1.75
+//                            has none, and tools/gate.sh runs every script with a check on both.
+//   steps N                  the step counter's count goes up N steps (#117, steps.h; N 0 to
+//                            1000000): the pet reads it on its next minute tick, so `wait 1m`
+//                            makes them count (or not: off USB and outside bedtime they do, and
+//                            they are thrown away otherwise). The 1.75C's motion sensor counts;
+//                            the original 1.75 has none, so there it changes nothing. Only the
+//                            simulator has this.
 //   game NAME                the next Play deals this minigame (#94), one of keepy, catch, peek
 //                            or song, in place of the bag's pick. Only the simulator has this.
 //   expect TEXT              a check on the serial output (#99): some line printed since the
@@ -77,7 +91,7 @@ enum SimOp : uint8_t {
   OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING, OP_PMU,
   OP_TAP, OP_HOLD, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
   OP_WAIT, OP_SERIAL, OP_SHOT, OP_IDLE, OP_SAY, OP_NATURE,
-  OP_TRAIN, OP_GAME, OP_POOPS, OP_EXPECT, OP_EXPECT_NOT, OP_EXPECT_ONCE,
+  OP_TRAIN, OP_GAME, OP_POOPS, OP_EXPECT, OP_EXPECT_NOT, OP_EXPECT_ONCE, OP_STEPS,
 };
 
 struct SimCmd {
@@ -86,6 +100,7 @@ struct SimCmd {
   int32_t a = 0, b = 0, c = 0, d = 0;  // coordenadas, %, cuentas, flags
   uint64_t ms = 0;        // duraciones
   std::string text;       // idioma, linea serie, nombre de la captura
+  int8_t board = -1;      // board step: -1 every board, 0 the original 1.75 only, 1 the 1.75C only
 };
 
 struct SimScript {

@@ -354,6 +354,41 @@ TEST(SimScript, train_sets_the_three_training_points) {
     CHECK_MSG(!simParseScript(bad).error.empty(), std::string("accepted: ") + bad);
 }
 
+// "steps N" (#117): the step counter's count goes up N, 0 to 1,000,000
+TEST(SimScript, steps_adds_to_the_step_counter) {
+  SimScript s = simParseScript("steps 0\nsteps 250\nsteps 1000000\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)3);
+  if (s.cmds.size() != 3) return;
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_STEPS);
+  CHECK_EQ(s.cmds[1].a, (int32_t)250);
+  CHECK_EQ(s.cmds[2].a, (int32_t)1000000);
+  CHECK_EQ(simPreBootEnd(s), (size_t)0);  // it runs the firmware: not a boot step
+  CHECK_EQ(simParseScript("wait 1s\nsteps\n", "r.txt").error,
+           std::string("r.txt:2: usage: steps N (steps counted by the chip, 0-1000000)"));
+  for (const char *bad : { "steps\n", "steps -1\n", "steps 1000001\n", "steps 1 2\n", "steps a\n" })
+    CHECK_MSG(!simParseScript(bad).error.empty(), std::string("accepted: ") + bad);
+}
+
+// "board 175c|175|both" (#117): the steps after it are for that board only; it is no step itself
+TEST(SimScript, board_marks_the_steps_after_it_for_one_board) {
+  SimScript s = simParseScript("wait 1s\nboard 175c\nsteps 5\nexpect A\nboard 175\nexpect B\nboard both\nwait 2s\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)5);  // wait, steps, expect, expect, wait: `board` makes none
+  if (s.cmds.size() != 5) return;
+  CHECK_EQ((int)s.cmds[0].board, -1);
+  CHECK_EQ((int)s.cmds[1].board, 1);
+  CHECK_EQ((int)s.cmds[2].board, 1);
+  CHECK_EQ((int)s.cmds[3].board, 0);
+  CHECK_EQ((int)s.cmds[4].board, -1);
+  CHECK_EQ(simCheckCount(s), (size_t)2);
+  CHECK_EQ(simParseScript("board\n", "r.txt").error, std::string("r.txt:1: usage: board 175c|175|both"));
+  for (const char *bad : { "board 175c 175\n", "board 176\n", "board all\n" })
+    CHECK_MSG(!simParseScript(bad).error.empty(), std::string("accepted: ") + bad);
+  // the preparation steps apply to every board, whatever `board` says before them
+  CHECK_EQ(simPreBootEnd(simParseScript("board 175c\nbattery 50\nwait 1s\n")), (size_t)1);
+}
+
 // pmu ok|none (#24): the firmware asks the AXP2101 once, in setup(), so it is boot-only
 // "say LINE" (#23): a speech bubble by its serial-log name, in BubbleLine order
 TEST(SimScript, say_takes_a_speech_bubble_line_by_name) {

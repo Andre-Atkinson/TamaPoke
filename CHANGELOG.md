@@ -13,6 +13,19 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
 
 ### Added
 
+- **Walks** (#117), on the 1.75C. Its motion sensor now counts steps by itself (the QMI8658's
+  step engine, at 62.5 Hz: about 1% of the battery, and the datasheet's own step profile
+  counted 102 on a 100-step walk), instead of being powered down. Off the charger and outside
+  bedtime, the Fitness page shows **Steps today** and the **walk treats** banked: one treat for
+  every 250 steps, at most 40 earned a day, 40 in the bank, kept overnight. Off the charger,
+  when a need falls under 40 the creature spends a treat to bring it back to 50 (food,
+  hygiene, energy, joy, one a minute, awake only), so a board in a bag on a desk still gets
+  help. Every 1,000 steps adds a stamina training point (at most 5 a day), the **walking
+  ribbon** comes at 5,000 steps in a day, and after a good walk the creature says "That was a
+  lovely walk!". Steps taken on the charger or at bedtime are not counted. The serial `STEPS?`
+  shows it. The original 1.75 has no step counter and is unchanged. The simulator has a
+  `steps N` step and a `board 175c|175|both` step (`sim/scripts/walks.txt`).
+
 - **Accessories earned by care** (#116). Each creature earns its own things to wear on its
   head from its medals: a **Bow** (its favourite berry found), **Flowers** (a 7-day streak), a
   **Bobble hat** (full bond), a **Cap** (level 10), a **Top hat** (level 25), a **Crown**

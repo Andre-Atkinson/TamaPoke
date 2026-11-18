@@ -51,6 +51,8 @@ void Pet::newEgg() {
   milked = false;  // a new pet has had no milk (#13)
   clearSickness();  // a new pet is well (#15)
   medUntil = 0;
+  walk.bank = 0;  // the walk treats are the pet's (#117): a new pet starts with none, the day's steps are the player's
+  treatHeld_ = false;
   acc = ACC_NONE;  // the egg wears nothing (#116); hatch() clears them again for the new pet
   accSeen = 0;
   accPickDay = 0;
@@ -145,6 +147,7 @@ void Pet::update(uint32_t nowMs) {
   }
   while (nowMs - lastTick >= PET_TICK_MS) {
     lastTick += PET_TICK_MS;
+    walkMinute();  // the step counter (#117) first: its stamina and ribbon belong to this minute
     tick();
   }
 }
@@ -198,9 +201,10 @@ void Pet::tick() {
 
   // Steady care builds stamina (#76, STAMINA_CARE_MIN in pet.h): a minute with every need
   // at 40 or more counts, in total; a minute under 40 only doesn't count. Self-care's minutes
-  // on the charger are not the player's care. (Between the food/hygiene drain and the joy
+  // on the charger are not the player's care, nor are those a walk treat holds up (#117:
+  // treatHeld_, until the next real care). (Between the food/hygiene drain and the joy
   // drain, as always: lowestStat() includes joy, and moving it would change the rhythm.)
-  if (lowestStat() >= 40 && !selfCareOn) {
+  if (lowestStat() >= 40 && !selfCareOn && !treatHeld_) {
     goodTicks += natureTrainGain(nature, TRAIN_STAMINA, GOOD_STEP);  // tidy (#25): 5
     if (goodTicks >= STAMINA_CARE_MIN * GOOD_STEP) {
       goodTicks = 0;
@@ -217,6 +221,11 @@ void Pet::tick() {
   // powered-off catch-up) never runs tick(), so it never self-cares. Every minute in
   // both paces: relaxed only halves the drain.
   if (selfCareOn) selfCare();
+  // Walk treats (#117), the same place for the same reasons: after the drain, so a lift shows
+  // as 50, and before the slip-up and run-away checks, so a need it lifts is no slip-up; and
+  // the returns above and syncClock() keep it off while asleep, as an egg, in a ceremony and
+  // in the powered-off catch-up. Off the charger only: on it, self-care does this job.
+  if (!usbIn && !selfCareOn) spendTreat();
 
   // Sickness (#15): after self-care, so a bath it gives this minute counts as clean, and before
   // the needs' slip-up below, which it neither waits for nor shares a cooldown with.
@@ -336,8 +345,38 @@ void Pet::clearSickness() {
   germMin = healMin = sickMin = 0;
 }
 
-void Pet::setCharger(bool pmuOk, bool usb, uint32_t idleMs) {
-  selfCareOn = pmuOk && usb && idleMs >= SELFCARE_IDLE_MS;
+void Pet::setCharger(bool pmuOk, bool usb, uint32_t idleMs, bool clockSet) {
+  usbIn = pmuOk && usb;
+  selfCareOn = usbIn && idleMs >= SELFCARE_IDLE_MS;
+  clockSet_ = clockSet;
+}
+
+// Walks (#117). Counting is open off USB and outside bedtime: the schedule is the Care page's
+// (bedPreset) read on the clock's local minute, and it only exists while the clock is set and
+// not stale (the preset "off" has no window at all).
+bool Pet::walkCounting() const {
+  if (usbIn) return false;
+  if (clockSet_ && lastSeenEpoch && isBedtime(bedPreset, bedMinuteOfDay(lastSeenEpoch))) return false;
+  return true;
+}
+
+void Pet::walkStart() {
+  uint32_t chip = 0;
+  if (stepSource && stepSource(&chip)) walk.start(chip);
+}
+
+void Pet::walkMinute() {
+  uint32_t chip = 0;
+  if (!stepSource || !stepSource(&chip)) return;  // no counter, or a failed read: the baseline stays
+  // the day is today's from a trusted clock, the same day registerCare() counts by; without
+  // one (0) the steps stay in the day they were counted in
+  WalkGain g = walk.minute(chip, walkCounting(), clockSet_ ? today() : 0);
+  if (g.stamina && trDef < 100) trDef = (uint8_t)min(100, (int)trDef + g.stamina);
+  // the steps themselves go to NVS with the periodic save; what a walk earned (or a new day)
+  // asks for one at the next quiet moment
+  if (g.treats || g.stamina || g.rolled) pendingSave = true;
+  if (g.treats) Serial.printf("walk: +%u steps, %u treat%s banked (%u)\n", (unsigned)g.steps, (unsigned)g.treats,
+                              g.treats == 1 ? "" : "s", (unsigned)walk.bank);
 }
 
 // One need per minute, in a fixed order: food and hygiene first, because either one
@@ -347,7 +386,9 @@ void Pet::setCharger(bool pmuOk, bool usb, uint32_t idleMs) {
 // and no heart or eating state either, because a visible event wakes the screen and
 // restarts the idle time that keeps self-care on. No save() of its own: tick() marks
 // the periodic one.
-void Pet::selfCare() {
+void Pet::selfCare() { liftNeed("self-care"); }
+
+bool Pet::liftNeed(const char *why) {
   const char *what;
   uint8_t before;
   if (fullness < SELFCARE_BELOW) {
@@ -368,9 +409,23 @@ void Pet::selfCare() {
     before = joy;
     joy = SELFCARE_LEVEL;
   } else {
-    return;
+    return false;
   }
-  Serial.printf("self-care: %s %u->%u\n", what, (unsigned)before, (unsigned)SELFCARE_LEVEL);
+  Serial.printf("%s: %s %u->%u\n", why, what, (unsigned)before, (unsigned)SELFCARE_LEVEL);
+  return true;
+}
+
+// A banked walk treat (#117) lifts the first need under SELFCARE_BELOW, in self-care's order
+// (liftNeed), at most one a minute (tick() calls this once). Like self-care it is not the
+// player's care: no streak, bond, medal or heart, and the minutes it holds up don't count as
+// steady care until the player next looks after the pet (treatHeld_, cleared by registerCare).
+// A minute no need is under SELFCARE_BELOW spends nothing.
+void Pet::spendTreat() {
+  if (!walk.bank) return;
+  if (!liftNeed("walk treat")) return;
+  walk.spend();
+  treatHeld_ = true;
+  pendingSave = true;  // the bank changed: the next quiet moment saves it
 }
 
 void Pet::idlePerk(uint8_t energyUp, uint8_t joyUp) {
@@ -534,6 +589,7 @@ int Pet::careBonus() const {
 // primer cuidado del dia: avanza la racha y afianza el vinculo
 void Pet::registerCare() {
   if (isEgg() || ceremony != CER_NONE) return;
+  treatHeld_ = false;  // the player looked after the pet: its good minutes count again (#117)
   uint32_t d = today();
   if (d == 0 || d == lastCareDay) return;  // sin reloj, o ya conto hoy
   // Clock a little behind (e.g. tools/board.py clock after drift): keep the
@@ -581,6 +637,7 @@ void Pet::checkMedals(bool byTick) {
   if (trAtk >= RIBBON_STR) medals |= MED_STR;  // the training ribbons (#76)
   if (trDef >= RIBBON_STA) medals |= MED_STA;
   if (trSpe >= RIBBON_SPD) medals |= MED_SPD;
+  if (walk.ribbon()) medals |= MED_WALK;  // #117: steps only count where the board has a step counter
   uint16_t gained = medals & ~before;
   if (gained) {
     for (uint16_t m = gained; m; m &= (m - 1)) totalMedals++;
@@ -1095,6 +1152,11 @@ void Pet::save() {
   prefs.putUInt("potw", garden.wet);
   prefs.putUInt("potd", garden.dry);
   prefs.putUInt("pota", garden.at);
+  prefs.putUInt("wsteps", walk.steps);  // walks (#117): today's steps, their day, the treat bank,
+  prefs.putUInt("wday", walk.day);      // the treats and stamina points earned today
+  prefs.putUChar("wbank", walk.bank);
+  prefs.putUChar("wearn", walk.earned);
+  prefs.putUChar("wsta", walk.stamina);
 }
 
 void Pet::load() {
@@ -1173,6 +1235,11 @@ void Pet::load() {
   garden.load(prefs.getUChar("potb", 0), prefs.getUInt("potg", 0), prefs.getUInt("potw", 0),
               prefs.getUInt("potd", 0), prefs.getUInt("pota", 0), CLOCK_EPOCH_MIN,
               CLOCK_EPOCH_END);
+  // walks (#117): range-checked as they load (WalkLedger::load); saves from before them have
+  // none of the keys, a day with no steps and no treats
+  walk.load(prefs.getUInt("wsteps", 0), prefs.getUInt("wday", 0), prefs.getUChar("wbank", 0),
+            prefs.getUChar("wearn", 0), prefs.getUChar("wsta", 0), CLOCK_EPOCH_MIN / 86400UL,
+            CLOCK_EPOCH_END / 86400UL);
 
   // Range-check what came out of NVS before anything indexes with it. Normally
   // these were written by this firmware, but a different build flashed earlier

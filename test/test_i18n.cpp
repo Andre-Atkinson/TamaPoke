@@ -63,6 +63,8 @@ static const ExpectedFmt EXPECTED[] = {
   { S_INFO_FMT,        "%s,%lu" },
   { S_NATURE_FMT,      "%s" },  // natureName() (#25, renderCardProfile)
   { S_MEDALS_FMT,      "%d,%d" },
+  { S_STEPS_TODAY_FMT, "%s" },  // formatCount()'s text (renderCardStats, #117)
+  { S_WALK_TREATS_FMT, "%u" },  // the treats banked (renderCardStats, #117)
   { S_REC_FMT,         "%u" },
   { S_LVL_FMT,         "%u" },
   { S_NEXT_LVL_FMT,    "%u,%u" },
@@ -248,8 +250,13 @@ TEST(i18n, las_medallas_estan_en_todos_los_idiomas) {
       CHECK_MSG(d && d[0], std::string("medalDesc vacio ") + where);
       if (n) CHECK_MSG(strlen(n) * CARD_LETTER_W <= 320 - 2 * CARD_LETTER_W,
                        std::string("nombre demasiado largo ") + where + ": " + n);
-      if (d) CHECK_MSG((int)strlen(d) * CARD_LETTER_W <= medalTextRoom((uint8_t)m),
-                       std::string("descripcion demasiado larga ") + where + ": " + d);
+      // a tile on the original 1.75's page; the walking ribbon (the last medal) has one only on the 1.75C's (#117)
+      if (d && m < MED_COUNT - 1)
+        CHECK_MSG((int)strlen(d) * CARD_LETTER_W <= medalTextRoom((uint8_t)m, false),
+                  std::string("descripcion demasiado larga ") + where + ": " + d);
+      if (d)
+        CHECK_MSG((int)strlen(d) * CARD_LETTER_W <= medalTextRoom((uint8_t)m, true),
+                  std::string("descripcion demasiado larga (1.75C) ") + where + ": " + d);
     }
   }
   gLang = LANG_DEFAULT;
@@ -259,26 +266,35 @@ TEST(i18n, las_medallas_estan_en_todos_los_idiomas) {
 // 10, may cut the disc's edge by at most 3 px), none overlapping another, the ribbon row
 // under the grid and the minigames' records under it, all above the page dots (y 369).
 TEST(cardlayout, the_medal_tiles_sit_on_the_disc_without_overlapping) {
-  for (uint8_t i = 0; i < MED_COUNT; i++) {
-    CardRect r = medalTile(i);
-    std::string where = "tile " + std::to_string(i);
-    CHECK_MSG(r.w > 0 && r.h == MEDAL_TILE_H, where);
-    const int cx[2] = { r.x + 3, r.x + r.w - 3 }, cy[2] = { r.y + 3, r.y + r.h - 3 };
-    for (int a = 0; a < 2; a++)
-      for (int b = 0; b < 2; b++) {
-        int dx = cx[a] - CARD_C, dy = cy[b] - CARD_C;
-        CHECK_MSG(dx * dx + dy * dy <= CARD_R * CARD_R, where + ": a corner off the disc");
+  // the original 1.75's page (3 ribbons in a row) and the 1.75C's (#117: 4, two rows of two)
+  for (bool walks : { false, true }) {
+    const int n = MEDAL_CARE + medalRibbons(walks);
+    CHECK_EQ(n, walks ? (int)MED_COUNT : (int)MED_COUNT - 1);
+    for (uint8_t i = 0; i < n; i++) {
+      CardRect r = medalTile(i, walks);
+      std::string where = std::string(walks ? "1.75C " : "1.75 ") + "tile " + std::to_string(i);
+      CHECK_MSG(r.w > 0 && r.h == medalTileH(walks), where);
+      const int cx[2] = { r.x + 3, r.x + r.w - 3 }, cy[2] = { r.y + 3, r.y + r.h - 3 };
+      for (int a = 0; a < 2; a++)
+        for (int b = 0; b < 2; b++) {
+          int dx = cx[a] - CARD_C, dy = cy[b] - CARD_C;
+          CHECK_MSG(dx * dx + dy * dy <= CARD_R * CARD_R, where + ": a corner off the disc");
+        }
+      CHECK_MSG(medalTextRoom(i, walks) >= 8 * CARD_LETTER_W, where + ": room for 8 letters at least");
+      for (uint8_t j = 0; j < i; j++) {
+        CardRect o = medalTile(j, walks);
+        bool apart = r.x >= o.x + o.w || o.x >= r.x + r.w || r.y >= o.y + o.h || o.y >= r.y + r.h;
+        CHECK_MSG(apart, where + " overlaps tile " + std::to_string(j));
       }
-    CHECK_MSG(medalTextRoom(i) >= 8 * CARD_LETTER_W, where + ": room for 8 letters at least");
-    for (uint8_t j = 0; j < i; j++) {
-      CardRect o = medalTile(j);
-      bool apart = r.x >= o.x + o.w || o.x >= r.x + r.w || r.y >= o.y + o.h || o.y >= r.y + r.h;
-      CHECK_MSG(apart, where + " overlaps tile " + std::to_string(j));
+      CHECK_MSG(r.y + r.h <= recordsY(walks), where + ": over the records");
     }
+    CHECK(medalTile(MEDAL_CARE, walks).y >= medalTile(MEDAL_CARE - 1, walks).y + medalTileH(walks));
+    CHECK(recordsY(walks) >= medalTile(n - 1, walks).y + medalTileH(walks));
+    CHECK(recordsY(walks) + 40 < 369 - 5);  // the page dots' top
   }
-  CHECK(RIBBON_ROW_Y >= medalTile(MEDAL_CARE - 1).y + MEDAL_TILE_H);
-  CHECK(RECORDS_Y >= RIBBON_ROW_Y + MEDAL_TILE_H);
-  CHECK(RECORDS_Y + 40 < 369);
+  // the original page is as it was: the ribbon row at RIBBON_ROW_Y, three tiles
+  CHECK_EQ((int)medalTile(MEDAL_CARE, false).y, (int)RIBBON_ROW_Y);
+  CHECK_EQ((int)recordsY(false), (int)RECORDS_Y);
   CHECK(MEDAL_TITLE_Y + 21 < MEDAL_ROW_Y);  // the size-3 title is 21 px tall
 }
 
@@ -305,7 +321,65 @@ TEST(i18n, the_fitness_page_texts_fit) {
   gLang = LANG_DEFAULT;
 }
 
-// The Medals page header at a full count ("MEDALHAS 11/11" is the widest) at size 3, with
+// A count as the language writes it (#117): English groups from 1,000 with a comma, European
+// Portuguese from five digits with a space (3240, 12 345); a buffer too small cuts it short,
+// never over its end.
+TEST(i18n, formatCount_writes_a_count_as_the_language_does) {
+  struct Case { uint32_t v; const char *en, *pt; };
+  const Case cases[] = {
+    { 0, "0", "0" },           { 7, "7", "7" },           { 999, "999", "999" },
+    { 1000, "1,000", "1000" }, { 3240, "3,240", "3240" }, { 9999, "9,999", "9999" },
+    { 10000, "10,000", "10 000" }, { 12345, "12,345", "12 345" },
+    { 100000, "100,000", "100 000" }, { 432000, "432,000", "432 000" },
+    { 1234567, "1,234,567", "1 234 567" },
+  };
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    for (const Case &c : cases) {
+      char b[16];
+      formatCount(b, sizeof b, c.v);
+      CHECK_MSG(strcmp(b, lang == LANG_PT ? c.pt : c.en) == 0,
+                std::string(LANG_NAME[lang]) + " " + std::to_string(c.v) + " came out '" + b + "'");
+    }
+    char tiny[4] = { 'x', 'x', 'x', 'x' };
+    formatCount(tiny, 3, 1234567);  // room for two characters and the end
+    CHECK(strlen(tiny) <= 2);
+    formatCount(tiny, 0, 5);  // nothing may be written
+    CHECK_EQ((int)tiny[3], (int)'x');
+  }
+  gLang = LANG_DEFAULT;
+}
+
+// The Fitness page's walks lines (#117, the 1.75C only): the steps line at its widest count and
+// the treats line fit the round edge where they are drawn, nothing overlaps the weight row above
+// or the TRAIN button under them, and the button clears the page dots (y 369) and still holds a
+// tap at its old height (the exercise scripts tap y 320).
+TEST(i18n, the_fitness_walks_lines_fit) {
+  for (int lang = 0; lang < LANG_COUNT; lang++) {
+    gLang = (Lang)lang;
+    char n[16], line[48];
+    formatCount(n, sizeof n, WALK_DAY_STEPS_MAX);
+    snprintf(line, sizeof line, T(S_STEPS_TODAY_FMT), n);
+    int room = 2 * cardHalfWidth(FIT_STEPS_Y, FIT_STEPS_Y + FIT_LINE_H, CARD_LETTER_W, 1000);
+    CHECK_MSG((int)strlen(line) * CARD_LETTER_W <= room, std::string("steps line too wide: ") + line);
+    snprintf(line, sizeof line, T(S_WALK_TREATS_FMT), (unsigned)WALK_BANK_MAX);
+    room = 2 * cardHalfWidth(FIT_TREATS_Y, FIT_TREATS_Y + FIT_LINE_H, CARD_LETTER_W, 1000);
+    CHECK_MSG((int)strlen(line) * CARD_LETTER_W <= room, std::string("treats line too wide: ") + line);
+  }
+  gLang = LANG_DEFAULT;
+  CHECK(FIT_STEPS_Y >= FIT_WGT_Y + FIT_LINE_H + 4);   // under the weight row
+  CHECK(FIT_TREATS_Y >= FIT_STEPS_Y + FIT_LINE_H);
+  CHECK(FIT_BTN_Y_WALK >= FIT_TREATS_Y + FIT_LINE_H);
+  CHECK(FIT_BTN_Y_WALK + FIT_BTN_H_WALK < 369 - 5);   // above the page dots
+  CHECK(fitBtnHit(233, 320, true) && fitBtnHit(233, 320, false));
+  CHECK(!fitBtnHit(233, FIT_BTN_Y_WALK - 1, true) && !fitBtnHit(233, FIT_BTN_Y_WALK + FIT_BTN_H_WALK + 1, true));
+  CHECK(fitBtnHit(233, FIT_BTN_Y, false) && fitBtnHit(233, FIT_BTN_Y + FIT_BTN_H, false));
+  CHECK(!fitBtnHit(FIT_BTN_X - 1, 330, true) && !fitBtnHit(FIT_BTN_X + FIT_BTN_W + 1, 330, true));
+  // the button is as wide on the disc at its lowest edge as drawn
+  CHECK(2 * cardHalfWidth(FIT_BTN_Y_WALK, FIT_BTN_Y_WALK + FIT_BTN_H_WALK, 0, 1000) >= FIT_BTN_W);
+}
+
+// The Medals page header at a full count ("MEDALHAS 12/12" is the widest) at size 3, with
 // 4 px to spare each side of the disc (at y 40 it started on the rim).
 TEST(i18n, the_medals_header_fits_at_a_full_count) {
   int room = 2 * cardHalfWidth(MEDAL_TITLE_Y, MEDAL_TITLE_Y + 21, 4, 1000);

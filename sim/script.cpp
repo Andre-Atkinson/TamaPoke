@@ -156,6 +156,7 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
   std::string raw;
   int lineNo = 0;
   bool running = false;  // ya hay un paso que hace correr el firmware
+  int8_t board = -1;     // the `board` step in force: -1 every board, 0 the original 1.75, 1 the 1.75C
   auto fail = [&](const std::string &why) {
     out.error = name + ":" + std::to_string(lineNo) + ": " + why;
     out.cmds.clear();
@@ -171,7 +172,13 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
     const std::string &op = w[0];
     SimCmd c;
     c.line = lineNo;
+    c.board = board;
     size_t n = w.size();
+    if (op == "board") {  // not a step: the ones after it are for that board only
+      if (n != 2 || (w[1] != "175c" && w[1] != "175" && w[1] != "both")) return fail("usage: board 175c|175|both");
+      board = w[1] == "175c" ? 1 : w[1] == "175" ? 0 : -1;
+      continue;
+    }
     if (op == "lang") {
       if (n != 2) return fail("usage: lang CODE");
       if (running) return fail("lang must come before the first step that runs the firmware");
@@ -284,6 +291,9 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       if (n != 4 || !toInt(w[1], c.a, 0, 100) || !toInt(w[2], c.b, 0, 100) || !toInt(w[3], c.c, 0, 100))
         return fail("usage: train STRENGTH STAMINA SPEED (training points, 0-100 each)");
       c.op = OP_TRAIN;
+    } else if (op == "steps") {
+      if (n != 2 || !toInt(w[1], c.a, 0, 1000000)) return fail("usage: steps N (steps counted by the chip, 0-1000000)");
+      c.op = OP_STEPS;
     } else if (op == "game") {
       c.a = -1;
       for (int i = 0; n == 2 && i < GAME_COUNT; i++)
