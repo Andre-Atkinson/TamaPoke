@@ -64,12 +64,16 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
   `BATLOG CLEAR` (erases the battery diary, NVS namespace `batlog`; not the
   pet), `SICK ON [minutes]` and `SICK OFF` (makes the pet sick now, with
   0-1440 counted minutes and no slip-up, or well, and saves; `ERR` while the
-  Care page's sickness setting is off, with no pet, or during an ending), `PUT`.
+  Care page's sickness setting is off, with no pet, or during an ending),
+  `ACC <name|none>` (wears an accessory the pet has earned, or takes it off,
+  and writes NVS key `acc`; today's special hat drops a pick made today, in
+  RAM; `ERR` when not earned, with no pet, or during an ending), `PUT`.
   Read-only: `HEALTH`, `STATS`, `REG`, `EGGS`, `TIME`,
   `CARE?` (prints `pace bed inbed stale egg picking sickness sick germ heal
   sickmin`), `OWNER?`, `BDAY?`
   (prints `bday today birthday`), `SCENE?`
   (prints `place today home wx prev mix season clock particles standby`),
+  `ACC?` (prints `worn shown day have new`),
   `BATLOG?` (prints `BATLOG rows cap unsaved period_min`, a CSV header and
   the diary's rows), `LS`, `SDINFO`, `LOCK?`,
   `TRAINTRACE?`. `LOCK?` and `TRAINTRACE` exist on the 1.75C only. These

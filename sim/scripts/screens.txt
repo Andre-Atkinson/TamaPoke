@@ -21,7 +21,7 @@ shot 04-feed-menu
 tap 233 150
 wait 2s
 
-# swipe up: the pet card, five pages (swipe left = next)
+# swipe up: the pet card, six pages (swipe left = next; the sixth, the Wardrobe, below)
 swipe up
 shot 05-card-profile
 swipe left
@@ -144,6 +144,30 @@ tap 233 233
 wait 1s
 usb off
 charging off
+
+# accessories (#116): level 10 earns the Cap (and IN SHAPE, the Laurel), and the first one goes
+# on by itself once the minute tick has seen the level; the Wardrobe page is the card's sixth.
+# Taps on the sky keep the screen lit.
+serial LVL 10
+tap 400 200
+wait 20s
+tap 400 200
+wait 20s
+tap 400 200
+wait 20s
+tap 400 200
+wait 20s
+tap 400 200
+wait 1s
+shot 27a-wearing-the-cap
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+swipe left
+shot 27b-card-wardrobe
+swipe up
 
 # Care page, Eggs -> Choose; a runaway (serial RUN) then offers three eggs
 swipe up

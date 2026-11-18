@@ -189,7 +189,7 @@ enum : int8_t {
   BANNER_STREAK = MED_COUNT,  // 0..MED_COUNT - 1: a medal's bit
   BANNER_ACC = MED_COUNT + 1, // BANNER_ACC + ACC_*: an accessory earned (ACC_BOW..ACC_LAUREL)
 };
-inline bool bannerIsAcc(int8_t b) { return b > BANNER_ACC && b <= BANNER_ACC + ACC_LAUREL; }
+inline bool bannerIsAcc(int8_t b) { return b > BANNER_ACC && b <= (int)BANNER_ACC + (int)ACC_LAUREL; }
 struct BannerQueue {
   int8_t on = BANNER_NONE;  // on screen: a medal's bit, BANNER_STREAK, BANNER_ACC + an accessory, or BANNER_NONE
   uint32_t until = 0;       // ...until this millis()

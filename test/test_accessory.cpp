@@ -364,6 +364,10 @@ TEST(wardrobe, a_new_pet_hatches_wearing_nothing) {
   p.update(millis() + CEREMONY_MS + 1);
   p.newEgg();
   CHECK_EQ(p.accUnlocked(), (uint16_t)0);  // an egg wears and has nothing
+  CHECK_EQ(p.acc, (uint8_t)ACC_NONE);
+  CHECK_EQ(p.accSeen, (uint16_t)0);
+  p.acc = ACC_CAP;  // as an egg saved by another build could load: the hatch clears it again
+  p.accSeen = 1u << ACC_CAP;
   p.eggTap();
   p.eggTap();
   p.eggTap();

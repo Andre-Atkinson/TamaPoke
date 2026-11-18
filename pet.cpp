@@ -51,6 +51,9 @@ void Pet::newEgg() {
   milked = false;  // a new pet has had no milk (#13)
   clearSickness();  // a new pet is well (#15)
   medUntil = 0;
+  acc = ACC_NONE;  // the egg wears nothing (#116); hatch() clears them again for the new pet
+  accSeen = 0;
+  accPickDay = 0;
   save();
 }
 

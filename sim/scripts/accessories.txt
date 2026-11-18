@@ -1,0 +1,137 @@
+# Accessories earned by care (#116, accessory.h): checked on the serial output (ACC?, and the
+# "wardrobe: <name>" line a worn tile prints), with shots to look at.
+#   A. a new pet has and wears nothing; ACC refuses one not earned and a word it doesn't know
+#   B. level 10 earns the Cap: its banner after the medal's, and on it goes by itself (the first)
+#   C. the Wardrobe page (the card's sixth): its red dot, seen once the page has opened; a tap
+#      on Nothing takes it off, a locked tile shows what earns it and wears nothing, a tap on
+#      the Cap puts it back on
+#   D. Christmas Eve: the Santa hat goes on by itself over the Cap; a pick on the page wins for
+#      the day, the hat's own tile brings it back; another day's hat is refused
+#   E. a tall pet in a tall hat with a speech bubble (the bubble stays over the hat)
+#   F. an ending: nothing can be worn; the egg after it and the pet that hatches wear and have
+#      nothing
+#   tools/sim.sh --script accessories --out shots/        (and --lang pt for the texts)
+battery 80
+
+# new game: pick Charmander, hatch the egg (the clock is 2026-11-13 10:00)
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# A. nothing yet
+serial ACC?
+expect ACC worn=none shown=none day=none have=none new=none
+serial ACC cap
+expect ERR not worn: not earned yet*
+serial ACC hat
+expect ERR usage: ACC*
+
+# B. level 10: the minute tick gains the medal (and IN SHAPE with it: no weight, no slip-up, so
+# the Laurel too), then their banners, each accessory's after its medal's. Taps on the sky keep
+# the screen lit.
+serial LVL 10
+tap 400 200
+wait 20s
+tap 400 200
+wait 20s
+tap 400 200
+wait 11s
+shot 1-medal-banner
+wait 4s
+shot 2-new-cap-banner
+wait 12s
+shot 3-wearing-the-cap
+serial ACC?
+expect ACC worn=cap shown=cap day=none have=cap,laurel new=cap,laurel
+
+# C. the Wardrobe page: the card, then five pages to the left
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+swipe left
+shot 4-wardrobe-new-cap
+serial ACC?
+expect ACC worn=cap shown=cap day=none have=cap,laurel new=none
+# Nothing (the first tile)
+tap 131 111
+expect wardrobe: none
+serial ACC?
+expect ACC worn=none shown=none*
+# the Top hat (the sixth, locked): its hint, nothing worn
+tap 335 195
+shot 5-wardrobe-locked-hint
+expect-not wardrobe:
+serial ACC?
+expect ACC worn=none shown=none*
+# the Cap (the fifth): on again
+tap 233 195
+expect wardrobe: cap
+shot 6-wardrobe-cap-worn
+swipe up
+
+# D. Christmas Eve, 10:00
+serial TIME 1798106400
+wait 2s
+serial ACC?
+expect ACC worn=cap shown=santa day=santa*
+shot 7-santa-over-the-cap
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+swipe left
+shot 8-wardrobe-today-santa
+tap 233 195
+expect wardrobe: cap
+serial ACC?
+expect ACC worn=cap shown=cap day=santa*
+tap 335 279
+expect wardrobe: santa
+serial ACC?
+expect ACC worn=cap shown=santa day=santa*
+swipe up
+serial ACC witch
+expect ERR not worn*
+serial ACC none
+expect ACC worn=none shown=none day=santa*
+serial ACC santa
+expect ACC worn=none shown=santa day=santa*
+
+# E. Gyarados at level 25 in the Top hat, saying hello
+serial TIME 1794650400
+wait 2s
+serial SPEC 130
+serial LVL 25
+tap 400 200
+wait 20s
+tap 400 200
+wait 20s
+tap 400 200
+wait 20s
+tap 400 200
+wait 10s
+serial ACC tophat
+expect ACC worn=tophat shown=tophat*
+tap 400 200
+say hi
+wait 500ms
+shot 9-tall-pet-tall-hat-bubble
+
+# F. a farewell: nothing can be worn; the egg after it hatches a pet wearing nothing
+serial BYE
+wait 1s
+serial ACC cap
+expect ERR not worn*
+wait 12s
+serial ACC?
+expect ACC worn=none shown=none day=none have=none new=none
+serial HATCH
+wait 2s
+serial ACC?
+expect ACC worn=none shown=none day=none have=none new=none

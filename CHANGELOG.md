@@ -11,6 +11,24 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
 
 ## [Unreleased]
 
+### Added
+
+- **Accessories earned by care** (#116). Each creature earns its own things to wear on its
+  head from its medals: a **Bow** (its favourite berry found), **Flowers** (a 7-day streak), a
+  **Bobble hat** (full bond), a **Cap** (level 10), a **Top hat** (level 25), a **Crown**
+  (level 50) and a **Laurel** (any training ribbon, or IN SHAPE). Each one earned gets a
+  banner of its own straight after its medal's ("NEW: CAP!"), and the first one goes on by
+  itself. The stat card has a sixth page, the **Wardrobe** (swipe up, then left to the end):
+  tap one to wear it, tap *None* to take it off, and tap a grey one to see what earns it; a
+  red dot marks one you haven't seen yet. On a special day the creature wears that day's hat
+  by itself (a Santa hat all December, a witch hat on 31 Oct, bunny ears on Easter Sunday, a
+  heart clip on 14 Feb, a party hat on 1 Jan and on your birthday), over whatever it wears;
+  picking something on the Wardrobe page that day wins until midnight. It takes its
+  accessory off to sleep and to doze, and wears nothing as an egg, while evolving (the new
+  form comes back wearing it), in minigames and exercises, and at a farewell, run-away or
+  release. A new creature hatches wearing nothing, with nothing earned. An old save loads
+  wearing nothing, with what its creature's medals already earned waiting on the page.
+
 ## [1.20] - 2026-11-17
 
 ### Added
