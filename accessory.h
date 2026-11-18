@@ -228,7 +228,8 @@ struct AccHead {
   uint8_t crown = 0, x0 = 0, w = 0;
 };
 #define ACC_HEAD_PCT 50
-// The widest stretch of opaque pixels on a row: its first column and its length (0: none)
+// The widest stretch of opaque pixels on a row: its first column and its length (0: none). Of two
+// equally wide, the first (leftmost) one.
 inline uint8_t accRowRun(const uint8_t *row, uint8_t w, uint8_t &start) {
   uint8_t best = 0;
   start = 0;

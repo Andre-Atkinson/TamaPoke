@@ -29,9 +29,10 @@ struct PmdAct {
   uint8_t top = 0;   // primera fila del frame 0 con contenido (h si esta vacio): lo alto de la cabeza (#73)
   uint16_t ms[24];
   const uint8_t *data = nullptr;  // frames * w * h en el blob
-  // Where an accessory sits on each frame (#116, accFindHead() in accessory.h, with accfix.h's
-  // skip): 3 bytes a frame, the head's top row, then the first column and the width of the
-  // stretch under it (width 0: none). nullptr when PSRAM had no room: then no accessory shows.
+  // Where an accessory sits on each frame (#116, accHeadFor() in accfix.h: accFindHead() with the
+  // species' row for the pose, its skip, pct and band): 3 bytes a frame, the head's top row,
+  // then the first column and the width of the stretch under it (width 0: none). nullptr when
+  // PSRAM had no room: then no accessory shows.
   const uint8_t *head = nullptr;
 };
 

@@ -50,13 +50,19 @@ inline const AccFix ACC_FIXES[] = {
   { 144, ACCF_STAND, 0, 0, 8, 0, 0, 0, false },  // Articuno: its head between the wings
   { 146, ACCF_STAND, 0, 0, 8, 0, 0, 0, false },  // Moltres: its head between the wings
   { 145, ACCF_STAND, 0, 0, 8, 0, 0, 0, false },  // Zapdos: its head among the spikes
+  { 80, ACCF_STAND, 10, 0, 0, 0, 0, 0, false },  // Slowbro: its head, under the Shellder on its tail
+  { 2, ACCF_WALK, 0, 0, 5, -7, 0, 0, false },    // Ivysaur: its head, not the bud on its back
+  { 3, ACCF_WALK, 0, 0, 6, -9, 0, 0, false },    // Venusaur: its head, not the flower on its back
+  { 10, ACCF_WALK, 0, 0, 5, -9, 0, 0, false },   // Caterpie: its head, not its back's hump
   { 37, ACCF_WALK, 0, 0, 5, -5, 0, 0, false },   // Vulpix: its head, in front of its tails
   { 38, ACCF_WALK, 0, 0, 4, -7, 0, 0, false },   // Ninetales: its head, in front of its tails
   { 51, ACCF_WALK, 0, 0, 0, 0, 0, 0, true },    // Dugtrio: only the earth it digs through shows
   { 53, ACCF_WALK, 0, 0, 5, -11, 0, 0, false },  // Persian: its head, not its back
   { 58, ACCF_WALK, 0, 0, 7, -9, 0, 0, false },   // Growlithe: its head, not its back
   { 77, ACCF_WALK, 0, 0, 5, -8, 0, 0, false },   // Ponyta: its head's mane, not its back
+  { 76, ACCF_WALK, 0, 0, 4, -10, 0, 0, false },  // Golem: its head, not its shell
   { 79, ACCF_WALK, 0, 0, 5, -7, 0, 0, false },   // Slowpoke: its head, not its tail
+  { 80, ACCF_WALK, 0, 0, 5, -8, 0, 0, false },   // Slowbro: its head, not its back
   { 86, ACCF_WALK, 0, 0, 6, -6, 0, 0, false },   // Seel: its head, not its back
   { 87, ACCF_WALK, 0, 0, 5, -9, 0, 0, false },   // Dewgong: its head, not its back
   { 111, ACCF_WALK, 0, 0, 5, -11, 0, 0, false }, // Rhyhorn: its head, not its back

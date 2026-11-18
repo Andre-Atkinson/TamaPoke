@@ -717,7 +717,8 @@ void Pet::hatch() {
   goodTicks = 0;     // stamina's steady-care minutes are this pet's too (#76)
   medals = 0;
   nick[0] = 0;
-  acc = ACC_NONE;  // the wardrobe is this pet's (#116): it hatches wearing nothing
+  acc = ACC_NONE;  // the wardrobe is this pet's (#116): nothing earned or worn yet (a running
+                   // 7-day streak earns the Flowers in checkMedals below, and they go on)
   accSeen = 0;
   accPickDay = 0;
   registerSpecies(speciesId);  // criado = registrado en la pokedex

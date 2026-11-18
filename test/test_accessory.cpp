@@ -180,6 +180,9 @@ TEST(accessory, a_row_with_a_gap_counts_its_widest_stretch) {
   CHECK_EQ(st, (uint8_t)4);
   CHECK_EQ(accRowRun(f.data() + 8, 8, st), (uint8_t)8);
   CHECK_EQ(st, (uint8_t)0);
+  std::vector<uint8_t> g = frameOf({ "###..###" });  // two as wide: the first, leftmost
+  CHECK_EQ(accRowRun(g.data(), 8, st), (uint8_t)3);
+  CHECK_EQ(st, (uint8_t)0);
 }
 
 // Centred on the head, half a pixel rounding right; sunk; nudged

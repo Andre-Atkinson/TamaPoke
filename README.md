@@ -356,7 +356,8 @@ first page, under the berry and age):
   "fit" = weight 0 & no slip-ups) and **3 training ribbons** (strength 30, stamina 10,
   speed 30), per-pet + a global counter.
 - **Pokédex:** raising a species registers it; **151 + shinies** to complete.
-- **Accessories** (per pet, reset on hatch): its medals earn things to wear on its head — a
+- **Accessories** (per pet, reset on hatch; a running 7-day streak gives a new pet its flowers
+  at once): its medals earn things to wear on its head — a
   bow (berry), flowers (7-day streak), a bobble hat (max bond), a cap (Lv10), a top hat
   (Lv25), a crown (Lv50) and a laurel (any ribbon or "fit"). Pick one on the card's
   **Wardrobe** page; the first one earned goes on by itself. Special days put their own hat

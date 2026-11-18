@@ -26,7 +26,8 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
   picking something on the Wardrobe page that day wins until midnight. It takes its
   accessory off to sleep and to doze, and wears nothing as an egg, while evolving (the new
   form comes back wearing it), in minigames and exercises, and at a farewell, run-away or
-  release. A new creature hatches wearing nothing, with nothing earned. An old save loads
+  release. A new creature hatches with nothing earned and wearing nothing, unless your 7-day
+  streak is running: then it earns the Flowers as it hatches, and puts them on. An old save loads
   wearing nothing, with what its creature's medals already earned waiting on the page.
 
 ## [1.20] - 2026-11-17
