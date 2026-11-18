@@ -94,7 +94,7 @@ uint8_t sceneForcePlace = SCENE_AUTO, sceneForceWx = SCENE_AUTO, sceneForceSeaso
 static SceneLatch sceneLatch;  // the place on screen: it follows sceneToday() only unseen (weather.h)
 
 // the clock the scene follows: 0 while it is not trusted (never set, or reseeded)
-static uint32_t sceneClock() { return sceneEpoch(pet.lastSeenEpoch, bedEdge.stale()); }
+uint32_t sceneClock() { return sceneEpoch(pet.lastSeenEpoch, bedEdge.stale()); }
 
 uint8_t sceneHome() {
   if (pet.isEgg() || pet.speciesId > DEX_COUNT) return PLACE_MEADOW;
@@ -231,8 +231,9 @@ static int sway(uint32_t now, uint32_t period, uint32_t ph, int a) {
 
 // spots on the ground (y 238-300, between the horizon and the bottom panel) for the spring
 // flowers and the fallen autumn leaves
+// (none in the berry garden's box, x 396..452, y 242..308: #115, garden.h)
 static const int16_t GROUND_SPOTS[10][2] = { { 40, 252 }, { 98, 276 }, { 150, 244 }, { 205, 292 }, { 262, 254 },
-                                             { 318, 282 }, { 372, 246 }, { 424, 270 }, { 70, 298 }, { 396, 300 } };
+                                             { 318, 282 }, { 372, 246 }, { 346, 300 }, { 70, 298 }, { 382, 280 } };
 
 // what lies on the ground with the season: spring flowers, autumn's fallen leaves, winter's
 // snowcaps on the forest's trees and the mountain's peaks (the snow cover and autumn's russet
@@ -322,8 +323,9 @@ static void drawSeasonFx(uint32_t now, uint8_t fx, bool night) {
 
 
 // Christmas, all December: a small tree on the right, below the sun and the moon, with
-// coloured lights (they twinkle at the full frame rate) and a star.
-#define XMAS_TREE_X 420
+// coloured lights (they twinkle at the full frame rate) and a star. Left of the berry
+// garden's pot (#115: GARDEN_BOX_X0 396, garden.h), which took its old place at x 420.
+#define XMAS_TREE_X 366
 static void drawXmasTree(uint32_t now, bool night, bool live) {
   const int x = XMAS_TREE_X;
   uint16_t green = C565(0x2a, 0x7a, 0x44), trunk = C565(0x6e, 0x4a, 0x2c);
@@ -374,7 +376,7 @@ static void drawBalloons(uint32_t now, bool night, bool live) {
 }
 
 // Halloween: a friendly pumpkin with a smile (it glows at night) and a small one beside it,
-// on the right.
+// on the right, left of the berry garden's pot (#115, which took their old place).
 static void drawPumpkins(bool night) {
   uint16_t body = C565(0xf0, 0x8a, 0x24), lobe = C565(0xf8, 0xa0, 0x38), stem = C565(0x5a, 0x7a, 0x2c);
   uint16_t face = night ? C565(0xff, 0xd8, 0x50) : C565(0x4a, 0x24, 0x10);
@@ -383,7 +385,7 @@ static void drawPumpkins(bool night) {
     lobe = lerp565(lobe, SCENE_NIGHT_TINT, 6, 16);
     stem = lerp565(stem, SCENE_NIGHT_TINT, 6, 16);
   }
-  const int x = 404, y = 282;
+  const int x = 346, y = 282;
   gfx->fillRect(x - 3, y - 22, 6, 9, stem);
   gfx->fillEllipse(x - 12, y, 13, 15, body);
   gfx->fillEllipse(x + 12, y, 13, 15, body);
@@ -393,7 +395,7 @@ static void drawPumpkins(bool night) {
   gfx->fillRect(x - 8, y + 7, 16, 3, face);  // the smile
   gfx->fillRect(x - 11, y + 4, 4, 3, face);
   gfx->fillRect(x + 7, y + 4, 4, 3, face);
-  const int sx = 440, sy = 296;  // the small one
+  const int sx = 380, sy = 296;  // the small one
   gfx->fillRect(sx - 2, sy - 13, 4, 6, stem);
   gfx->fillEllipse(sx - 5, sy, 7, 9, body);
   gfx->fillEllipse(sx + 5, sy, 7, 9, body);
@@ -420,9 +422,10 @@ static void drawBats(uint32_t now) {
 }
 
 // Easter Sunday: painted eggs in the grass. Two sit at the sides of the poops' box (drawPoops:
-// x 36..192, y 244..308) rather than under them.
+// x 36..192, y 244..308) rather than under them, and none in the berry garden's (#115,
+// GARDEN_BOX_* in garden.h: x 396..452).
 static void drawEasterEggs(bool night) {
-  static const int16_t AT[6][2] = { { 24, 284 }, { 214, 268 }, { 300, 294 }, { 348, 262 }, { 392, 292 }, { 436, 268 } };
+  static const int16_t AT[6][2] = { { 24, 284 }, { 214, 268 }, { 300, 294 }, { 348, 262 }, { 256, 298 }, { 378, 292 } };
   static const uint16_t BASE[6] = { C565(0xf6, 0xa8, 0xc8), C565(0xf8, 0xe0, 0x70), C565(0xc4, 0xa8, 0xf0),
                                     C565(0x9c, 0xe4, 0xb8), C565(0x98, 0xd0, 0xf8), C565(0xf8, 0xbc, 0x90) };
   static const uint16_t BAND[6] = { UI_WHITE, C565(0x58, 0x90, 0xe0), C565(0xf8, 0xe0, 0x70),
@@ -524,6 +527,10 @@ static void drawHoliday(uint32_t now, const HolidayToday &hol, bool night, bool 
 void drawScene(uint32_t now, bool night) {
   uint8_t biome = scenePlaceForFrame(now);
   WxNow wx = sceneWeather();
+  // the berry garden (#115): rain, a storm or snow on screen waters the pot, so it agrees with
+  // what is seen (the place on screen can be yesterday's for a moment after 06:00, and SCENE
+  // can force the weather); nothing while the clock is stale
+  if (gardenWeatherWaters(wx.kind)) pet.garden.rainSeen(sceneClock());
   uint8_t grey = wxGrey(wx), fog = wxFog(wx);
   bool live = wxParticlesLive(frameIntervalMs(powerCtx(now)));
   int h = sceneHour();
@@ -1430,6 +1437,200 @@ void drawPoops() {
   for (int i = 0; i < pet.poops; i++) {
     drawMap(SPR_POOP, 32, 36 + i * 46, 244, 2, false);
   }
+}
+
+// ---------- the berry garden (#115, garden.h) ----------
+// A terracotta pot with an ink outline like the sprites', at the right-hand end of the ground
+// (GARDEN_BOX_*), drawn after the scene and the special days' decorations and before the pet,
+// the poops, the bubbles and the buttons, which all go over it. At night it darkens with the
+// scene. The soil shows the water: dark with glints while watered (or while rain falls on
+// screen), pale and cracked while dry. A dry plant's leaves droop, and turn yellow once it has
+// been dry a day (wilting soon). The flower's petals and the berries show the berry planted.
+#define GARDEN_CAN_MS 900UL  // the watering can over the pot after a tap that planted or watered
+#define GARDEN_HOP_MS 700UL  // a picked berry's hop from the pot to the pet
+static bool gardenFxOn = false;  // the can or the hop is showing
+static uint32_t gardenFxAt = 0;  // millis() it started
+static uint8_t gardenFxTap = GTAP_WAIT, gardenFxColor = 0;
+
+void gardenShow(uint8_t tap, uint8_t color) {
+  if (tap != GTAP_PLANTED && tap != GTAP_WATERED && tap != GTAP_PICKED) return;
+  gardenFxTap = tap;
+  gardenFxColor = color < GARDEN_BERRY_COLORS ? color : 0;
+  gardenFxAt = millis();
+  gardenFxOn = true;
+}
+
+// ms into the hop (`hop`) or the can that is showing, or -1
+static int32_t gardenFxT(bool hop, uint32_t len) {
+  if (!gardenFxOn || (gardenFxTap == GTAP_PICKED) != hop) return -1;
+  uint32_t t = millis() - gardenFxAt;
+  if (t >= len) {
+    gardenFxOn = false;
+    return -1;
+  }
+  return (int32_t)t;
+}
+
+static const char *const *gardenBerryIcon(uint8_t c) {
+  return c == 1 ? SPR_ICON_BERRY_B : c == 2 ? SPR_ICON_BERRY_G : SPR_ICON_FOOD;
+}
+
+// a filled ellipse with an ink outline (the leaves, the bush)
+static void gardenBlob(int cx, int cy, int rx, int ry, uint16_t c) {
+  gfx->fillEllipse(cx, cy, rx + 1, ry + 1, INK_K);
+  gfx->fillEllipse(cx, cy, rx, ry, c);
+}
+
+// two leaves at (x, y) of the stem, `w` px long each: up while watered, drooping when dry
+static void gardenLeaves(int x, int y, int w, bool wet, uint16_t c) {
+  int dy = wet ? -2 : 2;
+  gardenBlob(x - w, y + dy, w, 2, c);
+  gardenBlob(x + 1 + w, y + dy, w, 2, c);
+}
+
+// the plain tag on its stick: a seed or a sprout
+static void gardenTag(uint16_t stick, uint16_t tag) {
+  gfx->fillRect(440, 258, 2, 20, stick);
+  gfx->fillRect(435, 252, 12, 8, INK_K);
+  gfx->fillRect(436, 253, 10, 6, tag);
+}
+
+static uint16_t gardenTint(uint16_t c, bool night, int k = 7) { return night ? lerp565(c, SCENE_NIGHT_TINT, k, 16) : c; }
+
+void drawGarden(bool night) {
+  const Garden &g = pet.garden;
+  const int X = GARDEN_POT_X;
+  // the soil shows the water, and the rain on screen even while the clock is stale (when the
+  // garden stands still) or the pot is empty
+  bool wet = g.watered() || gardenWeatherWaters(sceneWeather().kind);
+  bool warn = !wet && g.wiltingSoon();
+  uint16_t stem = gardenTint(wet ? C565(0x3c, 0x8a, 0x4c) : warn ? C565(0xa8, 0x90, 0x3a) : C565(0x86, 0x90, 0x3e), night);
+  uint16_t leaf = gardenTint(wet ? C565(0x58, 0xb8, 0x68) : warn ? C565(0xd8, 0xb0, 0x40) : C565(0xb2, 0xac, 0x56), night);
+  uint16_t stick = gardenTint(C565(0x7e, 0x55, 0x30), night), tag = gardenTint(C565(0xf3, 0xee, 0xe2), night);
+  static const uint16_t LIGHT[GARDEN_BERRY_COLORS] = { C565(0xf8, 0xc0, 0xb4), C565(0xd6, 0xed, 0xf9), C565(0xd2, 0xef, 0xd5) };
+  uint8_t berry = g.berry < GARDEN_BERRY_COLORS ? g.berry : 0;
+
+  // the plant, behind the pot's rim
+  switch (g.stage()) {
+    case GST_SEED:
+      gardenTag(stick, tag);
+      gfx->fillRect(418, 275, 12, 3, gardenTint(wet ? C565(0x6d, 0x4e, 0x39) : C565(0xa5, 0x86, 0x60), night));
+      gfx->fillRect(422, 273, 4, 2, stick);
+      break;
+    case GST_SPROUT:
+      gardenTag(stick, tag);
+      gfx->fillRect(X - 1, 266, 2, 12, stem);
+      gardenLeaves(X - 1, 266, 4, wet, leaf);
+      break;
+    case GST_LEAVES:
+      gfx->fillRect(X - 1, 255, 2, 23, stem);
+      gardenLeaves(X - 1, 272, 6, wet, leaf);
+      gardenLeaves(X - 1, 263, 5, wet, leaf);
+      gardenBlob(X, wet ? 253 : 255, 2, 3, leaf);
+      break;
+    case GST_FLOWER: {
+      gfx->fillRect(X - 1, 253, 2, 25, stem);
+      gardenLeaves(X - 1, 272, 6, wet, leaf);
+      gardenLeaves(X - 1, 263, 5, wet, leaf);
+      int cx = wet ? X : X + 3, cy = wet ? 250 : 253;  // a dry flower nods
+      static const int8_t PETAL[5][2] = { { 0, -4 }, { 4, -1 }, { 2, 3 }, { -2, 3 }, { -4, -1 } };
+      for (auto &p : PETAL) gfx->fillCircle(cx + p[0], cy + p[1], 4, INK_K);
+      for (auto &p : PETAL) gfx->fillCircle(cx + p[0], cy + p[1], 3, gardenTint(LIGHT[berry], night, 6));
+      gfx->fillCircle(cx, cy, 2, gardenTint(C565(0xff, 0xd9, 0x5e), night, 4));
+      break;
+    }
+    case GST_RIPE: {
+      uint16_t dark = gardenTint(C565(0x3c, 0x8a, 0x4c), night), light = gardenTint(C565(0x58, 0xb8, 0x68), night);
+      gfx->fillRect(X - 1, 268, 2, 10, dark);
+      gardenBlob(414, 268, 10, 6, dark);
+      gardenBlob(435, 266, 10, 6, dark);
+      gardenBlob(424, 258, 12, 8, dark);
+      gardenBlob(411, 257, 6, 5, dark);
+      gardenBlob(437, 255, 6, 5, dark);
+      gfx->fillEllipse(414, 266, 7, 3, light);
+      gfx->fillEllipse(435, 264, 7, 3, light);
+      gfx->fillEllipse(424, 256, 9, 5, light);
+      static const int16_t AT[GARDEN_BERRIES][2] = { { 403, 246 }, { 433, 253 }, { 419, 242 } };
+      for (uint8_t i = 0; i < g.left && i < GARDEN_BERRIES; i++) drawMap(gardenBerryIcon(berry), 16, AT[i][0], AT[i][1], 1, false);
+      uint16_t sp = night ? C565(0xdf, 0xe6, 0xf2) : UI_WHITE;  // sparkles: ready to pick
+      static const int16_t SP[3][2] = { { 449, 249 }, { 400, 264 }, { 446, 270 } };
+      for (auto &q : SP) {
+        gfx->fillRect(q[0] - 1, q[1], 3, 1, sp);
+        gfx->fillRect(q[0], q[1] - 1, 1, 3, sp);
+      }
+      break;
+    }
+    case GST_WITHERED: {
+      uint16_t wilt = gardenTint(C565(0xa0, 0x7a, 0x46), night), wiltDk = gardenTint(C565(0x6e, 0x50, 0x30), night);
+      gfx->fillRect(X, 266, 2, 12, wiltDk);  // a bent brown stalk
+      gfx->fillRect(X + 1, 262, 2, 5, wiltDk);
+      gfx->fillRect(X + 2, 260, 10, 2, wiltDk);
+      gardenBlob(416, 272, 5, 2, wilt);
+      gardenBlob(432, 268, 4, 2, wilt);
+      gardenBlob(438, 263, 3, 2, wiltDk);
+      break;
+    }
+    default: break;
+  }
+
+  // the pot: rim outline, soil, rim, body with its shade
+  uint16_t rim = gardenTint(C565(0xd9, 0x82, 0x4f), night), rimHi = gardenTint(C565(0xed, 0xa0, 0x70), night);
+  uint16_t body = gardenTint(C565(0xc4, 0x68, 0x3a), night), shade = gardenTint(C565(0xa4, 0x53, 0x2e), night);
+  gfx->fillRect(399, 275, 50, 13, INK_K);
+  if (wet) {
+    gfx->fillRect(401, 277, 46, 4, gardenTint(C565(0x4b, 0x35, 0x27), night));
+    gfx->fillRect(403, 277, 42, 1, gardenTint(C565(0x6d, 0x4e, 0x39), night));
+    uint16_t glint = gardenTint(C565(0x9c, 0xc0, 0xdc), night, 5);
+    gfx->fillRect(409, 279, 2, 1, glint);
+    gfx->fillRect(433, 278, 2, 1, glint);
+  } else {
+    uint16_t dk = gardenTint(C565(0xa5, 0x86, 0x60), night);
+    gfx->fillRect(401, 277, 46, 4, gardenTint(C565(0xc9, 0xab, 0x80), night));
+    gfx->fillRect(408, 279, 4, 1, dk);  // cracks
+    gfx->fillRect(411, 278, 1, 1, dk);
+    gfx->fillRect(430, 278, 5, 1, dk);
+    gfx->fillRect(437, 279, 1, 1, dk);
+  }
+  gfx->fillRect(401, 281, 46, 5, rim);
+  gfx->fillRect(401, 281, 46, 1, rimHi);
+  gfx->fillTriangle(404, 288, 444, 288, 440, 308, INK_K);
+  gfx->fillTriangle(404, 288, 440, 308, 408, 308, INK_K);
+  gfx->fillTriangle(406, 288, 442, 288, 438, 306, body);
+  gfx->fillTriangle(406, 288, 438, 306, 410, 306, body);
+  gfx->fillTriangle(432, 288, 442, 288, 438, 306, shade);
+  gfx->fillTriangle(432, 288, 438, 306, 430, 306, shade);
+  if (wet) gfx->fillRect(411, 300, 27, 3, shade);
+
+  // the watering can, tipped over the pot, with drops falling while it shows
+  int32_t t = gardenFxT(false, GARDEN_CAN_MS);
+  if (t >= 0) {
+    uint16_t can = gardenTint(C565(0x4f, 0x93, 0xc4), night, 5), canHi = gardenTint(C565(0x7c, 0xc4, 0xea), night, 5);
+    gfx->fillRoundRect(382, 222, 26, 18, 3, INK_K);
+    gfx->fillRect(384, 224, 22, 14, can);
+    gfx->fillRect(384, 224, 22, 2, canHi);
+    gfx->fillRect(388, 216, 14, 2, INK_K);  // the handle
+    gfx->fillRect(388, 216, 2, 7, INK_K);
+    gfx->fillRect(400, 216, 2, 7, INK_K);
+    gfx->fillTriangle(406, 228, 424, 238, 406, 236, INK_K);  // the spout
+    gfx->fillTriangle(407, 230, 421, 237, 407, 234, can);
+    for (int i = 0; i < 4; i++) {  // drops, from the spout down to the soil
+      int y = 242 + (int)((t / 6 + i * 9) % 34);
+      gfx->fillRect(418 + (i % 2) * 5, y, 2, 4, canHi);
+    }
+  }
+}
+
+// a picked berry on its way from the pot to the pet's mouth (after drawPet, so it goes in front)
+void drawGardenHop() {
+  int32_t t = gardenFxT(true, GARDEN_HOP_MS);
+  if (t < 0) return;
+  int petX = pmd.loaded ? (int)beh.x : CX;
+  int x0 = 419, y0 = 242, x1 = petX + (petX <= GARDEN_POT_X ? 34 : -34) - 16, y1 = PET_GROUND - 110;
+  int cx = (x0 + x1) / 2, cy = 150;  // the top of its arc
+  int u = (int)(t * 256 / (int32_t)GARDEN_HOP_MS), v = 256 - u;  // a quadratic curve, in 1/256ths
+  int x = (v * v * x0 + 2 * u * v * cx + u * u * x1) / 65536;
+  int y = (v * v * y0 + 2 * u * v * cy + u * u * y1) / 65536;
+  drawMap(gardenBerryIcon(gardenFxColor), 16, x, y, 2, false);
 }
 
 // The attention "!" (#9): a speech bubble beside the pet while a need is low, with the icon

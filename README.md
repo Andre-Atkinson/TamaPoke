@@ -86,6 +86,30 @@ the creature any way other than the run-away below.
   itself** the next time you look at the screen, with the run-away's ending and egg. The
   medicine saves it right up to then.
 
+### The berry garden
+A flower pot stands at the right-hand end of the ground, in every place the creature
+travels to, and it stays through an ending: the next egg finds the plant as it was.
+- **Plant:** tap the empty pot. The seed is a red, blue or green berry, picked at random; the
+  flower's petals and then the berries show which.
+- **Water:** tap a growing plant. A watering lasts **12 hours**; rain, a storm or snow where
+  the creature is (or on screen) waters it too, through that weather and 12 hours after. The
+  soil is dark while it is watered and pale and cracked when dry.
+- **Grow:** it grows only while watered: a sprout after **4** watered hours, leaves at
+  **12**, a flower at **24**, ripe at **40**. Watered once a day it ripens in about three
+  days; rain or two waterings a day make it sooner.
+- **Wilting:** dry **24 hours** in a row, its leaves turn yellow; dry **48 hours**, a growing
+  plant wilts into a brown stalk (tap to clear it, tap again to plant). Only the seed is
+  lost: a ripe plant never wilts, and the creature itself is not affected.
+- **Pick:** tap the ripe plant, three berries, one a tap. The berry hops to the creature,
+  which eats it: what a berry from the Food button gives (the favorite flavor's heart and
+  reveal included), plus **+10 FOOD, +10 JOY, a heart and +1 bond**. It counts as the
+  day's care. Not as an egg, asleep or while it is eating: the berries wait.
+- It says "My plant looks thirsty!" (more often once it is wilting) and "My berries are
+  ripe!" now and then, never before a need it has.
+- **The clock:** only a set clock moves it on. After a power cut (until the clock is set)
+  it stands still, and setting the clock never grows, dries or wilts it. Time away catches
+  up to 7 days at most.
+
 ### Actions
 - 🍎 **Berry** (3 flavors): +25 FOOD. Each species has a **hidden favorite flavor**
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
@@ -803,6 +827,10 @@ counted minutes in the red towards falling sick, and while sick the minutes out 
 towards the cure and the counted minutes sick) · `SICK ON [minutes]` / `SICK OFF` (sickness
 on now, with `minutes` counted already, 0–1440, and no slip-up, or better now; `ERR` while
 *Sickness* is off, with no creature, or during an ending) ·
+`GARDEN?` (read-only: the berry garden, `garden stage= berry= left= wet= wetmin= drymin=
+grownmin= wilting= at=`) · `GARDEN <empty|seed|sprout|leaves|flower|ripe|withered>
+[wet|dry|wilting] [red|blue|green]` (sets the pot's plant now and saves; for the simulator
+and screenshots) ·
 `SCENE <place|auto> [weather|auto] [season|auto]` (forces the place, `meadow beach forest
 volcano mountain snow`, the weather, `clear cloudy rain storm snow fog`, and the season,
 `spring summer autumn winter none`, in RAM only: `SCENE auto` or a restart gives them back
