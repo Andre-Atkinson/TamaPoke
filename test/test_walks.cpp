@@ -12,7 +12,11 @@
 #include "../bubble.h"
 #include "../bedtime.h"
 #include "../i18n.h"
+#include "../audio.h"  // SFX_MEDAL, audioSetEnabled (the shim's, counts sounds)
 #include <string>
+
+int mockLastSfx();  // test/shim/shim.cpp: the last sound that would have played
+uint32_t mockSfxCount();
 
 // ================================================================ the ledger (walks.h)
 
@@ -273,6 +277,44 @@ TEST(walks, stamina_is_one_point_per_1000_steps_at_most_5_a_day) {
   CHECK_EQ(v.stamina, (uint8_t)0);
   while (v.steps < 1000) { c2 += 300; total += v.minute(c2, true, D0 + 1).stamina; }
   CHECK_EQ(total, 6);
+}
+
+// With no pet to train (an egg, an ending) the stamina points are not given and not used up:
+// the day's steps still count, and the hatchling earns the points on its next minute with steps
+TEST(walks, stamina_waits_while_there_is_no_pet_to_train_and_the_cap_still_holds) {
+  WalkLedger w;
+  uint32_t chip = 0;
+  w.start(0);
+  for (int i = 0; i < 4; i++) {  // 1,200 steps with nobody to train
+    chip += 300;
+    WalkGain g = w.minute(chip, true, D0, false);
+    CHECK_EQ(g.stamina, (uint8_t)0);
+  }
+  CHECK_EQ(w.steps, 1200u);
+  CHECK_EQ(w.stamina, (uint8_t)0);
+  CHECK_MSG(w.earned == 4 && w.bank == 4, "the treats are the steps' own, they are earned all the same");
+  chip += 10;
+  WalkGain g = w.minute(chip, true, D0, true);  // a pet to train
+  CHECK_EQ(g.stamina, (uint8_t)1);
+  CHECK_EQ(w.stamina, (uint8_t)1);
+  chip += 10;
+  CHECK_EQ(w.minute(chip, true, D0, true).stamina, (uint8_t)0);  // given once
+  // a day's worth with nobody to train, then one minute: the day's cap of 5, not more
+  for (int i = 0; i < 30; i++) {  // 9,000 more
+    chip += 300;
+    w.minute(chip, true, D0, false);
+  }
+  CHECK_EQ(w.stamina, (uint8_t)1);
+  chip += 10;
+  CHECK_EQ(w.minute(chip, true, D0, true).stamina, (uint8_t)(WALK_STAMINA_DAY_MAX - 1));
+  CHECK_EQ(w.stamina, (uint8_t)WALK_STAMINA_DAY_MAX);
+  chip += 300;
+  CHECK_EQ(w.minute(chip, true, D0, true).stamina, (uint8_t)0);
+  // a new day starts afresh whoever is there
+  chip += 300;
+  WalkGain r = w.minute(chip, true, D0 + 1, false);
+  CHECK(r.rolled);
+  CHECK_EQ(w.stamina, (uint8_t)0);
 }
 
 TEST(walks, the_ribbon_is_5000_steps_in_one_day) {
@@ -699,6 +741,173 @@ TEST(petwalk, the_walking_ribbon_comes_at_5000_steps_and_is_kept) {
   done();
 }
 
+// Steps taken while there is no pet to train keep their stamina for the hatchling (owner,
+// 2026-11-18): the first pick, an egg and an ending (every CER_* ends in newEgg())
+TEST(petwalk, stamina_from_steps_before_the_first_pet_waits_for_the_hatchling) {
+  mockNvsReset();
+  mockSetMillis(0);
+  mockForceRandom(99);
+  gChip = 0;
+  gChipOk = true;
+  gEnv = Env();
+  Pet p;
+  p.begin();
+  CHECK(p.awaitingStarter());
+  p.lastSeenEpoch = noonOf(D0);
+  p.stepSource = chipSource;
+  p.walkStart();
+  pass(p);
+  for (int i = 0; i < 4; i++) minute(p, 300);  // 1,200 steps at the starter pick
+  CHECK_EQ(p.walk.steps, 1200u);
+  CHECK_EQ(p.walk.stamina, (uint8_t)0);
+  p.chooseStarter(4);
+  for (int i = 0; i < 2; i++) minute(p, 100);  // an egg, steps going on: still nobody to train
+  CHECK(p.isEgg());
+  CHECK_EQ(p.walk.stamina, (uint8_t)0);
+  p.eggTap();
+  p.eggTap();
+  p.eggTap();
+  CHECK(!p.isEgg());
+  CHECK_EQ(p.trDef, (uint8_t)0);
+  minute(p, 0);
+  CHECK_MSG(p.trDef == 0, "a minute with no steps gives nothing");
+  minute(p, 10);  // the hatchling's first minute with steps: the day's point
+  CHECK_EQ(p.trDef, (uint8_t)1);
+  CHECK_EQ(p.walk.stamina, (uint8_t)1);
+  minute(p, 10);
+  CHECK_MSG(p.trDef == 1, "and only once");
+  done();
+}
+
+TEST(petwalk, stamina_from_steps_during_an_ending_waits_for_the_next_pet) {
+  for (int ending = 0; ending < 3; ending++) {
+    Pet p;
+    walker(p);
+    CHECK_EQ(p.trDef, (uint8_t)0);
+    p.walk.steps = 800;  // the day's walk so far
+    mockAdvanceMillis(PET_TICK_MS - 5);
+    p.update(millis());
+    if (ending == 0) p.release();
+    else if (ending == 1) p.startFarewell();
+    else p.startRunaway();
+    CHECK(p.ceremony != CER_NONE);
+    gChip += 300;  // the minute that comes due while the ending is on
+    mockAdvanceMillis(5);
+    p.update(millis());
+    CHECK(p.ceremony != CER_NONE);
+    CHECK_EQ(p.walk.steps, 1100u);
+    CHECK_MSG(p.walk.stamina == 0 && p.trDef == 0, "ending " + std::to_string(ending) + ": no point yet");
+    mockAdvanceMillis(CEREMONY_MS);
+    p.update(millis());
+    CHECK_MSG(p.ceremony == CER_NONE && p.isEgg(), "the ending is over, an egg stands in its place");
+    minute(p, 10);  // an egg's minute
+    CHECK_MSG(p.walk.stamina == 0, "ending " + std::to_string(ending) + ": " + std::to_string(p.walk.stamina));
+    p.eggTap();
+    p.eggTap();
+    p.eggTap();
+    CHECK(!p.isEgg());
+    minute(p, 10);
+    CHECK_MSG(p.trDef == 1, "the next pet gets the point: " + std::to_string(p.trDef));
+    CHECK_EQ(p.walk.stamina, (uint8_t)1);
+  }
+  done();
+}
+
+TEST(petwalk, an_evolution_keeps_its_pet_so_the_points_still_come) {
+  Pet p;
+  walker(p);
+  p.ageMinutes = 20 * 60;
+  p.evolve();
+  CHECK(p.evolving());
+  for (int i = 0; i < 4; i++) minute(p, 300);  // 1,200 steps in the animation's minutes
+  CHECK_MSG(p.trDef == 1, "the same pet goes on with its training: " + std::to_string(p.trDef));
+  CHECK_EQ(p.walk.stamina, (uint8_t)1);
+  done();
+}
+
+TEST(petwalk, the_daily_cap_of_5_holds_when_the_points_wait_for_the_hatchling) {
+  mockNvsReset();
+  mockSetMillis(0);
+  mockForceRandom(99);
+  gChip = 0;
+  gChipOk = true;
+  gEnv = Env();
+  Pet p;
+  p.begin();
+  CHECK(p.awaitingStarter());  // the pick holds time still, so a long walk fits before the hatch
+  p.lastSeenEpoch = noonOf(D0);
+  p.stepSource = chipSource;
+  p.walkStart();
+  pass(p);
+  for (int i = 0; i < 24; i++) minute(p, 300);  // 7,200 steps
+  CHECK_EQ(p.walk.stamina, (uint8_t)0);
+  p.chooseStarter(4);
+  p.eggTap();
+  p.eggTap();
+  p.eggTap();
+  CHECK(!p.isEgg());
+  minute(p, 10);
+  CHECK_EQ(p.trDef, (uint8_t)WALK_STAMINA_DAY_MAX);
+  CHECK_EQ(p.walk.stamina, (uint8_t)WALK_STAMINA_DAY_MAX);
+  minute(p, 300);
+  minute(p, 300);
+  CHECK_MSG(p.trDef == WALK_STAMINA_DAY_MAX, "the cap of the day holds: " + std::to_string(p.trDef));
+  done();
+}
+
+// The walking ribbon is the tick's to notice, so in quiet hours its chime is spent silently, as
+// for a medal time earned (MED_QUIET_OK); outside them it sounds. Its banner shows either way.
+TEST(petwalk, the_walking_ribbon_is_silent_in_quiet_hours_and_chimes_outside_them) {
+  for (int quiet = 1; quiet >= 0; quiet--) {
+    Pet p;
+    walker(p);
+    audioSetEnabled(true);
+    audioSetSleeping(false);
+    p.quietHours = quiet != 0;
+    for (int i = 0; i < 16; i++) minute(p, 300);  // 4,800
+    minute(p, 199);
+    CHECK(!p.hasMedal(MED_WALK));
+    uint32_t n = mockSfxCount();
+    minute(p, 1);  // 5,000
+    CHECK(p.hasMedal(MED_WALK));
+    CHECK_MSG(p.showMedal(), "the banner shows either way");
+    if (quiet) {
+      CHECK_MSG(mockSfxCount() == n, "silent in quiet hours");
+    } else {
+      CHECK_MSG(mockSfxCount() == n + 1, "chimes outside them");
+      CHECK_EQ(mockLastSfx(), (int)SFX_MEDAL);
+    }
+  }
+  done();
+}
+
+// a medal the player's care earned alongside it keeps its sound (as with a time medal)
+TEST(petwalk, a_ribbon_with_a_medal_the_player_earned_still_sounds_in_quiet_hours) {
+  Pet p;
+  walker(p);
+  audioSetEnabled(true);
+  audioSetSleeping(false);
+  p.quietHours = true;
+  for (int i = 0; i < 16; i++) minute(p, 300);
+  minute(p, 199);
+  uint32_t n = mockSfxCount();
+  p.bond = 100;  // MED_BOND: the player's, noticed by the same tick
+  minute(p, 1);
+  CHECK(p.hasMedal(MED_WALK) && p.hasMedal(MED_BOND));
+  CHECK_EQ(mockSfxCount(), n + 1);
+  done();
+}
+
+// the medals page counts what the board can earn: the original 1.75, built here, has no ribbon
+// for steps (screens.cpp holds the same as a static_assert against its layout, for both boards)
+TEST(petwalk, the_medals_page_counts_the_medals_the_board_can_earn) {
+#if BOARD_AMOLED_175C
+  CHECK_EQ(MED_SHOWN, MED_COUNT);
+#else
+  CHECK_EQ(MED_SHOWN, MED_COUNT - 1);
+#endif
+}
+
 TEST(petwalk, the_treat_bank_fills_and_a_new_pet_starts_with_none) {
   Pet p;
   walker(p);
@@ -720,14 +929,40 @@ TEST(petwalk, steps_stamina_and_treats_are_saved_and_a_walk_asks_for_a_save) {
   CHECK_MSG(!p.savePending(), "steps alone wait for the periodic save, they don't ask for one");
   minute(p, 250);
   CHECK_MSG(p.savePending(), "a treat earned asks for the next quiet save");
+  for (int i = 0; i < 3; i++) minute(p, 300);  // 1,250 steps: 5 treats and a stamina point
+  CHECK_EQ(p.walk.stamina, (uint8_t)1);
+  CHECK_EQ(p.trDef, (uint8_t)1);
   p.saveNow();
   Pet q;
   q.begin();
   CHECK_EQ(q.walk.steps, p.walk.steps);
   CHECK_EQ(q.walk.day, (uint32_t)D0);
-  CHECK_EQ(q.walk.bank, (uint8_t)1);
-  CHECK_EQ(q.walk.earned, (uint8_t)1);
-  CHECK_EQ(q.walk.stamina, (uint8_t)0);
+  CHECK_EQ(q.walk.bank, (uint8_t)5);
+  CHECK_EQ(q.walk.earned, (uint8_t)5);
+  CHECK_MSG(q.walk.stamina == 1, "wsta is saved: " + std::to_string(q.walk.stamina));
+  CHECK_EQ(q.trDef, (uint8_t)1);
+  // the restart does not give the day's point a second time
+  q.lastSeenEpoch = noonOf(D0);
+  q.stepSource = chipSource;
+  q.walkStart();
+  minute(q, 100);  // 1,350 steps
+  CHECK_MSG(q.walk.steps == 1350u, "steps " + std::to_string(q.walk.steps));
+  CHECK_MSG(q.trDef == 1, "no second point for the same 1,000 steps: " + std::to_string(q.trDef));
+  done();
+}
+
+// A new day asks for a save: the rolled steps and points are the ledger's, and a pet that
+// stops walking would otherwise keep yesterday's on disk until the periodic save
+TEST(petwalk, a_new_day_asks_for_a_save) {
+  Pet p;
+  walker(p);
+  minute(p, 100);
+  p.saveNow();
+  CHECK(!p.savePending());
+  p.lastSeenEpoch = noonOf(D0 + 1);
+  minute(p, 0);  // one minute, no steps: only the roll can ask
+  CHECK_EQ(p.walk.steps, 0u);
+  CHECK_MSG(p.savePending(), "the day rolled");
   done();
 }
 
@@ -1048,6 +1283,7 @@ TEST(treat, is_not_the_players_care) {
 TEST(treat, minutes_a_treat_holds_up_do_not_build_stamina_until_the_next_real_care) {
   Pet p;
   walker(p);
+  p.clean();  // the day's first care: the one that ends the hold below is a later one
   p.walk.bank = 1;
   setNeeds(p, 38, 100, 100, 100);  // food 38 -> 36: a treat lifts it
   minuteAsIs(p);
@@ -1062,24 +1298,32 @@ TEST(treat, minutes_a_treat_holds_up_do_not_build_stamina_until_the_next_real_ca
   done();
 }
 
+// The day's first care ends the hold, and so does every later one: registerCare() returns early
+// for a day that already counted, and the hold must end before that.
 TEST(treat, every_real_care_ends_the_hold) {
   // registerCare() is behind each of these
-  for (int care = 0; care < 6; care++) {
-    Pet p;
-    walker(p);
-    p.walk.bank = 1;
-    setNeeds(p, 38, 100, 100, 100);
-    minuteAsIs(p);
-    CHECK(p.treatHeld());
-    switch (care) {
-      case 0: p.feedBerry(0); break;
-      case 1: p.feedCandy(); break;
-      case 2: p.clean(); break;
-      case 3: p.caress(); break;
-      case 4: p.playToy(); break;
-      default: p.playGame(GAME_KEEPY, 5); break;
+  for (int later = 0; later < 2; later++) {
+    for (int care = 0; care < 6; care++) {
+      Pet p;
+      walker(p);
+      if (later) {
+        p.clean();  // the day's first care comes before the treat
+        CHECK_EQ(p.lastCareDay, (uint32_t)D0);
+      }
+      p.walk.bank = 1;
+      setNeeds(p, 38, 100, 100, 100);
+      minuteAsIs(p);
+      CHECK(p.treatHeld());
+      switch (care) {
+        case 0: p.feedBerry(0); break;
+        case 1: p.feedCandy(); break;
+        case 2: p.clean(); break;
+        case 3: p.caress(); break;
+        case 4: p.playToy(); break;
+        default: p.playGame(GAME_KEEPY, 5); break;
+      }
+      CHECK_MSG(!p.treatHeld(), "care " + std::to_string(care) + (later ? " (a later one of the day)" : " (the day's first)"));
     }
-    CHECK_MSG(!p.treatHeld(), "care " + std::to_string(care));
   }
   done();
 }

@@ -123,7 +123,8 @@ enum PetMood : uint8_t { MOOD_HAPPY, MOOD_SAD, MOOD_EATING, MOOD_SLEEPING };
 // ribbon (#117): WALK_RIBBON_STEPS counted steps in one day, on the 1.75C, whose motion
 // sensor counts them; the original 1.75 has no step counter, so it never earns it and its
 // medals page doesn't show it (MED_SHOWN). It is the player's doing, not time's, so it isn't
-// in MED_BY_TIME, and it earns no accessory (accessory.h).
+// in MED_BY_TIME, and it earns no accessory (accessory.h); but the tick notices it, so its
+// chime keeps out of quiet hours like theirs (MED_QUIET_OK).
 enum : uint16_t {
   MED_LV10 = 1 << 0, MED_LV25 = 1 << 1, MED_LV50 = 1 << 2,
   MED_BERRY = 1 << 3, MED_STREAK7 = 1 << 4, MED_BOND = 1 << 5,
@@ -184,6 +185,11 @@ static_assert(ACCM_LV10 == MED_LV10 && ACCM_LV25 == MED_LV25 && ACCM_LV50 == MED
 // the bond, a final form reached by evolving), so they sound as before, also when the tick
 // is what notices them a minute later.
 #define MED_BY_TIME (MED_LV10 | MED_LV25 | MED_LV50 | MED_FIT | MED_STR | MED_STA | MED_SPD)
+// The medals whose sound the tick keeps to itself in quiet hours: those of time, and the walking
+// ribbon (#117): steps are counted by the minute tick, which then notices the ribbon, and with
+// the Care page's bedtime off or a stale clock an evening walk's ribbon would chime at 23:00.
+// (Owner, 2026-11-18.) Only the sound: the banner and the medals page are as for any medal.
+#define MED_QUIET_OK (MED_BY_TIME | MED_WALK)
 #define MEDAL_BANNER_MS 4000UL      // a new medal's banner (drawCelebration)
 #define MILESTONE_BANNER_MS 4500UL  // a streak milestone's banner
 
@@ -456,7 +462,7 @@ public:
   bool treatHeld() const { return treatHeld_; }
   // Quiet hours (attnQuietAt, attention.h; #44): the sketch sets it on every loop pass,
   // before update(). While it holds, tick() keeps the sounds nobody asked for to itself:
-  // the hourly level-up and a medal only time earned (MED_BY_TIME). RAM only, never saved.
+  // the hourly level-up and a medal only time earned or the walking ribbon (MED_QUIET_OK). RAM only, never saved.
   bool quietHours = false;
   // A finished doze or ball game on the main screen (#22, idleplan.h): a little energy or
   // joy, already capped per hour by the caller. Never lowers anything, and is not the

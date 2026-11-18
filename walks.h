@@ -125,8 +125,13 @@ struct WalkLedger {
 
   // One minute: the chip's count now, whether counting is open, and the local day from a
   // trusted clock (0 when there is none). The steps since the last look are counted only
-  // while open; a minute's worth is capped at WALK_MINUTE_MAX.
-  WalkGain minute(uint32_t chipNow, bool open, uint32_t today) {
+  // while open; a minute's worth is capped at WALK_MINUTE_MAX. `train`: there is a pet to
+  // train. When there is not (an egg, the first pick, an ending whose pet is replaced), the
+  // stamina points are not given and not used up: `stamina` stays as it was, so the hatchling
+  // earns the day's points on its next minute with steps. Steps, treats and the ribbon's
+  // count don't wait on it (the steps are the player's; a new pet's bank is emptied by the
+  // egg).
+  WalkGain minute(uint32_t chipNow, bool open, uint32_t today, bool train = true) {
     WalkGain g;
     uint32_t delta = have_ ? walkChipDelta(chip_, chipNow) : 0;  // the first look only sets the baseline
     chip_ = chipNow & WALK_CHIP_MASK;
@@ -156,7 +161,7 @@ struct WalkLedger {
       }
       uint32_t sta = steps / WALK_STEPS_PER_STAMINA;
       if (sta > WALK_STAMINA_DAY_MAX) sta = WALK_STAMINA_DAY_MAX;
-      if (sta > stamina) {
+      if (train && sta > stamina) {
         g.stamina = (uint8_t)(sta - stamina);
         stamina = (uint8_t)sta;
       }

@@ -100,7 +100,7 @@ inline bool fitBtnHit(int x, int y, bool walks) {
 #define MEDAL_TEXT_PAD 6   // kept clear at a tile's right end
 
 // The ribbon tiles this page has: 3 on the original 1.75, 4 with the walking one.
-inline uint8_t medalRibbons(bool walks) { return walks ? MEDAL_RIBBONS : MEDAL_RIBBONS - 1; }
+constexpr uint8_t medalRibbons(bool walks) { return walks ? MEDAL_RIBBONS : MEDAL_RIBBONS - 1; }
 inline int medalTileH(bool walks) { return walks ? MEDAL_TILE_H_WALK : MEDAL_TILE_H; }
 inline int recordsY(bool walks) { return walks ? RECORDS_Y_WALK : RECORDS_Y; }
 

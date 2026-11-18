@@ -564,7 +564,12 @@ static_assert(MED_STR == 1 << MED_CARE_COUNT && MED_STA == 1 << (MED_CARE_COUNT 
               "the ribbons are the medals after the care ones, in FIT_* order, then the walking one (#117)");
 // The 1.75C's pages have the walks (#117): the Fitness page's steps and treats, the walking
 // ribbon on the medals page. The original 1.75 has no step counter, so neither shows there.
-static const bool WALKS = BOARD_AMOLED_175C != 0;
+constexpr bool WALKS = BOARD_AMOLED_175C != 0;
+// The medals page lays out and counts the medals this board can earn (MED_SHOWN, pet.h): a
+// MED_SHOWN that drifted from the layout would show the 1.75 a ribbon it can't earn, or the
+// 1.75C one short.
+static_assert(MED_SHOWN == MEDAL_CARE + medalRibbons(WALKS) && MED_CARE_COUNT == MEDAL_CARE,
+              "MED_SHOWN is the medals the board's page shows (#117)");
 #define WALK_RIBBON_COLOR 0x9AD6  // the walking ribbon's tails: amethyst, beside the stats' red, blue and orange
 
 // A rosette 12 px across centred at (x, y), its two tails spreading down and out to 13 px

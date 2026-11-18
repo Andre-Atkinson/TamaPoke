@@ -371,7 +371,12 @@ void Pet::walkMinute() {
   if (!stepSource || !stepSource(&chip)) return;  // no counter, or a failed read: the baseline stays
   // the day is today's from a trusted clock, the same day registerCare() counts by; without
   // one (0) the steps stay in the day they were counted in
-  WalkGain g = walk.minute(chip, walkCounting(), clockSet_ ? today() : 0);
+  // Stamina goes to the pet being trained: with an egg, the first pick or an ending (every
+  // CER_* ends in newEgg(), which replaces the pet) there is none, and the ledger holds the
+  // points back for the hatchling (WalkLedger::minute). An evolution is no ceremony: the same
+  // pet goes on, with its trDef.
+  bool train = !isEgg() && !starterPick && !eggPick && ceremony == CER_NONE;
+  WalkGain g = walk.minute(chip, walkCounting(), clockSet_ ? today() : 0, train);
   if (g.stamina) trDef = clamp100((int)trDef + g.stamina);  // training points are 0-100
   // the steps themselves go to NVS with the periodic save; what a walk earned (or a new day)
   // asks for one at the next quiet moment
@@ -652,9 +657,10 @@ void Pet::checkMedals(bool byTick) {
     uint16_t accBefore = accUnlockMask(before), accNew = accUnlockMask(medals) & ~accBefore;
     if (accNew && !accBefore && acc == ACC_NONE) acc = accLowest(accNew);
     banners.add(gained, false, millis(), accNew);  // a banner each, one after another (#82)
-    // a medal that only time earned, noticed by the tick, is silent in quiet hours (#44);
+    // a medal that only time earned, or the walking ribbon (MED_QUIET_OK), noticed by the
+    // tick, is silent in quiet hours (#44);
     // the banner shows anyway. One the player's action gains (exercise burns weight too) sounds.
-    bool byTimeOnly = !(gained & ~MED_BY_TIME);
+    bool byTimeOnly = !(gained & ~MED_QUIET_OK);
     if (!sleeping && byTick && quietHours && byTimeOnly) Serial.println("alert medal: silent (quiet)");
     else if (!sleeping) sfxPlay(SFX_MEDAL);
     save();

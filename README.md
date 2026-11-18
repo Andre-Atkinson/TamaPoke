@@ -659,8 +659,11 @@ the original 1.75 has no step counter, so none of this is there.
   an hour and a quarter, and a full bank of 40 for about three and a half hours. A new creature
   starts with none. On the charger, self-care does this job instead.
 - **Stamina:** +1 training point for every 1,000 counted steps, at most 5 a day. Minutes a
-  treat held up don't count as steady care until you next look after the creature.
+  treat held up don't count as steady care until you next look after the creature. With only
+  an egg (or the first pick, or an ending) there is nobody to train: those points wait, and
+  the creature that hatches earns them on its next minute with steps.
 - **The walking ribbon** (Medals page, 12 medals on the 1.75C): 5,000 counted steps in one day.
+  Its chime is silent in quiet hours, as a medal that time earned is (the banner shows as usual).
 - **A good walk:** after 1,000 steps or more and then ten minutes with no new ones, the next time
   the screen is free the creature says "That was a lovely walk!" (not saved: a restart drops it).
 
