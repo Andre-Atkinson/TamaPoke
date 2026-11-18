@@ -395,6 +395,7 @@ TEST(garden, a_damaged_save_loads_as_an_empty_pot) {
     { (uint8_t)(GARDEN_EMPTY | 1 << 4), 0, 0, 0, "an empty pot with berries" },
     { GARDEN_WITHERED, H, 0, 0, "a wilted stalk with growth" },
     { GARDEN_EMPTY, 0, H, 0, "an empty pot with water" },
+    { (uint8_t)(grow | 3 << 4), GARDEN_RIPE_S, 0, H, "a ripe plant with a dry run" },
   };
   for (const Bad &x : bad) {
     Garden g = ok;

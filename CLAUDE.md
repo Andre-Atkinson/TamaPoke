@@ -55,7 +55,8 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
   open over the pet first, paying an open minigame or exercise, as every
   ending does), `HATCH`, `SPEC`, `LVL`, `NICK`, `SHINY`, `CAREDAY`,
   `ABANDON`, `TIME <epoch>` and `RTCSET <epoch>` (digits only, 2025-2099; `RTCSET`,
-  unlike `TIME`, moves the berry garden on by the jump, at most 7 days;
+  unlike `TIME`, moves the berry garden on by a jump forward, at most 7 days, while
+  the clock is trusted, and back it starts the garden afresh;
   anything else gets `ERR clock not set: ...` and sets nothing), `GAL`
   (`ERR` during an ending), `BEEP`, `TRAINTRACE ON|OFF`, `SAVE` (writes pending pet changes to
   NVS), `OWNER <name>` (writes the player's name to NVS; `OWNER` alone clears

@@ -257,7 +257,7 @@ struct Garden {
             uint32_t clockEnd) {
     clear();
     at = savedAt >= clockMin && savedAt < clockEnd ? savedAt : 0;
-    uint8_t p = b & 3, c = (b >> 2) & 3, l = (b >> 4) & 0x0F;
+    uint8_t p = b & 3, c = (b >> 2) & 3, l = (b >> 4) & 3;  // bits 6-7 must be 0 (below)
     bool ok = (b >> 6) == 0 && p < GARDEN_PLANTS && c < GARDEN_BERRY_COLORS;
     if (ok && p == GARDEN_GROWING) {
       bool isRipe = g >= GARDEN_RIPE_S;
