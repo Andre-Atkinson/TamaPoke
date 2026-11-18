@@ -52,6 +52,29 @@ static void printScene() {
                 wxParticlesLive(frameIntervalMs(powerCtx(millis()))) ? 1 : 0, standby ? 1 : 0);
 }
 
+// ACC and ACC? (#116, accessory.h): what the pet wears (`worn`), what shows on it now (`shown`:
+// asleep or dozing it shows nothing, which this doesn't say), today's special hat (`day`), the
+// earned ones it has (`have`) and those with a red dot (`new`); lists comma-separated, "none"
+// when empty.
+static void printAccList(const char *key, uint16_t bits) {
+  Serial.printf(" %s=", key);
+  bool any = false;
+  for (uint8_t id = ACC_BOW; id < ACC_COUNT; id++)
+    if (bits & (1u << id)) {
+      Serial.printf("%s%s", any ? "," : "", ACC_KEYS[id]);
+      any = true;
+    }
+  if (!any) Serial.print("none");
+}
+static void printAcc() {
+  uint8_t day = accDayHat();
+  Serial.printf("ACC worn=%s shown=%s day=%s", ACC_KEYS[pet.acc < ACC_COUNT ? pet.acc : 0],
+                ACC_KEYS[pet.accNow(day, accToday())], ACC_KEYS[day]);
+  printAccList("have", pet.accUnlocked());
+  printAccList("new", pet.accUnlocked() & ~pet.accSeen);
+  Serial.println();
+}
+
 // TIME or RTCSET with text that is not a time the clock can take (clockEpochParse, #65): an
 // ERR line naming it (its first 24 characters), and nothing set. `petNote`: TIME's line also
 // says the pet's saved time is unchanged, as for a time the clock refuses.
@@ -181,6 +204,18 @@ void handleSerial() {
     Serial.println("DONE");
   } else if (line == "RUN") {
     startPetEnding(CER_RUNAWAY);
+    Serial.println("DONE");
+  } else if (line == "ACC?") {  // read-only (#116)
+    printAcc();
+    Serial.println("DONE");
+  } else if (line.startsWith("ACC ")) {  // wears one, as a tap on the Wardrobe page does (#116)
+    int id = accFromKey(line.substring(4).c_str());
+    if (id < 0)
+      Serial.println("ERR usage: ACC <none|bow|flowers|bobble|cap|tophat|crown|laurel> or today's special hat");
+    else if (!pet.wearAcc((uint8_t)id, accDayHat(), accToday()))
+      Serial.println("ERR not worn: not earned yet, not today's special hat, or no pet (an egg or an ending)");
+    else
+      printAcc();
     Serial.println("DONE");
   } else if (line == "CARE?") {  // read-only: relaxed pace / bedtime settings and whether it is bedtime now
     uint32_t e = rtcEpoch();

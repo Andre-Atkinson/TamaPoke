@@ -4,6 +4,7 @@
 #   make -C sim -j3 BOARD=175       1.75 original
 #   make -C sim -j3 window          the interactive SDL2 window (build/<board>/tamapoke_window);
 #                                   opt-in: needs sdl2-config, and nothing else here does
+#   make -C sim -j3 accsheet        the accessories' contact sheets (#116, tools/acc_sheet.sh)
 # ARDUINO_LIBS es la carpeta de librerias de arduino-cli (tools/sim.sh la busca).
 BOARD        ?= 175c
 ARDUINO_LIBS ?= $(HOME)/Documents/Arduino/libraries
@@ -15,6 +16,7 @@ GFX   := $(ARDUINO_LIBS)/GFX_Library_for_Arduino/src
 BUILD := build/$(BOARD)
 BIN   := $(BUILD)/tamapoke_sim
 WINBIN := $(BUILD)/tamapoke_window
+SHEETBIN := $(BUILD)/tamapoke_accsheet
 
 ifeq ($(BOARD),175c)
 BOARD_FLAG := -DBOARD_AMOLED_175C=1
@@ -60,9 +62,10 @@ WIN_OBJS := $(addprefix $(BUILD)/win/,$(WIN_SRCS:.cpp=.o))
 SDL_CFLAGS = $(shell sdl2-config --cflags 2>/dev/null | sed 's/-I/-isystem /g')
 SDL_LIBS   = $(shell sdl2-config --libs 2>/dev/null | sed 's/-lSDL2main//')
 
-.PHONY: all window clean check-libs check-sdl
+.PHONY: all window accsheet clean check-libs check-sdl
 all: check-libs $(BIN)
 window: check-libs check-sdl $(WINBIN)
+accsheet: check-libs $(SHEETBIN)
 
 check-libs:
 	@test -f "$(GFX)/Arduino_GFX.h" || { echo "sim: GFX Library for Arduino not found in $(ARDUINO_LIBS) (set ARDUINO_LIBS)" >&2; exit 1; }
@@ -78,6 +81,9 @@ $(BIN): $(OBJS)
 
 $(WINBIN): $(CORE_OBJS) $(WIN_OBJS)
 	$(CXX) -o $@ $(CORE_OBJS) $(WIN_OBJS) $(SDL_LIBS)
+
+$(SHEETBIN): $(CORE_OBJS) $(BUILD)/sim/accsheet.o
+	$(CXX) -o $@ $(CORE_OBJS) $(BUILD)/sim/accsheet.o
 
 # el .ino con los prototipos que genera arduino-cli (gen_sketch.py)
 $(BUILD)/sketch/TamaPoke_ino.cpp: $(REPO)/TamaPoke.ino gen_sketch.py
@@ -112,9 +118,9 @@ $(BUILD)/gfx/%.o: $(GFX)/%.cpp
 # everything and the static_assert in boot.cpp fires; the list is the objects of both
 # programs (CORE_OBJS, main.o, WIN_OBJS). It only adds a prerequisite: each object keeps its
 # recipe, and its $< is still its .cpp.
-$(CORE_OBJS) $(BUILD)/sim/main.o $(WIN_OBJS): Makefile
+$(CORE_OBJS) $(BUILD)/sim/main.o $(BUILD)/sim/accsheet.o $(WIN_OBJS): Makefile
 
 clean:
 	rm -rf build
 
--include $(OBJS:.o=.d) $(WIN_OBJS:.o=.d)
+-include $(OBJS:.o=.d) $(WIN_OBJS:.o=.d) $(BUILD)/sim/accsheet.d

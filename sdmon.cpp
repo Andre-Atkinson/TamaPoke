@@ -1,5 +1,7 @@
 #include "sdmon.h"
 #include "pin_config.h"
+#include "accessory.h"
+#include "accfix.h"
 #include <FS.h>
 #if BOARD_AMOLED_175C
 #include <LittleFS.h>
@@ -83,9 +85,39 @@ bool PmdMon::load(uint8_t dexNum, bool shiny) {
     }
     a.top = top;
   }
+  findHeads(dexNum);
+  dex = dexNum;
   loaded = true;
   Serial.printf("cargado %s (%u KB)\n", path, size / 1024);
   return true;
+}
+
+static_assert(ACCF_STAND == PMD_IDLE && ACCF_WALK == PMD_WALKL && PMD_WALKR == 2 && ACCF_EAT == PMD_EAT &&
+                  ACCF_SAD == PMD_HURT && ACCF_POSE == PMD_POSE && ACCF_NOD == PMD_NOD &&
+                  ACCF_BREATH == PMD_BREATH && ACCF_SIT == PMD_SIT,
+              "accfix.h's poses are the PMD_* actions");
+
+// Where an accessory sits on every frame of every action (#116): one PSRAM block of 3 bytes a
+// frame (PmdAct::head), filled once here so drawing reads it, by accHeadFor() (accfix.h: the
+// rule with the species' row for the pose). No room: no accessory, nothing else lost.
+void PmdMon::findHeads(uint8_t dexNum) {
+  uint32_t n = 0;
+  for (auto &a : acts) n += a.frames;
+  if (!n) return;
+  heads = (uint8_t *)ps_malloc(n * 3);
+  if (!heads) return;
+  uint8_t *p = heads;
+  for (uint8_t id = 0; id < PMD_NACTS; id++) {
+    PmdAct &a = acts[id];
+    if (!a.frames) continue;
+    a.head = p;
+    for (uint8_t f = 0; f < a.frames; f++, p += 3) {
+      AccHead hd = accHeadFor(a.data + (uint32_t)f * a.w * a.h, a.w, a.h, dexNum, id);
+      p[0] = hd.crown;
+      p[1] = hd.x0;
+      p[2] = hd.w;
+    }
+  }
 }
 
 void PmdMon::unload() {
@@ -93,10 +125,16 @@ void PmdMon::unload() {
     free(blob);
     blob = nullptr;
   }
+  if (heads) {
+    free(heads);
+    heads = nullptr;
+  }
   for (auto &a : acts) {
     a.w = a.h = a.frames = a.base = a.top = 0;
     a.data = nullptr;
+    a.head = nullptr;
   }
+  dex = 0;
   loaded = false;
 }
 

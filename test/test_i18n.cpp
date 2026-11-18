@@ -79,6 +79,12 @@ static const ExpectedFmt EXPECTED[] = {
   { S_SAY_HALLOWEEN_FMT, "%s" },
   { S_SAY_BIRTHDAY_FMT, "%s" },
   { S_DATE_FMT,        "%s,%u,%s" },  // weekday, day, month (formatDate(), i18n.cpp)
+  // the Wardrobe page and its banner (#116, screens.cpp and bannerLines())
+  { S_WARDROBE_FMT,    "%d,%d" },
+  { S_ACC_WEARING_FMT, "%s" },
+  { S_ACC_TODAY_FMT,   "%s" },
+  { S_ACC_HINT_FMT,    "%s,%s" },
+  { S_ACC_NEW_FMT,     "%s" },
 };
 static const int NUM_EXPECTED = (int)(sizeof(EXPECTED) / sizeof(EXPECTED[0]));
 

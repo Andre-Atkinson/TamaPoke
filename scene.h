@@ -70,6 +70,19 @@ bool sceneStarsOut();     // the night sky shows its stars (the speech bubbles' 
 // Today's special day (holiday.h, #26) on the scene's clock: its decorations and greeting.
 // Nothing without a trusted clock, or during a farewell or a run-away.
 HolidayToday holidayNow();
+// Accessories (#116, accessory.h): the hat today's special day puts on (ACC_NONE on other days
+// and without a trusted clock), and today as a local day (epoch / 86400; 0 without a trusted
+// clock), for Pet::accNow() and Pet::wearAcc().
+uint8_t accDayHat();
+uint32_t accToday();
+// Accessory id's art with its top left at (x, y), each of its pixels s px; sil: all in silCol
+// (the Wardrobe page's locked tiles)
+void drawAccArt(uint8_t id, int x, int y, int s, bool sil, uint16_t silCol);
+// Accessory id on frame fi of action actId of m, the frame drawn at scale s with its canvas's
+// top left at (x0, y0): on the head the sprite's load found (accfix.h's nudges included).
+// False when none shows on that frame. drawPet() uses it, and the contact sheets
+// (tools/acc_sheet.sh) draw every frame of every species with it.
+bool drawAccOn(const PmdMon &m, uint8_t actId, uint8_t fi, int x0, int y0, uint8_t s, uint8_t id);
 // The sky, the place and the weather. The place changes only while nobody is looking
 // (SceneLatch), so call this only for a frame of the main scene that is drawn.
 void drawScene(uint32_t now, bool night);
@@ -109,7 +122,8 @@ void gardenShow(uint8_t tap, uint8_t color);
 // the trusted clock the scene and the garden follow: 0 while it is stale or unknown
 uint32_t sceneClock();
 // The top of the pet's head as drawPet() drew it this frame, hop included (#73): the emotes
-// (#22) and both bubbles point at it. Call it after drawPet(). 0 when no pet was drawn.
+// (#22) and both bubbles point at it. Over an accessory (#116), the accessory's top. Call it
+// after drawPet(). 0 when no pet was drawn.
 int petHeadTop();
 // The evolve, run-away, medicine or farewell button is drawn over the pet (render()): the
 // bubbles stay above it (bubbleTipY in attention.h). False while a banner holds the buttons

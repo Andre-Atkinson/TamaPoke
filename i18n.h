@@ -118,6 +118,16 @@ enum StrId : uint8_t {
   // sickness and medicine (#15): the Care page's row (label and "On"; "Off" is bedtime's), the
   // status line, the medicine button, the status while it takes it, and the Progress page
   S_SICKNESS, S_ON, S_SICK, S_GIVE_MEDICINE, S_BETTER, S_EVO_SICK,
+  // accessories (#116, accessory.h): the Wardrobe page's title ("WARDROBE n/7") and lines (what
+  // it wears, today's special hat, a locked tile's "<name>: <what earns it>"), the names in ACC_*
+  // order (ACC_NONE's is the empty tile's), what earns each earned one (ACC_BOW..ACC_LAUREL), and
+  // the banner's two lines
+  S_WARDROBE_FMT, S_ACC_WEARING_FMT, S_ACC_TODAY_FMT, S_ACC_HINT_FMT,
+  S_ACC_NONE, S_ACC_BOW, S_ACC_FLOWERS, S_ACC_BOBBLE, S_ACC_CAP, S_ACC_TOPHAT, S_ACC_CROWN, S_ACC_LAUREL,
+  S_ACC_SANTA, S_ACC_WITCH, S_ACC_BUNNY, S_ACC_HEART, S_ACC_PARTY,
+  S_ACC_EARN_BOW, S_ACC_EARN_FLOWERS, S_ACC_EARN_BOBBLE, S_ACC_EARN_CAP, S_ACC_EARN_TOPHAT,
+  S_ACC_EARN_CROWN, S_ACC_EARN_LAUREL,
+  S_ACC_NEW_FMT, S_ACC_SWIPE,
   STR_COUNT
 };
 
@@ -125,9 +135,12 @@ const char *T(StrId id);       // texto en el idioma activo
 const char *natureName(uint8_t n);  // the nature's name (#25, NAT_*); easygoing's when out of range
 const char *medalName(int i);  // banner de medalla (MED_COUNT)
 const char *medalDesc(int i);  // descripcion larga de medalla
+const char *accName(uint8_t id);  // an accessory's name (#116, ACC_*); ACC_NONE's when out of range
+const char *accEarnText(uint8_t id);  // what earns an earned accessory (#116); "" for the others
 // The celebration banner's two lines (drawCelebration, scene.cpp; #82, #83) for the banner on
 // screen (Pet::bannerShown(), BannerQueue in pet.h): a medal's bit gives "MEDAL!" and its name;
-// BANNER_STREAK gives "AWESOME!" and "<streakDays> DAY STREAK!" (a buffer of its own, valid
+// BANNER_STREAK gives "AWESOME!" and "<streakDays> DAY STREAK!", and BANNER_ACC + an accessory
+// "NEW: CAP!" and "SWIPE UP: WARDROBE" (#116) (each formatted line a buffer of its own, valid
 // until the next call).
 void bannerLines(int banner, uint16_t streakDays, const char **l1, const char **l2);
 // The date as the standby clock shows it (#60), short: "Sat 15 Nov", "s\240b, 15 nov".

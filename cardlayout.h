@@ -116,3 +116,38 @@ inline int careRowAt(int x, int y) {
     if (y >= careRowY(r) && y <= careRowY(r) + CARE_BTN_H) return r;
   return -1;
 }
+
+// ---------------------------------------------------------------- Wardrobe page (#116)
+// The card's last page: a 3x3 grid of tiles under the size-3 title, in ACC_* order (accessory.h):
+// Nothing, the seven to earn, and on a special day today's hat in the ninth. Under it two
+// size-2 lines (what it wears or a locked tile's hint; today's hat), clear of the page dots
+// (y 369). wardTileAt() is the tap's tile (renderCardWardrobe and wardrobeTap, screens.cpp).
+#define WARD_TITLE_Y 44   // size 3
+#define WARD_COLS 3
+#define WARD_TILES 9
+#define WARD_TILE_W 92
+#define WARD_TILE_H 74
+#define WARD_GAP 10
+#define WARD_GRID_Y 74    // the first row's top
+#define WARD_GRID_X (CARD_C - (WARD_COLS * WARD_TILE_W + (WARD_COLS - 1) * WARD_GAP) / 2)
+#define WARD_ART_S 4      // an accessory's pixel in its tile: the widest (14 x 11) is 56 x 44
+#define WARD_LINE_Y 322   // the first line; the second is WARD_LINE_H under it
+#define WARD_LINE_H 22
+#define WARD_LINE_MAX 30  // letters a line may have: 360 px, inside the disc at that height
+
+inline CardRect wardTile(uint8_t i) {
+  CardRect r;
+  r.x = (int16_t)(WARD_GRID_X + (i % WARD_COLS) * (WARD_TILE_W + WARD_GAP));
+  r.y = (int16_t)(WARD_GRID_Y + (i / WARD_COLS) * (WARD_TILE_H + WARD_GAP));
+  r.w = WARD_TILE_W;
+  r.h = WARD_TILE_H;
+  return r;
+}
+// The tile under (x, y), 0 to WARD_TILES - 1, or -1 (the gaps between tiles are none)
+inline int wardTileAt(int x, int y) {
+  for (uint8_t i = 0; i < WARD_TILES; i++) {
+    CardRect r = wardTile(i);
+    if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return i;
+  }
+  return -1;
+}

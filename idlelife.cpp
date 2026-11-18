@@ -197,10 +197,10 @@ uint8_t idleFrameAct(uint32_t now, int &dy, uint32_t &t0, bool &loop) {
 }
 
 // Something else is by its head or over the pet: a speech bubble (#23: it goes first, and
-// draws in the same band beside the head), the heart of a pat, a medal or streak banner, the
+// draws in the same band beside the head), the heart of a pat, a medal, streak or accessory banner, the
 // evolve, farewell, run-away or medicine (#15) button.
 static bool emoteAllowed() {
-  return !bubbleShowing() && !pet.showHeart() && !pet.showMedal() && !pet.showMilestone() &&
+  return !bubbleShowing() && !pet.showHeart() && !pet.showMedal() && !pet.showMilestone() && !pet.showNewAcc() &&
          !pet.wantEvolveButton() && !pet.canRunawayNow() && !pet.wantFarewellButton() && !pet.wantMedicineButton();
 }
 

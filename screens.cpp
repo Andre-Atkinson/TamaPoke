@@ -43,7 +43,7 @@ bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
-uint8_t cardPage = 0;         // 0 perfil, 1 stats, 2 medallas, 3 progreso, 4 cuidados (ritmo y hora de dormir)
+uint8_t cardPage = 0;         // 0 perfil, 1 stats, 2 medallas, 3 progreso, 4 cuidados (ritmo y hora de dormir), 5 wardrobe (#116)
 bool clockOpen = false;       // pantalla de ajuste de hora (deslizar abajo)
 int clockH = 12, clockM = 0;  // hora en edicion
 
@@ -780,6 +780,111 @@ bool careTap(int16_t x, int16_t y) {
   return true;
 }
 
+// pagina 5: the Wardrobe (#116). Tiles in ACC_* order: Nothing, the seven to earn (in colour
+// on white when this pet has it, a grey shape on beige when not), and on a special day its hat.
+// What shows on the pet now is ringed green; a red dot on each earned one the player hadn't
+// seen when the page opened. Under the grid: what it wears, or what earns the locked tile
+// tapped; then today's hat. Layout: cardlayout.h (WARD_*).
+static uint16_t wardNew = 0;  // this visit's red dots (Pet::accPageOpened)
+static int8_t wardHint = -1;  // the locked tile tapped (its hint shows), or -1
+#define WARD_LOCKED_INK 0xB5B6  // a locked tile's shape: grey, a step darker than the tile
+#define WARD_TEXT_INK 0x8410    // the grey of the Nothing tile and the hint
+
+void wardrobeOpened() {
+  wardNew = pet.accPageOpened();
+  wardHint = -1;
+}
+
+// tile i's accessory: ACC_NONE to ACC_LAUREL, then today's hat (ACC_NONE: no ninth tile)
+static uint8_t wardTileAcc(uint8_t i, uint8_t dayHat) { return i <= ACC_LAUREL ? i : dayHat; }
+
+uint32_t wardrobeKey() {
+  uint8_t dayHat = accDayHat();
+  return (uint32_t)(uint8_t)wardHint | (uint32_t)wardNew << 8 | (uint32_t)dayHat << 24 |
+         (uint32_t)pet.accNow(dayHat, accToday()) << 28;
+}
+
+static void renderCardWardrobe() {
+  uint16_t have = pet.accUnlocked();
+  int got = 0;
+  for (uint8_t id = ACC_BOW; id <= ACC_LAUREL; id++)
+    if (have & (1u << id)) got++;
+  char head[24];
+  snprintf(head, sizeof(head), T(S_WARDROBE_FMT), got, ACC_EARNED);
+  gfx->setTextColor(UI_INK);
+  setSize(3);
+  setCur(centerX(head, 3), WARD_TITLE_Y);
+  printT(head);
+
+  uint8_t dayHat = accDayHat();
+  uint8_t shown = pet.accNow(dayHat, accToday());
+  for (uint8_t i = 0; i < WARD_TILES; i++) {
+    uint8_t id = wardTileAcc(i, dayHat);
+    if (i > ACC_LAUREL && id == ACC_NONE) break;  // no special day: eight tiles
+    CardRect r = wardTile(i);
+    bool locked = accIsEarned(id) && !(have & (1u << id));
+    gfx->fillRoundRect(r.x, r.y, r.w, r.h, 10, locked ? UI_TRACK : UI_WHITE);
+    if (id == shown)  // what it shows now: a green ring 4 px thick
+      for (int k = 0; k < 4; k++) gfx->drawRoundRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, 10 - k, UI_BAR_OK);
+    else if (!locked)
+      gfx->drawRoundRect(r.x, r.y, r.w, r.h, 10, UI_TRACK);
+    if (id == ACC_NONE) {
+      const char *t = accName(ACC_NONE);
+      gfx->setTextColor(WARD_TEXT_INK);
+      setSize(2);
+      setCur(r.x + (r.w - textW(t, 2)) / 2, r.y + r.h / 2 - 7);
+      printT(t);
+    } else {
+      const AccArt &a = ACC_ART[id];
+      drawAccArt(id, r.x + (r.w - a.w * WARD_ART_S) / 2, r.y + (r.h - a.h * WARD_ART_S) / 2, WARD_ART_S, locked,
+                 WARD_LOCKED_INK);
+    }
+    if (wardNew & (1u << id)) gfx->fillCircle(r.x + r.w - 9, r.y + 9, 5, UI_BAR_BAD);
+  }
+
+  char line[48];
+  int y = WARD_LINE_Y;
+  if (wardHint > ACC_NONE) {
+    snprintf(line, sizeof(line), T(S_ACC_HINT_FMT), accName((uint8_t)wardHint), accEarnText((uint8_t)wardHint));
+    gfx->setTextColor(WARD_TEXT_INK);
+  } else if (shown != ACC_NONE && shown != dayHat) {
+    snprintf(line, sizeof(line), T(S_ACC_WEARING_FMT), accName(shown));
+    gfx->setTextColor(UI_INK);
+  } else {
+    line[0] = 0;
+  }
+  setSize(2);
+  if (line[0]) {
+    setCur(centerX(line, 2), y);
+    printT(line);
+    y += WARD_LINE_H;
+  }
+  if (dayHat != ACC_NONE) {
+    snprintf(line, sizeof(line), T(S_ACC_TODAY_FMT), accName(dayHat));
+    gfx->setTextColor(UI_BAR_BAD);
+    setCur(centerX(line, 2), y);
+    printT(line);
+  }
+}
+
+// A tap on the Wardrobe page: true if it fell on a tile. An earned one this pet has (or
+// Nothing, or today's hat) is worn at once (Pet::wearAcc); a locked one says what earns it.
+bool wardrobeTap(int16_t x, int16_t y) {
+  int i = wardTileAt(x, y);
+  uint8_t dayHat = accDayHat();
+  if (i < 0) return false;
+  uint8_t id = wardTileAcc((uint8_t)i, dayHat);
+  if (i > ACC_LAUREL && id == ACC_NONE) return false;  // no ninth tile today
+  if (accIsEarned(id) && !(pet.accUnlocked() & (1u << id))) {
+    wardHint = (int8_t)id;
+  } else {
+    wardHint = -1;
+    if (pet.wearAcc(id, dayHat, accToday())) Serial.printf("wardrobe: %s\n", ACC_KEYS[id]);
+  }
+  sfxPlay(SFX_TAP);
+  return true;
+}
+
 void renderCard() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, CARD_R, UI_BG_DAY);  // the disc cardlayout.h lays the pages out on
@@ -788,12 +893,14 @@ void renderCard() {
   else if (cardPage == 1) renderCardStats();
   else if (cardPage == 2) renderCardMedals();
   else if (cardPage == 3) renderCardProgress();
-  else renderCardCare();
+  else if (cardPage == CARD_PAGE_CARE) renderCardCare();
+  else renderCardWardrobe();
 
-  // indicador de 5 paginas + ayuda
+  // indicador de paginas, centrado (6 since #116) + ayuda
   for (int i = 0; i <= CARD_LAST_PAGE; i++) {
-    if (i == cardPage) gfx->fillCircle(181 + i * 26, 374, 5, UI_INK);
-    else gfx->drawCircle(181 + i * 26, 374, 4, UI_INK);
+    int x = CX - CARD_LAST_PAGE * 26 / 2 + i * 26;
+    if (i == cardPage) gfx->fillCircle(x, 374, 5, UI_INK);
+    else gfx->drawCircle(x, 374, 4, UI_INK);
   }
   gfx->setTextColor(UI_TRACK);
   setSize(2);

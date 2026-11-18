@@ -380,6 +380,12 @@ class TestBuffersDeTexto(unittest.TestCase):
         'S_FAREWELL_BTN': ('nombre_o_apodo',),
         'S_RUNAWAY_BTN': ('nombre_o_apodo',),
         'S_SAY_LOVE_FMT': ('dueno',),
+        # the Wardrobe page and its banner (#116): an accessory's name (accName), and what
+        # earns one (accEarnText)
+        'S_ACC_WEARING_FMT': ('accesorio',),
+        'S_ACC_TODAY_FMT': ('accesorio',),
+        'S_ACC_HINT_FMT': ('accesorio', 'ganar'),
+        'S_ACC_NEW_FMT': ('accesorio',),
     }
     CIFRAS = {'u': 5, 'd': 5, 'lu': 10}
     ESPEC = re.compile(r'%0?\d*(lu|u|d|s)')
@@ -446,6 +452,14 @@ class TestBuffersDeTexto(unittest.TestCase):
             elif arg == 'naturaleza':  # natureName() (#25)
                 total += max(self.bytes_literal(self.LIT[n][li]) for n in
                              ('S_NAT_EASYGOING', 'S_NAT_GREEDY', 'S_NAT_PLAYFUL', 'S_NAT_TIDY', 'S_NAT_LAZY'))
+            elif arg == 'accesorio':  # accName() (#116): S_ACC_NONE to S_ACC_PARTY
+                ids = list(self.LIT)
+                total += max(self.bytes_literal(self.LIT[a][li]) for a in
+                             ids[ids.index('S_ACC_NONE'):ids.index('S_ACC_PARTY') + 1])
+            elif arg == 'ganar':  # accEarnText() (#116): S_ACC_EARN_BOW to S_ACC_EARN_LAUREL
+                ids = list(self.LIT)
+                total += max(self.bytes_literal(self.LIT[a][li]) for a in
+                             ids[ids.index('S_ACC_EARN_BOW'):ids.index('S_ACC_EARN_LAUREL') + 1])
             else:
                 self.fail(f'{sid}: ARGS_S names {arg!r}, which peor_caso() does not know')
         return total

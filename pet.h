@@ -5,6 +5,7 @@
 #include "clockprompt.h"  // CLOCK_EPOCH_END
 #include "gamecore.h"  // GameId, records and normalised scores of the Play minigames
 #include "nature.h"    // NAT_*, the drains, care boosts and training bonus of each nature (#25)
+#include "accessory.h" // ACC_*, what earns each accessory (#116)
 #include "garden.h"    // the berry garden (#115): Pet::garden, saved with the pet
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
@@ -123,6 +124,11 @@ enum : uint16_t {
 #define MED_COUNT 11
 #define MED_ALL ((uint16_t)((1u << MED_COUNT) - 1))
 #define MED_CARE_COUNT 8  // the medals page's grid: bits 0-7; the ribbons are bits 8 to MED_COUNT - 1
+static_assert(ACCM_LV10 == MED_LV10 && ACCM_LV25 == MED_LV25 && ACCM_LV50 == MED_LV50 &&
+                  ACCM_BERRY == MED_BERRY && ACCM_STREAK7 == MED_STREAK7 && ACCM_BOND == MED_BOND &&
+                  ACCM_FINAL == MED_FINAL && ACCM_FIT == MED_FIT &&
+                  ACCM_RIBBONS == (MED_STR | MED_STA | MED_SPD),
+              "accessory.h's medals are pet.h's");
 // Training points (0-100) that earn each ribbon (#76), reachable in a normal pet's life:
 //   strength 30: the rhythm punch (#78) pays 1.5 points a punch, at most 18 a session, so
 //     two sessions;
@@ -176,11 +182,21 @@ enum : uint16_t {
 // single banner always did. Their sound is the gain's (Pet::checkMedals), not the banner's.
 // RAM only: a restart starts with none. An ending clears it (Pet::startFarewell, startRunaway,
 // release), so the egg after it and the pet that hatches start with none either.
-enum : int8_t { BANNER_NONE = -1, BANNER_STREAK = MED_COUNT };  // 0..MED_COUNT - 1: a medal's bit
+// An accessory a medal earns (#116) has a banner of its own ("NEW: CAP!"), straight after
+// that medal's (Pet::checkMedals adds both at once). One added with none of its medals waiting
+// comes after the medals left, so none is ever lost. So at most MED_COUNT + 1 + ACC_EARNED
+// banners in a row.
+enum : int8_t {
+  BANNER_NONE = -1,
+  BANNER_STREAK = MED_COUNT,  // 0..MED_COUNT - 1: a medal's bit
+  BANNER_ACC = MED_COUNT + 1, // BANNER_ACC + ACC_*: an accessory earned (ACC_BOW..ACC_LAUREL)
+};
+inline bool bannerIsAcc(int8_t b) { return b > BANNER_ACC && b <= (int)BANNER_ACC + (int)ACC_LAUREL; }
 struct BannerQueue {
-  int8_t on = BANNER_NONE;  // on screen: a medal's bit, BANNER_STREAK or BANNER_NONE
+  int8_t on = BANNER_NONE;  // on screen: a medal's bit, BANNER_STREAK, BANNER_ACC + an accessory, or BANNER_NONE
   uint32_t until = 0;       // ...until this millis()
   uint16_t medals = 0;      // the medals waiting (bits), not the one on screen
+  uint16_t accs = 0;        // the accessories waiting (1 << ACC_*), not the one on screen (#116)
   bool streak = false;      // a streak milestone waiting
 
   static uint32_t length(int8_t b) { return b == BANNER_STREAK ? MILESTONE_BANNER_MS : MEDAL_BANNER_MS; }
@@ -198,10 +214,12 @@ struct BannerQueue {
       until = end + length(on);
     }
   }
-  // New medals (bits) and a streak milestone: on screen at once if nothing shows, else waiting
-  void add(uint16_t medalBits, bool milestone, uint32_t now) {
+  // New medals (bits), a streak milestone and the accessories the medals earned (1 << ACC_*,
+  // #116): on screen at once if nothing shows, else waiting
+  void add(uint16_t medalBits, bool milestone, uint32_t now, uint16_t accBits = 0) {
     update(now);
     medals |= medalBits & MED_ALL;
+    accs |= accBits & ACC_EARNED_MASK;
     streak = streak || milestone;
     if (on == BANNER_NONE) {
       next();
@@ -218,6 +236,13 @@ struct BannerQueue {
 
 private:
   void next() {  // the next one waiting to the screen; BANNER_NONE when none waits
+    // an accessory the medal leaving the screen earned comes straight after it (#116)
+    uint8_t a = (on >= 0 && on < MED_COUNT) ? accEarnedBy((uint16_t)(1u << on), accs) : (uint8_t)ACC_NONE;
+    if (a) {
+      accs &= (uint16_t)~(1u << a);
+      on = (int8_t)(BANNER_ACC + a);
+      return;
+    }
     if (streak) {
       streak = false;
       on = BANNER_STREAK;
@@ -230,6 +255,11 @@ private:
         on = i;
         return;
       }
+    a = accLowest(accs);  // one added with none of its medals waiting
+    if (a) {
+      accs &= (uint16_t)~(1u << a);
+      on = (int8_t)(BANNER_ACC + a);
+    }
   }
 };
 
@@ -475,6 +505,31 @@ public:
     return b >= 0 && b < MED_COUNT;
   }
   bool showMilestone() const { return bannerShown() == BANNER_STREAK; }
+  bool showNewAcc() const { return bannerIsAcc(bannerShown()); }  // "NEW: CAP!" (#116)
+
+  // Accessories (#116, accessory.h). `acc`: what the pet wears, ACC_NONE or one it has earned
+  // (NVS "acc"); `accSeen`: the earned ones the player has seen on the Wardrobe page, 1 << ACC_*
+  // (NVS "accseen"; the others have a red dot). Both start empty when an egg hatches, and an
+  // earned one is this pet's medals (accUnlockMask), so no bits of their own.
+  uint8_t acc = ACC_NONE;
+  uint16_t accSeen = 0;
+  uint32_t accPickDay = 0;  // the local day a Wardrobe pick beat that day's special hat (#116); RAM only
+  uint16_t accUnlocked() const { return isEgg() ? 0 : accUnlockMask(medals); }
+  // What shows on the pet: today's special hat (dayHat, the scene's clock: accForDay) unless
+  // the player picked something on the Wardrobe page today; else `acc`. today: the local day
+  // (epoch / 86400), 0 without a trusted clock. An egg shows nothing.
+  uint8_t accNow(uint8_t dayHat, uint32_t today) const {
+    return isEgg() ? (uint8_t)ACC_NONE : accShown(acc, dayHat, accPickDay, today);
+  }
+  // Wear `id` (the Wardrobe page's tap, the ACC command): ACC_NONE, an earned one this pet has,
+  // or today's special hat (dayHat), which only drops a pick made today. On a special day the
+  // pick wins over its hat until midnight, in RAM. Saved at once in its own key ("acc"), as
+  // the Care page's settings are. False, and nothing changes: locked, not an accessory, an
+  // egg, an ending.
+  bool wearAcc(uint8_t id, uint8_t dayHat, uint32_t today);
+  // The Wardrobe page opens: the earned ones not yet seen (its red dots), now marked seen
+  // (and saved, when there were any)
+  uint16_t accPageOpened();
   // While a Play minigame or an exercise is on screen (the sketch, every loop pass,
   // #69): a medal or streak banner that came up under it (the exercise was the day's first
   // care) waits, and shows its whole time once the creature's screen is back, then the
