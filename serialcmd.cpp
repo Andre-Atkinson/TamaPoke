@@ -108,7 +108,7 @@ void handleSerial() {
     String prof = sp < 0 ? String("") : args.substring(sp + 1);
     prof.trim();
     if (stepsSetRate(rate.c_str(), prof.c_str())) stepsPrintStatus();
-    else Serial.println("ERR STEPRATE <lp21|lp128|28|56|112> [lib|scaled|easy] (or no step counter)");
+    else Serial.println("ERR STEPRATE <lp21|lp128|31|62|125> [ds|lib|easy] (or no step counter)");
     return;
   }
   if (sdSerialCommand(line)) return;

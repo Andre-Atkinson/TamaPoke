@@ -26,21 +26,26 @@ static const uint8_t QMI_STATUS1 = 0x2F;  // the motion events, the step engine'
 static const uint8_t QMI_AX_L = 0x35;     // AX, AY, AZ: six bytes, little-endian
 static const uint8_t QMI_STEP_L = 0x5A;   // the step count: three bytes, little-endian
 
+// The accelerometer's rates with the gyroscope off (QMI8658A datasheet Rev A, CTRL2):
+// SensorLib names CTRL2's codes by the rates they give with the gyroscope on (28, 56, 112 Hz),
+// so `cfgHz` is what SensorLib's configAccel() takes to pick the code, and `hz` the real
+// rate, which the step profile's sample counts are worked out from.
 struct StepRate {
   const char *name;
   float hz;
+  float cfgHz;
   uint8_t lpCode;  // CTRL2's low-power rate code, 0 for the normal mode
 };
 static const StepRate RATES[] = {
-  { "lp21", 21.0f, 0x0D }, { "lp128", 128.0f, 0x0C },
-  { "28", 28.0f, 0 },      { "56", 56.0f, 0 },        { "112", 112.0f, 0 },
+  { "lp21", 21.0f, 28.0f, 0x0D }, { "lp128", 128.0f, 28.0f, 0x0C },
+  { "31", 31.25f, 28.0f, 0 },     { "62", 62.5f, 56.0f, 0 },        { "125", 125.0f, 112.0f, 0 },
 };
 static const uint8_t RATE_COUNT = sizeof(RATES) / sizeof(RATES[0]);
-static const char *const PROFILES[] = { "lib", "scaled", "easy" };
-enum : uint8_t { PROF_LIB = 0, PROF_SCALED = 1, PROF_EASY = 2, PROF_COUNT = 3 };
-static const uint8_t BOOT_RATE = 2;  // 28 Hz
+static const char *const PROFILES[] = { "ds", "lib", "easy" };
+enum : uint8_t { PROF_DS = 0, PROF_LIB = 1, PROF_EASY = 2, PROF_COUNT = 3 };
+static const uint8_t BOOT_RATE = 3;  // 62.5 Hz
 static uint8_t curRate = BOOT_RATE;
-static uint8_t curProf = PROF_SCALED;
+static uint8_t curProf = PROF_DS;
 
 // A raw register read; -1 when it fails.
 static int readReg(uint8_t reg) {
@@ -92,9 +97,13 @@ static bool configure(uint8_t r, uint8_t p) {
     Serial.println("steps: CTRL8 failed");
     return false;
   }
-  // The normal mode at the rate (the low-power one starts from 28 Hz, SensorLib's lowest),
-  // the gyroscope off (reset() leaves it off), which the low-power mode needs.
-  if (!imu.configAccel(AccelFullScaleRange::FS_4G, rt.lpCode ? 28.0f : rt.hz)) {
+  // The normal mode at the rate (the low-power one starts from SensorLib's lowest), the
+  // gyroscope off (reset() leaves it off), which the low-power mode needs. The low-pass
+  // filter OFF: SensorLib's default is its narrowest mode, 2.66% of the rate (the
+  // datasheet's Table 10), 1.7 Hz at 62.5 Hz, which flattens the 1.5-2.5 Hz peaks of a
+  // walk; off, the bandwidth is 27.5% of the rate. With it on, a 100-step walk counted 26
+  // at 62.5 Hz (2026-11-18), and every rate counted more the faster it ran.
+  if (!imu.configAccel(AccelFullScaleRange::FS_4G, rt.cfgHz, SensorQMI8658::LpfMode::OFF)) {
     Serial.println("steps: configAccel failed");
     return false;
   }
@@ -112,17 +121,19 @@ static bool configure(uint8_t r, uint8_t p) {
   bool ok;
   if (p == PROF_LIB) {
     ok = imu.configPedometerDefault(rt.hz);
+  } else if (p == PROF_EASY) {
+    // SensorLib's example's "debug" thresholds (80 and 60 mg), counting from the first step,
+    // over the datasheet's 1 s window and time limits
+    ok = imu.configPedometer((uint16_t)(rt.hz + 0.5f), 80, 60, (uint16_t)(rt.hz * 4.0f + 0.5f),
+                             (uint8_t)(rt.hz * 0.4f + 0.5f), 1, 0, 1);
   } else {
-    // SensorLib's default profile with its 50-sample window kept at the 0.4 s it lasts at
-    // 125 Hz; the time limits as SensorLib works them out (2 s up, 0.3 s low).
-    uint16_t window = (uint16_t)(rt.hz * 0.4f + 0.5f);
-    if (window < 4) window = 4;
-    uint16_t timeUp = (uint16_t)(rt.hz * 2.0f + 0.5f);
-    uint8_t timeLow = (uint8_t)(rt.hz * 0.3f + 0.5f);
-    if (p == PROF_EASY)  // SensorLib's example's "debug" thresholds, counting from the first step
-      ok = imu.configPedometer(window, 80, 60, timeUp, timeLow, 1, 0, 1);
-    else
-      ok = imu.configPedometer(window, 100, 116, timeUp, timeLow, 8, 0, 1);
+    // The datasheet's example profile (QMI8658A Rev A, 11.1, given at 50 Hz), in seconds: a
+    // 1 s window, a step's peak-to-peak 200 mg (0x00CC, u6.10 g) and peak 100 mg (0x0066)
+    // over the average, a step at most 4 s and at least 0.4 s long, 10 steps in a row before
+    // it counts. The count goes up every step (ped_sig_count 1; the datasheet's 4 makes it go
+    // up in fours).
+    ok = imu.configPedometer((uint16_t)(rt.hz + 0.5f), 0x00CC, 0x0066, (uint16_t)(rt.hz * 4.0f + 0.5f),
+                             (uint8_t)(rt.hz * 0.4f + 0.5f), 10, 0, 1);
   }
   if (!ok) {
     Serial.println("steps: configPedometer failed");
@@ -163,7 +174,7 @@ bool stepsBegin() {
   // Time for a soft reset whose wait in begin() ended early to finish before configure()
   // sets the registers it would clear (above, CTRL1).
   delay(100);
-  return configure(BOOT_RATE, PROF_SCALED);
+  return configure(BOOT_RATE, PROF_DS);
 }
 
 bool stepsOn() { return engineOn; }
@@ -174,7 +185,7 @@ uint32_t stepsChipCount() {
 
 bool stepsSetRate(const char *rate, const char *profile) {
   if (!imuAddr) return false;
-  uint8_t r = RATE_COUNT, p = PROF_SCALED;
+  uint8_t r = RATE_COUNT, p = PROF_DS;
   for (uint8_t i = 0; i < RATE_COUNT; i++)
     if (!strcmp(rate, RATES[i].name)) r = i;
   if (r == RATE_COUNT) return false;
