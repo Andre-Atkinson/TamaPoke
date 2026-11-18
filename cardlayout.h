@@ -61,6 +61,12 @@ inline int fitRowY(uint8_t stat) { return FIT_ROW_Y + stat * FIT_ROW_H; }
 #define FIT_LINE_H 14  // a size-2 line's height
 inline int fitBtnY(bool walks) { return walks ? FIT_BTN_Y_WALK : FIT_BTN_Y; }
 inline int fitBtnH(bool walks) { return walks ? FIT_BTN_H_WALK : FIT_BTN_H; }
+// Where the label's top goes: the original 1.75 keeps the 311 it always had (11 under the button), the
+// 1.75C's sits in the middle of its button.
+#define FIT_BTN_TEXT_DY 11
+inline int fitBtnTextY(bool walks) {
+  return walks ? FIT_BTN_Y_WALK + (FIT_BTN_H_WALK - FIT_LINE_H) / 2 : FIT_BTN_Y + FIT_BTN_TEXT_DY;
+}
 inline bool fitBtnHit(int x, int y, bool walks) {
   return y >= fitBtnY(walks) && y <= fitBtnY(walks) + fitBtnH(walks) && x >= FIT_BTN_X && x <= FIT_BTN_X + FIT_BTN_W;
 }

@@ -83,7 +83,7 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
   the diary's rows), `LS`, `SDINFO`, `LOCK?`,
   `STEPS?` (prints `STEPS on chip today day bank earned counting`: the step engine, the
   chip's count, today's counted steps, their day, the walk treats banked and earned
-  today, and whether counting is open now; on the original 1.75 `on=0 chip=-`),
+  today, and whether counting is open now; with no step counter, the original 1.75 or a sensor that did not start, `on=0 chip=-` and `counting=0`),
   `TRAINTRACE?`. `LOCK?` and `TRAINTRACE` exist on the 1.75C only. These
   scripts send state-changing commands: `tools/board.py` (`clock` sends
   `TIME <epoch>`, `save` sends `SAVE`, `cmd` sends anything; `status` and

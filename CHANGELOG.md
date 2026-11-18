@@ -18,9 +18,11 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
   counted 102 on a 100-step walk), instead of being powered down. Off the charger and outside
   bedtime, the Fitness page shows **Steps today** and the **walk treats** banked: one treat for
   every 250 steps, at most 40 earned a day, 40 in the bank, kept overnight. Off the charger,
-  when a need falls under 40 the creature spends a treat to bring it back to 50 (food,
-  hygiene, energy, joy, one a minute, awake only), so a board in a bag on a desk still gets
-  help. Every 1,000 steps adds a stamina training point (at most 5 a day), the **walking
+  when a need falls under 40 the creature spends a treat to bring it up to 80 (food,
+  hygiene, energy, joy, one a minute, awake only; a bath treat clears the poops too), so a board
+  in a bag on a desk still gets help for a while: about 5 to 6 minutes a treat, so a 3,000-step
+  day (12 treats) holds the needs up for about an hour and a quarter, and a full bank of 40
+  for about three and a half hours. Every 1,000 steps adds a stamina training point (at most 5 a day), the **walking
   ribbon** comes at 5,000 steps in a day, and after a good walk the creature says "That was a
   lovely walk!". Steps taken on the charger or at bedtime are not counted. The serial `STEPS?`
   shows it. The original 1.75 has no step counter and is unchanged. The simulator has a

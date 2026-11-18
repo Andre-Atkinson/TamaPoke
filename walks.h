@@ -8,7 +8,7 @@
 //    closed the steps are discarded, not saved up.
 //  - 1 walk treat per WALK_STEPS_PER_TREAT counted steps, at most WALK_TREATS_DAY_MAX earned a
 //    day; the bank holds WALK_BANK_MAX and keeps overnight. The pet spends them off the
-//    charger (Pet::tick): a need under SELFCARE_BELOW goes back to SELFCARE_LEVEL.
+//    charger (Pet::tick): a need under SELFCARE_BELOW goes up to WALK_TREAT_LEVEL (80).
 //  - Stamina training: +1 per WALK_STEPS_PER_STAMINA counted steps, at most
 //    WALK_STAMINA_DAY_MAX a day.
 //  - The walking ribbon (MED_WALK): WALK_RIBBON_STEPS counted steps in one day.

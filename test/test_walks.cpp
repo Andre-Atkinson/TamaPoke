@@ -3,7 +3,7 @@
 // Pet::spendTreat). The owner's decisions of 2026-11-18: counting only awake and off the charger
 // (so not at bedtime either); 1 treat per 250 steps, at most 40 earned a day and 40 banked; +1
 // stamina per 1,000 steps, at most 5 a day; the walking ribbon at 5,000 steps in a day; a treat
-// lifts the first need under 40 to 50, off the charger, one a minute; a bubble after a walk of
+// lifts the first need under 40 to 80, off the charger, one a minute; a bubble after a walk of
 // 1,000 steps and 10 quiet minutes.
 #include "framework.h"
 #include "shim/Arduino.h"
@@ -572,6 +572,19 @@ TEST(petwalk, on_the_charger_nothing_counts_and_the_steps_are_not_saved_up) {
   done();
 }
 
+// STEPS? prints walkCounting(): with no step counter (the original 1.75, or a 1.75C whose sensor
+// did not start) nothing is counted, so it must not say counting is open.
+TEST(petwalk, with_no_step_source_counting_is_not_open) {
+  Pet p;
+  walker(p);
+  CHECK(p.walkCounting());
+  p.stepSource = nullptr;
+  CHECK(!p.walkCounting());
+  minute(p, 250);
+  CHECK_EQ(p.walk.steps, 0u);
+  done();
+}
+
 TEST(petwalk, a_pmu_that_never_answered_counts_as_unplugged) {  // as self-care (usbPresent() reads true)
   Pet p;
   walker(p);
@@ -789,16 +802,67 @@ TEST(petwalk, every_nvs_key_is_range_checked_on_load) {
 }
 
 // ---- spending (Pet::spendTreat, tick)
-TEST(treat, a_need_under_40_goes_back_to_50_and_costs_one_treat) {
+TEST(treat, a_need_under_40_goes_up_to_80_and_costs_one_treat) {
   Pet p;
   walker(p);
   p.walk.bank = 3;
   setNeeds(p, 41, 80, 80, 100);  // food 41 -> 39 this minute
   minuteAsIs(p);
-  CHECK_EQ(p.fullness, (uint8_t)SELFCARE_LEVEL);
+  CHECK_EQ(p.fullness, (uint8_t)80);  // the level itself, not the macro: 80 (the owner, 2026-11-18)
   CHECK_EQ(p.joy, (uint8_t)79);  // the others only drained
   CHECK_EQ(p.walk.bank, (uint8_t)2);
   CHECK(p.savePending());
+  done();
+}
+
+// The poops go with a bath (liftNeed, the same as self-care's and the player's clean()): a
+// treat spent on hygiene leaves none on the ground, a treat spent on anything else leaves them.
+// Not the player's care either way: no streak, bond or heart (is_not_the_players_care below).
+TEST(treat, a_treat_spent_on_hygiene_clears_the_poops_and_the_other_needs_leave_them) {
+  {
+    Pet p;
+    walker(p);
+    p.walk.bank = 2;
+    setNeeds(p, 80, 80, 80, 41);  // hygiene 41 -> 36 with a poop on the ground: the first need under 40
+    p.poops = 1;
+    minuteAsIs(p);
+    CHECK_EQ(p.hygiene, (uint8_t)80);
+    CHECK_EQ(p.poops, (uint8_t)0);
+    CHECK_EQ(p.walk.bank, (uint8_t)1);
+    CHECK(p.savePending());
+    CHECK(!p.showHeart());  // a bath that wakes nothing: no heart, no care
+  }
+  for (int need = 0; need < 3; need++) {  // food, energy, joy
+    Pet p;
+    walker(p);
+    p.walk.bank = 2;
+    p.poops = 2;
+    uint8_t f = 80, j = 80, e = 80;
+    if (need == 0) f = 20;
+    if (need == 1) e = 20;
+    if (need == 2) j = 20;
+    setNeeds(p, f, j, e, 100);  // hygiene stays well over 40 after the drain
+    minuteAsIs(p);
+    CHECK_MSG(p.walk.bank == 1, "the treat was spent, need " + std::to_string(need));
+    CHECK_MSG(p.poops == 2, "the poops stay, need " + std::to_string(need));
+  }
+  done();
+}
+
+// Self-care on the charger is the same job at its own level: 50, and its bath clears the poops
+// as it always has (hygiene lifted by it, not by a treat).
+TEST(treat, self_care_still_lifts_to_50_and_its_bath_still_clears_the_poops) {
+  Pet p;
+  walker(p);
+  p.walk.bank = 3;
+  gEnv.usb = true;
+  gEnv.idle = LONG_IDLE_MS;
+  setNeeds(p, 80, 80, 80, 41);
+  p.poops = 1;
+  minuteAsIs(p);
+  CHECK_EQ(p.hygiene, (uint8_t)50);
+  CHECK_EQ(p.poops, (uint8_t)0);
+  CHECK_EQ(p.walk.bank, (uint8_t)3);  // no treat spent
   done();
 }
 
@@ -830,18 +894,18 @@ TEST(treat, food_then_hygiene_then_energy_then_joy_one_a_minute) {
   setNeeds(p, 20, 20, 20, 20);
   p.poops = 2;
   minuteAsIs(p);
-  CHECK_EQ(p.fullness, (uint8_t)50);
+  CHECK_EQ(p.fullness, (uint8_t)80);
   CHECK(p.hygiene < 40 && p.energy < 40 && p.joy < 40);
   CHECK_EQ(p.walk.bank, (uint8_t)9);
   minuteAsIs(p);
-  CHECK_EQ(p.hygiene, (uint8_t)50);
+  CHECK_EQ(p.hygiene, (uint8_t)80);
   CHECK_EQ(p.poops, (uint8_t)0);  // a bath clears them, as self-care's
   CHECK(p.energy < 40 && p.joy < 40);
   minuteAsIs(p);
-  CHECK_EQ(p.energy, (uint8_t)50);
+  CHECK_EQ(p.energy, (uint8_t)80);
   CHECK(p.joy < 40);
   minuteAsIs(p);
-  CHECK_EQ(p.joy, (uint8_t)50);
+  CHECK_EQ(p.joy, (uint8_t)80);
   CHECK_EQ(p.walk.bank, (uint8_t)6);
   done();
 }
@@ -859,7 +923,7 @@ TEST(treat, not_on_the_charger_where_self_care_does_the_job) {
   gEnv.idle = LONG_IDLE_MS;  // untouched: self-care lifts it, the bank still isn't touched
   setNeeds(p, 20, 80, 80, 100);
   minuteAsIs(p);
-  CHECK_EQ(p.fullness, (uint8_t)SELFCARE_LEVEL);
+  CHECK_EQ(p.fullness, (uint8_t)50);  // self-care keeps its 50: a treat is the only thing that goes to 80
   CHECK_EQ(p.walk.bank, (uint8_t)5);
   CHECK_MSG(!p.treatHeld(), "self-care is not a treat");
   done();
@@ -874,7 +938,7 @@ TEST(treat, a_pmu_that_never_answered_counts_as_unplugged_so_a_treat_is_spent) {
   gEnv.idle = LONG_IDLE_MS;
   setNeeds(p, 20, 80, 80, 100);
   minuteAsIs(p);
-  CHECK_EQ(p.fullness, (uint8_t)SELFCARE_LEVEL);
+  CHECK_EQ(p.fullness, (uint8_t)WALK_TREAT_LEVEL);
   CHECK_EQ(p.walk.bank, (uint8_t)1);
   done();
 }
@@ -890,7 +954,7 @@ TEST(treat, never_asleep_and_it_waits_for_the_morning) {
   CHECK_EQ(p.walk.bank, (uint8_t)4);
   CHECK(p.autoWake());
   minuteAsIs(p);
-  CHECK_EQ(p.fullness, (uint8_t)SELFCARE_LEVEL);
+  CHECK_EQ(p.fullness, (uint8_t)WALK_TREAT_LEVEL);
   CHECK_EQ(p.walk.bank, (uint8_t)3);
   done();
 }
@@ -936,7 +1000,7 @@ TEST(treat, never_in_the_powered_off_catch_up) {
   CHECK_EQ(p.fullness, (uint8_t)15);      // the catch-up's floor, untouched
   CHECK_EQ(p.walk.bank, (uint8_t)4);
   minuteAsIs(p);                          // the first live minute spends one
-  CHECK_EQ(p.fullness, (uint8_t)SELFCARE_LEVEL);
+  CHECK_EQ(p.fullness, (uint8_t)WALK_TREAT_LEVEL);
   CHECK_EQ(p.walk.bank, (uint8_t)3);
   done();
 }
@@ -948,7 +1012,7 @@ TEST(treat, a_need_it_lifts_this_minute_is_not_a_slip_up) {
   p.walk.bank = 2;
   setNeeds(p, 11, 80, 80, 100);  // food 11 -> 9 this minute: a slip-up without a treat
   minuteAsIs(p);
-  CHECK_EQ(p.fullness, (uint8_t)SELFCARE_LEVEL);
+  CHECK_EQ(p.fullness, (uint8_t)WALK_TREAT_LEVEL);
   CHECK_MSG(p.careMistakes == 2, "no new slip-up");
   // control: with the bank empty it is one
   Pet q;
@@ -970,7 +1034,7 @@ TEST(treat, is_not_the_players_care) {
   uint16_t medals = p.medals;
   setNeeds(p, 20, 80, 80, 100);
   minuteAsIs(p);
-  CHECK_EQ(p.fullness, (uint8_t)SELFCARE_LEVEL);
+  CHECK_EQ(p.fullness, (uint8_t)WALK_TREAT_LEVEL);
   CHECK_EQ(p.bond, (uint8_t)50);
   CHECK_EQ(p.streak, streak);
   CHECK_EQ(p.lastCareDay, care);

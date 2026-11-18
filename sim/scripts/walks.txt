@@ -99,14 +99,14 @@ steps 300
 wait 70s
 serial STEPS?
 wait 1s
-expect STEPS on=0 chip=- today=0 day=0 bank=0 earned=0 counting=1
+expect STEPS on=0 chip=- today=0 day=0 bank=0 earned=0 counting=0
 expect-not walk: +
 board both
 
 # ---- a walk of 1,000 steps and 10 quiet minutes: the pet says so when it has the screen to itself
 board 175c
 wait 12m
-expect walk treat: *->50
+expect walk treat: *->80
 press pwr
 wait 5s
 expect say walk

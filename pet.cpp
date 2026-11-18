@@ -222,7 +222,7 @@ void Pet::tick() {
   // both paces: relaxed only halves the drain.
   if (selfCareOn) selfCare();
   // Walk treats (#117), the same place for the same reasons: after the drain, so a lift shows
-  // as 50, and before the slip-up and run-away checks, so a need it lifts is no slip-up; and
+  // as 80, and before the slip-up and run-away checks, so a need it lifts is no slip-up; and
   // the returns above and syncClock() keep it off while asleep, as an egg, in a ceremony and
   // in the powered-off catch-up. Off the charger only: on it, self-care does this job.
   if (!usbIn && !selfCareOn) spendTreat();
@@ -355,6 +355,7 @@ void Pet::setCharger(bool pmuOk, bool usb, uint32_t idleMs, bool clockSet) {
 // (bedPreset) read on the clock's local minute, and it only exists while the clock is set and
 // not stale (the preset "off" has no window at all).
 bool Pet::walkCounting() const {
+  if (!stepSource) return false;  // no step counter (the original 1.75, or the sensor did not start): nothing is counted
   if (usbIn) return false;
   if (clockSet_ && lastSeenEpoch && isBedtime(bedPreset, bedMinuteOfDay(lastSeenEpoch))) return false;
   return true;
@@ -386,43 +387,47 @@ void Pet::walkMinute() {
 // and no heart or eating state either, because a visible event wakes the screen and
 // restarts the idle time that keeps self-care on. No save() of its own: tick() marks
 // the periodic one.
-void Pet::selfCare() { liftNeed("self-care"); }
+void Pet::selfCare() { liftNeed("self-care", SELFCARE_LEVEL); }
 
-bool Pet::liftNeed(const char *why) {
+// Shared by self-care (SELFCARE_LEVEL) and the walk treats (WALK_TREAT_LEVEL): the first need
+// under SELFCARE_BELOW goes to `level`, and a lifted hygiene takes the poops away with it.
+bool Pet::liftNeed(const char *why, uint8_t level) {
   const char *what;
   uint8_t before;
   if (fullness < SELFCARE_BELOW) {
     what = "food";
     before = fullness;
-    fullness = SELFCARE_LEVEL;
+    fullness = level;
   } else if (hygiene < SELFCARE_BELOW) {
     what = "hygiene";
     before = hygiene;
-    hygiene = SELFCARE_LEVEL;
+    hygiene = level;
     poops = 0;
   } else if (energy < SELFCARE_BELOW) {
     what = "energy";
     before = energy;
-    energy = SELFCARE_LEVEL;
+    energy = level;
   } else if (joy < SELFCARE_BELOW) {
     what = "joy";
     before = joy;
-    joy = SELFCARE_LEVEL;
+    joy = level;
   } else {
     return false;
   }
-  Serial.printf("%s: %s %u->%u\n", why, what, (unsigned)before, (unsigned)SELFCARE_LEVEL);
+  Serial.printf("%s: %s %u->%u\n", why, what, (unsigned)before, (unsigned)level);
   return true;
 }
 
 // A banked walk treat (#117) lifts the first need under SELFCARE_BELOW, in self-care's order
-// (liftNeed), at most one a minute (tick() calls this once). Like self-care it is not the
+// (liftNeed), to WALK_TREAT_LEVEL (80, not self-care's 50: the owner's call, 2026-11-18), at
+// most one a minute (tick() calls this once). A treat spent on hygiene clears the poops, as
+// self-care's bath and the player's do. Like self-care it is not the
 // player's care: no streak, bond, medal or heart, and the minutes it holds up don't count as
 // steady care until the player next looks after the pet (treatHeld_, cleared by registerCare).
 // A minute no need is under SELFCARE_BELOW spends nothing.
 void Pet::spendTreat() {
   if (!walk.bank) return;
-  if (!liftNeed("walk treat")) return;
+  if (!liftNeed("walk treat", WALK_TREAT_LEVEL)) return;
   walk.spend();
   treatHeld_ = true;
   pendingSave = true;  // the bank changed: the next quiet moment saves it

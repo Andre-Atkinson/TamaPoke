@@ -652,8 +652,11 @@ the original 1.75 has no step counter, so none of this is there.
   **walk treats** banked.
 - **Walk treats:** one for every 250 counted steps, at most 40 earned a day; the bank holds 40
   and keeps overnight. Off the charger, when a need falls under 40 the creature spends a
-  treat to bring it back to 50, in self-care's order (food, hygiene, energy, joy), at most one
-  a minute, and only awake: a bag on a desk still gets help, hours after the walk. A new creature
+  treat to bring it up to 80, in self-care's order (food, hygiene, energy, joy), at most one
+  a minute, and only awake. A treat spent on hygiene clears the poops, as a bath does, but is
+  not your care (no streak, bond or medal). Each treat holds the needs up for roughly 5 to 6
+  minutes (measured in the simulator at the normal pace): a 3,000-step day, 12 treats, for about
+  an hour and a quarter, and a full bank of 40 for about three and a half hours. A new creature
   starts with none. On the charger, self-care does this job instead.
 - **Stamina:** +1 training point for every 1,000 counted steps, at most 5 a day. Minutes a
   treat held up don't count as steady care until you next look after the creature.
@@ -872,7 +875,8 @@ unsaved= period_min=` line, a CSV header and the rows; `tools/board.py batlog` t
 a CSV file) · `BATLOG CLEAR` (starts a new battery diary; the pet is not touched) ·
 `STEPS?` (read-only, the 1.75C's step counter: `STEPS on= chip= today= day= bank= earned=
 counting=`: the engine, the chip's count, today's counted steps, their day, the walk treats banked and
-earned today, and whether counting is open; the original 1.75 prints `on=0 chip=-`) ·
+earned today, and whether counting is open; with no step counter (the original 1.75, or a
+sensor that did not start) it prints `on=0 chip=- ... counting=0`) ·
 `SDINFO` / `LS` / `PUT` (the sprite files: free space, list, send one; `tools/send_sd.py`
 sends sprite files with them). `tools/board.py`
 sends these from a script (clock sync, status); see `PORTING.md`.

@@ -626,7 +626,7 @@ static void renderCardStats() {
   gfx->fillRoundRect(FIT_BTN_X, by, FIT_BTN_W, bh, 12, UI_BAR_BAD);
   gfx->setTextColor(UI_BG_DAY);
   setSize(2);
-  setCur(centerX(T(S_TRAIN), 2), by + (bh - FIT_LINE_H) / 2);
+  setCur(centerX(T(S_TRAIN), 2), fitBtnTextY(WALKS));
   printT(T(S_TRAIN));
 }
 

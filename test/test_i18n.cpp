@@ -290,7 +290,7 @@ TEST(cardlayout, the_medal_tiles_sit_on_the_disc_without_overlapping) {
     }
     CHECK(medalTile(MEDAL_CARE, walks).y >= medalTile(MEDAL_CARE - 1, walks).y + medalTileH(walks));
     CHECK(recordsY(walks) >= medalTile(n - 1, walks).y + medalTileH(walks));
-    CHECK(recordsY(walks) + 40 < 369 - 5);  // the page dots' top
+    CHECK(recordsY(walks) + 40 <= 369 - 7);  // the dots' top row is 369 (fillCircle(x, 374, 5)): the records end at 361 on the 1.75C, 7 clear rows between
   }
   // the original page is as it was: the ribbon row at RIBBON_ROW_Y, three tiles
   CHECK_EQ((int)medalTile(MEDAL_CARE, false).y, (int)RIBBON_ROW_Y);
@@ -374,6 +374,8 @@ TEST(i18n, the_fitness_walks_lines_fit) {
   CHECK(fitBtnHit(233, 320, true) && fitBtnHit(233, 320, false));
   CHECK(!fitBtnHit(233, FIT_BTN_Y_WALK - 1, true) && !fitBtnHit(233, FIT_BTN_Y_WALK + FIT_BTN_H_WALK + 1, true));
   CHECK(fitBtnHit(233, FIT_BTN_Y, false) && fitBtnHit(233, FIT_BTN_Y + FIT_BTN_H, false));
+  CHECK_EQ((int)fitBtnTextY(false), 311);  // the original 1.75 draws its label where main always did
+  CHECK_EQ((int)fitBtnTextY(true), FIT_BTN_Y_WALK + (FIT_BTN_H_WALK - FIT_LINE_H) / 2);  // centred on the 1.75C's button
   CHECK(!fitBtnHit(FIT_BTN_X - 1, 330, true) && !fitBtnHit(FIT_BTN_X + FIT_BTN_W + 1, 330, true));
   // the button is as wide on the disc at its lowest edge as drawn
   CHECK(2 * cardHalfWidth(FIT_BTN_Y_WALK, FIT_BTN_Y_WALK + FIT_BTN_H_WALK, 0, 1000) >= FIT_BTN_W);

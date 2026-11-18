@@ -28,7 +28,7 @@ steps 300
 wait 70s
 serial STEPS?
 wait 1s
-expect STEPS on=0 chip=- today=0 day=0 bank=0 earned=0 counting=1
+expect STEPS on=0 chip=- today=0 day=0 bank=0 earned=0 counting=0
 board both
 
 # the player sets the clock (2026-11-13 10:00, day 20770): its day is adopted with the 300 steps

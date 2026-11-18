@@ -29,6 +29,9 @@
 #define SELFCARE_IDLE_MS (10UL * 60 * 1000)
 #define SELFCARE_BELOW 40
 #define SELFCARE_LEVEL 50
+// A walk treat (#117) lifts a need further than self-care does (owner, 2026-11-18): a treat is
+// earned on foot, and a bag on a desk should not fall under 40 again within minutes.
+#define WALK_TREAT_LEVEL 80
 // Over this weight the status line says "chubby" (statusMsg) and the idle planner (#22) has
 // the pet rest more and play less. Weight is 0-100.
 #define PET_CHUBBY_WEIGHT 60
@@ -442,7 +445,7 @@ public:
   // look while counting is open (walkCounting(): off USB and not bedtime), adds the stamina
   // they earn (WALK_STAMINA_DAY_MAX a day) and banks treats (WALK_STEPS_PER_TREAT a step
   // count, WALK_TREATS_DAY_MAX a day). A treat is spent in tick(), off the charger, on the
-  // first need under SELFCARE_BELOW, which goes to SELFCARE_LEVEL (spendTreat()).
+  // first need under SELFCARE_BELOW, which goes to WALK_TREAT_LEVEL (spendTreat()).
   WalkLedger walk;
   bool (*stepSource)(uint32_t *chip) = nullptr;
   void walkStart();
@@ -651,7 +654,7 @@ private:
   // per minute asleep: the nature's rate, and more after warm milk (#13)
   uint8_t sleepEnergy() const { return (nature == NAT_LAZY ? NAT_SLEEP_ENERGY : 6) + (milked ? MILK_SLEEP_ENERGY : 0); }
   void selfCare();   // one need back up to half while charging (#24), from tick()
-  bool liftNeed(const char *why);  // the first need under SELFCARE_BELOW goes to SELFCARE_LEVEL; false if none is
+  bool liftNeed(const char *why, uint8_t level);  // the first need under SELFCARE_BELOW goes to `level` (a bath clears the poops); false if none is
   void spendTreat();  // a walk treat (#117), from tick(): off USB, one a minute, lifts a need with liftNeed()
   void walkMinute();  // the step counter's minute (#117), from update(), before tick()
   void sickTick(bool awake);  // sickness's minute (#15): falls sick, slips up, gets better
