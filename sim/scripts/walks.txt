@@ -55,6 +55,14 @@ board both
 swipe up
 swipe left
 shot walks-fitness-day
+# the TRAIN button moved down on the 1.75C (cardlayout.h, fitBtnY): a tap on its new lower edge opens the choice
+board 175c
+tap 233 348
+wait 500ms
+shot walks-train-pick
+tap 233 420
+wait 500ms
+board both
 swipe left
 shot walks-medals-day
 tap 233 420
@@ -98,20 +106,26 @@ board both
 # ---- a walk of 1,000 steps and 10 quiet minutes: the pet says so when it has the screen to itself
 board 175c
 wait 12m
+expect walk treat: *->50
 press pwr
 wait 5s
 expect say walk
 shot walks-bubble
+# ...and says it once: the next bubble is another line
+wait 130s
+press pwr
+wait 8s
+expect say *
+expect-not say walk
 board both
 
 
-# ---- off the charger the first need under 40 goes back to 50, for a treat from the bank
+# ---- the treats still banked go the same way as the needs fall: all four spent, none earned back
 board 175c
 wait 25m
-expect walk treat: *->50
 serial STEPS?
 wait 1s
-expect STEPS on=1 chip=6160 today=1210 day=* bank=* earned=4 counting=1
+expect STEPS on=1 chip=6160 today=1210 day=* bank=0 earned=4 counting=1
 board both
 
 # ---- the day's cap: 40 treats earned, whatever comes after (10,000 steps)
