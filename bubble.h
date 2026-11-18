@@ -128,7 +128,10 @@ struct BubbleIn {
 // the warm-milk hint when it is due (#13). Otherwise r % 100 picks the kind: 30% a time line
 // when one applies (r % 100 under 30), 20% a line of the pet's nature (30-49), 20% love
 // (80-99), and the rest friendly (30% with a time line, 60% without); r / 100 picks which
-// friendly or nature line. A need repeats while it lasts; any other line is not said twice in
+// friendly or nature line. The berry garden's lines (#115) take p 50-64 of the friendly
+// share while a plant is dry or ripe, 50-79 once it is wilting soon (which then leaves no
+// friendly line, except p 0-29 where no time line applies). A
+// need repeats while it lasts; any other line is not said twice in
 // a row (the hatch line and the milk hint either: then they wait for the next bubble, and
 // are only counted once said).
 inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {

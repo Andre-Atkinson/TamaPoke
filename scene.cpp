@@ -233,7 +233,7 @@ static int sway(uint32_t now, uint32_t period, uint32_t ph, int a) {
 // flowers and the fallen autumn leaves
 // (none in the berry garden's box, x 396..452, y 242..308: #115, garden.h)
 static const int16_t GROUND_SPOTS[10][2] = { { 40, 252 }, { 98, 276 }, { 150, 244 }, { 205, 292 }, { 262, 254 },
-                                             { 318, 282 }, { 372, 246 }, { 346, 300 }, { 70, 298 }, { 382, 280 } };
+                                             { 318, 282 }, { 372, 246 }, { 346, 300 }, { 70, 298 }, { 384, 268 } };
 
 // what lies on the ground with the season: spring flowers, autumn's fallen leaves, winter's
 // snowcaps on the forest's trees and the mountain's peaks (the snow cover and autumn's russet

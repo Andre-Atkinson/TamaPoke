@@ -813,7 +813,7 @@ runaway-ready state) · `WIPE` (factory reset → new game) · `BEEP` (audio tes
 (farewell, run-away or release): `ERR gallery not opened: ...`) · `CAREDAY` ·
 `TIME <epoch>` (sets the clock and the pet's saved time; `<epoch>` is seconds since 1970 in
 digits only, from 2025 to 2099, and anything else, or a time the clock does not take, gets
-`ERR clock not set: ...` and changes nothing) / `RTCSET <epoch>` (the clock only, the same
+`ERR clock not set: ...` and changes nothing) / `RTCSET <epoch>` (the clock only, so it moves the berry garden on by the jump, at most 7 days, unlike `TIME`; the same
 check) · `HEALTH` (uptime + heap for the soak test) ·
 `SAVE` (write pending pet changes now) · `OWNER <name>` (the player's name in the
 speech bubbles; `OWNER` alone clears it) · `OWNER?` (read-only: `owner=<name>`) ·

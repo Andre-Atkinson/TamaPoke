@@ -31,7 +31,7 @@ enum : uint8_t { MOON_LIGHTS = 0, MOON_MILK, MOON_ITEMS };
 #define MENU_RADIUS 14
 // The Food button's centre x (buttons[] in TamaPoke.ino): the hungry pet's spot sits under it
 // (IDLE_SEEK_X, idleplan.h; idlelife.cpp checks it does).
-#define CARE_FOOD_BTN_X 140
+#define CARE_FOOD_BTN_X 140  // test/test_garden.cpp (the_pot_is_clear_of_...) copies it: update it too
 
 inline uint8_t menuItems(uint8_t kind) {
   if (kind == MENU_FOOD) return FOOD_ITEMS;

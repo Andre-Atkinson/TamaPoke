@@ -54,7 +54,8 @@ trading, anything multiplayer. The roadmap is the open GitHub issues labelled
   command needs its own request: `WIPE`, `BYE` and `RUN` (close whatever is
   open over the pet first, paying an open minigame or exercise, as every
   ending does), `HATCH`, `SPEC`, `LVL`, `NICK`, `SHINY`, `CAREDAY`,
-  `ABANDON`, `TIME <epoch>` and `RTCSET <epoch>` (digits only, 2025-2099;
+  `ABANDON`, `TIME <epoch>` and `RTCSET <epoch>` (digits only, 2025-2099; `RTCSET`,
+  unlike `TIME`, moves the berry garden on by the jump, at most 7 days;
   anything else gets `ERR clock not set: ...` and sets nothing), `GAL`
   (`ERR` during an ending), `BEEP`, `TRAINTRACE ON|OFF`, `SAVE` (writes pending pet changes to
   NVS), `OWNER <name>` (writes the player's name to NVS; `OWNER` alone clears
