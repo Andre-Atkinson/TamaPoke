@@ -73,6 +73,13 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "%s %u %s",
     // sickness and medicine (#15)
     "SICKNESS", "On", "Not feeling well...", "Give medicine", "Feeling better!", "Get well to evolve",
+    // accessories (#116)
+    "WARDROBE %d/%d", "Wearing: %s", "Today: %s", "%s: %s",
+    "NONE", "BOW", "FLOWERS", "BOBBLE HAT", "CAP", "TOP HAT", "CROWN", "LAUREL",
+    "SANTA HAT", "WITCH HAT", "BUNNY EARS", "HEART CLIP", "PARTY HAT",
+    "find its berry", "a 7-day streak", "a full bond", "reach level 10", "reach level 25",
+    "reach level 50", "a ribbon or IN SHAPE",
+    "NEW: %s!", "SWIPE UP: WARDROBE",
   },
   // ---------------- PT (European Portuguese, #61) ----------------
   // One form of address throughout: "tu" (toca, desliza, escolhe, ouve, mantem),
@@ -146,6 +153,13 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "%s, %u %s",
     // sickness and medicine (#15)
     "DOEN\200AS", "Ligado", "Est\240 adoentado...", "Dar rem\202dio", "J\240 est\240 melhor!", "Tem de melhorar primeiro",
+    // accessories (#116)
+    "ROUPEIRO %d/%d", "A usar: %s", "Hoje: %s", "%s: %s",
+    "NADA", "LACINHO", "FLORES", "GORRO", "BON\220", "CARTOLA", "COROA", "LOUROS",
+    "GORRO DE NATAL", "CHAP\220U DE BRUXA", "ORELHAS DE COELHO", "GANCHO DE CORA\200\303O", "CHAP\220U DE FESTA",
+    "achar a baga", "7 dias seguidos", "la\207o m\240ximo", "chegar ao n\241vel 10", "chegar ao n\241vel 25",
+    "chegar ao n\241vel 50", "uma fita ou EM FORMA",
+    "NOVO: %s!", "DESLIZA P/ CIMA: ROUPEIRO",
   },
 };
 
@@ -193,6 +207,11 @@ static_assert(S_NAT_LAZY - S_NAT_EASYGOING == NAT_LAZY - NAT_EASYGOING && NAT_LA
 const char *natureName(uint8_t n) { return T((StrId)(S_NAT_EASYGOING + (n < NAT_COUNT ? n : (uint8_t)NAT_EASYGOING))); }
 const char *medalName(int i)  { return MED_NAME[gLang][i]; }
 const char *medalDesc(int i)  { return MED_DSC[gLang][i]; }
+static_assert(S_ACC_PARTY - S_ACC_NONE == ACC_PARTY && ACC_PARTY + 1 == ACC_COUNT &&
+                  S_ACC_EARN_LAUREL - S_ACC_EARN_BOW == ACC_LAUREL - ACC_BOW,
+              "the accessories' names and what earns them follow ACC_* (accessory.h)");
+const char *accName(uint8_t id) { return T((StrId)(S_ACC_NONE + (id < ACC_COUNT ? id : (uint8_t)ACC_NONE))); }
+const char *accEarnText(uint8_t id) { return accIsEarned(id) ? T((StrId)(S_ACC_EARN_BOW + (id - ACC_BOW))) : ""; }
 
 void bannerLines(int banner, uint16_t streakDays, const char **l1, const char **l2) {
   if (banner == BANNER_STREAK) {
@@ -200,6 +219,11 @@ void bannerLines(int banner, uint16_t streakDays, const char **l1, const char **
     snprintf(buf, sizeof(buf), T(S_STREAK_DAYS_FMT), streakDays);
     *l1 = T(S_GREAT);
     *l2 = buf;
+  } else if (bannerIsAcc((int8_t)banner)) {  // an accessory earned (#116)
+    static char acc[32];  // TestBuffersDeTexto (test/test_tools.py) checks "NOVO: %s!" fits
+    snprintf(acc, sizeof(acc), T(S_ACC_NEW_FMT), accName((uint8_t)(banner - BANNER_ACC)));
+    *l1 = acc;
+    *l2 = T(S_ACC_SWIPE);
   } else {
     *l1 = T(S_MEDAL_BANNER);
     *l2 = medalName(banner);

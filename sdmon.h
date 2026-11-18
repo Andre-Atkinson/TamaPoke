@@ -29,6 +29,10 @@ struct PmdAct {
   uint8_t top = 0;   // primera fila del frame 0 con contenido (h si esta vacio): lo alto de la cabeza (#73)
   uint16_t ms[24];
   const uint8_t *data = nullptr;  // frames * w * h en el blob
+  // Where an accessory sits on each frame (#116, accFindHead() in accessory.h, with accfix.h's
+  // skip): 3 bytes a frame, the head's top row, then the first column and the width of the
+  // stretch under it (width 0: none). nullptr when PSRAM had no room: then no accessory shows.
+  const uint8_t *head = nullptr;
 };
 
 // The scale drawPmdActM() draws an action whose canvas is actH tall at, for a sprite whose
@@ -50,11 +54,16 @@ struct PmdMon {
   uint16_t palCount = 0;
   uint16_t pal[256];
   uint8_t *blob = nullptr;
+  uint8_t *heads = nullptr;  // every action's PmdAct::head, one block (#116)
+  uint8_t dex = 0;           // the species loaded (accfix.h's rows are per species)
   PmdAct acts[PMD_NACTS];
 
   bool load(uint8_t dexNum, bool shiny = false);
   void unload();
   bool has(uint8_t a) const { return loaded && a < PMD_NACTS && acts[a].frames > 0; }
+
+private:
+  void findHeads(uint8_t dexNum);
 };
 
 // miniaturas de la galeria (thumbs.bin entero en PSRAM)

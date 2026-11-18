@@ -1371,13 +1371,16 @@ static void fourMedalsOnOneTick(Pet &p) {
 }
 
 // #82: an older pet can gain several medals on one minute tick. Each gets a banner of its own,
-// for its whole time, lowest bit first, and the last one ends like a single banner did.
+// for its whole time, lowest bit first, and the last one ends like a single banner did. #116:
+// an accessory a medal earned comes straight after that medal's (the Cap after level 10, the
+// Laurel after IN SHAPE, the first of the three that earn it).
 TEST(banners, several_medals_on_one_tick_each_get_their_own_banner) {
   Pet p;
   fourMedalsOnOneTick(p);
   CHECK_EQ(p.medals, (uint16_t)(MED_LV10 | MED_FIT | MED_STA | MED_SPD));
-  for (uint16_t m : { MED_LV10, MED_FIT, MED_STA, MED_SPD })
-    expectBanner(p, bitOf(m), MEDAL_BANNER_MS, "medal bit " + std::to_string(bitOf(m)));
+  const int8_t want[] = { bitOf(MED_LV10), (int8_t)(BANNER_ACC + ACC_CAP), bitOf(MED_FIT),
+                          (int8_t)(BANNER_ACC + ACC_LAUREL), bitOf(MED_STA), bitOf(MED_SPD) };
+  for (int8_t b : want) expectBanner(p, b, MEDAL_BANNER_MS, "banner " + std::to_string(b));
   CHECK_MSG(p.bannerShown() == BANNER_NONE, "nothing after the last");
 }
 
@@ -1395,6 +1398,7 @@ TEST(banners, a_streak_milestone_shows_first_then_the_medal_it_came_with) {
   CHECK(p.hasMedal(MED_STREAK7));
   expectBanner(p, BANNER_STREAK, MILESTONE_BANNER_MS, "the milestone");
   expectBanner(p, bitOf(MED_STREAK7), MEDAL_BANNER_MS, "then its medal");
+  expectBanner(p, BANNER_ACC + ACC_FLOWERS, MEDAL_BANNER_MS, "then the Flowers it earned (#116)");
   CHECK_MSG(p.bannerShown() == BANNER_NONE, "nothing after it");
 }
 
@@ -1537,6 +1541,8 @@ TEST(banners, an_ending_clears_them) {
 TEST(banners, an_ended_banner_stays_gone_after_25_days_of_uptime) {
   Pet p;
   makePet(p, 4);
+  p.medals |= MED_STA;  // the Laurel already earned (#116): the speed ribbon is the only banner
+  p.trDef = RIBBON_STA;
   p.trSpe = RIBBON_SPD;
   advance(p, 1);
   CHECK(p.showMedal());
@@ -4332,6 +4338,7 @@ TEST(exercise, a_banner_under_the_screen_waits_for_it_to_close) {
   screen.update(false, p);  // the creature's screen is back
   expectBanner(p, BANNER_STREAK, MILESTONE_BANNER_MS, "all of the milestone's time on the creature's screen");
   expectBanner(p, bitOf(MED_STREAK7), MEDAL_BANNER_MS, "then all of the medal's");
+  expectBanner(p, BANNER_ACC + ACC_FLOWERS, MEDAL_BANNER_MS, "then the Flowers it earned (#116)");
   CHECK(p.bannerShown() == BANNER_NONE);
 }
 

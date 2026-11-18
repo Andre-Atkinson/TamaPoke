@@ -1,6 +1,8 @@
 // The main screen's scene and pet drawing (scene.h). Moved out of TamaPoke.ino (#41).
 #include <Arduino.h>
 #include "app.h"
+#include "accessory.h"  // #116
+#include "accfix.h"
 #include "attention.h"
 #include "blit.h"
 #include "bubble.h"
@@ -130,6 +132,16 @@ bool sceneStarsOut() { return wxStarsOut(sceneWeather()); }
 HolidayToday holidayNow() {
   if (pet.ceremony) return HolidayToday();
   return holidayAt(sceneClock(), birthday());
+}
+
+// The hat today's special day puts on the pet (#116, accForDay): none without a trusted clock
+uint8_t accDayHat() {
+  HolidayToday t = holidayNow();
+  return accForDay(t.day, t.birthday);
+}
+uint32_t accToday() {
+  uint32_t e = sceneClock();
+  return e ? e / 86400 : 0;
 }
 
 // The place for this frame: a new day's place (or a new pet's home) is taken up only while
@@ -1065,10 +1077,12 @@ static void drawEvolveFX(uint32_t now) {
 // PMD path the action and hop it drew (its height comes from PmdAct::top, read only when
 // asked); on the others the sprite's top edge. Nothing drawn (evolving, no sprite): top 0,
 // which keeps the bubbles at their highest, under the status line.
+// accTop: the top of the accessory drawn on the head (#116), on the action's first frame like
+// the head's, so the bubbles stay still as the pet breathes; 0 when none was drawn.
 static struct {
   bool pmd;
   uint8_t act;
-  int16_t dy, top;
+  int16_t dy, top, accTop;
 } headNow;
 
 void drawPet() {
@@ -1239,7 +1253,9 @@ static int pmdHeight(uint8_t actId, uint8_t maxS) {
 }
 
 int petHeadTop() {
-  return headNow.pmd ? PET_GROUND + headNow.dy - pmdHeight(headNow.act, 5) : headNow.top;
+  int top = headNow.pmd ? PET_GROUND + headNow.dy - pmdHeight(headNow.act, 5) : headNow.top;
+  if (headNow.accTop > 0 && headNow.accTop < top) top = headNow.accTop;  // over its accessory (#116)
+  return top;
 }
 
 // A medal's or a streak's banner (drawCelebration, y 150-246) covers the place of the buttons
@@ -1263,16 +1279,67 @@ static void blitPmdFrame(const PmdMon &m, const PmdAct &a, uint8_t fi, int x0, i
             [&](int c0, int len, int k) { gfx->fillRect(x0 + c0 * s, y0 + r * s, len * s, s, sil ? INK_K : m.pal[k]); });
   }
 }
-// dibuja una accion anclada por la base (centro-x, suelo) y devuelve su escala
+// Where drawPmdActM() draws action a of m: the frame at time t, its scale, and its canvas's top
+// left. Anclado por los pies (a.base), no por el alto del lienzo: asi las acciones con
+// padding distinto (Hurt, Eat...) quedan todas a la misma altura de suelo.
+struct PmdPlace {
+  uint8_t fi, s;
+  int x0, y0;
+};
+static PmdPlace pmdPlace(const PmdMon &m, const PmdAct &a, int cx, int groundY, uint32_t t, bool loop, uint8_t maxS) {
+  PmdPlace p;
+  p.s = pmdScale(m, a, maxS);
+  p.fi = pmdFrameAt(a, t, loop);
+  p.x0 = cx - a.w * p.s / 2;
+  p.y0 = groundY - (a.base ? a.base : a.h) * p.s;
+  return p;
+}
 // dibuja una accion de un PmdMon concreto (m); drawPmdAct usa el global pmd
 void drawPmdActM(PmdMon &m, uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool sil, uint8_t maxS) {
   const PmdAct &a = m.acts[actId];
   if (!a.frames) return;
-  uint8_t s = pmdScale(m, a, maxS);
-  uint8_t fi = pmdFrameAt(a, t, loop);
-  // anclar por los pies (a.base), no por el alto del lienzo: asi las acciones
-  // con padding distinto (Hurt, Eat...) quedan todas a la misma altura de suelo
-  blitPmdFrame(m, a, fi, cx - a.w * s / 2, groundY - (a.base ? a.base : a.h) * s, s, sil);
+  PmdPlace p = pmdPlace(m, a, cx, groundY, t, loop, maxS);
+  blitPmdFrame(m, a, p.fi, p.x0, p.y0, p.s, sil);
+}
+
+// ---------- accessories (#116, accessory.h) ----------
+void drawAccArt(uint8_t id, int x, int y, int s, bool sil, uint16_t silCol) {
+  if (id == ACC_NONE || id >= ACC_COUNT) return;
+  const AccArt &a = ACC_ART[id];
+  for (int r = 0; r < a.h; r++) {
+    const char *row = a.rows[r];
+    forRuns(a.w, [&](int c) { return charKey(row[c], sil); },
+            [&](int c0, int len, int k) { gfx->fillRect(x + c0 * s, y + r * s, len * s, s, sil ? silCol : accColor((char)k)); });
+  }
+}
+
+// Where accessory id goes on frame fi of action actId of m, in sprite pixels of the frame's
+// canvas: the head the sprite's load found on that frame (PmdAct::head), with the species'
+// accfix.h nudge (dx turned round walking right). False: none on that frame (no head found,
+// accfix.h hides it in that pose, or no room was left in PSRAM for the heads).
+static bool accSpot(const PmdMon &m, uint8_t actId, uint8_t fi, uint8_t id, int &col, int &row) {
+  if (id == ACC_NONE || id >= ACC_COUNT || actId >= PMD_NACTS) return false;
+  const PmdAct &a = m.acts[actId];
+  if (!a.head || fi >= a.frames) return false;
+  const uint8_t *h = a.head + fi * 3;
+  if (!h[2]) return false;
+  bool mirrored;
+  const AccFix *fix = accFixFor(m.dex, actId, mirrored);
+  if (fix && fix->hide) return false;
+  AccHead hd;
+  hd.crown = h[0];
+  hd.x0 = h[1];
+  hd.w = h[2];
+  int dx = fix ? (mirrored ? -fix->dx : fix->dx) : 0, dy = fix ? fix->dy : 0;
+  accPlace(hd, ACC_ART[id], dx, dy, col, row);
+  return true;
+}
+
+bool drawAccOn(const PmdMon &m, uint8_t actId, uint8_t fi, int x0, int y0, uint8_t s, uint8_t id) {
+  int col, row;
+  if (!accSpot(m, actId, fi, id, col, row)) return false;
+  drawAccArt(id, x0 + col * s, y0 + row * s, s, false, 0);
+  return true;
 }
 void drawPmdFrame(const PmdMon &m, uint8_t actId, uint8_t fi, uint8_t feet, int cx, int groundY, uint8_t s) {
   const PmdAct &a = m.acts[actId];
@@ -1364,8 +1431,19 @@ static void drawPetPMD() {
     if (!pmd.has(act)) act = PMD_IDLE;
   }
 
-  drawPmdAct(act, (int)beh.x + dx, PET_GROUND + dy, now - t0, loop || act == PMD_IDLE, false, 5);
-  headNow = { true, act, (int16_t)dy, 0 };
+  int cx = (int)beh.x + dx, groundY = PET_GROUND + dy;
+  bool loopIt = loop || act == PMD_IDLE;
+  drawPmdAct(act, cx, groundY, now - t0, loopIt, false, 5);
+  // its accessory (#116), on the frame just drawn; put away asleep and dozing
+  int16_t accTop = 0;
+  uint8_t worn = (pet.sleeping || act == PMD_SLEEP) ? (uint8_t)ACC_NONE : pet.accNow(accDayHat(), accToday());
+  if (worn != ACC_NONE && pmd.has(act)) {
+    PmdPlace p = pmdPlace(pmd, pmd.acts[act], cx, groundY, now - t0, loopIt, 5);
+    int col, row;
+    if (drawAccOn(pmd, act, p.fi, p.x0, p.y0, p.s, worn) && accSpot(pmd, act, 0, worn, col, row))
+      accTop = (int16_t)(p.y0 + row * p.s);  // the first frame's, as the head's top is
+  }
+  headNow = { true, act, (int16_t)dy, 0, accTop };
   drawHuffPuff((int)beh.x + petReact.away * 56, PET_GROUND - 120, now);
   drawTreatBy((int)beh.x, PET_GROUND);  // the plush or the mug (#13)
 
@@ -1444,7 +1522,7 @@ void drawAttnBubble() {
   bool sickOnly = need >= ATTN_NEEDS && pet.isSick();
   if ((need >= ATTN_NEEDS && !sickOnly) || bubbleShowing()) return;
   if (pet.sleeping || pet.eating() || pet.playingToy() || pet.showHeart() || pet.evolving() || timeLeft(bathUntil) ||
-      pet.showMedal() || pet.showMilestone() || timeLeft(confirmUntil) || timeLeft(menuUntil) ||
+      pet.showMedal() || pet.showMilestone() || pet.showNewAcc() || timeLeft(confirmUntil) || timeLeft(menuUntil) ||
       (choiceKind && timeLeft(choiceUntil)) ||
       huffing(millis()))  // the puffs of the huff go by the head, where the bubble is (#73)
     return;

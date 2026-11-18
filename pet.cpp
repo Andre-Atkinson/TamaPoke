@@ -580,7 +580,12 @@ void Pet::checkMedals(bool byTick) {
   uint16_t gained = medals & ~before;
   if (gained) {
     for (uint16_t m = gained; m; m &= (m - 1)) totalMedals++;
-    banners.add(gained, false, millis());  // a banner each, one after another (#82)
+    // The accessories they earned (#116): a banner each after their medal's. A pet that had
+    // earned none, wearing nothing, puts the first one on by itself (the owner's call,
+    // 2026-11-17); later ones wait on the Wardrobe page with a red dot.
+    uint16_t accBefore = accUnlockMask(before), accNew = accUnlockMask(medals) & ~accBefore;
+    if (accNew && !accBefore && acc == ACC_NONE) acc = accLowest(accNew);
+    banners.add(gained, false, millis(), accNew);  // a banner each, one after another (#82)
     // a medal that only time earned, noticed by the tick, is silent in quiet hours (#44);
     // the banner shows anyway. One the player's action gains (exercise burns weight too) sounds.
     bool byTimeOnly = !(gained & ~MED_BY_TIME);
@@ -591,6 +596,28 @@ void Pet::checkMedals(bool byTick) {
 }
 
 void Pet::holdBanners() { banners.hold(millis()); }
+
+bool Pet::wearAcc(uint8_t id, uint8_t dayHat, uint32_t today) {
+  if (isEgg() || ceremony != CER_NONE || id >= ACC_COUNT) return false;
+  if (dayHat != ACC_NONE && id == dayHat) {  // today's special hat: a pick made today is dropped
+    accPickDay = 0;
+    return true;
+  }
+  if (id != ACC_NONE && !(accUnlocked() & (1u << id))) return false;  // locked, or a special day's
+  acc = id;
+  if (dayHat != ACC_NONE) accPickDay = today;  // beats the day's hat until midnight
+  prefs.putUChar("acc", acc);
+  return true;
+}
+
+uint16_t Pet::accPageOpened() {
+  uint16_t fresh = accUnlocked() & ~accSeen;
+  if (fresh) {
+    accSeen |= fresh;
+    prefs.putUShort("accseen", accSeen);
+  }
+  return fresh;
+}
 
 void Pet::exerciseOver() {
   if (exercised) checkMedals(false);  // the next tick still sees the exercise, as before
@@ -687,6 +714,9 @@ void Pet::hatch() {
   goodTicks = 0;     // stamina's steady-care minutes are this pet's too (#76)
   medals = 0;
   nick[0] = 0;
+  acc = ACC_NONE;  // the wardrobe is this pet's (#116): it hatches wearing nothing
+  accSeen = 0;
+  accPickDay = 0;
   registerSpecies(speciesId);  // criado = registrado en la pokedex
   checkMedals(false);  // por si nace ya en forma final (legendario)
   sfxPlay(SFX_HATCH);
@@ -1029,6 +1059,8 @@ void Pet::save() {
   prefs.putUShort("sickh", healMin);
   prefs.putUShort("sickt", sickMin);
   prefs.putString("nick", nick);
+  prefs.putUChar("acc", acc);  // #116
+  prefs.putUShort("accseen", accSeen);
 }
 
 void Pet::load() {
@@ -1092,6 +1124,8 @@ void Pet::load() {
   songHi = gameRecordOk(GAME_SONG, prefs.getUShort("mgs", 0));
   punchHi = prefs.getUChar("phi", 0);
   prefs.getString("nick", nick, sizeof(nick));
+  acc = prefs.getUChar("acc", ACC_NONE);  // saves from before #116: none, wearing nothing
+  accSeen = prefs.getUShort("accseen", 0);
   pace = prefs.getUChar("pace", PACE_NORMAL);
   bedPreset = prefs.getUChar("bed", 0);
   eggPickMode = prefs.getUChar("eggch", EGGPICK_OFF);
@@ -1131,6 +1165,11 @@ void Pet::load() {
   if (germMin >= SICK_AFTER_MIN) germMin = 0;
   if (healMin >= SICK_HEAL_MIN) healMin = 0;
   if (sickMin > SICK_RUNAWAY_MIN) sickMin = 0;
+  // Accessories (#116): only what this pet's medals earned. One it doesn't have (or no
+  // accessory at all) loads as nothing, and "seen" keeps only those it has, so an old save
+  // wears nothing and shows a red dot on each it already earned.
+  if (acc >= ACC_COUNT || (acc != ACC_NONE && !(accUnlockMask(medals) & (1u << acc)))) acc = ACC_NONE;
+  accSeen &= accUnlockMask(medals);
   if (eggTarget < 1 || eggTarget > DEX_COUNT) eggTarget = pickEggSpecies();
   if (speciesId == 0 || speciesId < -1 || speciesId > DEX_COUNT) {
     newEgg();  // that pet doesn't exist in this firmware: start a fresh egg

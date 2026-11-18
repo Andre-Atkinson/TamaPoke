@@ -822,13 +822,14 @@ static void alertLog(const char *what, bool sounded, bool quieted) {
 
 // ---------- speech bubbles (bubble.h, #23) ----------
 // A bubble may show: petSceneFree() (the pet awake on the lit, undimmed main screen with
-// nothing over it), and no heart, no medal or streak banner, and no attention call lighting
+// nothing over it), and no heart, no medal, streak or accessory banner, and no attention call lighting
 // the screen (during attnShowUntil powerCtx() reads "just touched", so dimStage is
 // DIM_AWAKE then). Read once per pass, after updateBrightness() (so dimStage is this
 // pass's) and before render(); it never wakes or lights the screen and does not touch
 // lastInteract, so it cannot keep the screen awake.
 static bool bubbleFree(uint32_t now) {
-  return petSceneFree() && !pet.showHeart() && !pet.showMedal() && !pet.showMilestone() && !attnShowing(now);
+  return petSceneFree() && !pet.showHeart() && !pet.showMedal() && !pet.showMilestone() && !pet.showNewAcc() &&
+         !attnShowing(now);
 }
 
 void loop() {
@@ -1633,10 +1634,12 @@ void onSwipeV(int dir) {
 void onSwipe(int dir) {
   if (pet.awaitingStarter() || pet.awaitingEgg()) return;  // bloqueado mientras elige inicial o huevo
   if (gameOpen || kbOpen || clockOpen) return;
-  if (cardOpen) {  // dentro de la ficha: cambiar entre las 5 paginas
+  if (cardOpen) {  // dentro de la ficha: cambiar entre las 6 paginas
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
+    uint8_t was = cardPage;
     cardPage = p < 0 ? 0 : (p > CARD_LAST_PAGE ? CARD_LAST_PAGE : p);
     trainPick = false;  // the exercise choice goes back to the stats
+    if (cardPage == CARD_PAGE_WARDROBE && was != CARD_PAGE_WARDROBE) wardrobeOpened();  // #116: this visit's red dots
     return;
   }
   if (!galleryOpen) {
@@ -1763,6 +1766,8 @@ void onTap(int16_t x, int16_t y) {
       else trainPick = true;
     } else if (cardPage == CARD_PAGE_CARE && careTap(x, y)) {
       // ritmo / hora de dormir: la ficha sigue abierta (careTap ya guardo y repinta)
+    } else if (cardPage == CARD_PAGE_WARDROBE && wardrobeTap(x, y)) {
+      // a tile (#116): worn at once, or a locked one's hint; the card stays open
     } else {
       cardOpen = false;
     }
@@ -1918,6 +1923,7 @@ static uint32_t screenKey() {
                         (uint32_t)pet.pace, (uint32_t)pet.bedPreset, (uint32_t)pet.eggPickMode,
                         (uint32_t)pet.sickMode, (uint32_t)pet.isSick() })  // #15: the Care row, the Progress line
       h = mixKey(h, v);
+    if (cardPage == CARD_PAGE_WARDROBE) h = mixKey(h, wardrobeKey());  // #116: worn, hint, dots, today's hat
     for (const char *c = pet.nick; *c; c++) h = mixKey(h, (uint8_t)*c);
   }
   return h;

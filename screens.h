@@ -1,5 +1,5 @@
 // The screens other than the main one (#41: moved out of TamaPoke.ino): the starter and
-// egg choice, the pet card's five pages, the clock and settings screen, the nickname
+// egg choice, the pet card's six pages, the clock and settings screen, the nickname
 // keyboard and the Pokedex gallery, each with its taps and its state. render(), onTap()
 // and onSwipe*() in TamaPoke.ino choose which one is open.
 #pragma once
@@ -7,7 +7,8 @@
 #include "sdmon.h"  // PmdMon
 
 #define CARD_PAGE_CARE 4
-#define CARD_LAST_PAGE CARD_PAGE_CARE
+#define CARD_PAGE_WARDROBE 5  // #116
+#define CARD_LAST_PAGE CARD_PAGE_WARDROBE
 
 // eleccion de inicial (primera partida): Bulbasaur / Charmander / Squirtle, 3 filas
 inline const int16_t STARTER_DEX[3] = { 1, 4, 7 };
@@ -41,6 +42,12 @@ void renderClock();
 void clockTap(int16_t x, int16_t y);
 void renderCard();
 bool careTap(int16_t x, int16_t y);
+// The Wardrobe page (#116): wardrobeOpened() as the card turns to it (the red dots of this
+// visit: the earned ones not seen before, then marked seen); wardrobeTap() true if the tap
+// fell on a tile (wears it, or shows what earns a locked one); wardrobeKey() for screenKey().
+void wardrobeOpened();
+bool wardrobeTap(int16_t x, int16_t y);
+uint32_t wardrobeKey();
 void openKeyboard();
 void renderKeyboard();
 void keyboardTap(int16_t x, int16_t y);
