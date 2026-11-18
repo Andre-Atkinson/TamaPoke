@@ -916,7 +916,7 @@ A script is one step per line (the full list is in `sim/script.h`):
 and the other special days' greetings too),
 `train 30 10 30` (the creature's strength, stamina and speed training, simulator only; see
 `sim/scripts/fitness.txt`), `steps 300` (the 1.75C's step counter counts that many more, simulator
-only; see `sim/scripts/walks.txt`, and `board 175c` / `board 175` / `board both`, which marks the steps
+only; see `sim/scripts/walks.txt`, and `walks-clock.txt` with the clock not set; and `board 175c` / `board 175` / `board both`, which marks the steps
 after it for one board, since only the 1.75C counts steps), `game catch` (the next Play deals this minigame, `keepy`,
 `catch`, `peek` or `song`, simulator only; see `sim/scripts/game-screen-off.txt`), and `shot NAME`.
 `expect Play: peek score=* (screen off)` checks the serial output: some line printed

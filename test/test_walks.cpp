@@ -32,6 +32,9 @@ TEST(walks, the_chip_delta_copes_with_a_restart_and_the_24_bit_size) {
   // only 24 bits are the chip's: the high bits of a wider read are not steps
   CHECK_EQ(walkChipDelta(0xFFFFFF00u, 0xFFFFFF40u), 0x40u);
   CHECK_EQ(walkChipDelta(0x01000010u, 0x01000030u), 0x20u);
+  // ...and the bits past 24 of the last look are not steps either
+  CHECK_EQ(walkChipDelta(0xFF000010u, 0x20u), 0x10u);
+  CHECK_EQ(walkChipDelta(0x00FFFFF0u, 0x01000010u), 0x10u);
   // the counter wrapping at 2^24: the count after it, which undercounts the few steps before it
   CHECK_EQ(walkChipDelta(0xFFFFF0u, 0x000010u), 0x10u);
 }

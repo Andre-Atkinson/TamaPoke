@@ -1,0 +1,43 @@
+# Walks (#117) while the clock is not set (reseeded after a power-off): the steps still count,
+# into a day that has no date yet, and the first time the player sets the clock that day is
+# adopted with the steps so far, not thrown away. Bedtime and midnight need a trusted clock
+# (the unit tests in test/test_walks.cpp cover those); this is the sketch handing the pet
+# "the clock is not set" (TamaPoke.ino, loop: !bedEdge.stale() into Pet::setCharger).
+#   tools/sim.sh --board 175c --script walks-clock --out shots/
+# The original 1.75 has no step counter: the `board 175` lines say what it prints instead.
+clock none
+battery 64
+usb off
+
+# new game: Charmander (the clock screen asks for the time: swipe it away), hatch
+wait 1s
+tap 233 220
+wait 1s
+swipe up
+serial HATCH
+wait 6s
+
+board 175c
+steps 300
+wait 70s
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=300 today=300 day=0 bank=1 earned=1 counting=1
+board 175
+steps 300
+wait 70s
+serial STEPS?
+wait 1s
+expect STEPS on=0 chip=- today=0 day=0 bank=0 earned=0 counting=1
+board both
+
+# the player sets the clock (2026-11-13 10:00, day 20770): its day is adopted with the 300 steps
+serial TIME 1794564000
+wait 1s
+board 175c
+steps 100
+wait 70s
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=400 today=400 day=20770 bank=1 earned=1 counting=1
+board both

@@ -371,7 +371,7 @@ void Pet::walkMinute() {
   // the day is today's from a trusted clock, the same day registerCare() counts by; without
   // one (0) the steps stay in the day they were counted in
   WalkGain g = walk.minute(chip, walkCounting(), clockSet_ ? today() : 0);
-  if (g.stamina && trDef < 100) trDef = (uint8_t)min(100, (int)trDef + g.stamina);
+  if (g.stamina) trDef = clamp100((int)trDef + g.stamina);  // training points are 0-100
   // the steps themselves go to NVS with the periodic save; what a walk earned (or a new day)
   // asks for one at the next quiet moment
   if (g.treats || g.stamina || g.rolled) pendingSave = true;
