@@ -100,6 +100,17 @@ void handleSerial() {
     stepsPrintStatus();
     return;
   }
+  if (line.startsWith("STEPRATE ")) {  // test builds (#117): the step engine's rate, in RAM only
+    String args = line.substring(9);
+    args.trim();
+    int sp = args.indexOf(' ');
+    String rate = sp < 0 ? args : args.substring(0, sp);
+    String prof = sp < 0 ? String("") : args.substring(sp + 1);
+    prof.trim();
+    if (stepsSetRate(rate.c_str(), prof.c_str())) stepsPrintStatus();
+    else Serial.println("ERR STEPRATE <lp21|lp128|28|56|112> [lib|scaled|easy] (or no step counter)");
+    return;
+  }
   if (sdSerialCommand(line)) return;
 
   char ownerArg[OWNER_CMD_NAME_BYTES];  // the name of an OWNER <name> line (owner.h)

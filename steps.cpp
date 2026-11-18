@@ -6,6 +6,7 @@
 
 #if BOARD_AMOLED_175C
 #include <Wire.h>
+#include <string.h>
 // SensorLib's current QMI8658 driver (the one ImuDrv.hpp includes). <SensorQMI8658.hpp>
 // is the library's older driver, without the step engine's calls used here.
 #include <sensor/imu/qmi8658/SensorQMI8658.hpp>
@@ -15,13 +16,33 @@ static bool engineOn = false;
 static uint8_t imuAddr = 0;
 
 // The registers the status line shows (SensorLib's SensorQMI8658_Reg.hpp).
+static const uint8_t QMI_CTRL1 = 0x02;  // bit 0 sensor disable (oscillator off), bit 1 reserved
 static const uint8_t QMI_CTRL2 = 0x03;  // accelerometer range (bits 6-4) and rate (bits 3-0)
 static const uint8_t QMI_CTRL7 = 0x08;  // bit 0 accelerometer on, bit 1 gyroscope on
 static const uint8_t QMI_CTRL8 = 0x09;  // bit 4 step engine on
-static const uint8_t QMI_ODR_LP_21HZ = 0x0D;
-static const float STEPS_ODR_HZ = STEPS_ACC_LP ? 21.0f : 28.0f;
+static const uint8_t QMI_STATUSINT = 0x2D;
+static const uint8_t QMI_STATUS0 = 0x2E;  // bit 0 new accelerometer data
+static const uint8_t QMI_STATUS1 = 0x2F;  // the motion events, the step engine's among them
+static const uint8_t QMI_AX_L = 0x35;     // AX, AY, AZ: six bytes, little-endian
+static const uint8_t QMI_STEP_L = 0x5A;   // the step count: three bytes, little-endian
 
-// A raw register read, for the status line; -1 when the read fails.
+struct StepRate {
+  const char *name;
+  float hz;
+  uint8_t lpCode;  // CTRL2's low-power rate code, 0 for the normal mode
+};
+static const StepRate RATES[] = {
+  { "lp21", 21.0f, 0x0D }, { "lp128", 128.0f, 0x0C },
+  { "28", 28.0f, 0 },      { "56", 56.0f, 0 },        { "112", 112.0f, 0 },
+};
+static const uint8_t RATE_COUNT = sizeof(RATES) / sizeof(RATES[0]);
+static const char *const PROFILES[] = { "lib", "scaled", "easy" };
+enum : uint8_t { PROF_LIB = 0, PROF_SCALED = 1, PROF_EASY = 2, PROF_COUNT = 3 };
+static const uint8_t BOOT_RATE = 2;  // 28 Hz
+static uint8_t curRate = BOOT_RATE;
+static uint8_t curProf = PROF_SCALED;
+
+// A raw register read; -1 when it fails.
 static int readReg(uint8_t reg) {
   Wire.beginTransmission(imuAddr);
   Wire.write(reg);
@@ -30,11 +51,82 @@ static int readReg(uint8_t reg) {
   return Wire.read();
 }
 
+static bool readRegs(uint8_t reg, uint8_t *buf, uint8_t n) {
+  Wire.beginTransmission(imuAddr);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom(imuAddr, n) != n) return false;
+  for (uint8_t i = 0; i < n; i++) buf[i] = Wire.read();
+  return true;
+}
+
 static bool writeReg(uint8_t reg, uint8_t val) {
   Wire.beginTransmission(imuAddr);
   Wire.write(reg);
   Wire.write(val);
   return Wire.endTransmission() == 0;
+}
+
+// The engine (re)started at RATES[r] with profile p, its count at 0.
+static bool configure(uint8_t r, uint8_t p) {
+  const StepRate &rt = RATES[r];
+  engineOn = false;
+  imu.disablePedometer();
+  imu.disableAccel();
+  // The oscillator on: the power-down before #117 set CTRL1's bits 0 and 1, and the chip
+  // keeps its power across an app-only update.
+  int c1 = readReg(QMI_CTRL1);
+  if (c1 < 0 || ((c1 & 0x03) && !writeReg(QMI_CTRL1, (uint8_t)(c1 & ~0x03)))) {
+    Serial.println("steps: CTRL1 failed");
+    return false;
+  }
+  // The normal mode at the rate (the low-power one starts from 28 Hz, SensorLib's lowest),
+  // the gyroscope off (reset() leaves it off), which the low-power mode needs.
+  if (!imu.configAccel(AccelFullScaleRange::FS_4G, rt.lpCode ? 28.0f : rt.hz)) {
+    Serial.println("steps: configAccel failed");
+    return false;
+  }
+  if (rt.lpCode) {  // the rate bits of CTRL2, with the accelerometer still off
+    int c2 = readReg(QMI_CTRL2);
+    if (c2 < 0 || !writeReg(QMI_CTRL2, (uint8_t)((c2 & 0xF0) | rt.lpCode))) {
+      Serial.println("steps: low-power rate failed");
+      return false;
+    }
+  }
+  if (!imu.enableAccel()) {
+    Serial.println("steps: enableAccel failed");
+    return false;
+  }
+  bool ok;
+  if (p == PROF_LIB) {
+    ok = imu.configPedometerDefault(rt.hz);
+  } else {
+    // SensorLib's default profile with its 50-sample window kept at the 0.4 s it lasts at
+    // 125 Hz; the time limits as SensorLib works them out (2 s up, 0.3 s low).
+    uint16_t window = (uint16_t)(rt.hz * 0.4f + 0.5f);
+    if (window < 4) window = 4;
+    uint16_t timeUp = (uint16_t)(rt.hz * 2.0f + 0.5f);
+    uint8_t timeLow = (uint8_t)(rt.hz * 0.3f + 0.5f);
+    if (p == PROF_EASY)  // SensorLib's example's "debug" thresholds, counting from the first step
+      ok = imu.configPedometer(window, 80, 60, timeUp, timeLow, 1, 0, 1);
+    else
+      ok = imu.configPedometer(window, 100, 116, timeUp, timeLow, 8, 0, 1);
+  }
+  if (!ok) {
+    Serial.println("steps: configPedometer failed");
+    return false;
+  }
+  imu.resetStepCount();
+  // Turning the engine on restarts its count at 0 (the datasheet, via SensorLib).
+  if (!imu.enablePedometer()) {
+    Serial.println("steps: enablePedometer failed");
+    return false;
+  }
+  curRate = r;
+  curProf = p;
+  engineOn = true;
+  Serial.printf("steps: step engine on, accel %s, profile %s\n", rt.name, PROFILES[p]);
+  return true;
 }
 
 bool stepsBegin() {
@@ -55,39 +147,8 @@ bool stepsBegin() {
     imuAddr = 0;
     return false;
   }
-  // The accelerometer's normal mode at the rate below 28 Hz SensorLib rounds to; the
-  // gyroscope stays off (reset() leaves it off), which the low-power mode needs.
-  if (!imu.configAccel(AccelFullScaleRange::FS_4G, 28.0f)) {
-    Serial.println("steps: configAccel failed");
-    return false;
-  }
-#if STEPS_ACC_LP
-  // Low-power 21 Hz: the rate bits of CTRL2, with the accelerometer still off.
-  int c2 = readReg(QMI_CTRL2);
-  if (c2 < 0 || !writeReg(QMI_CTRL2, (uint8_t)((c2 & 0xF0) | QMI_ODR_LP_21HZ))) {
-    Serial.println("steps: low-power rate failed");
-    return false;
-  }
-#endif
-  if (!imu.enableAccel()) {
-    Serial.println("steps: enableAccel failed");
-    return false;
-  }
-  // SensorLib's default walking profile, its time limits worked out from the rate.
-  if (!imu.configPedometerDefault(STEPS_ODR_HZ)) {
-    Serial.println("steps: configPedometer failed");
-    return false;
-  }
-  imu.resetStepCount();
-  // Turning the engine on restarts its count at 0 (the datasheet, via SensorLib).
-  if (!imu.enablePedometer()) {
-    Serial.println("steps: enablePedometer failed");
-    return false;
-  }
-  engineOn = true;
-  Serial.printf("steps: QMI8658 0x%02X step engine on, accel %s %.0f Hz\n", imuAddr,
-                STEPS_ACC_LP ? "low-power" : "normal", STEPS_ODR_HZ);
-  return true;
+  Serial.printf("steps: QMI8658 at 0x%02X\n", imuAddr);
+  return configure(BOOT_RATE, PROF_SCALED);
 }
 
 bool stepsOn() { return engineOn; }
@@ -96,14 +157,41 @@ uint32_t stepsChipCount() {
   return engineOn ? imu.getStepCount() : 0;
 }
 
+bool stepsSetRate(const char *rate, const char *profile) {
+  if (!imuAddr) return false;
+  uint8_t r = RATE_COUNT, p = PROF_SCALED;
+  for (uint8_t i = 0; i < RATE_COUNT; i++)
+    if (!strcmp(rate, RATES[i].name)) r = i;
+  if (r == RATE_COUNT) return false;
+  if (profile && *profile) {
+    p = PROF_COUNT;
+    for (uint8_t i = 0; i < PROF_COUNT; i++)
+      if (!strcmp(profile, PROFILES[i])) p = i;
+    if (p == PROF_COUNT) return false;
+  }
+  return configure(r, p);
+}
+
 void stepsPrintStatus() {
   if (!imuAddr) {
     Serial.println("STEPS on=0 chip=0 (no QMI8658)");
     return;
   }
-  Serial.printf("STEPS on=%d chip=%lu ctrl2=0x%02X ctrl7=0x%02X ctrl8=0x%02X\n", engineOn ? 1 : 0,
-                (unsigned long)stepsChipCount(), readReg(QMI_CTRL2) & 0xFF,
-                readReg(QMI_CTRL7) & 0xFF, readReg(QMI_CTRL8) & 0xFF);
+  uint8_t st[3] = { 0, 0, 0 }, ax[6] = { 0, 0, 0, 0, 0, 0 }, sc[3] = { 0, 0, 0 };
+  bool stOk = readRegs(QMI_STATUSINT, st, 3);
+  bool axOk = readRegs(QMI_AX_L, ax, 6);
+  bool scOk = readRegs(QMI_STEP_L, sc, 3);
+  // mg at the +-4 g range: 8192 counts a g
+  int x = (int16_t)(ax[0] | ax[1] << 8) * 1000 / 8192;
+  int y = (int16_t)(ax[2] | ax[3] << 8) * 1000 / 8192;
+  int z = (int16_t)(ax[4] | ax[5] << 8) * 1000 / 8192;
+  Serial.printf("STEPS on=%d chip=%lu rate=%s profile=%s raw=%02X%02X%02X%s ctrl1=0x%02X ctrl2=0x%02X "
+                "ctrl7=0x%02X ctrl8=0x%02X stint=0x%02X st0=0x%02X st1=0x%02X%s acc_mg=%d,%d,%d%s\n",
+                engineOn ? 1 : 0, (unsigned long)stepsChipCount(), RATES[curRate].name,
+                PROFILES[curProf], sc[2], sc[1], sc[0], scOk ? "" : "(failed)",
+                readReg(QMI_CTRL1) & 0xFF, readReg(QMI_CTRL2) & 0xFF, readReg(QMI_CTRL7) & 0xFF,
+                readReg(QMI_CTRL8) & 0xFF, st[0], st[1], st[2], stOk ? "" : "(failed)", x, y, z,
+                axOk ? "" : "(failed)");
 }
 
 #else  // the original 1.75: no step counter
@@ -111,6 +199,7 @@ void stepsPrintStatus() {
 bool stepsBegin() { return false; }
 bool stepsOn() { return false; }
 uint32_t stepsChipCount() { return 0; }
+bool stepsSetRate(const char *, const char *) { return false; }
 void stepsPrintStatus() { Serial.println("STEPS on=0 chip=0 (no step counter on this board)"); }
 
 #endif

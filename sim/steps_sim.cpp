@@ -6,4 +6,5 @@
 bool stepsBegin() { return false; }
 bool stepsOn() { return false; }
 uint32_t stepsChipCount() { return 0; }
+bool stepsSetRate(const char *, const char *) { return false; }
 void stepsPrintStatus() { Serial.println("STEPS on=0 chip=0 (simulator)"); }
