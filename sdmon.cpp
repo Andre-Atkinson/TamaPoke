@@ -98,10 +98,8 @@ static_assert(ACCF_STAND == PMD_IDLE && ACCF_WALK == PMD_WALKL && PMD_WALKR == 2
               "accfix.h's poses are the PMD_* actions");
 
 // Where an accessory sits on every frame of every action (#116): one PSRAM block of 3 bytes a
-// frame (PmdAct::head), filled once here so drawing reads it. A species' accfix.h row moves
-// the rule's start down past a tail or an ear (skip), sets how wide a head must be (pct), or
-// looks only at a band of columns (band, mid; turned round walking right). No
-// room: no accessory, nothing else lost.
+// frame (PmdAct::head), filled once here so drawing reads it, by accHeadFor() (accfix.h: the
+// rule with the species' row for the pose). No room: no accessory, nothing else lost.
 void PmdMon::findHeads(uint8_t dexNum) {
   uint32_t n = 0;
   for (auto &a : acts) n += a.frames;
@@ -112,14 +110,9 @@ void PmdMon::findHeads(uint8_t dexNum) {
   for (uint8_t id = 0; id < PMD_NACTS; id++) {
     PmdAct &a = acts[id];
     if (!a.frames) continue;
-    bool mirrored;
-    const AccFix *fix = accFixFor(dexNum, id, mirrored);
-    uint8_t skip = fix && fix->skip < a.h ? fix->skip : 0;
-    uint8_t pct = fix && fix->pct ? fix->pct : ACC_HEAD_PCT, band = fix ? fix->band : 0;
-    int mid = fix ? (mirrored ? -fix->mid : fix->mid) : 0;
     a.head = p;
     for (uint8_t f = 0; f < a.frames; f++, p += 3) {
-      AccHead hd = accFindHead(a.data + (uint32_t)f * a.w * a.h, a.w, a.h, skip, pct, band, mid);
+      AccHead hd = accHeadFor(a.data + (uint32_t)f * a.w * a.h, a.w, a.h, dexNum, id);
       p[0] = hd.crown;
       p[1] = hd.x0;
       p[2] = hd.w;

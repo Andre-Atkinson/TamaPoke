@@ -497,11 +497,14 @@ public:
   // earned one is this pet's medals (accUnlockMask), so no bits of their own.
   uint8_t acc = ACC_NONE;
   uint16_t accSeen = 0;
+  uint32_t accPickDay = 0;  // the local day a Wardrobe pick beat that day's special hat (#116); RAM only
   uint16_t accUnlocked() const { return isEgg() ? 0 : accUnlockMask(medals); }
   // What shows on the pet: today's special hat (dayHat, the scene's clock: accForDay) unless
   // the player picked something on the Wardrobe page today; else `acc`. today: the local day
-  // (epoch / 86400), 0 without a trusted clock.
-  uint8_t accNow(uint8_t dayHat, uint32_t today) const { return accShown(acc, dayHat, accPickDay, today); }
+  // (epoch / 86400), 0 without a trusted clock. An egg shows nothing.
+  uint8_t accNow(uint8_t dayHat, uint32_t today) const {
+    return isEgg() ? (uint8_t)ACC_NONE : accShown(acc, dayHat, accPickDay, today);
+  }
   // Wear `id` (the Wardrobe page's tap, the ACC command): ACC_NONE, an earned one this pet has,
   // or today's special hat (dayHat), which only drops a pick made today. On a special day the
   // pick wins over its hat until midnight, in RAM. Saved at once in its own key ("acc"), as
@@ -572,7 +575,6 @@ private:
   uint32_t ceremonyUntil = 0;
   uint8_t bondToday = 0;       // tope diario de subida de vinculo
   BannerQueue banners;         // the medal and streak banners (#82, #83); RAM only
-  uint32_t accPickDay = 0;     // the local day a Wardrobe pick beat that day's special hat (#116); RAM only
   bool selfCareOn = false;     // setCharger(): on USB and untouched SELFCARE_IDLE_MS
 
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }

@@ -14,6 +14,7 @@
 #include <dirent.h>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <set>
 #include <string>
 #include <vector>
@@ -327,9 +328,7 @@ TEST(accfix, every_species_wears_one_on_every_frame_it_shows) {
       if (fix && fix->hide) continue;
       uint8_t s = pmdScaleFor(t.acts[PMD_IDLE].h, a.h, 5);
       for (uint8_t fi = 0; fi < a.n; fi++, frames++) {
-        AccHead hd = accFindHead(a.data + (size_t)fi * a.w * a.h, a.w, a.h, fix ? fix->skip : 0,
-                                 fix && fix->pct ? fix->pct : ACC_HEAD_PCT, fix ? fix->band : 0,
-                                 fix ? (mirrored ? -fix->mid : fix->mid) : 0);
+        AccHead hd = accHeadFor(a.data + (size_t)fi * a.w * a.h, a.w, a.h, dex, act);  // as findHeads does
         std::string where = "#" + std::to_string(dex) + " act " + std::to_string(act) + " frame " + std::to_string(fi);
         CHECK_MSG(hd.w > 0, where + ": a head");
         int col, row;
@@ -351,6 +350,43 @@ TEST(accfix, every_species_wears_one_on_every_frame_it_shows) {
   CHECK_MSG(minTop >= 0, "the highest art's top: y " + std::to_string(minTop) + " (#" + std::to_string(minDex) + ")");
 }
 
+// Walking right is walking left turned round (the sprite pack's WALKR is its exact mirror, a
+// column out for a few), so the row for WALKL serves both with its band's middle turned round:
+// on every walking frame of every species with a row, the head found walking right sits where
+// the mirror image of the one found walking left does, within a pixel.
+TEST(accfix, walking_right_finds_the_mirror_of_walking_lefts_head) {
+  bool m = false;
+  const AccFix *g = accFixFor(130, PMD_WALKR, m);  // Gyarados
+  CHECK(g != nullptr && m);
+  CHECK(g == accFixFor(130, PMD_WALKL, m) && !m);
+  CHECK(accFixFor(130, PMD_IDLE, m) == nullptr && !m);
+  int species = 0, frames = 0;
+  for (unsigned i = 0; i < ACC_FIX_COUNT; i++) {
+    const AccFix &f = ACC_FIXES[i];
+    if (f.dex == 0 || f.act != ACCF_WALK || f.hide) continue;
+    AccSprite t;
+    if (!readSprite(f.dex, t)) continue;  // the species' sprite is checked above
+    const AccSprite::Act &l = t.acts[PMD_WALKL], &r = t.acts[PMD_WALKR];
+    std::string who = "#" + std::to_string(f.dex);
+    CHECK_MSG(l.n > 0 && l.n == r.n && l.w == r.w && l.h == r.h, who + ": both walks, the same size");
+    if (l.n != r.n || l.w != r.w || l.h != r.h) continue;
+    species++;
+    for (uint8_t fi = 0; fi < l.n; fi++, frames++) {
+      AccHead hl = accHeadFor(l.data + (size_t)fi * l.w * l.h, l.w, l.h, f.dex, PMD_WALKL);
+      AccHead hr = accHeadFor(r.data + (size_t)fi * r.w * r.h, r.w, r.h, f.dex, PMD_WALKR);
+      std::string where = who + " frame " + std::to_string(fi);
+      CHECK_MSG(hl.w > 0 && hr.w > 0, where + ": a head both ways");
+      // twice the head's centre column (x0 + (w - 1) / 2), to stay in whole numbers
+      int cl = 2 * hl.x0 + hl.w - 1, cr = 2 * hr.x0 + hr.w - 1, mirror = 2 * (l.w - 1) - cl;
+      CHECK_MSG(std::abs(cr - mirror) <= 2,
+                where + ": walking right's head at " + std::to_string(cr / 2.0) + ", the mirror of left's at " +
+                    std::to_string(mirror / 2.0));
+    }
+  }
+  CHECK_MSG(species >= 15 && frames >= 60,
+            "looked at " + std::to_string(species) + " species, " + std::to_string(frames) + " frames");
+}
+
 // ---------------------------------------------------------------- the pet's wardrobe
 // decision 2: each pet's own; the new pet hatches wearing nothing, with nothing earned
 TEST(wardrobe, a_new_pet_hatches_wearing_nothing) {
@@ -360,14 +396,24 @@ TEST(wardrobe, a_new_pet_hatches_wearing_nothing) {
   CHECK_EQ(p.accUnlocked(), (uint16_t)0);
   reachLevel(p, 10);
   CHECK_EQ(p.acc, (uint8_t)ACC_CAP);
+  CHECK_EQ(p.accPageOpened(), (uint16_t)(1u << ACC_CAP));  // the page seen: accSeen is not 0 now
+  CHECK_EQ(p.accSeen, (uint16_t)(1u << ACC_CAP));
+  const uint32_t xmas = 20000;  // a day (any non-zero one: only the pick's day is compared)
+  CHECK(p.wearAcc(ACC_CAP, ACC_SANTA, xmas));  // a pick made on a special day
+  CHECK_EQ(p.accNow(ACC_SANTA, xmas), (uint8_t)ACC_CAP);
   p.startFarewell();
   p.update(millis() + CEREMONY_MS + 1);
   p.newEgg();
   CHECK_EQ(p.accUnlocked(), (uint16_t)0);  // an egg wears and has nothing
   CHECK_EQ(p.acc, (uint8_t)ACC_NONE);
   CHECK_EQ(p.accSeen, (uint16_t)0);
+  CHECK_EQ(p.accPickDay, (uint32_t)0);  // the pick made on the old pet's special day is forgotten
+  CHECK_EQ(p.accNow(ACC_SANTA, xmas), (uint8_t)ACC_NONE);  // an egg shows nothing, even on a special day (ACC?)
+  CHECK(!p.wearAcc(ACC_NONE, ACC_NONE, 0));  // nothing is worn on an egg
+  CHECK(!p.wearAcc(ACC_SANTA, ACC_SANTA, xmas));
   p.acc = ACC_CAP;  // as an egg saved by another build could load: the hatch clears it again
   p.accSeen = 1u << ACC_CAP;
+  p.accPickDay = xmas;  // and a pick left in RAM
   p.eggTap();
   p.eggTap();
   p.eggTap();
@@ -375,6 +421,7 @@ TEST(wardrobe, a_new_pet_hatches_wearing_nothing) {
   CHECK_EQ(p.acc, (uint8_t)ACC_NONE);
   CHECK_EQ(p.accSeen, (uint16_t)0);
   CHECK_EQ(p.accUnlocked(), (uint16_t)0);
+  CHECK_EQ(p.accNow(ACC_SANTA, xmas), (uint8_t)ACC_SANTA);  // the new pet's own day: the pick did not carry over
 }
 
 // A pet that has earned none puts the first one on by itself (the owner's call); later ones

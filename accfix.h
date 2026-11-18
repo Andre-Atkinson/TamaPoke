@@ -19,9 +19,11 @@
 //    left; dy > 0 down);
 //  - hide: no accessory in this pose at all.
 // Pure data. test/test_accessory.cpp checks every row (a species, a pose that shows one, no
-// pose twice, a skip inside the canvas, small nudges).
+// pose twice, a skip inside the canvas, small nudges) and that walking right finds the mirror
+// image of walking left's head.
 #pragma once
 #include <stdint.h>
+#include "accessory.h"  // AccHead, accFindHead
 
 struct AccFix {
   uint8_t dex, act, skip, pct, band;
@@ -64,6 +66,7 @@ inline const AccFix ACC_FIXES[] = {
   { 144, ACCF_WALK, 0, 0, 5, -12, 0, 0, false }, // Articuno: its head, not its wing
   { 145, ACCF_WALK, 0, 0, 5, -6, 0, 0, false },  // Zapdos: its head, not its spikes
   { 146, ACCF_WALK, 0, 0, 5, -20, 0, 0, false }, // Moltres: its head, not its wing
+  { 22, ACCF_WALK, 0, 0, 5, -9, 0, 0, false }, // Fearow: its head, not its raised wing
   { 83, ACCF_SAD, 11, 0, 0, 0, 0, 0, false },   // Farfetch'd: not the leek it drops
   { 87, ACCF_SAD, 0, 0, 5, -4, 0, 0, false },   // Dewgong: its head, not its raised flipper
   { 104, ACCF_SAD, 12, 0, 0, 0, 0, 0, false },  // Cubone: not the bone it drops
@@ -83,4 +86,17 @@ inline const AccFix *accFixFor(int dex, uint8_t act, bool &mirrored) {
   for (unsigned i = 0; i < ACC_FIX_COUNT; i++)
     if (ACC_FIXES[i].dex == dex && dex > 0 && ACC_FIXES[i].act == key) return &ACC_FIXES[i];
   return nullptr;
+}
+
+// Where the head is on one frame `fr` (w x h, action `act`) of species `dex`: accFindHead()
+// with the species' row for that pose (skip kept inside the canvas, pct 0 meaning the rule's
+// own, the band's middle turned round walking right). The one place that does it, for
+// PmdMon::findHeads (sdmon.cpp) and the host test.
+inline AccHead accHeadFor(const uint8_t *fr, uint8_t w, uint8_t h, int dex, uint8_t act) {
+  bool mirrored;
+  const AccFix *fix = accFixFor(dex, act, mirrored);
+  uint8_t skip = fix && fix->skip < h ? fix->skip : 0;
+  uint8_t pct = fix && fix->pct ? fix->pct : ACC_HEAD_PCT, band = fix ? fix->band : 0;
+  int mid = fix ? (mirrored ? -fix->mid : fix->mid) : 0;
+  return accFindHead(fr, w, h, skip, pct, band, mid);
 }
