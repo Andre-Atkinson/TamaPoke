@@ -533,8 +533,17 @@ TEST(wardrobe, an_accessory_banner_follows_its_medal) {
   CHECK_EQ((int)q.shown(t), (int)BANNER_NONE);
 }
 
-// An accessory whose medal's banner already went (two of the Laurel's medals at once) comes after
-// the medals left; the queue stays bounded: everything at once is each banner once
+// One added with none of its medals waiting still gets its banner, after the medals left: none
+// is ever lost
+TEST(wardrobe, an_accessory_with_no_medal_waiting_still_shows) {
+  BannerQueue q;
+  q.add(MED_LV10, false, 1000);  // on screen
+  q.add(0, false, 2000, 1u << ACC_BOW);
+  CHECK_EQ((int)q.shown(1000 + MEDAL_BANNER_MS), (int)(BANNER_ACC + ACC_BOW));
+  CHECK_EQ((int)q.shown(1000 + 2 * MEDAL_BANNER_MS), (int)BANNER_NONE);
+}
+
+// The queue stays bounded: everything at once is each banner once
 TEST(wardrobe, the_queue_with_accessories_is_each_once_then_none) {
   BannerQueue q;
   q.add(MED_ALL, true, 0, ACC_EARNED_MASK);

@@ -182,8 +182,9 @@ static_assert(ACCM_LV10 == MED_LV10 && ACCM_LV25 == MED_LV25 && ACCM_LV50 == MED
 // RAM only: a restart starts with none. An ending clears it (Pet::startFarewell, startRunaway,
 // release), so the egg after it and the pet that hatches start with none either.
 // An accessory a medal earns (#116) has a banner of its own ("NEW: CAP!"), straight after
-// that medal's; one whose medal's banner has gone (two medals earned it) comes after the
-// medals left. So at most MED_COUNT + 1 + ACC_EARNED banners in a row.
+// that medal's (Pet::checkMedals adds both at once). One added with none of its medals waiting
+// comes after the medals left, so none is ever lost. So at most MED_COUNT + 1 + ACC_EARNED
+// banners in a row.
 enum : int8_t {
   BANNER_NONE = -1,
   BANNER_STREAK = MED_COUNT,  // 0..MED_COUNT - 1: a medal's bit
@@ -253,7 +254,7 @@ private:
         on = i;
         return;
       }
-    a = accLowest(accs);  // one whose medal's banner has already gone
+    a = accLowest(accs);  // one added with none of its medals waiting
     if (a) {
       accs &= (uint16_t)~(1u << a);
       on = (int8_t)(BANNER_ACC + a);
