@@ -100,6 +100,14 @@ void drawPmdAct(uint8_t actId, int cx, int groundY, uint32_t t, bool loop, bool 
 // lunge (punchlunge.h, #90). Nothing for a frame the action doesn't have.
 void drawPmdFrame(const PmdMon &m, uint8_t actId, uint8_t fi, uint8_t feet, int cx, int groundY, uint8_t s);
 void drawPoops();
+// The berry garden (#115, garden.h): the pot and its plant (after the scene, before the pet),
+// with the watering can while it shows; the picked berry's hop to the pet (after the pet).
+// gardenShow() starts the can or the hop for what a tap on the pot did (GardenTap).
+void drawGarden(bool night);
+void drawGardenHop();
+void gardenShow(uint8_t tap, uint8_t color);
+// the trusted clock the scene and the garden follow: 0 while it is stale or unknown
+uint32_t sceneClock();
 // The top of the pet's head as drawPet() drew it this frame, hop included (#73): the emotes
 // (#22) and both bubbles point at it. Call it after drawPet(). 0 when no pet was drawn.
 int petHeadTop();

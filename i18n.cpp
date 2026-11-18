@@ -57,6 +57,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Sleepy... warm milk?",  // the warm-milk hint (#13)
     "Hi there!", "I'm happy!", "Pat me!",
     "I love you, %s!", "I love you!",
+    "My plant looks thirsty!", "My berries are ripe!",  // the berry garden (#115)
     // the natures' lines (#86): the first names the nature as the stat card does
     "I'm easygoing!", "Life is good!", "No rush, no worries!",
     "I'm a bit greedy!", "Berries are the best!", "Dreaming of berries...",
@@ -130,6 +131,7 @@ static const char *const STRINGS[LANG_COUNT][STR_COUNT] = {
     "Sono... leite quentinho?",  // the warm-milk hint (#13)
     "Ol\240!", "Estou feliz!", "Faz-me festinhas!",
     "Adoro-te, %s!", "Adoro-te!",
+    "A minha planta tem sede!", "As bagas est\343o maduras!",  // the berry garden (#115)
     // the natures' lines (#86): the first names the nature as the stat card does
     "Sou tranquilo!", "A vida \202 bela!", "Sem pressas, tudo bem!",
     "Sou um pouco guloso!", "As bagas s\343o o m\240ximo!", "A sonhar com bagas...",

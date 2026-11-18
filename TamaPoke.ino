@@ -142,6 +142,7 @@ int flashIdxForDex(int16_t dex) {
   return (dex >= 1 && dex <= 9) ? IDX[dex] : -1;
 }
 
+// test/test_garden.cpp (the_pot_is_clear_of_...) copies these centres: update it with them
 Btn buttons[4] = {
   { CARE_FOOD_BTN_X, 390, SPR_ICON_FOOD },  // comer
   { 202, 404, SPR_ICON_PLAY },   // jugar
@@ -547,6 +548,10 @@ void setup() {
     if (!reseeded) Serial.println("clock: not set since its reseed (kept through a reset)");
   }
   clockPrompt.boot(e != 0);  // e == 0 here: no PCF85063, the clock cannot be set
+  // the berry garden (#115) catches up first, with the home the pet had while the board was
+  // off (the catch-up below can hatch the egg), and an egg stays in the meadow rather than
+  // travelling (as the scene does); a stale clock leaves it standing still
+  pet.garden.settle(sceneEpoch(e, bedEdge.stale()), sceneHome(), !pet.isEgg());
   pet.syncClock(e);
   // Sin RTC (la 1.75 original sin PCF85063) e == 0, y el minuto 0 cae dentro de toda ventana:
   // muestrear aqui dormiria al bicho en cada arranque y el bucle (que tampoco muestrea con
@@ -1004,6 +1009,10 @@ void loop() {
     lastClock = now;
     uint32_t e = rtcEpoch();
     if (e) { pet.lastSeenEpoch = e; bedSample(e); }
+    // the berry garden (#115) grows, dries and catches the rain with the trusted clock (it
+    // stands still while the clock is stale; an egg doesn't travel, as in the scene); a home
+    // that changed (an ending, a hatch) counts from here, within these 30 s
+    pet.garden.settle(sceneEpoch(e, bedEdge.stale()), sceneHome(), !pet.isEgg());
   }
   milkApply();
   bedApply();
@@ -1251,7 +1260,7 @@ void idleWait(PowerCtx c) {
 
 // ---------- entrada tactil ----------
 
-// test/test_clockprompt.cpp (ClockBadge) mirrors these bounds (x > 110): update it too.
+// test/test_clockprompt.cpp (ClockBadge) and test/test_garden.cpp (the_pot_is_clear_of_the_pet_the_buttons_and_the_panel_edge) mirror these bounds (x > 110): update them too.
 bool inPetZone(int16_t x, int16_t y) {
   return x > 110 && x < 356 && y > 95 && y < 310;
 }
@@ -1716,6 +1725,39 @@ static void trainAsleepNote() {
   showControlToast(T(S_TRAIN_ASLEEP), 2000);
 }
 
+// A tap on the berry garden's pot (#115): plant, water, pick or clear (Pet::tapGarden), with
+// its sound, the can or the berry's hop (gardenShow) and a line on the serial log. A ripe
+// plant waits while the pet can't eat (an egg, asleep, already eating). Asleep or in quiet
+// hours planting, watering and clearing work silently (a ripe berry can't be picked asleep).
+static void gardenTap() {
+  bool hush = pet.sleeping || quietNow();
+  uint8_t picked = 0;
+  GardenTap t = pet.tapGarden((uint32_t)random(0x7fffffff), picked);
+  gardenShow(t, t == GTAP_PICKED ? picked : pet.garden.berry);
+  switch (t) {
+    case GTAP_PLANTED:
+      if (!hush) sfxPlay(SFX_TAP);
+      Serial.printf("garden: planted %s\n", GARDEN_BERRY_KEYS[pet.garden.berry]);
+      break;
+    case GTAP_WATERED:
+      if (!hush) sfxPlay(SFX_TAP);
+      Serial.println("garden: watered");
+      break;
+    case GTAP_PICKED:
+      sfxPlay(SFX_EAT);
+      Serial.printf("garden: picked %s, %u left\n", GARDEN_BERRY_KEYS[picked], (unsigned)pet.garden.left);
+      break;
+    case GTAP_CLEARED:
+      if (!hush) sfxPlay(SFX_TAP);
+      Serial.println("garden: cleared");
+      break;
+    default:
+      if (!hush) sfxPlay(SFX_DENY);
+      Serial.println("garden: ripe, the pet can't eat now");
+      break;
+  }
+}
+
 void onTap(int16_t x, int16_t y) {
   // Serial.printf("TOUCH %d %d\n", x, y);  // diagnostico (silenciado: satura el log)
   if (pet.awaitingStarter()) {  // primera partida: elegir inicial
@@ -1798,6 +1840,12 @@ void onTap(int16_t x, int16_t y) {
   if (clockPrompt.asking(bedEdge.stale()) && clockBadgeHit(x, y)) {  // reloj sin poner
     sfxPlay(SFX_TAP);
     openClock();
+    return;
+  }
+  // the berry garden's pot (#115, garden.h): before the egg, which takes every other tap, so
+  // the pot can be planted and watered while the egg hatches
+  if (gardenHit(x, y)) {
+    gardenTap();
     return;
   }
   if (pet.isEgg()) {
@@ -2000,6 +2048,7 @@ bool render() {
     return true;
   }
 
+  drawGarden(gNight);  // the berry garden's pot (#115), behind the egg or the pet
   if (pet.isEgg()) {
     drawHeader(T(S_EGG_HDR), inkColor(), eggMsg());
     int s = 5, x = CX - 16 * s, y = PET_CY - 16 * s;
@@ -2039,6 +2088,7 @@ bool render() {
     drawPet();
     drawBath();
     drawPoops();
+    drawGardenHop();  // a picked berry on its way to the pet (#115)
     drawClockBadge();
     drawAttnBubble();
     drawSpeechBubble();  // in the "!" bubble's place while it shows (#23)

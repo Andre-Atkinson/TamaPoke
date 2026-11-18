@@ -52,12 +52,12 @@ struct Btn {
 #define EVO_BTN_W 256
 #define EVO_BTN_H 64
 #define EVO_BTN_X (CX - EVO_BTN_W / 2)
-#define EVO_BTN_Y 172  // test/test_clockprompt.cpp (ClockBadge) mirrors this: update it too
+#define EVO_BTN_Y 172  // test/test_clockprompt.cpp (ClockBadge) and test/test_garden.cpp (the_pot_is_clear_of_...) mirror this: update them too
 // boton-CTA de despedida (mas ancho: lleva el nombre + frase)
 #define FAR_BTN_W 408
 #define FAR_BTN_H 58
 #define FAR_BTN_X (CX - FAR_BTN_W / 2)
-#define FAR_BTN_Y 176  // mirrored in test/test_clockprompt.cpp (ClockBadge) too
+#define FAR_BTN_Y 176  // mirrored in test/test_clockprompt.cpp (ClockBadge) and test/test_garden.cpp too
 
 extern Arduino_Canvas *gfx;  // the whole frame, in PSRAM; flushUI() sends it to the panel
 extern Pet pet;

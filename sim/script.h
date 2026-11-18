@@ -20,7 +20,8 @@
 //   wait DUR                 dejar correr el firmware DUR (alias: advance)
 //   serial LINEA             mandar una linea por la consola serie (HATCH, SPEC 25...)
 //   say LINE                 show a speech bubble now (#23, bubble.h): hungry bath tired
-//                            bored sick morning stars milk hi happy pat love-name love, the
+//                            bored sick morning stars milk hi happy pat love-name love,
+//                            the berry garden's thirsty ripe (#115), the
 //                            natures' lines (#86) NATURE-1 NATURE-2 NATURE-3 for each of
 //                            easygoing greedy playful tidy lazy (playful-1...), and the
 //                            special days' greetings (#26) christmas newyear valentine

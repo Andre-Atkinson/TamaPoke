@@ -17,6 +17,18 @@
 
 // ---------- consola serie (provision de SD + depuracion) ----------
 
+// GARDEN? and GARDEN (#115): the pot as it is now (garden.h): its stage, the berry planted, the
+// berries left on a ripe plant, whether it is watered, the minutes of water left, dry in a
+// row and watered in all, wilting soon, and the trusted clock it was last moved on to (0:
+// none yet, or the clock is stale).
+static void printGarden() {
+  const Garden &g = pet.garden;
+  Serial.printf("garden stage=%s berry=%s left=%u wet=%d wetmin=%lu drymin=%lu grownmin=%lu wilting=%d at=%lu\n",
+                GARDEN_STAGE_KEYS[g.stage()], g.growing() ? GARDEN_BERRY_KEYS[g.berry % GARDEN_BERRY_COLORS] : "none",
+                (unsigned)g.left, g.watered() ? 1 : 0, (unsigned long)(g.wet / 60), (unsigned long)(g.dry / 60),
+                (unsigned long)(g.grown / 60), g.wiltingSoon() ? 1 : 0, (unsigned long)g.at);
+}
+
 // BDAY and BDAY? (#26): the stored birthday ("none" or month and day), today's special day
 // on the scene's clock (holiday.h; "none" on an ordinary day, while the clock is not trusted
 // and during a farewell or a run-away, holidayNow()) and whether it is the birthday.
@@ -68,6 +80,8 @@ void handleSerial() {
   BdayCmd bdayCmd;
   uint16_t sickArg;  // the minutes of a SICK ON <minutes> line (#15, sickCmdParse in pet.h)
   SickCmd sickCmd;
+  GardenCmdArgs gardenArgs;  // a GARDEN line's stage, water and berry (#115, gardenCmdParse in garden.h)
+  GardenCmd gardenCmd;
   if (line == "HATCH") {
     pet.eggTap(); pet.eggTap(); pet.eggTap();
     Serial.println("DONE");
@@ -177,6 +191,19 @@ void handleSerial() {
     // the cure's and the minutes sick while sick)
     Serial.printf(" sickness=%u sick=%d germ=%u heal=%u sickmin=%u\n", pet.sickMode, pet.isSick() ? 1 : 0,
                   pet.germMinutes(), pet.healMinutes(), pet.sickMinutes());
+    Serial.println("DONE");
+  } else if ((gardenCmd = gardenCmdParse(line.c_str(), gardenArgs)) != GCMD_NONE) {
+    // the berry garden (#115): "GARDEN?" reads it; "GARDEN <stage> ..." forces it (a test hook
+    // for the simulator and screenshots) and saves
+    if (gardenCmd == GCMD_BAD) {
+      Serial.println("ERR usage: GARDEN <empty|seed|sprout|leaves|flower|ripe|withered> [wet|dry|wilting] [red|blue|green]");
+    } else {
+      if (gardenCmd == GCMD_SET) {
+        pet.garden.force(gardenArgs.stage, gardenArgs.moist, gardenArgs.color);
+        pet.saveNow();
+      }
+      printGarden();
+    }
     Serial.println("DONE");
   } else if ((sickCmd = sickCmdParse(line.c_str(), sickArg)) != SICKCMD_NONE) {
     // a test hook (#15): sick now (with sickArg counted minutes) or well, with no slip-up
