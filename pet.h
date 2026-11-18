@@ -6,6 +6,7 @@
 #include "gamecore.h"  // GameId, records and normalised scores of the Play minigames
 #include "nature.h"    // NAT_*, the drains, care boosts and training bonus of each nature (#25)
 #include "accessory.h" // ACC_*, what earns each accessory (#116)
+#include "garden.h"    // the berry garden (#115): Pet::garden, saved with the pet
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
 // (p. ej. 5000UL = las estadisticas caen 12x mas rapido).
@@ -311,6 +312,21 @@ public:
   // Acciones (botones tactiles)
   void feed();              // baya roja (compatibilidad)
   void feedBerry(uint8_t color);  // 0 roja, 1 azul, 2 verde
+  // The berry garden (#115, garden.h): the pot's plant, saved with the pet (NVS potb, potg,
+  // potw, potd, pota) and kept through an ending. The sketch moves it on with the clock
+  // (Garden::settle) and draws it.
+  Garden garden;
+  // A tap on the pot (Garden::tap; `roll` any random number, for the berry planted). A ripe
+  // plant gives a berry only when the pet can eat (canPickBerry); the pet eats it at once
+  // (pickBerry). Planting, watering and clearing save with the next periodic save. `picked`
+  // is the berry's colour after GTAP_PICKED.
+  GardenTap tapGarden(uint32_t roll, uint8_t &picked);
+  bool canPickBerry() const { return ceremony == CER_NONE && !isEgg() && !sleeping && !eating(); }
+  // A berry from the garden: what a Food-strip berry gives (feedBerry: the favourite's heart
+  // and medal, a greedy pet's extra) and GARDEN_PICK_JOY, GARDEN_PICK_FULL, a heart and
+  // GARDEN_PICK_BOND more. The day's care, and a save. False, and nothing given, unless
+  // canPickBerry().
+  bool pickBerry(uint8_t color);
   void feedCandy();
   // The plush toy (#13, TOY_* above): the pet plays with it for TOY_ANIM_MS (playingToy()).
   // Returns the joy it gave: 0 once this hour's plays have given theirs, or with joy already
@@ -579,6 +595,7 @@ private:
 
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo
+  void eatBerry(uint8_t color);  // a berry eaten (feedBerry, pickBerry): no care or save of its own
   uint8_t playReward(uint8_t n);  // recompensa de un minijuego, n = 0..GAME_SCORE_CAP; the speed gained
   void exerciseDone(uint8_t work);  // an exercise session's cost and reward (#78)
   void addBond(uint8_t amt);

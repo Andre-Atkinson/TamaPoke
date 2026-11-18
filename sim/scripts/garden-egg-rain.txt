@@ -1,0 +1,22 @@
+# The berry garden (#115): with no pet yet (an egg: the starter or egg choice on screen, an
+# egg before it hatches) the garden takes the meadow's rain, as the scene keeps an egg in the
+# meadow, not the rain where a travelling pet would be (review R1-1, R2-2). On 2026-11-20 the
+# 03:00 and 06:00 blocks are dry in the meadow, while from 06:00 a pet whose home is the
+# meadow travels to the forest, where it rains (wxKind, travelPlace in weather.h). The pot's
+# 30-s settle (TamaPoke.ino) passes !pet.isEgg(): the dry plant stays dry. An egg hatches by
+# itself after 3 minutes, so the 50 minutes are spent on the first game's starter choice.
+#   tools/sim.sh --script garden-egg-rain --out shots/
+clock 2026-11-20 05:50
+battery 80
+
+# new game: the starter choice stays on screen (no pet yet)
+wait 1s
+serial GARDEN leaves dry
+serial GARDEN?
+expect garden stage=leaves * wet=0 *
+# into the 06:00 block, past several 30-s settles
+wait 50m
+serial GARDEN?
+expect garden stage=leaves * wet=0 *
+serial SCENE?
+expect scene * today=meadow home=meadow *

@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "attention.h"
+#include "garden.h"     // GSAY_*: the berry garden's lines (#115)
 #include "holiday.h"
 #include "nature.h"
 #include "playarea.h"   // PET_WALK_MIN..MAX, PLAY_MID_X (#66)
@@ -42,6 +43,7 @@ enum BubbleLine : uint8_t {
   BUB_HI, BUB_HAPPY, BUB_PAT,                      // the friendly lines
   BUB_LOVE_NAME,                                   // "I love you, %s!" (a name is set)
   BUB_LOVE,                                        // "I love you!" (no name)
+  BUB_THIRSTY, BUB_RIPE,                           // the berry garden (#115): a dry plant, ripe berries
   // the natures' lines (#86, nature.h): BUB_NAT_LINES for each nature, in NAT_* order
   // (bubbleNatureLine). The first names the nature as the stat card does ("I'm playful!"),
   // the others show it. None asks for care: only a low need's line does.
@@ -77,6 +79,7 @@ constexpr bool bubbleTakesName(uint8_t line, bool named) {
 // each line's name in the serial log ("say hungry") and in the simulator's "say" step
 inline const char *const BUBBLE_KEYS[BUB_LINES] = {
   "hungry", "bath", "tired", "bored", "sick", "morning", "stars", "milk", "hi", "happy", "pat", "love-name", "love",
+  "thirsty", "ripe",
   "easygoing-1", "easygoing-2", "easygoing-3", "greedy-1", "greedy-2", "greedy-3",
   "playful-1", "playful-2", "playful-3", "tidy-1", "tidy-2", "tidy-3", "lazy-1", "lazy-2", "lazy-3",
   "christmas", "newyear", "valentine", "easter", "halloween", "birthday",
@@ -109,7 +112,14 @@ struct BubbleIn {
   uint8_t nature = NAT_EASYGOING;  // the pet's (Pet::nature, #86); out of range counts as easygoing
   bool hatchLine = false;  // the pet just hatched: the nature's first line is due (#86)
   bool sick = false;  // the pet is sick (Pet::isSick, #15)
+  uint8_t garden = GSAY_NONE;  // what the berry garden asks for (Garden::say, #115)
 };
+
+// The berry garden's lines (#115) take part of the ordinary picks' friendly share, from
+// BUBBLE_GARDEN_FROM: BUBBLE_GARDEN_PCT while the plant is dry or ripe, twice that once it
+// is wilting soon. Never before a need, sickness, the hatch line or the milk hint.
+#define BUBBLE_GARDEN_FROM 50
+#define BUBBLE_GARDEN_PCT 15
 
 // r: any random number. A special day's greeting that is due comes first, even before a
 // need: it is rare (holiday.h) and the need's "!" bubble is back as soon as it ends.
@@ -118,7 +128,10 @@ struct BubbleIn {
 // the warm-milk hint when it is due (#13). Otherwise r % 100 picks the kind: 30% a time line
 // when one applies (r % 100 under 30), 20% a line of the pet's nature (30-49), 20% love
 // (80-99), and the rest friendly (30% with a time line, 60% without); r / 100 picks which
-// friendly or nature line. A need repeats while it lasts; any other line is not said twice in
+// friendly or nature line. The berry garden's lines (#115) take p 50-64 of the friendly
+// share while a plant is dry or ripe, 50-79 once it is wilting soon (which then leaves no
+// friendly line, except p 0-29 where no time line applies). A
+// need repeats while it lasts; any other line is not said twice in
 // a row (the hatch line and the milk hint either: then they wait for the next bubble, and
 // are only counted once said).
 inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
@@ -137,6 +150,9 @@ inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
   else if (in.clockKnown && in.starsOut && p < 30 && skyNightHour(in.hour))
     line = BUB_STARS;
   else if (p >= BUBBLE_NAT_FROM && p < BUBBLE_NAT_TO) line = bubbleNatureLine(in.nature, which);
+  else if (in.garden != GSAY_NONE && in.garden <= GSAY_RIPE && p >= BUBBLE_GARDEN_FROM &&
+           p < BUBBLE_GARDEN_FROM + BUBBLE_GARDEN_PCT * (in.garden == GSAY_WILTING ? 2 : 1))
+    line = in.garden == GSAY_RIPE ? BUB_RIPE : BUB_THIRSTY;
   else if (p < 80) line = friendly;
   else line = in.named ? BUB_LOVE_NAME : BUB_LOVE;
   if (line != in.last) return line;

@@ -30,6 +30,22 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
   streak is running: then it earns the Flowers as it hatches, and puts them on. An old save loads
   wearing nothing, with what its creature's medals already earned waiting on the page.
 
+- **A berry garden** (#115). A flower pot stands at the right-hand end of the ground,
+  wherever the creature travels, and stays through an ending. Tap the empty pot to plant a
+  berry (red, blue or green, a surprise), tap the plant to water it, and the rain waters it
+  too. It grows only while watered: ripe after 40 watered hours, about three days of one
+  watering a day. Dry a day its leaves turn yellow; dry two days a growing plant wilts (a ripe
+  one never does, and the creature is never affected). Tap the ripe plant for a berry, three
+  a plant: the berry hops to the creature, which eats it as a Food-button berry with +10
+  food, +10 joy, a heart and +1 bond on top. The creature says when its plant is thirsty or
+  its berries are ripe. Only a set clock moves the garden on: a power cut or setting the
+  clock never grows, dries or wilts it.
+
+### Changed
+
+- The Christmas tree, the Halloween pumpkins and two of the Easter eggs moved left, out of
+  the berry garden's corner, and so did two spots of spring flowers and autumn leaves.
+
 ## [1.20] - 2026-11-17
 
 ### Added

@@ -186,3 +186,17 @@ shot 29-egg-look
 tap 233 220
 wait 1s
 shot 30-egg-picked
+
+# the berry garden (#115, garden.h), beside the new egg: dry, wilting soon, ripe, wilted
+serial GARDEN sprout dry
+wait 500ms
+shot 31-garden-sprout-dry
+serial GARDEN flower wilting blue
+wait 500ms
+shot 32-garden-wilting
+serial GARDEN ripe wet green
+wait 500ms
+shot 33-garden-ripe
+serial GARDEN withered
+wait 500ms
+shot 34-garden-withered

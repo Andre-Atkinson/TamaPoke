@@ -1,0 +1,92 @@
+# The berry garden (#115, garden.h): the pot at the right-hand end of the ground (tap box
+# x 360-458, y 237-310; the pot itself at x 399-448, y 242-308).
+#   A. on the egg screen the pot takes its own taps: plant, water; a ripe plant waits
+#   B. hatched: a pick, the berry's hop and the heart; a second tap while it eats waits;
+#      three berries and the pot is empty
+#   C. a wilted stalk clears and the pot plants again
+#   D. rain on screen waters it; the thirsty and ripe lines (shots only: the say step logs
+#      nothing)
+#   E. it stays through an ending (BYE): the new egg finds the plant as it was
+#   F. watered time grows it (4 h: a sprout), with the screen dark
+#   tools/sim.sh --script garden --out shots/        (and --lang pt for the speech lines)
+clock 2026-11-13 10:00
+battery 80
+
+# A. new game: pick Charmander; the egg is on screen
+wait 1s
+tap 233 220
+wait 500ms
+tap 424 290
+expect garden: planted *
+shot 1-egg-planting
+tap 424 290
+expect-once garden: watered
+serial GARDEN ripe wet blue
+tap 424 290
+expect-once garden: ripe, the pet can't eat now
+expect-not garden: picked
+serial GARDEN?
+expect garden stage=ripe berry=blue left=3 wet=1 *
+
+# B. hatch it: a berry for the pet, with its hop to the pet and the heart
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+tap 424 290
+expect-once garden: picked blue, 2 left
+shot 2-pick-hop
+tap 424 290
+expect-once garden: ripe, the pet can't eat now
+wait 3s
+tap 424 290
+expect-once garden: picked blue, 1 left
+wait 3s
+tap 424 290
+expect-once garden: picked blue, 0 left
+serial GARDEN?
+expect garden stage=empty *
+
+# C. a wilted stalk clears with a tap, and the next tap plants
+wait 3s
+serial GARDEN withered
+shot 3-withered
+tap 424 290
+expect-once garden: cleared
+serial GARDEN?
+expect garden stage=empty *
+tap 424 290
+expect-once garden: planted *
+
+# D. rain on screen waters a dry plant at once; the lines
+serial GARDEN leaves dry green
+serial GARDEN?
+expect garden stage=leaves berry=green left=0 wet=0 *
+serial SCENE meadow rain
+wait 2s
+serial GARDEN?
+expect garden stage=leaves berry=green left=0 wet=1 *
+shot 4-rain
+serial SCENE auto
+serial GARDEN flower wilting
+say thirsty
+shot 5-thirsty
+serial GARDEN ripe
+say ripe
+shot 6-ripe
+
+# E. an ending keeps the garden
+serial GARDEN flower wet red
+serial BYE
+wait 12s
+serial GARDEN?
+expect garden stage=flower berry=red *
+shot 7-after-ending
+
+# F. watered time grows it, with the screen dark too (serial only from here: the screen goes
+# dark and the 1.75C locks its touch): a seed with its 12 h of water is a sprout after 4 h
+# (rain can only add water)
+serial GARDEN seed wet
+wait 4h10m
+serial GARDEN?
+expect garden stage=sprout *

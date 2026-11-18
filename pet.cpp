@@ -67,6 +67,7 @@ static uint8_t dropTo(uint8_t v, uint8_t d, uint8_t fl) {
 
 void Pet::setClock(uint32_t nowEpoch) {
   lastSeenEpoch = nowEpoch;
+  garden.at = 0;  // the garden starts afresh from the new time: a clock set never grows or dries it (#115)
   if (nowEpoch) save();  // persiste ya: un corte de luz no pierde la referencia
 }
 
@@ -766,6 +767,12 @@ void Pet::feed() {
 void Pet::feedBerry(uint8_t color) {
   if (ceremony != CER_NONE) return;
   if (isEgg() || sleeping) return;
+  eatBerry(color);
+  registerCare();
+  save();
+}
+
+void Pet::eatBerry(uint8_t color) {
   uint8_t extra = nature == NAT_GREEDY ? NAT_BERRY_EXTRA : 0;  // #25
   if (lovesBerry(color)) {
     fullness = clamp100(fullness + 35 + extra);
@@ -777,8 +784,26 @@ void Pet::feedBerry(uint8_t color) {
     fullness = clamp100(fullness + 25 + extra);
   }
   eatUntil = millis() + EAT_ANIM_MS;
+}
+
+// The berry garden (#115, garden.h)
+GardenTap Pet::tapGarden(uint32_t roll, uint8_t &picked) {
+  GardenTap t = garden.tap(roll, canPickBerry(), picked);
+  if (t == GTAP_PICKED) pickBerry(picked);
+  else if (t != GTAP_WAIT) pendingSave = true;  // the next quiet moment writes it (flushSave)
+  return t;
+}
+
+bool Pet::pickBerry(uint8_t color) {
+  if (!canPickBerry()) return false;
+  eatBerry(color);
+  fullness = clamp100(fullness + GARDEN_PICK_FULL);
+  joy = clamp100(joy + GARDEN_PICK_JOY);
+  heartUntil = millis() + HEART_MS;
+  addBond(GARDEN_PICK_BOND);
   registerCare();
   save();
+  return true;
 }
 
 void Pet::feedCandy() {
@@ -1065,6 +1090,11 @@ void Pet::save() {
   prefs.putString("nick", nick);
   prefs.putUChar("acc", acc);  // #116
   prefs.putUShort("accseen", accSeen);
+  prefs.putUChar("potb", garden.packed());  // the berry garden (#115)
+  prefs.putUInt("potg", garden.grown);
+  prefs.putUInt("potw", garden.wet);
+  prefs.putUInt("potd", garden.dry);
+  prefs.putUInt("pota", garden.at);
 }
 
 void Pet::load() {
@@ -1138,6 +1168,11 @@ void Pet::load() {
   germMin = prefs.getUShort("sickg", 0);
   healMin = prefs.getUShort("sickh", 0);
   sickMin = prefs.getUShort("sickt", 0);
+  // the berry garden (#115): range-checked as it loads (Garden::load); saves from before it
+  // have none of its keys, an empty pot
+  garden.load(prefs.getUChar("potb", 0), prefs.getUInt("potg", 0), prefs.getUInt("potw", 0),
+              prefs.getUInt("potd", 0), prefs.getUInt("pota", 0), CLOCK_EPOCH_MIN,
+              CLOCK_EPOCH_END);
 
   // Range-check what came out of NVS before anything indexes with it. Normally
   // these were written by this firmware, but a different build flashed earlier
