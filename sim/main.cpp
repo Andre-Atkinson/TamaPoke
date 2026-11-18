@@ -196,8 +196,16 @@ int main(int argc, char **argv) {
       printf("sim: %s%s\n", path.c_str(), simPanelVisible() ? "" : " (panel dark: screen off or locked)");
     return true;
   };
+  size_t otherBoard = 0;  // checks for the other board (`board` step): skipped, and counted as passed
   for (size_t i = first; i < script.cmds.size(); i++) {
     const SimCmd &c = script.cmds[i];
+    if (c.board >= 0 && c.board != (BOARD_AMOLED_175C ? 1 : 0)) {  // for the other board
+      if (simIsCheck(c.op)) {
+        checksPassed++;
+        otherBoard++;
+      }
+      continue;
+    }
     if (simIsCheck(c.op)) {
       std::string why;
       if (window.check(c, why)) {
@@ -297,6 +305,10 @@ int main(int argc, char **argv) {
         pet.trSpe = (uint8_t)c.c;
         run(50);
         break;
+      case OP_STEPS:
+        simStepsAdd((uint32_t)c.a);
+        run(50);
+        break;
       case OP_GAME:
         gameForceNext((uint8_t)c.a);
         run(50);
@@ -319,6 +331,8 @@ int main(int argc, char **argv) {
   }
   // Also with --quiet: tools/gate.sh compares the count with the script's expect steps.
   if (checks > 0) {
+    if (otherBoard > 0)
+      printf("sim: %zu check(s) are for the other board (`board` step): skipped, counted as passed\n", otherBoard);
     printf("sim: checks %zu/%zu passed\n", checksPassed, checks);
     fflush(stdout);
     if (checksPassed != checks) {

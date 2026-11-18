@@ -54,10 +54,12 @@ static_assert(StaminaHold::IDLE_END_MS <= POWER_GAME_AWAKE_MS, "an idle hold end
 #include "scene.h"
 #include "standby.h"
 #include "screens.h"
+#include "cardlayout.h"  // fitBtnHit: the Fitness page's TRAIN button (#117 moved it on the 1.75C)
 #include "serialcmd.h"
 #include "uitext.h"
 #include "owner.h"
 #include "holiday.h"
+#include "steps.h"     // walks (#117): the 1.75C's step counter
 #include "batdiary.h"
 #include <Preferences.h>
 
@@ -454,14 +456,18 @@ void setup() {
   birthdayLoad();  // the player's birthday for the special days (holiday.h, #26), if set
   batLogLoad();  // the battery diary (batdiary.h, #14): its first row comes from the loop
   Wire.begin(IIC_SDA, IIC_SCL);
+  bool stepsOk = false;  // the step engine started (the 1.75C only): the pet reads it below, once it is loaded
 #if BOARD_AMOLED_175C
-  // QMI8658 is on VCC3V3 and is not used by this firmware. CTRL7=0 disables its sensors; the
+  // Walks (#117): the QMI8658's step engine counts the player's steps (steps.h). If it
+  // doesn't start, the sensor is powered down as before #117.
+  // QMI8658 is on VCC3V3. CTRL7=0 disables its sensors; the
   // bigger saving is stopping the internal high-speed oscillator via CTRL1. SensorLib's
   // powerDown() sets CTRL1 bit 1; the previous code here set bit 0. No QMI8658 datasheet is
   // available locally to say which is the disable bit, so both are set (CTRL1=0x03).
   // WHO_AM_I is 0x05.
   const uint8_t qmiAddrs[] = { 0x6B, 0x6A };
-  for (uint8_t a : qmiAddrs) {
+  stepsOk = stepsBegin();
+  if (!stepsOk) for (uint8_t a : qmiAddrs) {
     Wire.beginTransmission(a);
     Wire.write(0x00);
     if (Wire.endTransmission(false) != 0) continue;
@@ -513,6 +519,10 @@ void setup() {
   touchBringUp();
 
   pet.begin();
+  if (stepsOk) {  // walks (#117): the pet reads the count once a minute; the engine started at 0 just now
+    pet.stepSource = stepsRead;
+    pet.walkStart();
+  }
   sdBegin();
   thumbs.load();
 
@@ -845,7 +855,8 @@ void loop() {
   if (!panelAsleep && panelBrightness) batLogScreenOn(now - diaryPassAt);
   diaryPassAt = now;
   // self-care while charging (#24): the cached USB reading, no extra I2C
-  pet.setCharger(pmuReady, usbPresent(), idleSince(now, lastInteract));
+  // (and walks, #117: no counting and no treats on USB; the day and bedtime need a clock that is set)
+  pet.setCharger(pmuReady, usbPresent(), idleSince(now, lastInteract), !bedEdge.stale());
   // quiet hours for the sounds nobody asked for (#44): the hourly level-up and a medal that
   // time earned (Pet::tick), and the evolve and run-away alerts below
   bool quiet = quietNow();
@@ -1802,7 +1813,7 @@ void onTap(int16_t x, int16_t y) {
         cardOpen = false;
         startExercise(kind);
       }
-    } else if (cardPage == 1 && y >= 300 && y <= 340 && x >= 96 && x <= 370) {
+    } else if (cardPage == 1 && fitBtnHit(x, y, BOARD_AMOLED_175C != 0)) {
       // the TRAIN button: choose an exercise; asleep, the card stays and says why (#89)
       if (pet.sleeping) trainAsleepNote();
       else trainPick = true;

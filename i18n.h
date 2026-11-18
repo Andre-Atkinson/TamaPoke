@@ -101,6 +101,7 @@ enum StrId : uint8_t {
   S_SAY_MILK,  // the warm-milk hint (#13)
   S_SAY_HI, S_SAY_HAPPY, S_SAY_PAT, S_SAY_LOVE_FMT, S_SAY_LOVE,
   S_SAY_THIRSTY, S_SAY_RIPE,  // the berry garden (#115): a dry plant, ripe berries
+  S_SAY_WALK,  // after a good walk (#117, WalkBubble)
   // the natures' lines (#86), three for each nature in NAT_* order: the first names it with
   // the stat card's word (natureName()), and none asks for care
   S_SAY_EASYGOING_1, S_SAY_EASYGOING_2, S_SAY_EASYGOING_3, S_SAY_GREEDY_1, S_SAY_GREEDY_2, S_SAY_GREEDY_3,
@@ -128,6 +129,9 @@ enum StrId : uint8_t {
   S_ACC_EARN_BOW, S_ACC_EARN_FLOWERS, S_ACC_EARN_BOBBLE, S_ACC_EARN_CAP, S_ACC_EARN_TOPHAT,
   S_ACC_EARN_CROWN, S_ACC_EARN_LAUREL,
   S_ACC_NEW_FMT, S_ACC_SWIPE,
+  // walks (#117), the 1.75C's Fitness page: "Steps today: 3,240" (the count is formatCount()'s
+  // text, a %s) and "Walk treats: 12"
+  S_STEPS_TODAY_FMT, S_WALK_TREATS_FMT,
   STR_COUNT
 };
 
@@ -146,6 +150,10 @@ void bannerLines(int banner, uint16_t streakDays, const char **l1, const char **
 // The date as the standby clock shows it (#60), short: "Sat 15 Nov", "s\240b, 15 nov".
 // `weekday` 0 (Sunday) to 6, `month` 1 to 12 (CivilDate, weather.h); out of range: "?".
 void formatDate(char *buf, size_t n, uint8_t weekday, uint8_t day, uint8_t month);
+// A count as the active language writes it (#117, the steps on the Fitness page): English
+// groups thousands with a comma ("3,240", "12,345"); European Portuguese with a space from
+// five digits up ("3240", "12 345"), as it writes numbers.
+void formatCount(char *buf, size_t n, uint32_t v);
 
 void loadLang();             // reads the language from NVS (call in setup); never writes
 void setLang(Lang l);        // switches and saves the language (an invalid one is ignored)

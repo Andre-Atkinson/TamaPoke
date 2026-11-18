@@ -14,6 +14,7 @@
 #include "screens.h"
 #include "sdmon.h"
 #include "serialcmd.h"
+#include "steps.h"     // STEPS? (#117)
 
 // ---------- consola serie (provision de SD + depuracion) ----------
 
@@ -95,6 +96,16 @@ void handleSerial() {
     return;
   }
 #endif
+  if (line == "STEPS?") {  // read-only: the step counter and what it made of today (#117, steps.h, walks.h)
+    uint32_t chip = 0;
+    bool read = stepsRead(&chip);  // false: no step counter on this board, or the read failed
+    char c[12] = "-";
+    if (read) snprintf(c, sizeof c, "%lu", (unsigned long)chip);
+    Serial.printf("STEPS on=%d chip=%s today=%lu day=%lu bank=%u earned=%u counting=%d\n", stepsOn() ? 1 : 0, c,
+                  (unsigned long)pet.walk.steps, (unsigned long)pet.walk.day, (unsigned)pet.walk.bank,
+                  (unsigned)pet.walk.earned, pet.walkCounting() ? 1 : 0);
+    return;
+  }
   if (sdSerialCommand(line)) return;
 
   char ownerArg[OWNER_CMD_NAME_BYTES];  // the name of an OWNER <name> line (owner.h)

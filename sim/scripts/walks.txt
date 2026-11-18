@@ -1,0 +1,227 @@
+# Walks (#117): the 1.75C's step counter (the QMI8658's step engine), what it makes of today's
+# steps, the walk treats, the walking ribbon and the speech bubble after a walk, and the pages that
+# show them. The simulator's chip counts only when the script says so (`steps N`, sim/script.h);
+# the original 1.75 has no step counter, so what the 1.75C counts is under `board 175c` and what
+# the 1.75 does (nothing) under `board 175`: tools/gate.sh runs every script with a check on both
+# boards. The shots are the Fitness and medals pages, as the board has them.
+#   tools/sim.sh --board 175c --lang pt --script walks --out shots/
+#   tools/sim.sh --board 175 --lang en --script walks --out shots/
+# The pet reads the chip once a minute (Pet::walkMinute), so each `steps` is followed by a wait
+# of a little over a minute. `serial STEPS?` prints engine on, the chip's count, today's steps, the
+# day, the treats banked, the treats earned today and whether counting is open now.
+lang en
+clock 2026-11-18 10:00
+battery 64
+usb off
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# ---- off the charger the steps count, and every 250 of them bank a treat
+board 175c
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=0 today=0 day=* bank=0 earned=0 counting=1
+steps 120
+wait 70s
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=120 today=120 day=* bank=0 earned=0 counting=1
+expect-not walk: +
+steps 180
+wait 70s
+expect walk: +180 steps, 1 treat banked (1)
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=300 today=300 day=* bank=1 earned=1 counting=1
+# one look is at most 300 steps, whatever the chip says (a bad read can't add thousands)
+steps 5000
+wait 70s
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=5300 today=600 day=* bank=2 earned=2 counting=1
+board 175c
+press pwr
+wait 1s
+board 175
+tap 233 60
+wait 1s
+board both
+swipe up
+swipe left
+shot walks-fitness-day
+# the TRAIN button moved down on the 1.75C (cardlayout.h, fitBtnY): a tap on its new lower edge opens the choice
+board 175c
+tap 233 348
+wait 500ms
+shot walks-train-pick
+tap 233 420
+wait 500ms
+board both
+swipe left
+shot walks-medals-day
+tap 233 420
+wait 1s
+
+# ---- on the charger they are thrown away: not counted now, not saved up for later
+usb on
+board 175c
+steps 250
+wait 70s
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=5550 today=600 day=* bank=2 earned=2 counting=0
+expect-not walk: +
+board both
+usb off
+board 175c
+steps 10
+wait 70s
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=5560 today=610 day=* bank=2 earned=2 counting=1
+steps 300
+wait 70s
+steps 300
+wait 70s
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=6160 today=1210 day=* bank=4 earned=4 counting=1
+
+# ---- the original 1.75 has no step counter: nothing counts, and nothing is earned
+board 175
+steps 300
+wait 70s
+serial STEPS?
+wait 1s
+expect STEPS on=0 chip=- today=0 day=0 bank=0 earned=0 counting=0
+expect-not walk: +
+board both
+
+# ---- a walk of 1,000 steps and 10 quiet minutes: the pet says so when it has the screen to itself
+board 175c
+wait 12m
+expect walk treat: *->80
+press pwr
+wait 5s
+expect say walk
+shot walks-bubble
+# ...and says it once: the next bubble is another line
+wait 130s
+press pwr
+wait 8s
+expect say *
+expect-not say walk
+board both
+
+
+# ---- the treats still banked go the same way as the needs fall: all four spent, none earned back
+board 175c
+wait 25m
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=6160 today=1210 day=* bank=0 earned=4 counting=1
+board both
+
+# ---- the day's cap: 40 treats earned, whatever comes after (10,000 steps)
+
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+steps 300
+wait 65s
+board 175c
+serial STEPS?
+wait 1s
+expect STEPS on=1 chip=15160 today=10210 day=* bank=* earned=40 counting=1
+steps 300
+wait 70s
+serial STEPS?
+wait 1s
+expect-not walk: +
+expect STEPS on=1 chip=15460 today=10510 day=* bank=* earned=40 counting=1
+press pwr
+wait 1s
+board 175
+tap 233 60
+wait 1s
+board both
+swipe up
+swipe left
+shot walks-fitness-full
+swipe left
+shot walks-medals-ribbon
+tap 233 420
+wait 1s
+
+# ---- the same pages at night (22:00 the same day: the steps stay today's)
+serial TIME 1795039200
+wait 2s
+swipe up
+swipe left
+shot walks-fitness-night
+swipe left
+shot walks-medals-night
+tap 233 420
+wait 1s
+

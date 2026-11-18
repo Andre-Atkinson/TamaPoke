@@ -10,7 +10,8 @@
 //    MilkHint). Otherwise, at random, a morning or night line (only with a clock that is set
 //    and not stale), a line of the pet's nature (#86), a friendly line, or "I love you" (with
 //    the player's name when one is set, owner.h). Right after a hatch the nature's first line,
-//    which names it as the stat card does, comes before the warm-milk hint and the rest.
+//    which names it as the stat card does, comes before the warm-milk hint and the rest. After a
+//    good walk (#117, WalkBubble in walks.h) "That was a lovely walk!" comes next, once.
 //  - bubbleChoose(): bubblePick() plus the greeting's rules (a few a day, never in quiet hours)
 //    and the hatch line's.
 //  - HatchLine: whether a pet that has just hatched still has to name its nature (#86).
@@ -44,6 +45,7 @@ enum BubbleLine : uint8_t {
   BUB_LOVE_NAME,                                   // "I love you, %s!" (a name is set)
   BUB_LOVE,                                        // "I love you!" (no name)
   BUB_THIRSTY, BUB_RIPE,                           // the berry garden (#115): a dry plant, ripe berries
+  BUB_WALK,                                        // "That was a lovely walk!" (#117, WalkBubble)
   // the natures' lines (#86, nature.h): BUB_NAT_LINES for each nature, in NAT_* order
   // (bubbleNatureLine). The first names the nature as the stat card does ("I'm playful!"),
   // the others show it. None asks for care: only a low need's line does.
@@ -79,7 +81,7 @@ constexpr bool bubbleTakesName(uint8_t line, bool named) {
 // each line's name in the serial log ("say hungry") and in the simulator's "say" step
 inline const char *const BUBBLE_KEYS[BUB_LINES] = {
   "hungry", "bath", "tired", "bored", "sick", "morning", "stars", "milk", "hi", "happy", "pat", "love-name", "love",
-  "thirsty", "ripe",
+  "thirsty", "ripe", "walk",
   "easygoing-1", "easygoing-2", "easygoing-3", "greedy-1", "greedy-2", "greedy-3",
   "playful-1", "playful-2", "playful-3", "tidy-1", "tidy-2", "tidy-3", "lazy-1", "lazy-2", "lazy-3",
   "christmas", "newyear", "valentine", "easter", "halloween", "birthday",
@@ -113,6 +115,7 @@ struct BubbleIn {
   bool hatchLine = false;  // the pet just hatched: the nature's first line is due (#86)
   bool sick = false;  // the pet is sick (Pet::isSick, #15)
   uint8_t garden = GSAY_NONE;  // what the berry garden asks for (Garden::say, #115)
+  bool walk = false;  // a good walk has ended and the pet hasn't said so yet (WalkBubble::due, #117)
 };
 
 // The berry garden's lines (#115) take part of the ordinary picks' friendly share, from
@@ -125,6 +128,7 @@ struct BubbleIn {
 // need: it is rare (holiday.h) and the need's "!" bubble is back as soon as it ends.
 // Then a low need, then sickness (#15: as the "!" bubble and the status line, after the needs;
 // it repeats while it lasts, as a need does), then right after a hatch the line that names the pet's nature (#86), then
+// the walk's line when a good walk has ended (#117; the caller says it was said, once), then
 // the warm-milk hint when it is due (#13). Otherwise r % 100 picks the kind: 30% a time line
 // when one applies (r % 100 under 30), 20% a line of the pet's nature (30-49), 20% love
 // (80-99), and the rest friendly (30% with a time line, 60% without); r / 100 picks which
@@ -141,6 +145,7 @@ inline uint8_t bubblePick(const BubbleIn &in, uint32_t r) {
   if (in.sick) return BUB_SICK;
   uint8_t naming = bubbleNatureLine(in.nature, 0);
   if (in.hatchLine && in.last != naming) return naming;
+  if (in.walk) return BUB_WALK;
   if (in.milkHint && in.last != BUB_MILK) return BUB_MILK;
   uint32_t p = r % 100;
   uint8_t which = (uint8_t)((r / 100) % BUB_FRIENDLY);  // BUB_FRIENDLY == BUB_NAT_LINES
