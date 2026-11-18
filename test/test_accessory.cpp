@@ -353,7 +353,8 @@ TEST(accfix, every_species_wears_one_on_every_frame_it_shows) {
 // Walking right is walking left turned round (the sprite pack's WALKR is its exact mirror, a
 // column out for a few), so the row for WALKL serves both with its band's middle turned round:
 // on every walking frame of every species with a row, the head found walking right sits where
-// the mirror image of the one found walking left does, within a pixel.
+// the mirror image of the one found walking left does, within a pixel, and each is at the
+// front: left of the canvas's middle walking left, right of it walking right.
 TEST(accfix, walking_right_finds_the_mirror_of_walking_lefts_head) {
   bool m = false;
   const AccFix *g = accFixFor(130, PMD_WALKR, m);  // Gyarados
@@ -378,6 +379,8 @@ TEST(accfix, walking_right_finds_the_mirror_of_walking_lefts_head) {
       CHECK_MSG(hl.w > 0 && hr.w > 0, where + ": a head both ways");
       // twice the head's centre column (x0 + (w - 1) / 2), to stay in whole numbers
       int cl = 2 * hl.x0 + hl.w - 1, cr = 2 * hr.x0 + hr.w - 1, mirror = 2 * (l.w - 1) - cl;
+      CHECK_MSG(cl <= l.w - 1 && cr >= r.w - 1,
+                where + ": the head at the front: left of the middle walking left, right of it walking right");
       CHECK_MSG(std::abs(cr - mirror) <= 2,
                 where + ": walking right's head at " + std::to_string(cr / 2.0) + ", the mirror of left's at " +
                     std::to_string(mirror / 2.0));
