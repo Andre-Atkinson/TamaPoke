@@ -34,12 +34,12 @@ CXXFLAGS ?= -O2 -g
 CXXFLAGS += -std=gnu++17 -funsigned-char -MMD -MP $(DEFS) $(INCLUDES)
 WARN     := -Wall -Wextra -Wno-unused-parameter
 
-# el firmware tal cual (rtcbat.cpp y audio.cpp los sustituyen rtcbat_sim.cpp y el audio
+# el firmware tal cual (rtcbat.cpp, steps.cpp y audio.cpp los sustituyen rtcbat_sim.cpp, steps_sim.cpp y el audio
 # mudo de test/shim/shim.cpp)
 FW_SRCS  := pet.cpp i18n.cpp sdmon.cpp screenlock.cpp bootbutton.cpp trainingcapture.cpp trainingtouch.cpp \
             serialcmd.cpp uitext.cpp scene.cpp gameui.cpp screens.cpp idlelife.cpp bubble.cpp owner.cpp holiday.cpp batdiary.cpp
 # the fake board and the helpers both programs use (tamapoke_sim adds main.cpp)
-COMMON_SRCS := simhw.cpp simfs.cpp rtcbat_sim.cpp script.cpp png.cpp boot.cpp
+COMMON_SRCS := simhw.cpp simfs.cpp rtcbat_sim.cpp steps_sim.cpp script.cpp png.cpp boot.cpp
 SIM_SRCS := main.cpp $(COMMON_SRCS)
 # the window: only built by the `window` target, the only one that uses SDL
 WIN_SRCS := interactive.cpp window.cpp main_window.cpp

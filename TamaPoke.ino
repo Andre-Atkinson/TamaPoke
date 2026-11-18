@@ -58,6 +58,7 @@ static_assert(StaminaHold::IDLE_END_MS <= POWER_GAME_AWAKE_MS, "an idle hold end
 #include "uitext.h"
 #include "owner.h"
 #include "holiday.h"
+#include "steps.h"     // walks (#117): the 1.75C's step counter
 #include "batdiary.h"
 #include <Preferences.h>
 
@@ -455,13 +456,15 @@ void setup() {
   batLogLoad();  // the battery diary (batdiary.h, #14): its first row comes from the loop
   Wire.begin(IIC_SDA, IIC_SCL);
 #if BOARD_AMOLED_175C
-  // QMI8658 is on VCC3V3 and is not used by this firmware. CTRL7=0 disables its sensors; the
+  // Walks (#117): the QMI8658's step engine counts the player's steps (steps.h). If it
+  // doesn't start, the sensor is powered down as before #117.
+  // QMI8658 is on VCC3V3. CTRL7=0 disables its sensors; the
   // bigger saving is stopping the internal high-speed oscillator via CTRL1. SensorLib's
   // powerDown() sets CTRL1 bit 1; the previous code here set bit 0. No QMI8658 datasheet is
   // available locally to say which is the disable bit, so both are set (CTRL1=0x03).
   // WHO_AM_I is 0x05.
   const uint8_t qmiAddrs[] = { 0x6B, 0x6A };
-  for (uint8_t a : qmiAddrs) {
+  if (!stepsBegin()) for (uint8_t a : qmiAddrs) {
     Wire.beginTransmission(a);
     Wire.write(0x00);
     if (Wire.endTransmission(false) != 0) continue;

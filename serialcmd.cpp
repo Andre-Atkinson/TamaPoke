@@ -14,6 +14,7 @@
 #include "screens.h"
 #include "sdmon.h"
 #include "serialcmd.h"
+#include "steps.h"     // STEPS? (#117)
 
 // ---------- consola serie (provision de SD + depuracion) ----------
 
@@ -95,6 +96,10 @@ void handleSerial() {
     return;
   }
 #endif
+  if (line == "STEPS?") {  // read-only: the step counter (#117, steps.h)
+    stepsPrintStatus();
+    return;
+  }
   if (sdSerialCommand(line)) return;
 
   char ownerArg[OWNER_CMD_NAME_BYTES];  // the name of an OWNER <name> line (owner.h)
