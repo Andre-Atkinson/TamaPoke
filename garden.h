@@ -156,12 +156,13 @@ struct Garden {
   }
 
   // Moves the garden on to `now`, the trusted clock (sceneEpoch(): 0 while it is stale or
-  // unknown), with the rain at the pet's place block by block (`home`, the pet's home:
-  // travelPlace() picks the day's place from it; an egg's is the meadow). With no trusted
-  // clock it stands still and forgets where it was, so the first trusted settle starts
-  // afresh; a clock that went back starts afresh too. Catches up at most GARDEN_CATCHUP_S
-  // (the latest part).
-  void settle(uint32_t now, uint8_t home) {
+  // unknown), with the rain at the pet's place block by block. `home`: the pet's home
+  // (sceneHome(); an egg's is the meadow). `travels`: the pet goes visiting, so travelPlace()
+  // picks the day's place from `home`; an egg doesn't (the scene keeps it in the meadow), so
+  // the caller passes !pet.isEgg(). With no trusted clock it stands still and forgets where
+  // it was, so the first trusted settle starts afresh; a clock that went back starts afresh
+  // too. Catches up at most GARDEN_CATCHUP_S (the latest part).
+  void settle(uint32_t now, uint8_t home, bool travels) {
     if (!now) {
       at = 0;
       return;
@@ -177,7 +178,8 @@ struct Garden {
       uint32_t end = (block + 1) * WX_BLOCK_S;
       if (end > now) end = now;
       // it rains through the block, and the water lasts GARDEN_WATER_S after it ends
-      if (gardenWeatherWaters(wxKind(travelPlace(home, t), block)))
+      uint8_t place = travels ? travelPlace(home, t) : home;
+      if (gardenWeatherWaters(wxKind(place, block)))
         water((block + 1) * WX_BLOCK_S - t + GARDEN_WATER_S);
       pass(end - t);
       t = end;
@@ -248,11 +250,13 @@ struct Garden {
 
   // Loads the saved values and range-checks them: anything this firmware can't have written
   // (a damaged page, another build) gives an empty pot, never a plant that grew or wilted on
-  // its own. Returns false when it had to empty the pot. `savedAt` past the clock's range
-  // (`clockEnd`) reads as none.
-  bool load(uint8_t b, uint32_t g, uint32_t w, uint32_t d, uint32_t savedAt, uint32_t clockEnd) {
+  // its own. Returns false when it had to empty the pot. `savedAt` outside the clock's
+  // range (`clockMin` to `clockEnd`) reads as none: a damaged one must not become a
+  // reference that catches up days at the first trusted settle.
+  bool load(uint8_t b, uint32_t g, uint32_t w, uint32_t d, uint32_t savedAt, uint32_t clockMin,
+            uint32_t clockEnd) {
     clear();
-    at = savedAt < clockEnd ? savedAt : 0;
+    at = savedAt >= clockMin && savedAt < clockEnd ? savedAt : 0;
     uint8_t p = b & 3, c = (b >> 2) & 3, l = (b >> 4) & 0x0F;
     bool ok = (b >> 6) == 0 && p < GARDEN_PLANTS && c < GARDEN_BERRY_COLORS;
     if (ok && p == GARDEN_GROWING) {

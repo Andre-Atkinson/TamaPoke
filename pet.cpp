@@ -1133,7 +1133,8 @@ void Pet::load() {
   // the berry garden (#115): range-checked as it loads (Garden::load); saves from before it
   // have none of its keys, an empty pot
   garden.load(prefs.getUChar("potb", 0), prefs.getUInt("potg", 0), prefs.getUInt("potw", 0),
-              prefs.getUInt("potd", 0), prefs.getUInt("pota", 0), CLOCK_EPOCH_END);
+              prefs.getUInt("potd", 0), prefs.getUInt("pota", 0), CLOCK_EPOCH_MIN,
+              CLOCK_EPOCH_END);
 
   // Range-check what came out of NVS before anything indexes with it. Normally
   // these were written by this firmware, but a different build flashed earlier

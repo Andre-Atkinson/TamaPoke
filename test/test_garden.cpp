@@ -192,7 +192,7 @@ TEST(garden, rain_where_the_pet_is_waters_it_through_the_block_and_12_hours) {
     g.wet = 0;
     g.dry = 5 * H;
     g.at = r + 60;
-    g.settle(r + 120, home);
+    g.settle(r + 120, home, true);
     CHECK_MSG(g.wet == WX_BLOCK_S - 60 + GARDEN_WATER_S - 60, "home " + std::to_string(home));
     CHECK_EQ(g.dry, 0u);
     CHECK_EQ(g.grown, 60u);
@@ -204,14 +204,14 @@ TEST(garden, with_no_rain_it_dries) {
   uint32_t s = findDry(PLACE_VOLCANO, T0, 3 * DAY);
   Garden g = planted();
   g.at = s;
-  g.settle(s + 2 * H, PLACE_VOLCANO);
+  g.settle(s + 2 * H, PLACE_VOLCANO, true);
   CHECK_EQ(g.grown, 2 * H);
   CHECK_EQ(g.wet, GARDEN_WATER_S - 2 * H);
-  g.settle(s + GARDEN_WATER_S + GARDEN_WARN_S, PLACE_VOLCANO);
+  g.settle(s + GARDEN_WATER_S + GARDEN_WARN_S, PLACE_VOLCANO, true);
   CHECK_EQ(g.grown, GARDEN_WATER_S);
   CHECK_EQ(g.dry, GARDEN_WARN_S);
   CHECK(g.wiltingSoon());
-  g.settle(s + GARDEN_WATER_S + GARDEN_WILT_S, PLACE_VOLCANO);
+  g.settle(s + GARDEN_WATER_S + GARDEN_WILT_S, PLACE_VOLCANO, true);
   CHECK_EQ(g.stage(), (uint8_t)GST_WITHERED);
 }
 
@@ -228,8 +228,30 @@ TEST(garden, the_rain_is_where_the_pet_travelled_that_day) {
     g.wet = 0;
     g.dry = H;
     g.at = t;
-    g.settle(t + 60, home);
+    g.settle(t + 60, home, true);
     CHECK_MSG(g.watered() == away, "block " + std::to_string(b));
+  }
+  CHECK_EQ(found, 3);
+}
+
+// An egg stays in the meadow on screen (sceneToday() never travels it), so its pot gets the
+// meadow's rain: settle(now, home, travels = false) follows `home`, not travelPlace().
+TEST(garden, an_egg_that_does_not_travel_gets_the_rain_of_its_home) {
+  int found = 0;
+  for (uint32_t t = T0; t < T0 + 200 * DAY && found < 3; t += WX_BLOCK_S) {
+    uint8_t there = travelPlace(PLACE_MEADOW, t);
+    bool meadow = gardenWeatherWaters(wxKind(PLACE_MEADOW, t / WX_BLOCK_S));
+    bool away = gardenWeatherWaters(wxKind(there, t / WX_BLOCK_S));
+    if (there == PLACE_MEADOW || meadow == away) continue;
+    found++;
+    Garden stays = planted(), goes = planted();
+    stays.wet = goes.wet = 0;
+    stays.dry = goes.dry = H;
+    stays.at = goes.at = t;
+    stays.settle(t + 60, PLACE_MEADOW, false);
+    goes.settle(t + 60, PLACE_MEADOW, true);
+    CHECK_MSG(stays.watered() == meadow, "stays: block " + std::to_string(t / WX_BLOCK_S));
+    CHECK_MSG(goes.watered() == away, "goes: block " + std::to_string(t / WX_BLOCK_S));
   }
   CHECK_EQ(found, 3);
 }
@@ -238,8 +260,8 @@ TEST(garden, many_small_settles_add_up_to_one_big_one) {
   for (uint8_t home : { (uint8_t)PLACE_MEADOW, (uint8_t)PLACE_FOREST, (uint8_t)PLACE_SNOW }) {
     Garden a = planted(), b = planted();
     a.at = b.at = T0 + 1234;
-    for (uint32_t t = T0 + 1234 + 30; t <= T0 + 1234 + 4 * DAY; t += 30) a.settle(t, home);
-    b.settle(T0 + 1234 + 4 * DAY, home);
+    for (uint32_t t = T0 + 1234 + 30; t <= T0 + 1234 + 4 * DAY; t += 30) a.settle(t, home, true);
+    b.settle(T0 + 1234 + 4 * DAY, home, true);
     CHECK_MSG(same(a, b), "home " + std::to_string(home));
     CHECK_EQ(a.at, b.at);
   }
@@ -249,13 +271,13 @@ TEST(garden, a_stale_clock_stands_it_still_and_the_first_trusted_time_only_start
   Garden g = planted();
   g.at = T0;
   Garden before = g;
-  g.settle(0, PLACE_MEADOW);  // stale
+  g.settle(0, PLACE_MEADOW, true);  // stale
   CHECK(same(g, before));
   CHECK_EQ(g.at, 0u);
-  g.settle(T0 + 5 * DAY, PLACE_MEADOW);  // set: it starts from here
+  g.settle(T0 + 5 * DAY, PLACE_MEADOW, true);  // set: it starts from here
   CHECK(same(g, before));
   CHECK_EQ(g.at, T0 + 5 * DAY);
-  g.settle(T0 + 5 * DAY + H, PLACE_MEADOW);
+  g.settle(T0 + 5 * DAY + H, PLACE_MEADOW, true);
   CHECK_MSG(g.grown >= H, "an hour of the seed's water counts");
 }
 
@@ -263,7 +285,7 @@ TEST(garden, a_clock_that_goes_back_starts_it_afresh) {
   Garden g = planted();
   g.at = T0 + DAY;
   Garden before = g;
-  g.settle(T0, PLACE_MEADOW);
+  g.settle(T0, PLACE_MEADOW, true);
   CHECK(same(g, before));
   CHECK_EQ(g.at, T0);
 }
@@ -303,7 +325,7 @@ TEST(garden, it_catches_up_at_most_7_days) {
   g.wet = 0;
   g.dry = 0;
   g.at = now - gap;
-  g.settle(now, home);
+  g.settle(now, home, true);
   CHECK_EQ(g.stage(), (uint8_t)GST_WITHERED);
   CHECK_EQ(g.at, now);
   // ...and from 7 days back, the same
@@ -311,7 +333,7 @@ TEST(garden, it_catches_up_at_most_7_days) {
   h.grown = GARDEN_RIPE_S - H;
   h.wet = h.dry = 0;
   h.at = now - GARDEN_CATCHUP_S;
-  h.settle(now, home);
+  h.settle(now, home, true);
   CHECK_EQ(h.stage(), (uint8_t)GST_WITHERED);
 }
 
@@ -323,8 +345,8 @@ TEST(garden, the_home_given_is_the_one_counted_so_an_ending_counts_from_its_sett
     Garden a = planted(), b = planted();
     a.wet = b.wet = 0;
     a.at = b.at = t;
-    a.settle(t + 60, PLACE_MEADOW);
-    b.settle(t + 60, PLACE_VOLCANO);
+    a.settle(t + 60, PLACE_MEADOW, true);
+    b.settle(t + 60, PLACE_VOLCANO, true);
     CHECK_EQ(a.watered(), m);
     CHECK_EQ(b.watered(), v);
     return;
@@ -342,7 +364,7 @@ TEST(garden, every_state_saves_and_loads_as_it_was) {
         g.force(st, moist, c);
         g.at = T0 + st;
         Garden h;
-        CHECK(h.load(g.packed(), g.grown, g.wet, g.dry, g.at, CLOCK_EPOCH_END));
+        CHECK(h.load(g.packed(), g.grown, g.wet, g.dry, g.at, CLOCK_EPOCH_MIN, CLOCK_EPOCH_END));
         CHECK_MSG(same(g, h) && h.at == g.at, std::string(GARDEN_STAGE_KEYS[st]) + " " + std::to_string(moist));
       }
   Garden r;
@@ -350,7 +372,7 @@ TEST(garden, every_state_saves_and_loads_as_it_was) {
   uint8_t picked = 0;
   r.tap(0, true, picked);  // two left
   Garden h;
-  CHECK(h.load(r.packed(), r.grown, r.wet, r.dry, 0, CLOCK_EPOCH_END));
+  CHECK(h.load(r.packed(), r.grown, r.wet, r.dry, 0, CLOCK_EPOCH_MIN, CLOCK_EPOCH_END));
   CHECK_EQ(h.left, (uint8_t)2);
 }
 
@@ -376,14 +398,25 @@ TEST(garden, a_damaged_save_loads_as_an_empty_pot) {
   };
   for (const Bad &x : bad) {
     Garden g = ok;
-    CHECK_MSG(!g.load(x.b, x.g, x.w, x.d, T0, CLOCK_EPOCH_END), x.why);
+    CHECK_MSG(!g.load(x.b, x.g, x.w, x.d, T0, CLOCK_EPOCH_MIN, CLOCK_EPOCH_END), x.why);
     CHECK_MSG(g.stage() == GST_EMPTY && g.wet == 0 && g.dry == 0 && g.grown == 0 && g.left == 0, x.why);
     CHECK_MSG(g.at == T0, x.why);
   }
   Garden g;
-  CHECK(g.load(ok.packed(), ok.grown, ok.wet, ok.dry, CLOCK_EPOCH_END, CLOCK_EPOCH_END));
+  CHECK(g.load(ok.packed(), ok.grown, ok.wet, ok.dry, CLOCK_EPOCH_END, CLOCK_EPOCH_MIN, CLOCK_EPOCH_END));
   CHECK_MSG(g.at == 0, "a saved time past the clock's range reads as none");
   CHECK(same(g, ok));
+  // a saved time before the clock's range reads as none too, the rest of the save intact
+  for (uint32_t low : { 1u, CLOCK_EPOCH_MIN - 1 }) {
+    Garden l;
+    CHECK_MSG(l.load(ok.packed(), ok.grown, ok.wet, ok.dry, low, CLOCK_EPOCH_MIN, CLOCK_EPOCH_END),
+              "a low saved time still loads the plant");
+    CHECK_MSG(l.at == 0, "a saved time before the clock's range reads as none: " + std::to_string(low));
+    CHECK(same(l, ok));
+  }
+  Garden m;
+  CHECK(m.load(ok.packed(), ok.grown, ok.wet, ok.dry, CLOCK_EPOCH_MIN, CLOCK_EPOCH_MIN, CLOCK_EPOCH_END));
+  CHECK_MSG(m.at == CLOCK_EPOCH_MIN, "the clock's first second is a valid reference");
 }
 
 static void hatchPet(Pet &p) {
