@@ -73,11 +73,23 @@ static bool configure(uint8_t r, uint8_t p) {
   engineOn = false;
   imu.disablePedometer();
   imu.disableAccel();
-  // The oscillator on: the power-down before #117 set CTRL1's bits 0 and 1, and the chip
-  // keeps its power across an app-only update.
+  // CTRL1: the oscillator on (bit 0 clear; the power-down before #117 set bits 0 and 1, and
+  // the chip keeps its power across an app-only update) and the register address
+  // auto-increment on (bit 6). SensorLib's reset() sets bit 6, but its wait can end on a
+  // stale "reset done" and the reset then finishes later and clears it: seen on the board
+  // (2026-11-18, CTRL1 0x20, every multi-byte read repeating one register). Without it,
+  // SensorLib's two-byte writes of the step profile land in one register and nothing counts.
   int c1 = readReg(QMI_CTRL1);
-  if (c1 < 0 || ((c1 & 0x03) && !writeReg(QMI_CTRL1, (uint8_t)(c1 & ~0x03)))) {
+  uint8_t want1 = (uint8_t)((c1 & ~0x03) | 0x40);
+  if (c1 < 0 || (c1 != want1 && !writeReg(QMI_CTRL1, want1)) || readReg(QMI_CTRL1) != want1) {
     Serial.println("steps: CTRL1 failed");
+    return false;
+  }
+  // CTRL8 bit 7: CTRL9 commands hand shake through STATUSINT bit 7, which SensorLib's
+  // begin() sets and its commands wait on; the late reset clears it the same way.
+  int c8 = readReg(QMI_CTRL8);
+  if (c8 < 0 || (!(c8 & 0x80) && !writeReg(QMI_CTRL8, (uint8_t)(c8 | 0x80)))) {
+    Serial.println("steps: CTRL8 failed");
     return false;
   }
   // The normal mode at the rate (the low-power one starts from 28 Hz, SensorLib's lowest),
@@ -148,6 +160,9 @@ bool stepsBegin() {
     return false;
   }
   Serial.printf("steps: QMI8658 at 0x%02X\n", imuAddr);
+  // Time for a soft reset whose wait in begin() ended early to finish before configure()
+  // sets the registers it would clear (above, CTRL1).
+  delay(100);
   return configure(BOOT_RATE, PROF_SCALED);
 }
 
@@ -186,12 +201,13 @@ void stepsPrintStatus() {
   int y = (int16_t)(ax[2] | ax[3] << 8) * 1000 / 8192;
   int z = (int16_t)(ax[4] | ax[5] << 8) * 1000 / 8192;
   Serial.printf("STEPS on=%d chip=%lu rate=%s profile=%s raw=%02X%02X%02X%s ctrl1=0x%02X ctrl2=0x%02X "
-                "ctrl7=0x%02X ctrl8=0x%02X stint=0x%02X st0=0x%02X st1=0x%02X%s acc_mg=%d,%d,%d%s\n",
+                "ctrl7=0x%02X ctrl8=0x%02X stint=0x%02X st0=0x%02X st1=0x%02X%s acc_mg=%d,%d,%d%s "
+                "acc_raw=%02X%02X.%02X%02X.%02X%02X\n",
                 engineOn ? 1 : 0, (unsigned long)stepsChipCount(), RATES[curRate].name,
                 PROFILES[curProf], sc[2], sc[1], sc[0], scOk ? "" : "(failed)",
                 readReg(QMI_CTRL1) & 0xFF, readReg(QMI_CTRL2) & 0xFF, readReg(QMI_CTRL7) & 0xFF,
                 readReg(QMI_CTRL8) & 0xFF, st[0], st[1], st[2], stOk ? "" : "(failed)", x, y, z,
-                axOk ? "" : "(failed)");
+                axOk ? "" : "(failed)", ax[0], ax[1], ax[2], ax[3], ax[4], ax[5]);
 }
 
 #else  // the original 1.75: no step counter
