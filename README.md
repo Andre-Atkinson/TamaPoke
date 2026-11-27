@@ -243,10 +243,11 @@ travels to, and it stays through an ending: the next egg finds the plant as it w
     the charger doesn't call.
   - A screen that turned off by itself lights for 15 s, and touch works while it is lit:
     the auto touch lock lets go, and the first tap does what it taps (a bath, food, a
-    cuddle), so the call can be answered at once. A tap, PWR or BOOT turns the screen on
-    for real. Left untouched, it goes dark again and the touch lock comes back after its
-    usual delay. A stat card, gallery, clock or keyboard left open goes back to the
-    creature first. A dimmed screen brightens.
+    cuddle), so the call can be answered at once; only while the run-away button shows
+    does the first tap just wake the screen, so a tap meant for the pet can't end it. A
+    tap, PWR or BOOT turns the screen on for real. Left untouched, it goes dark again and
+    the touch lock comes back after its usual delay. A stat card, gallery, clock or
+    keyboard left open goes back to the creature first. A dimmed screen brightens.
   - A lit screen that has sat untouched for 5 minutes (screen-off set to never, the
     original 1.75 default) counts as left behind, like a timed-out one: a call closes a
     gallery, card, clock or keyboard left open, shows the creature, brightens and chirps.
@@ -821,9 +822,10 @@ What the firmware does to save power (the policy is in `power.h`, covered by `te
   after a power-up so the start is not cut.
 - **1.75C only, on by default:** the screen turns off after 60 s without touching (dimming at 30 s), and the
   touch controller is put to sleep and its interrupt ignored 10 s after that, so the idle board can light-sleep;
-  a short PWR press wakes it. The CPU runs at 240 MHz in use, 160 MHz once dimmed or asleep and 80 MHz with the
-  screen off (a minigame stays at 240). The original 1.75 keeps its previous behaviour by default (screen-off and touch lock set to
-  never) but can pick either in the settings, and CPU scaling applies to both boards.
+  a short PWR press wakes it, and so does an attention call's 15 s window (the controller wakes while the call
+  lights the screen, and sleeps again 10 s after the window if nobody touched it). The CPU runs at 240 MHz in use,
+  160 MHz once dimmed or asleep and 80 MHz with the screen off (a minigame stays at 240). The original 1.75
+  keeps its previous behaviour by default (screen-off and touch lock set to never) but can pick either in the settings, and CPU scaling applies to both boards.
 - **Attention calls** light a screen that turned off by itself, or brighten a dimmed one, for 15 s (not in quiet
   hours), and only when a need first drops below 25, so a few times a day. They are noticed by the loop that
   already runs with the screen off (no extra wakeups). During those 15 s the screen draws at 10 fps with no

@@ -3,7 +3,8 @@
 # tap was ignored until PWR, because the auto touch lock read only screenOff, which a call's
 # "peek" leaves true (attention.h). Now the lock lets go while the call lights the screen
 # (touchScreenDark, touchlock.h), and the first tap does what it taps (touchOnlyWakes), so one
-# tap on the bath answers a bath call. Left untouched, the screen goes dark again and the lock
+# tap on the bath answers a bath call. (Not while the run-away button is up: its first tap only
+# wakes; touch-runaway-peek.txt.) Left untouched, the screen goes dark again and the lock
 # comes back after its usual 10 s. A screen turned off with PWR gets no lit window: its call
 # chirps in the dark and the touch stays locked.
 #   tools/sim.sh --script touch-during-call --serial-log calls.log --out shots/
@@ -25,7 +26,10 @@ wait 80s
 expect screen off: idle 60000
 expect touch lock
 
-# A. hygiene's call (~840 s) lights the timed-out screen for 15 s, and the lock lets go
+# A. hygiene's call (~840 s) lights the timed-out screen for 15 s, and the lock lets go.
+# Timing, measured: the call lands 750-754 s into this 758 s wait, so the tap below comes 4-8 s
+# into its 15 s window. If the call, unlock or bath checks here fail after the pet's needs or
+# the clock changed, re-measure this margin before blaming the lock.
 wait 758s
 expect call hygiene: peek chirp
 expect touch unlock
@@ -42,6 +46,9 @@ shot 2-bathed-from-the-call
 # and the lock comes back 10 s after the window ends
 wait 75s
 expect touch lock
+# Timing, measured: food's call lands 750-755 s into this 763 s wait, so the wait ends 8-13 s
+# into the window (the lock is still off); it comes back about 25 s after the call, which the
+# 30 s wait below covers. A failure here is this margin before it is the bug.
 wait 763s
 expect call food: peek chirp
 expect touch unlock

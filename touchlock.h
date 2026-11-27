@@ -3,7 +3,9 @@
 
 // Automatic touch lock. Not the triple-press pocket lock: that one stays
 // until another triple press. This one starts when the screen turns off and
-// a short PWR press both wakes the screen and clears it.
+// a short PWR press both wakes the screen and clears it. So does an attention call's window
+// (#9), which lights a timed-out screen for 15 s: the lock lets go while it shows
+// (touchScreenDark) and starts over if the window ends untouched.
 // TOUCH_LOCK_NEVER disables it. 0 locks on the same moment the screen goes off.
 
 constexpr uint32_t TOUCH_LOCK_NEVER = 0xFFFFFFFFu;
@@ -90,6 +92,24 @@ inline bool touchScreenDark(bool screenOff, bool callShowing) {
 // gesture), since she can't see what she is touching. A call's window shows the pet at full
 // brightness (powerCtx() reads it as "just touched", so dimStage is 0): a touch there does
 // what it touches, as on any lit screen, so the call can be answered with one tap.
-inline bool touchOnlyWakes(uint8_t dimStage, bool screenOff, bool callShowing) {
-  return dimStage > 0 || touchScreenDark(screenOff, callShowing);
+// One exception, on a timed-out screen a call lights: while the run-away button is up
+// (runawayButton, Pet::canRunawayNow()) the first touch still only wakes. That button is
+// one tap with no dialog and lies right across the pet, so a tap meant for the pet could
+// end it (a sickness call can peek then; a need's call can't, it called long before). Evolve
+// and farewell open a dialog and medicine only gives the pill, so they need no exception.
+// With the button up and the window not lit by a call, nothing changes: dark already wakes only.
+inline bool touchOnlyWakes(uint8_t dimStage, bool screenOff, bool callShowing, bool runawayButton) {
+  return dimStage > 0 || touchScreenDark(screenOff, callShowing) || (screenOff && runawayButton);
+}
+
+// Should loop() run touchBringUp() now? `pending`: it still has to run (the auto lock ended
+// while the pocket lock held the chip asleep, or the last touch.begin() failed). `pocketLocked`:
+// nothing runs under the pocket lock. A first attempt (`retrying` false) goes at once, even on
+// a dark screen (it follows the unlock, whose cause may be a call's window or PWR). A retry
+// after a failure (a failed bring-up blocks the loop ~0.5 s) waits `periodMs` since the
+// failure and needs a screen that is on or lit by a call (`screenDark` false), so a dead chip
+// never stalls a dark pocketed screen.
+inline bool touchBringUpDue(bool pending, bool pocketLocked, bool retrying, bool screenDark,
+                            uint32_t sinceFailMs, uint32_t periodMs) {
+  return pending && !pocketLocked && (!retrying || (!screenDark && sinceFailMs >= periodMs));
 }

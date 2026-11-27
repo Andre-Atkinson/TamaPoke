@@ -67,11 +67,12 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
 
 - **Touch works when the creature calls for help.** When a need ran low (too many poops, say)
   and the creature called, the screen lit up for 15 s with the "!" bubble, but on the 1.75C
-  every tap was ignored until PWR, because the automatic touch lock stayed on. The lock now
-  lets go while a call lights the screen, and the first tap does what it taps (a bath, food,
-  a cuddle), so one tap answers the call. Left untouched, the screen goes dark again and the
-  touch lock comes back after its usual delay. A screen turned off with PWR, or the pocket
-  lock, still stays dark and locked.
+  every tap was ignored until PWR or BOOT, because the automatic touch lock stayed on. The
+  lock now lets go while a call lights the screen, and the first tap does what it taps (a bath, food,
+  a cuddle), so one tap answers the call (while the run-away button shows, the first tap
+  still only wakes the screen, so a tap meant for the pet can't end it). Left untouched, the
+  screen goes dark again and the touch lock comes back after its usual delay. A screen turned
+  off with PWR, or the pocket lock, still stays dark and locked.
 
 ## [1.20] - 2026-11-17
 

@@ -728,6 +728,8 @@ void bedApply() {
 //    go for the window (it reads touchScreenDark(), touchlock.h) and the first touch is not
 //    swallowed (touchOnlyWakes()): she sees the pet asking for help, so a tap answers it at
 //    once, and turns the screen on for real (screenOff false, wakeUI()), as PWR and BOOT do.
+//    The exception is the run-away button (a sickness call can peek while it is up): there
+//    the first touch only wakes, and the next one acts.
 //    A window that ends untouched leaves the screen dark and the lock starts over from then.
 //  - A lit screen (dimmed, or almost off): it brightens for the window.
 // PWR off, a touch, BOOT or anything else that calls wakeUI() ends the window.
@@ -963,9 +965,9 @@ void loop() {
   // If the auto lock ended while the pocket lock was on, the pocket unlock brings the chip up.
   // A failed attempt is retried at most every TOUCH_RETRY_MS and only with the screen on (or
   // lit by a call).
-  if (touchBringUpPending && !screenIsLocked() &&
-      (!touchRetrying ||
-       (!touchScreenDark(screenOff, attnShow) && (uint32_t)(millis() - touchRetryFrom) >= TOUCH_RETRY_MS))) {
+  if (touchBringUpDue(touchBringUpPending, screenIsLocked(), touchRetrying,
+                      touchScreenDark(screenOff, attnShow), (uint32_t)(millis() - touchRetryFrom),
+                      TOUCH_RETRY_MS)) {
     touchBringUpPending = false;
     touchBringUp();
   }
@@ -1600,8 +1602,9 @@ void handleTouch() {
   if (pressed && !wasPressed) {  // empieza el gesto
     holdFired = false;
     stripAtDown = timeLeft(menuUntil) != 0;
-    // dimmed or dark: it only wakes; lit by an attention call: it acts (touchOnlyWakes)
-    swallowGesture = touchOnlyWakes(dimStage, screenOff, attnShowing(millis()));
+    // dimmed or dark: it only wakes; lit by an attention call: it acts, except while the
+    // run-away button is up (one tap, no dialog, across the pet): touchOnlyWakes
+    swallowGesture = touchOnlyWakes(dimStage, screenOff, attnShowing(millis()), pet.canRunawayNow());
     screenOff = false;
     wakeUI();
     touchG.down(millis(), x, y, onPetBody(x, y) && petGesturesLive(petGestureGate()));
@@ -1888,7 +1891,11 @@ void onTap(int16_t x, int16_t y) {
   // botones de final (mismo recuadro): escapada directa; despedida abre dialogo
   if (overPetButtons && x >= FAR_BTN_X && x <= FAR_BTN_X + FAR_BTN_W &&
       y >= FAR_BTN_Y && y <= FAR_BTN_Y + FAR_BTN_H) {
-    if (pet.canRunawayNow()) { startPetEnding(CER_RUNAWAY); return; }
+    if (pet.canRunawayNow()) {
+      Serial.println("run-away: tapped");  // a log line for the sim's checks
+      startPetEnding(CER_RUNAWAY);
+      return;
+    }
     if (pet.wantMedicineButton()) {  // #15: one tap, no dialog; it takes the pill
       if (pet.giveMedicine()) {
         sfxPlay(SFX_EAT);
