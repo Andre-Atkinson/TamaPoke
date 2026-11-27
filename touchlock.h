@@ -92,14 +92,16 @@ inline bool touchScreenDark(bool screenOff, bool callShowing) {
 // gesture), since she can't see what she is touching. A call's window shows the pet at full
 // brightness (powerCtx() reads it as "just touched", so dimStage is 0): a touch there does
 // what it touches, as on any lit screen, so the call can be answered with one tap.
-// One exception, on a timed-out screen a call lights: while the run-away button is up
-// (runawayButton, Pet::canRunawayNow()) the first touch still only wakes. That button is
-// one tap with no dialog and lies right across the pet, so a tap meant for the pet could
-// end it (a sickness call can peek then; a need's call can't, it called long before). Evolve
-// and farewell open a dialog and medicine only gives the pill, so they need no exception.
-// With the button up and the window not lit by a call, nothing changes: dark already wakes only.
+// One exception, on any screen a call lights (a timed-out one it peeks on, or a dimmed one it
+// brightens): while the run-away button is up (runawayButton, Pet::canRunawayNow()) the first
+// touch still only wakes. That button is one tap with no dialog and lies right across the pet,
+// so a tap meant for the pet could end it (a sickness call can come then; a need's call can't,
+// it called long before). The swallowed touch ends the window (wakeUI()), so the next one acts.
+// Evolve and farewell open a dialog and medicine only gives the pill, so they need no exception.
+// With the button up and no call's window, nothing changes: dark or dimmed already wakes only,
+// and an awake screen acts (the button is tapped on purpose).
 inline bool touchOnlyWakes(uint8_t dimStage, bool screenOff, bool callShowing, bool runawayButton) {
-  return dimStage > 0 || touchScreenDark(screenOff, callShowing) || (screenOff && runawayButton);
+  return dimStage > 0 || touchScreenDark(screenOff, callShowing) || (callShowing && runawayButton);
 }
 
 // Should loop() run touchBringUp() now? `pending`: it still has to run (the auto lock ended

@@ -243,11 +243,13 @@ travels to, and it stays through an ending: the next egg finds the plant as it w
     the charger doesn't call.
   - A screen that turned off by itself lights for 15 s, and touch works while it is lit:
     the auto touch lock lets go, and the first tap does what it taps (a bath, food, a
-    cuddle), so the call can be answered at once; only while the run-away button shows
-    does the first tap just wake the screen, so a tap meant for the pet can't end it. A
-    tap, PWR or BOOT turns the screen on for real. Left untouched, it goes dark again and
-    the touch lock comes back after its usual delay. A stat card, gallery, clock or
-    keyboard left open goes back to the creature first. A dimmed screen brightens.
+    cuddle), so the call can be answered at once. A tap, PWR or BOOT turns the screen on
+    for real. Left untouched, it goes dark again and the touch lock comes back after its
+    usual delay. A stat card, gallery, clock or keyboard left open goes back to the
+    creature first. A dimmed screen brightens.
+  - While the run-away button shows, the first tap on a call's lit screen (timed out or
+    dimmed before the call) just wakes it, so a tap meant for the pet can't end it; the
+    next tap works as usual.
   - A lit screen that has sat untouched for 5 minutes (screen-off set to never, the
     original 1.75 default) counts as left behind, like a timed-out one: a call closes a
     gallery, card, clock or keyboard left open, shows the creature, brightens and chirps.

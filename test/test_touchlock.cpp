@@ -118,13 +118,14 @@ TEST(TouchLock, first_touch_acts_on_a_screen_a_call_lights) {
   CHECK(!touchOnlyWakes(0, false, true, false));   // a dimmed screen a call brightened: acts
 }
 
-// The run-away button is one tap with no dialog, across the pet, so a call that peeks while it
-// is up (a sickness call) must not let the first tap hit it: it only wakes. Only the peek is
-// touched: awake or brightened screens act as before, and the other buttons need nothing.
-TEST(TouchLock, first_touch_only_wakes_a_peek_while_the_runaway_button_is_up) {
+// The run-away button is one tap with no dialog, across the pet, so a call that comes while it
+// is up (a sickness call) must not let the first tap hit it: it only wakes, whether the call
+// peeked on a timed-out screen or brightened a dimmed one. With no call an awake screen acts as
+// before, and the other buttons need nothing.
+TEST(TouchLock, first_touch_only_wakes_a_call_window_while_the_runaway_button_is_up) {
   CHECK_MSG(touchOnlyWakes(0, true, true, true), "peek + run-away button: only wakes");
+  CHECK_MSG(touchOnlyWakes(0, false, true, true), "brighten + run-away button: only wakes");
   CHECK(touchOnlyWakes(0, true, false, true));    // dark, no call: only wakes anyway
-  CHECK(!touchOnlyWakes(0, false, true, true));   // brightened (not timed out): acts, as before
   CHECK(!touchOnlyWakes(0, false, false, true));  // awake: acts (the button is tapped on purpose)
   CHECK(touchOnlyWakes(1, false, true, true));    // dimmed: only wakes
 }

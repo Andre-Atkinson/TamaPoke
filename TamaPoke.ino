@@ -730,8 +730,8 @@ void bedApply() {
 //    go for the window (it reads touchScreenDark(), touchlock.h) and the first touch is not
 //    swallowed (touchOnlyWakes()): she sees the pet asking for help, so a tap answers it at
 //    once, and turns the screen on for real (screenOff false, wakeUI()), as PWR and BOOT do.
-//    The exception is the run-away button (a sickness call can peek while it is up): there
-//    the first touch only wakes, and the next one acts.
+//    The exception is the run-away button (a sickness call can come while it is up): during
+//    any call's window, peek or brighten, the first touch only wakes, and the next one acts.
 //    A window that ends untouched leaves the screen dark and the lock starts over from then.
 //  - A lit screen (dimmed, or almost off): it brightens for the window.
 // PWR off, a touch, BOOT or anything else that calls wakeUI() ends the window.

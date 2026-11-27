@@ -3,6 +3,7 @@
 # the pet must not end it. A sickness call can peek then (a need's call can't: it called long
 # before), so: sickness on, the pet neglected until the button shows, the screen timed out, and
 # SICK ON makes it call. The first tap only wakes the screen; the next one is the player's.
+# touch-runaway-brighten.txt is the same on a dimmed screen the call brightens.
 #   tools/sim.sh --script touch-runaway-peek --serial-log calls.log --out shots/
 # The 1.75C only (the touch lock and the timed-out screen); tools/gate.sh runs it on both boards
 # and the 1.75 skips it.
