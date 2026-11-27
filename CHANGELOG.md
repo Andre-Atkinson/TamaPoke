@@ -62,15 +62,17 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
 
 - The Christmas tree, the Halloween pumpkins and two of the Easter eggs moved left, out of
   the berry garden's corner, and so did two spots of spring flowers and autumn leaves.
+
+### Fixed
+
 - **The settings screen's OK says it worked.** It sets the clock and goes back to the
   creature as before, and now plays a short chime and shows the time it set for 2 s ("Time
   set: 11:00"). If the clock doesn't take the time it plays the "no" sound and says "Clock
   not set" instead. The settings screen also no longer dims half way to the screen-off time
   (or at 90 s with screen-off "never"), so the first tap on OK always counts: a tap on a
   dimmed screen only wakes it, and OK seemed to do nothing. It still turns off at the
-  screen-off time.
-
-### Fixed
+  screen-off time (a 1.75C on USB with its clock set shows the standby clock there instead,
+  at 90 s with "never", as before, and that closes the settings screen).
 
 - **Touch works when the creature calls for help.** When a need ran low (too many poops, say)
   and the creature called, the screen lit up for 15 s with the "!" bubble, but on the 1.75C

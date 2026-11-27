@@ -749,6 +749,14 @@ TEST(i18n, the_toasts_fit_their_box) {
     gLang = (Lang)lang;
     for (StrId id : {S_TOAST_SOUND_ON, S_TOAST_MUTED, S_TOAST_LOCKED, S_TOAST_UNLOCKED, S_TRAIN_ASLEEP})
       CHECK_MSG(strlen(T(id)) * 12 <= 380 - 2 * 12, std::string("too wide: ") + T(id));
+    // The settings screen's OK note (applyClock, screens.cpp): it also has to fit applyClock()'s
+    // char note[48] and TamaPoke.ino's controlToast[48], and the time is at its widest at 23:59.
+    CHECK_MSG(strlen(T(S_CLOCK_NOT_SET)) * 12 <= 380 - 2 * 12, std::string("too wide: ") + T(S_CLOCK_NOT_SET));
+    CHECK_MSG(strlen(T(S_CLOCK_NOT_SET)) < 48, std::string("too long for the buffers: ") + T(S_CLOCK_NOT_SET));
+    char note[48];
+    int n = snprintf(note, sizeof note, T(S_CLOCK_SET_FMT), 23u, 59u);
+    CHECK_MSG(n > 0 && n < (int)sizeof note, std::string("too long for the buffers: ") + note);
+    CHECK_MSG(strlen(note) * 12 <= 380 - 2 * 12, std::string("too wide: ") + note);
   }
   gLang = LANG_DEFAULT;
 }

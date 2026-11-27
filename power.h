@@ -71,7 +71,9 @@ inline uint8_t dimStageFor(uint32_t idleMs) {
 // The settings screen skips the dimmed stage: it stays bright until the screen-off time
 // (offMs), or until DIM_OFF's 5 min with offMs 0. Its OK sets the clock, and a tap on a
 // dimmed screen only wakes it, so with the 60 s screen-off a player who took 30 s to read the
-// screen tapped OK and nothing happened.
+// screen tapped OK and nothing happened. This is only the dim: on the 1.75C plugged into USB with
+// a trusted clock, the standby clock (standby.h) still takes over at the screen-off time, at
+// 90 s with "never" (standbyAfterMs), and closes the settings screen, as before.
 inline uint8_t dimStageNow(const PowerCtx &c) {
   if (c.standby) return DIM_OFF;  // nobody is using it: no pet scene, no amplifier, 1 fps, 80 MHz
   uint32_t idle = c.idleMs;

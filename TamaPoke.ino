@@ -241,6 +241,7 @@ bool screenIsLocked() {
 void showControlToast(const char *text, uint32_t duration) {
   if (screenIsLocked()) return;  // sync/pet/serial feedback cannot wake a pocketed device
   snprintf(controlToast, sizeof(controlToast), "%s", text);
+  Serial.printf("toast: %s\n", controlToast);  // what the player is shown (a sim script can expect it)
   controlToastUntil = millis() + duration;
   controlToastVisible = true;
   galleryDirty = true;
