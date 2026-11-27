@@ -104,9 +104,12 @@ uint32_t touchLockMs = DEFAULT_TOUCH_LOCK_MS;  // 0 = al apagarse; TOUCH_LOCK_NE
 TouchLock autoTouch;
 static bool touchReady = false;
 // touchBringUp() still has to run: the auto touch lock ended while the pocket lock holds the
-// chip asleep, or the last touch.begin() failed and is retried every TOUCH_RETRY_MS (screen on).
+// chip asleep, or the last touch.begin() failed and is retried every TOUCH_RETRY_MS (screen on,
+// or lit by an attention call: touchScreenDark()).
 // A failed bring-up blocks the loop ~0.5 s (3 tries, 150 ms apart), so a chip that stays dead
-// gets TOUCH_RETRY_MAX attempts, then none until the next auto touch unlock.
+// gets TOUCH_RETRY_MAX attempts, then none until the next auto touch unlock. An attention
+// call's window is such an unlock too, so on a chip that never starts each call's 15 s window
+// spends about 2.5 s of it in those attempts (only on a faulty chip; calls come a few a day).
 static bool touchBringUpPending = false;
 static bool touchRetrying = false;     // last touchBringUp() failed
 static uint32_t touchRetryFrom = 0;    // millis() when it failed
@@ -723,10 +726,13 @@ void bedApply() {
 // powerCtx() reads the window as "just touched" (idle 0, panel on), so the screen is lit
 // at full brightness, drawn at 10 fps, with no auto-off, no dimming and no light sleep for
 // its length; when it ends the real idle applies again (dim, or off, or dark).
-//  - A screen that timed out (a "peek"): screenOff stays true, so the auto touch lock, if
-//    on, keeps holding (TouchLock only sees screenOff). PWR and BOOT turn the screen on for
-//    real (the existing path, which unlocks touch); with the touch lock off, or not engaged
-//    yet, a touch does, and that first touch is swallowed.
+//  - A screen that timed out (a "peek"): screenOff stays true, but the auto touch lock lets
+//    go for the window (it reads touchScreenDark(), touchlock.h) and the first touch is not
+//    swallowed (touchOnlyWakes()): she sees the pet asking for help, so a tap answers it at
+//    once, and turns the screen on for real (screenOff false, wakeUI()), as PWR and BOOT do.
+//    The exception is the run-away button (a sickness call can come while it is up): during
+//    any call's window, peek or brighten, the first touch only wakes, and the next one acts.
+//    A window that ends untouched leaves the screen dark and the lock starts over from then.
 //  - A lit screen (dimmed, or almost off): it brightens for the window.
 // PWR off, a touch, BOOT or anything else that calls wakeUI() ends the window.
 
@@ -940,7 +946,10 @@ void loop() {
   // screen, not an almost-off lit one) and before the panel decisions below, so a call's
   // window lights the panel in this same pass
   attnLoop(now);
-  int tlockEdge = autoTouch.update(screenOff, now);
+  // once per pass: the touch lock, the panel sleep and the autosave must agree
+  bool attnShow = attnShowing(now);
+  // a call's window lights a timed-out screen: the lock lets go for it (touchScreenDark)
+  int tlockEdge = autoTouch.update(touchScreenDark(screenOff, attnShow), now);
   if (tlockEdge > 0) {
     Serial.println("touch lock");
     if (touchReady) {
@@ -956,13 +965,14 @@ void loop() {
   }
   // Only the auto touch lock puts the CST9217 to sleep; the pocket lock just detaches the ISR.
   // If the auto lock ended while the pocket lock was on, the pocket unlock brings the chip up.
-  // A failed attempt is retried at most every TOUCH_RETRY_MS and only with the screen on.
-  if (touchBringUpPending && !screenIsLocked() &&
-      (!touchRetrying || (!screenOff && (uint32_t)(millis() - touchRetryFrom) >= TOUCH_RETRY_MS))) {
+  // A failed attempt is retried at most every TOUCH_RETRY_MS and only with the screen on (or
+  // lit by a call).
+  if (touchBringUpDue(touchBringUpPending, screenIsLocked(), touchRetrying,
+                      touchScreenDark(screenOff, attnShow), (uint32_t)(millis() - touchRetryFrom),
+                      TOUCH_RETRY_MS)) {
     touchBringUpPending = false;
     touchBringUp();
   }
-  bool attnShow = attnShowing(now);  // once per pass: the panel sleep and the autosave must agree
   bool wantSleep = screenOff && !attnShow;
 #if BOARD_AMOLED_175C
   wantSleep = wantSleep || screenLock.blank(millis());
@@ -1594,7 +1604,9 @@ void handleTouch() {
   if (pressed && !wasPressed) {  // empieza el gesto
     holdFired = false;
     stripAtDown = timeLeft(menuUntil) != 0;
-    swallowGesture = (dimStage > 0) || screenOff;  // si estaba a oscuras, solo despierta
+    // dimmed or dark: it only wakes; lit by an attention call: it acts, except while the
+    // run-away button is up (one tap, no dialog, across the pet): touchOnlyWakes
+    swallowGesture = touchOnlyWakes(dimStage, screenOff, attnShowing(millis()), pet.canRunawayNow());
     screenOff = false;
     wakeUI();
     touchG.down(millis(), x, y, onPetBody(x, y) && petGesturesLive(petGestureGate()));
@@ -1881,7 +1893,11 @@ void onTap(int16_t x, int16_t y) {
   // botones de final (mismo recuadro): escapada directa; despedida abre dialogo
   if (overPetButtons && x >= FAR_BTN_X && x <= FAR_BTN_X + FAR_BTN_W &&
       y >= FAR_BTN_Y && y <= FAR_BTN_Y + FAR_BTN_H) {
-    if (pet.canRunawayNow()) { startPetEnding(CER_RUNAWAY); return; }
+    if (pet.canRunawayNow()) {
+      Serial.println("run-away: tapped");  // a log line for the sim's checks
+      startPetEnding(CER_RUNAWAY);
+      return;
+    }
     if (pet.wantMedicineButton()) {  // #15: one tap, no dialog; it takes the pill
       if (pet.giveMedicine()) {
         sfxPlay(SFX_EAT);

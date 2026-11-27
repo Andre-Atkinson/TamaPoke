@@ -63,6 +63,18 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
 - The Christmas tree, the Halloween pumpkins and two of the Easter eggs moved left, out of
   the berry garden's corner, and so did two spots of spring flowers and autumn leaves.
 
+### Fixed
+
+- **Touch works when the creature calls for help.** When a need ran low (too many poops, say)
+  and the creature called, the screen lit up for 15 s with the "!" bubble, but on the 1.75C
+  every tap was ignored until PWR or BOOT, because the automatic touch lock stayed on. The
+  lock now lets go while a call lights the screen, and the first tap does what it taps (a bath, food,
+  a cuddle), so one tap answers the call. While the run-away button shows, the first tap on
+  any call's lit screen only wakes it, also on a dimmed screen a call brightens (that first
+  tap used to act there), so a tap meant for the pet can't end it. Left untouched, the
+  screen goes dark again and the touch lock comes back after its usual delay. A screen turned
+  off with PWR, or the pocket lock, still stays dark and locked.
+
 ## [1.20] - 2026-11-17
 
 ### Added
