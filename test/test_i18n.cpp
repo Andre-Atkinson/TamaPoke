@@ -59,6 +59,7 @@ static const ExpectedFmt EXPECTED[] = {
   { S_RECORD_FMT,      "%u" },
   { S_SCORE_FMT,       "%u" },
   { S_STREAK_DAYS_FMT, "%u" },
+  { S_CLOCK_SET_FMT,   "%u,%u" },  // the time the settings screen's OK set (applyClock, screens.cpp)
   { S_STREAK_FMT,      "%u,%u" },
   { S_INFO_FMT,        "%s,%lu" },
   { S_NATURE_FMT,      "%s" },  // natureName() (#25, renderCardProfile)

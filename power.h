@@ -78,7 +78,7 @@ inline uint8_t dimStageNow(const PowerCtx &c) {
   if (c.gameOpen && idle < POWER_GAME_AWAKE_MS) return DIM_AWAKE;
   if (!c.offMs) {
     uint8_t stage = dimStageFor(idle);
-    return c.settingsOpen && stage == DIM_LOW ? DIM_AWAKE : stage;
+    return c.settingsOpen && stage == DIM_LOW ? (uint8_t)DIM_AWAKE : stage;
   }
   if (idle >= c.offMs) return DIM_OFF;
   if (idle >= c.offMs / 2 && !c.settingsOpen) return DIM_LOW;
