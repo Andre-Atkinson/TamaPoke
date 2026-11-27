@@ -1,0 +1,53 @@
+# touch-runaway-peek.txt's case on a screen that is still lit: while the run-away button is up,
+# the first tap on any call's window only wakes, also when the call brightened a dimmed screen
+# rather than lighting a timed-out one. The button is one tap with no dialog and lies across the
+# pet, so a tap meant for the pet must not end it. So: sickness on, the pet neglected until the
+# button shows, the screen left to dim but not time out, and SICK ON makes it call (a brighten).
+# The first tap only wakes the screen; the next one is the player's.
+#   tools/sim.sh --script touch-runaway-brighten --serial-log calls.log --out shots/
+# The 1.75C only (its screen dims at 30 s and times out at 60 s; the 1.75's never times out, so
+# the same timings would not line up); tools/gate.sh runs it on both boards and the 1.75 skips it.
+battery 80
+board 175c
+
+# new game: pick Charmander, hatch the egg (the clock is 2026-11-13 10:00)
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# the Care page's Sickness setting on (the stat card, five pages along), then the card closed
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+tap 233 304
+expect sickness on
+swipe up
+wait 1s
+
+# neglect it until the run-away button shows, and let the screen dim but not time out
+serial ABANDON
+wait 40s
+expect-not screen off
+
+# sickness calls (a brighten: the screen is still lit, so no peek)
+serial SICK ON
+wait 2s
+expect call sick: brighten chirp
+expect-not call sick: peek
+shot 1-sick-brighten
+
+# the first tap lands on the run-away button but only wakes the screen
+tap 233 205
+wait 2s
+expect-not run-away: tapped
+shot 2-first-tap-only-wakes
+
+# the next tap is the player's: the run-away button works
+tap 233 205
+wait 1s
+expect run-away: tapped

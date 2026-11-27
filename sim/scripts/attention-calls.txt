@@ -1,7 +1,8 @@
 # Attention calls (#9). A need that drops below 25 calls once, and a call is not a touch.
 #   A. dimmed screen: brightens for 15 s, then the real idle applies (dim, then off on schedule)
-#   B. timed-out screen: a 15 s "peek" with the "!" bubble beside the pet, touch still locked
-#      (the auto touch lock is on); a view left open is closed first; PWR turns it on for real
+#   B. timed-out screen: a 15 s "peek" with the "!" bubble beside the pet; the auto touch lock
+#      lets go while it is lit (touch-during-call.txt checks a tap there); a view left open is
+#      closed first; PWR turns it on for real
 #   C. quiet hours (22:00-07:00 with bedtime off): silent and dark
 #   D. screen turned off with PWR: the call chirps and the panel stays dark
 #   E. pocket lock (three quick PWR presses): the call is spent silently, panel stays dark
@@ -54,7 +55,7 @@ wait 4s
 shot 8-bathed
 
 # B. the stat card is left open and the screen times out; food's call (~28 min) goes back
-# to the pet screen before lighting it (a peek: touch stays locked)
+# to the pet screen before lighting it (a peek)
 swipe up
 wait 1s
 shot 9-card-left-open

@@ -1,0 +1,54 @@
+# The first tap on a call's lit screen acts (touch-during-call.txt), except while the run-away
+# button is up: that button is one tap with no dialog and lies across the pet, so a tap meant for
+# the pet must not end it. A sickness call can peek then (a need's call can't: it called long
+# before), so: sickness on, the pet neglected until the button shows, the screen timed out, and
+# SICK ON makes it call. The first tap only wakes the screen; the next one is the player's.
+# touch-runaway-brighten.txt is the same on a dimmed screen the call brightens.
+#   tools/sim.sh --script touch-runaway-peek --serial-log calls.log --out shots/
+# The 1.75C only (the touch lock and the timed-out screen); tools/gate.sh runs it on both boards
+# and the 1.75 skips it.
+battery 80
+board 175c
+
+# new game: pick Charmander, hatch the egg (the clock is 2026-11-13 10:00)
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+
+# the Care page's Sickness setting on (the stat card, five pages along), then the card closed
+swipe up
+swipe left
+swipe left
+swipe left
+swipe left
+tap 233 304
+expect sickness on
+swipe up
+wait 1s
+
+# neglect it until the run-away button shows, then let the screen time out and the touch lock
+serial ABANDON
+wait 120s
+expect screen off
+expect touch lock
+
+# sickness calls (a peek: the screen lights, the touch lock lets go)
+serial SICK ON
+wait 2s
+expect call sick: peek chirp
+expect touch unlock
+shot 1-sick-peek
+
+# the first tap lands on the run-away button but only wakes the screen
+tap 233 205
+wait 2s
+expect-not run-away: tapped
+shot 2-first-tap-only-wakes
+
+# the next tap is the player's: the run-away button works
+tap 233 205
+wait 1s
+expect run-away: tapped
