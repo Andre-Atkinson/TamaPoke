@@ -19,6 +19,7 @@ enum Sfx : uint8_t {
   SFX_NOTE2,    // baya verde (sol)
   SFX_NOTE3,    // caramelo (do agudo)
   SFX_CALL,     // aviso de atencion (#9): una necesidad acaba de bajar de 25
+  SFX_OK,       // the settings screen's OK set the clock: a short chime that rises a fifth
   SFX_COUNT
 };
 

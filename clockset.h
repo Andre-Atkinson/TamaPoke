@@ -1,6 +1,9 @@
 #pragma once
 #include <stdint.h>
+#include <stdio.h>
+#include "audio.h"   // SFX_OK, SFX_DENY
 #include "clockprompt.h"
+#include "i18n.h"    // T(), S_CLOCK_SET_FMT, S_CLOCK_NOT_SET
 #include "pet.h"
 #include "rtcbat.h"
 
@@ -19,6 +22,16 @@ inline bool setWallClock(Pet &pet, uint32_t e, void (*bedClockFollow)(uint32_t))
   pet.setClock(e);
   bedClockFollow(e);
   return true;
+}
+
+// What the clock screen's OK shows and plays once setWallClock() has answered (`took`): the
+// note "Time set: 11:05" (S_CLOCK_SET_FMT with `h` and `m`) and SFX_OK when the clock took
+// the time, "Clock not set" (S_CLOCK_NOT_SET) and SFX_DENY when it didn't. `out` gets the
+// note (applyClock() in screens.cpp shows it with showControlToast()); returns the sound.
+inline uint8_t clockOkNote(bool took, unsigned h, unsigned m, char *out, size_t n) {
+  if (took) snprintf(out, n, T(S_CLOCK_SET_FMT), h, m);
+  else snprintf(out, n, "%s", T(S_CLOCK_NOT_SET));
+  return took ? SFX_OK : SFX_DENY;
 }
 
 // The time in a serial TIME or RTCSET line (#65), the text after the command: seconds since

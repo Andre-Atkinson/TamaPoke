@@ -241,6 +241,7 @@ bool screenIsLocked() {
 void showControlToast(const char *text, uint32_t duration) {
   if (screenIsLocked()) return;  // sync/pet/serial feedback cannot wake a pocketed device
   snprintf(controlToast, sizeof(controlToast), "%s", text);
+  Serial.printf("toast: %s\n", controlToast);  // what the player is shown (a sim script can expect it)
   controlToastUntil = millis() + duration;
   controlToastVisible = true;
   galleryDirty = true;
@@ -1146,6 +1147,7 @@ PowerCtx powerCtx(uint32_t now) {
   c.batPct = batPercent();
   c.userDim = userDim;
   c.offMs = powerOffMs;
+  c.settingsOpen = clockOpen;  // no dimmed stage there, so its OK works on the first tap
   // A call (attnLoop) while the clock shows: the window reads as "just touched" and shows the
   // pet at full brightness, so the clock is off for its length (here and in standbyShown()).
   // `standby` itself stays set, because a call is not a touch (wakeUI() clears it): the

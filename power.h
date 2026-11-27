@@ -39,6 +39,7 @@ struct PowerCtx {
   uint8_t userDim;    // nivel de brillo elegido en ajustes: 0 = alto (el de siempre), 1 = medio, 2 = bajo
   uint32_t offMs;     // 0 = el horario de siempre (atenua a 90 s, casi apagada a 5 min). Si no, apaga a este tiempo y atenua a la mitad
   bool standby;       // the standby clock is up (standby.h, #60): it takes the place of screen-off
+  bool settingsOpen = false;  // the clock and settings screen (swipe down): see dimStageNow()
 };
 
 // The standby clock's brightness (before the settings' level scales it): dim, on a black
@@ -67,13 +68,26 @@ inline uint8_t dimStageFor(uint32_t idleMs) {
 #define POWER_GAME_AWAKE_MS 15000UL
 
 // offMs == 0 keeps the historical schedule so the host tests stay valid.
+// The settings screen skips the dimmed stage: it stays bright until the screen-off time
+// (offMs), or until DIM_OFF's 5 min with offMs 0. Its OK sets the clock, and a tap on a
+// dimmed screen only wakes it, so with the 60 s screen-off a player who took 30 s to read the
+// screen tapped OK and nothing happened. Everything else that reads the stage follows, only
+// while this screen is open: it keeps 240 MHz (cpuMhzFor), the amplifier (amplifierWanted)
+// and the faster frame interval (a staticScreen, so it doesn't redraw anyway), and the
+// autosave and battery-diary save, which wait for a quiet screen (flashQuiet), wait until the
+// screen-off time instead of half way. On the 1.75C plugged into USB with a trusted clock, the
+// standby clock (standby.h) still takes over at the screen-off time, at 90 s with "never"
+// (standbyAfterMs), and closes the settings screen, as before.
 inline uint8_t dimStageNow(const PowerCtx &c) {
   if (c.standby) return DIM_OFF;  // nobody is using it: no pet scene, no amplifier, 1 fps, 80 MHz
   uint32_t idle = c.idleMs;
   if (c.gameOpen && idle < POWER_GAME_AWAKE_MS) return DIM_AWAKE;
-  if (!c.offMs) return dimStageFor(idle);
+  if (!c.offMs) {
+    uint8_t stage = dimStageFor(idle);
+    return c.settingsOpen && stage == DIM_LOW ? (uint8_t)DIM_AWAKE : stage;
+  }
   if (idle >= c.offMs) return DIM_OFF;
-  if (idle >= c.offMs / 2) return DIM_LOW;
+  if (idle >= c.offMs / 2 && !c.settingsOpen) return DIM_LOW;
   return DIM_AWAKE;
 }
 

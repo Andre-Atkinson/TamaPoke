@@ -1,0 +1,64 @@
+# The settings screen's OK (swipe down): it sets the clock, closes the screen, chimes and
+# shows the time it set for 2 s ("Time set: 11:00"), with a "clock: OK" line and a "toast:"
+# line (showControlToast prints what it shows) on the serial log. The settings screen skips
+# the dimmed stage (dimStageNow, power.h), so OK works on the first tap even after the screen
+# sat untouched past half the screen-off time, where the pet screen dims and a tap only
+# wakes it.
+#   tools/sim.sh --script sim/scripts/settings-ok.txt --out shots/
+clock 2026-11-27 10:00
+usb off
+
+# a pet: the starter, hatched; the screen dimmed while it hatched, so a tap on the sky wakes it
+wait 1s
+tap 233 220
+wait 1s
+serial HATCH
+wait 40s
+tap 233 40
+wait 1s
+
+# A. settings, HOUR + (10:00 -> 11:00), OK: the clock is set, the pet screen is back with the note
+swipe down
+wait 1s
+tap 199 219
+wait 500ms
+tap 233 384
+expect-once clock: OK 11:00 set
+expect-once toast: Time set: 11:00
+wait 300ms
+shot 1-time-set
+
+# B. settings again, HOUR + (12:00), then 35 s untouched: past half the 60 s screen-off, so
+# the pet screen would be dimmed. The first tap on OK sets the clock.
+wait 3s
+swipe down
+wait 1s
+tap 199 219
+wait 35s
+tap 233 384
+expect-once clock: OK 12:00 set
+expect-once toast: Time set: 12:00
+wait 300ms
+shot 2-time-set-after-35s
+
+# C. screen-off "never", HOUR + (13:00), then 100 s untouched: past the 90 s where the pet
+# screen dims with "never". The first tap on OK sets the clock. "Never" is the original
+# 1.75's default; the 1.75C's is 60 s, so there the screen-off pill goes 60 s -> 30 s ->
+# 15 s -> never. (On the 1.75, B's 35 s were never dimmed either: only C checks it there.)
+wait 3s
+swipe down
+wait 1s
+board 175c
+tap 233 338
+wait 300ms
+tap 233 338
+wait 300ms
+tap 233 338
+wait 300ms
+board both
+expect-not clock: OK
+tap 199 219
+wait 100s
+tap 233 384
+expect-once clock: OK 13:00 set
+expect-once toast: Time set: 13:00

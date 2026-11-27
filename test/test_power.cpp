@@ -301,3 +301,38 @@ TEST(power, un_minijuego_no_se_atenua_antes_de_su_final_por_inactividad) {
   c.idleMs = 10000;
   CHECK_EQ((int)dimStageNow(c), (int)DIM_AWAKE);
 }
+
+// The settings screen (swipe down) skips the dimmed stage: its OK sets the clock, and a tap
+// on a dimmed screen only wakes it, so with the 60 s screen-off a player who took 30 s over
+// the screen tapped OK and nothing happened. It still goes off at the screen-off time, and
+// with screen-off "never" it still reaches DIM_OFF at 5 min.
+TEST(power, settings_screen_stays_bright_until_the_screen_off_time) {
+  PowerCtx c = ctx(30000);
+  c.offMs = 60000;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_LOW);  // the pet screen dims half way, as always
+  c.settingsOpen = true;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_AWAKE);
+  c.idleMs = 59999;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_AWAKE);
+  CHECK(!autoScreenOff(c));
+  c.idleMs = 60000;  // the screen-off time: off, settings or not
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_OFF);
+  CHECK(autoScreenOff(c));
+  c.offMs = 15000;
+  c.idleMs = 10000;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_AWAKE);
+  c.idleMs = 15000;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_OFF);
+  // screen-off "never" (offMs 0): no dimmed stage at 90 s, still DIM_OFF after 5 min
+  c.offMs = 0;
+  c.idleMs = POWER_DIM1_MS + 1;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_AWAKE);
+  c.idleMs = POWER_DIM2_MS;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_AWAKE);
+  c.idleMs = POWER_DIM2_MS + 1;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_OFF);
+  CHECK(!autoScreenOff(c));  // "never" stays never
+  c.settingsOpen = false;
+  c.idleMs = POWER_DIM1_MS + 1;
+  CHECK_EQ((int)dimStageNow(c), (int)DIM_LOW);  // the pet screen: the usual 90 s dim
+}

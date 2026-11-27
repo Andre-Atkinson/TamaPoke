@@ -65,6 +65,16 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
 
 ### Fixed
 
+- **The settings screen's OK says it worked.** It sets the clock and goes back to the
+  creature as before, and now plays a short chime and shows the time it set for 2 s ("Time
+  set: 11:00"). The chime is silent while the creature sleeps or with the sound off; the
+  note shows either way. If the clock doesn't take the time it plays the "no" sound and says
+  "Clock not set" instead. The settings screen also no longer dims half way to the screen-off time
+  (or at 90 s with screen-off "never"), so the first tap on OK always counts: a tap on a
+  dimmed screen only wakes it, and OK seemed to do nothing. It still turns off at the
+  screen-off time (a 1.75C on USB with its clock set shows the standby clock there instead,
+  at 90 s with "never", as before, and that closes the settings screen).
+
 - **Touch works when the creature calls for help.** When a need ran low (too many poops, say)
   and the creature called, the screen lit up for 15 s with the "!" bubble, but on the 1.75C
   every tap was ignored until PWR or BOOT, because the automatic touch lock stayed on. The
