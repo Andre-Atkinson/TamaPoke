@@ -219,11 +219,20 @@ void openClock() {
   clockPrompt.opened();  // however it opened, it does not open again by itself
 }
 
+// OK: sets the clock and closes the screen, with a chime and a note over the pet screen
+// that shows the time set, so the player knows it worked. A clock that does not take the
+// time (setWallClock) gets the "no" sound and says so instead.
 static void applyClock() {
   uint32_t base = pet.lastSeenEpoch ? pet.lastSeenEpoch : rtcEpoch();
   uint32_t e = (base / 86400) * 86400 + (uint32_t)clockH * 3600 + (uint32_t)clockM * 60;
-  setWallClock(pet, e, bedClockSet);  // the pet's saved time follows only if the clock took it
+  bool took = setWallClock(pet, e, bedClockSet);  // the pet's saved time follows only if the clock took it
   clockOpen = false;
+  char note[48];
+  if (took) snprintf(note, sizeof note, T(S_CLOCK_SET_FMT), (unsigned)clockH, (unsigned)clockM);
+  else snprintf(note, sizeof note, "%s", T(S_CLOCK_NOT_SET));
+  showControlToast(note, 2000);
+  sfxPlay(took ? SFX_OK : SFX_DENY);
+  Serial.printf("clock: OK %02u:%02u %s\n", (unsigned)clockH, (unsigned)clockM, took ? "set" : "not set");
 }
 
 static void drawClockBtn(int x, int y, const char *l) {

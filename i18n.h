@@ -52,6 +52,9 @@ enum StrId : uint8_t {
   // reloj / ajustes
   S_SET_TIME, S_HOUR, S_MIN, S_CLOCK_CANCEL,
   S_CLOCK_ASK,  // clock screen title while the clock is stale (reseeded after a power-off)
+  // the note after the clock screen's OK: the time it set ("Time set: 11:00"), or that the
+  // clock did not take it (setWallClock, clockset.h)
+  S_CLOCK_SET_FMT, S_CLOCK_NOT_SET,
   // celebracion
   S_MEDAL_BANNER, S_GREAT, S_STREAK_DAYS_FMT,
   // ficha: perfil

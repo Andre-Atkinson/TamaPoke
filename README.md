@@ -559,7 +559,10 @@ themselves after 6 s.
   language. Under it, each pill shows an icon and a number: the touch lock (a padlock and the
   seconds after the screen goes off, `0s` = as it goes off; an open padlock and "off" = never),
   the screen-off time (a screen and the seconds without a touch, or "off" = never) and the
-  battery in the header (its icon or `87%`, with the live level). After a full
+  battery in the header (its icon or `87%`, with the live level). Each pill saves as you
+  tap it; **OK** sets the clock, with a chime and a note showing the time set ("Time set:
+  11:00"), and swipe up leaves the time as it was. This screen doesn't dim before the
+  screen-off time, so OK works on the first tap. After a full
   power-off the clock screen opens by itself once to ask for the time; skip it (swipe up)
   and a small clock badge in the sky opens it again until the time is set.
 - Long press (3 s) on the creature = **release** dialog.
