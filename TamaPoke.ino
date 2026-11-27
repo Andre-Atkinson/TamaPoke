@@ -107,7 +107,9 @@ static bool touchReady = false;
 // chip asleep, or the last touch.begin() failed and is retried every TOUCH_RETRY_MS (screen on,
 // or lit by an attention call: touchScreenDark()).
 // A failed bring-up blocks the loop ~0.5 s (3 tries, 150 ms apart), so a chip that stays dead
-// gets TOUCH_RETRY_MAX attempts, then none until the next auto touch unlock.
+// gets TOUCH_RETRY_MAX attempts, then none until the next auto touch unlock. An attention
+// call's window is such an unlock too, so on a chip that never starts each call's 15 s window
+// spends about 2.5 s of it in those attempts (only on a faulty chip; calls come a few a day).
 static bool touchBringUpPending = false;
 static bool touchRetrying = false;     // last touchBringUp() failed
 static uint32_t touchRetryFrom = 0;    // millis() when it failed

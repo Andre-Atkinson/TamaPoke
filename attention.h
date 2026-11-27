@@ -173,7 +173,8 @@ struct AttnAction {
   bool brighten;    // lit screen: full brightness for ATTN_PEEK_MS
   bool peek;        // timed-out screen: light it for ATTN_PEEK_MS; it stays logically off
                     // (screenOff), but the auto touch lock lets go while it is lit and a
-                    // touch acts at once (touchScreenDark/touchOnlyWakes, touchlock.h)
+                    // touch acts at once (touchScreenDark/touchOnlyWakes, touchlock.h), except
+                    // while the run-away button is up: then the first touch only wakes
   // Both open the sketch's "showing" window (attnShowUntil): full brightness, no auto-off
   // and no dimming until it ends, and no touch is recorded (lastInteract is left alone), so
   // idle-based features (self-care while charging, #24) keep counting from her last real touch.
