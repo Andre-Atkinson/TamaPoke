@@ -83,3 +83,36 @@ TEST(TouchLock, selector_three_is_zero_seconds) {
   CHECK_EQ(touchLockFromSel(1), 30000u);
   CHECK_EQ(touchLockFromSel(9), 10000u);
 }
+
+// An attention call's window lights a timed-out screen (#9): the touch lock lets go while it
+// shows, so a touch on the lit pet works, and comes back after its delay once the window ends
+// untouched (the screen dark again). It used to read screenOff alone: locked through the window.
+TEST(TouchLock, a_call_window_lets_go_and_the_lock_starts_over_after_it) {
+  TouchLock t;
+  CHECK_EQ(t.update(touchScreenDark(true, false), 0), 0);
+  CHECK_EQ(t.update(touchScreenDark(true, false), 10000), 1);  // locked, 10 s after screen off
+  CHECK_MSG(t.update(touchScreenDark(true, true), 800000) == -1, "the call's window unlocks");
+  CHECK(!t.active);
+  CHECK_EQ(t.update(touchScreenDark(true, true), 814999), 0);  // still lit: no lock
+  CHECK(!t.active);
+  CHECK_EQ(t.update(touchScreenDark(true, false), 815000), 0);  // window over: the delay again
+  CHECK_EQ(t.update(touchScreenDark(true, false), 815000 + 9999), 0);
+  CHECK_EQ(t.update(touchScreenDark(true, false), 815000 + 10000), 1);
+}
+
+TEST(TouchLock, screen_dark_only_when_off_and_no_call_lights_it) {
+  CHECK(touchScreenDark(true, false));
+  CHECK(!touchScreenDark(true, true));
+  CHECK(!touchScreenDark(false, false));
+  CHECK(!touchScreenDark(false, true));
+}
+
+// The first touch on a dimmed or dark screen only wakes it; on a screen a call lights at full
+// brightness it acts, so one tap answers the call (it used to be swallowed there too).
+TEST(TouchLock, first_touch_acts_on_a_screen_a_call_lights) {
+  CHECK_MSG(!touchOnlyWakes(0, true, true), "lit by a call: the touch acts");
+  CHECK(touchOnlyWakes(0, true, false));   // dark: only wakes
+  CHECK(touchOnlyWakes(1, false, false));  // dimmed: only wakes
+  CHECK(touchOnlyWakes(2, false, false));  // almost off: only wakes
+  CHECK(!touchOnlyWakes(0, false, false));  // awake: acts
+}

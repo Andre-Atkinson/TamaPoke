@@ -241,11 +241,12 @@ travels to, and it stays through an ending: the next egg finds the plant as it w
     charging, which waits for 10 untouched minutes, keeps counting from your last real
     touch. Once self-care is running it keeps the needs at 35 or more, so a pet left on
     the charger doesn't call.
-  - A screen that turned off by itself lights for 15 s. Touch stays locked if the auto
-    touch lock is on; PWR or BOOT turns the screen on for real, and with the touch lock
-    off (or not engaged yet) a touch does, and that first touch is swallowed. A stat
-    card, gallery, clock or keyboard left open goes back to the creature first. A
-    dimmed screen brightens.
+  - A screen that turned off by itself lights for 15 s, and touch works while it is lit:
+    the auto touch lock lets go, and the first tap does what it taps (a bath, food, a
+    cuddle), so the call can be answered at once. A tap, PWR or BOOT turns the screen on
+    for real. Left untouched, it goes dark again and the touch lock comes back after its
+    usual delay. A stat card, gallery, clock or keyboard left open goes back to the
+    creature first. A dimmed screen brightens.
   - A lit screen that has sat untouched for 5 minutes (screen-off set to never, the
     original 1.75 default) counts as left behind, like a timed-out one: a call closes a
     gallery, card, clock or keyboard left open, shows the creature, brightens and chirps.

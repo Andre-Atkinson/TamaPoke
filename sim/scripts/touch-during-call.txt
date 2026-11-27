@@ -1,0 +1,62 @@
+# Touch works while an attention call lights the screen. The bug: the pet called (a need under
+# 25: "Needs a bath!", the "!" bubble, the poops), the timed-out screen lit for 15 s, and every
+# tap was ignored until PWR, because the auto touch lock read only screenOff, which a call's
+# "peek" leaves true (attention.h). Now the lock lets go while the call lights the screen
+# (touchScreenDark, touchlock.h), and the first tap does what it taps (touchOnlyWakes), so one
+# tap on the bath answers a bath call. Left untouched, the screen goes dark again and the lock
+# comes back after its usual 10 s. A screen turned off with PWR gets no lit window: its call
+# chirps in the dark and the touch stays locked.
+#   tools/sim.sh --script touch-during-call --serial-log calls.log --out shots/
+# The 1.75C only: the original 1.75's screen never turns off by default and it has no touch
+# lock, so its calls brighten a lit screen instead, and on a lit screen the pet's idle life
+# brings the call earlier; tools/gate.sh runs this on both boards, and the 1.75 skips it.
+battery 80
+board 175c
+
+# new game: pick Charmander, hatch the egg (the clock is 2026-11-13 10:00)
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+# the screen times out at 60 s untouched, and the touch locks 10 s later
+wait 80s
+expect screen off: idle 60000
+expect touch lock
+
+# A. hygiene's call (~840 s) lights the timed-out screen for 15 s, and the lock lets go
+wait 758s
+expect call hygiene: peek chirp
+expect touch unlock
+shot 1-hygiene-call
+# one tap on the bath button during the call bathes the pet (it used to do nothing)
+tap 326 390
+wait 6s
+serial STATS
+expect lim=100
+shot 2-bathed-from-the-call
+
+# B. the bath's tap turned the screen on for real; it times out again (~910 s) and locks. Food's
+# call (~28 min) is left alone: the lock lets go for its window, then the screen is dark again
+# and the lock comes back 10 s after the window ends
+wait 75s
+expect touch lock
+wait 763s
+expect call food: peek chirp
+expect touch unlock
+expect-not touch lock
+wait 30s
+expect touch lock
+
+# C. PWR on, then off: a screen turned off with PWR gets no lit window. Joy's call (~35 min)
+# chirps in the dark and the touch stays locked
+press pwr
+wait 2s
+press pwr
+wait 15s
+expect touch unlock
+expect touch lock
+wait 420s
+expect call joy: dark chirp
+expect-not touch unlock
