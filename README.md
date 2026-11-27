@@ -565,8 +565,9 @@ themselves after 6 s.
   the screen-off time (a screen and the seconds without a touch, or "off" = never) and the
   battery in the header (its icon or `87%`, with the live level). Each pill saves as you
   tap it; **OK** sets the clock, with a chime and a note showing the time set ("Time set:
-  11:00"), and swipe up leaves the time as it was. This screen doesn't dim before the
-  screen-off time, so OK works on the first tap. After a full
+  11:00"; no chime while the creature sleeps or with the sound off), and swipe up leaves
+  the time as it was. This screen doesn't dim before the screen-off time (with "never", not
+  until it goes almost off at 5 min), so OK works on the first tap. After a full
   power-off the clock screen opens by itself once to ask for the time; skip it (swipe up)
   and a small clock badge in the sky opens it again until the time is set.
 - Long press (3 s) on the creature = **release** dialog.

@@ -266,3 +266,20 @@ TEST(ClockEpochParse, a_time_before_2025_or_no_digits_is_refused) {
   CHECK(!clockEpochParse("", e));
   CHECK_EQ(e, UNSET);
 }
+
+// The clock screen's OK (clockOkNote): the note and the sound once setWallClock() has
+// answered. Taken: "Time set: HH:MM" and the chime; refused: "Clock not set" and the "no"
+// sound, never a "Time set" that didn't happen. In both languages.
+TEST(ClockSet, ok_note_says_the_time_set_with_the_chime_or_clock_not_set_with_no) {
+  char note[48];
+  CHECK_EQ((int)clockOkNote(true, 11, 5, note, sizeof note), (int)SFX_OK);
+  CHECK_EQ(std::string(note), std::string("Time set: 11:05"));
+  CHECK_EQ((int)clockOkNote(false, 11, 5, note, sizeof note), (int)SFX_DENY);
+  CHECK_EQ(std::string(note), std::string("Clock not set"));
+  gLang = LANG_PT;
+  CHECK_EQ((int)clockOkNote(true, 7, 0, note, sizeof note), (int)SFX_OK);
+  CHECK_EQ(std::string(note), std::string("Hora acertada: 07:00"));
+  CHECK_EQ((int)clockOkNote(false, 7, 0, note, sizeof note), (int)SFX_DENY);
+  CHECK_EQ(std::string(note), std::string("Rel\242gio n\343o acertado"));
+  gLang = LANG_DEFAULT;
+}
