@@ -1,4 +1,4 @@
-// The minigames' screens and the calm exercises (#41: moved out of TamaPoke.ino; #78
+// The minigames' screens and the training exercises (#41: moved out of TamaPoke.ino; #78
 // replaced the strength-training sack): starting and finishing a game or an exercise,
 // its touches and sounds, and drawing it. The games' own logic is in minigames.h and the
 // exercises' in exercise.h; render() and handleTouch() call in here.
@@ -58,9 +58,10 @@ void playEndNow(const char *why);
 constexpr int TRAIN_EXIT_STRIP_H = 42;
 #endif
 #if HOST_SIM
-// The simulator's `pushup` step: ms from now until the middle of the green band of the
-// push-up going down, or -1 when no push-up is down.
-int32_t exerciseMsToBandMid(uint32_t now);
+// The simulator's `pushup` step: ms from now until the lift of the push-up going down: the
+// middle of its green band, or with `edge` just before the band's end. -1 when no push-up
+// is down.
+int32_t exerciseMsToLift(uint32_t now, bool edge);
 #endif
 void renderExercise();
 void renderTrainPick();                     // the choice, on the stat card

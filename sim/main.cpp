@@ -243,19 +243,20 @@ int main(int argc, char **argv) {
         break;
       case OP_PUSHUP: {
         // down, until the firmware has the push-up down (its touch poll, 20 ms), then on to the
-        // middle of the band it planned, and up: the let-go lands within a poll of the middle
+        // middle of the band it planned (with `edge`, to just before its end), and up: the let-go
+        // lands within a poll of that moment
         simTouchSet(true, (int16_t)c.a, (int16_t)c.b);
-        int32_t toMid = -1;
-        for (int k = 0; k < 50 && toMid < 0; k++) {
+        int32_t toLift = -1;
+        for (int k = 0; k < 50 && toLift < 0; k++) {
           run(10);
-          toMid = exerciseMsToBandMid(millis());
+          toLift = exerciseMsToLift(millis(), c.c != 0);
         }
-        if (toMid < 0) {
+        if (toLift < 0) {
           fprintf(stderr, "%s:%d: pushup: no push-up went down (not on the push-ups, or over)\n",
                   o.script.c_str(), c.line);
           return 1;
         }
-        run((uint64_t)toMid);
+        run((uint64_t)toLift);
         if (!c.text.empty() && !shot(c.text)) return 1;  // the finger still down
         simTouchSet(false, 0, 0);
         run(SETTLE_MS);

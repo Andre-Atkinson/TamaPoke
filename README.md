@@ -26,7 +26,7 @@ Running on hardware. Implemented: the 151 + shinies animated from microSD, full
 life cycle (egg by rarity → evolution → farewell/release/runaway, each gated
 behind a decision dialog), bred-Pokédex with gallery, fitness training (strength, stamina,
 speed) with ribbons, retention hooks (streak / bond / medals / name), biome + real-time
-backgrounds, four minigames, two calm exercises, animated bath, RTC with offline
+backgrounds, four minigames, two endless training exercises (the rhythm punch and the push-ups), animated bath, RTC with offline
 progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
 **sound (ES8311)**, **English and European Portuguese UI (English default)**, **starter choice on
 first run**, and a one-click **web installer**.

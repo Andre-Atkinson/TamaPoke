@@ -223,11 +223,14 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       }
       c.op = OP_HOLD;
     } else if (op == "pushup") {
-      if ((n != 3 && n != 4) || !toInt(w[1], c.a, 0, 465) || !toInt(w[2], c.b, 0, 465))
-        return fail("usage: pushup X Y [SHOT]");
-      if (n == 4) {  // a shot just before the finger lifts
-        if (!shotName(w[3])) return fail("shot names use letters, digits, '-', '_' and '.' only");
-        c.text = w[3];
+      if (n < 3 || n > 5 || !toInt(w[1], c.a, 0, 465) || !toInt(w[2], c.b, 0, 465))
+        return fail("usage: pushup X Y [edge] [SHOT]");
+      size_t k = 3;
+      if (k < n && w[k] == "edge") { c.c = 1; k++; }  // lift near the band's end, not its middle
+      if (k + 1 < n) return fail("usage: pushup X Y [edge] [SHOT]");
+      if (k < n) {  // a shot just before the finger lifts
+        if (!shotName(w[k])) return fail("shot names use letters, digits, '-', '_' and '.' only");
+        c.text = w[k];
       }
       c.op = OP_PUSHUP;
     } else if (op == "swipe") {

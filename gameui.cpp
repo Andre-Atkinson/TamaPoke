@@ -1,4 +1,4 @@
-// The minigames' screens and the calm exercises (gameui.h). Moved out of TamaPoke.ino
+// The minigames' screens and the training exercises (gameui.h). Moved out of TamaPoke.ino
 // (#41); the exercises replaced the strength-training sack (#78), endless since #126.
 #include <Arduino.h>
 #include "app.h"
@@ -197,11 +197,12 @@ static bool payExercise(const char *why) {
   trainNewHi = trainCount > (p ? pet.punchHi : pet.pushHi);
   trainGain = p ? pet.trainStrength(trainCount) : pet.trainStamina(trainCount);
 #if BOARD_AMOLED_175C
-  Serial.printf("Training: %s count=%u gain=%u%s input_drops=%lu%s\n", p ? "punch" : "pushup", trainCount,
-                trainGain, TRAIN_MISS_LOG[trainMiss], (unsigned long)trainingCapture.dropped(), why);
+  Serial.printf("Training: %s count=%u gain=%u%s%s input_drops=%lu%s\n", p ? "punch" : "pushup", trainCount,
+                trainGain, TRAIN_MISS_LOG[trainMiss], trainNewHi ? " record" : "",
+                (unsigned long)trainingCapture.dropped(), why);
 #else
-  Serial.printf("Training: %s count=%u gain=%u%s%s\n", p ? "punch" : "pushup", trainCount, trainGain,
-                TRAIN_MISS_LOG[trainMiss], why);
+  Serial.printf("Training: %s count=%u gain=%u%s%s%s\n", p ? "punch" : "pushup", trainCount, trainGain,
+                TRAIN_MISS_LOG[trainMiss], trainNewHi ? " record" : "", why);
 #endif
   return true;
 }
@@ -278,10 +279,14 @@ void exerciseRelease(uint32_t at) {
 }
 
 #if HOST_SIM
-int32_t exerciseMsToBandMid(uint32_t now) {
+int32_t exerciseMsToLift(uint32_t now, bool edge) {
   if (!trainOpen || trainOverUntil || trainKind != EX_HOLD || !pushups.down()) return -1;
-  uint32_t mid = pushups.pressAt + (pushups.bandLo + pushups.bandHi) / 2;
-  return exAtOrAfter(now, mid) ? 0 : (int32_t)(mid - now);
+  // The middle of the band, or SIM_EDGE_MS before its end: the touch poll sees the lift up to
+  // 20 ms late, so it is still judged inside the band (even the narrowest, 100 ms), but a
+  // judgement at the lift's confirmation, 40 ms after that, would be too late.
+  const uint32_t SIM_EDGE_MS = 25;
+  uint32_t at = pushups.pressAt + (edge ? pushups.bandHi - SIM_EDGE_MS : (pushups.bandLo + pushups.bandHi) / 2);
+  return exAtOrAfter(now, at) ? 0 : (int32_t)(at - now);
 }
 #endif
 

@@ -314,8 +314,9 @@ TEST(SimScript, nature_names_a_nature) {
   CHECK(!simParseScript("nature tidy lazy\n").error.empty());
 }
 
-// "pushup X Y [SHOT]" (#126): one push-up let go in its band; it runs the firmware
-TEST(SimScript, pushup_takes_a_point_and_an_optional_shot) {
+// "pushup X Y [edge] [SHOT]" (#126): one push-up let go in its band (with `edge`, near the
+// band's end); it runs the firmware
+TEST(SimScript, pushup_takes_a_point_an_optional_edge_and_an_optional_shot) {
   SimScript s = simParseScript("pushup 233 270\npushup 233 270 41-pushup-down\n");
   CHECK_EQ(s.error, std::string(""));
   CHECK_EQ(s.cmds.size(), (size_t)2);
@@ -325,11 +326,25 @@ TEST(SimScript, pushup_takes_a_point_and_an_optional_shot) {
   CHECK_EQ(s.cmds[0].b, (int32_t)270);
   CHECK_EQ(s.cmds[0].text, std::string(""));
   CHECK_EQ(s.cmds[1].text, std::string("41-pushup-down"));
+  CHECK_EQ(s.cmds[0].c, (int32_t)0);  // the middle of the band
+  CHECK_EQ(s.cmds[1].c, (int32_t)0);
   CHECK_EQ(simPreBootEnd(s), (size_t)0);
-  CHECK_EQ(simParseScript("pushup 233\n", "p.txt").error, std::string("p.txt:1: usage: pushup X Y [SHOT]"));
+  SimScript e = simParseScript("pushup 233 270 edge\npushup 233 270 edge 42-pushup-edge\n");
+  CHECK_EQ(e.error, std::string(""));
+  CHECK_EQ(e.cmds.size(), (size_t)2);
+  if (e.cmds.size() == 2) {
+    CHECK_EQ((int)e.cmds[0].op, (int)OP_PUSHUP);
+    CHECK_EQ(e.cmds[0].c, (int32_t)1);  // near the band's end
+    CHECK_EQ(e.cmds[0].text, std::string(""));
+    CHECK_EQ(e.cmds[1].c, (int32_t)1);
+    CHECK_EQ(e.cmds[1].text, std::string("42-pushup-edge"));
+  }
+  CHECK_EQ(simParseScript("pushup 233\n", "p.txt").error, std::string("p.txt:1: usage: pushup X Y [edge] [SHOT]"));
   CHECK(!simParseScript("pushup 233 500\n").error.empty());
   CHECK(!simParseScript("pushup 233 270 a/b\n").error.empty());
   CHECK(!simParseScript("pushup 233 270 x y\n").error.empty());
+  CHECK(!simParseScript("pushup 233 270 edge x y\n").error.empty());
+  CHECK(!simParseScript("pushup 233 270 x edge\n").error.empty());  // edge comes before the shot
 }
 
 // "game NAME" (#94): the next Play deals this minigame; it runs the firmware, so it closes

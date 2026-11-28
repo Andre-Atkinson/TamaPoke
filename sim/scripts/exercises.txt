@@ -1,12 +1,14 @@
 # The exercises (#78, endless and skill-based since #126): the stat card's TRAIN button and
 # the choice it opens, the rhythm punch (five punches on the beat, the pay step going up to
 # x2, then a swing let pass: the miss) and the push-ups (a first try let go too early, the
-# warm-up; three reps let go in the green; then one held too long: the miss), each with its
+# warm-up; three reps let go in the green, the last near the band's end; then one held too
+# long: the miss), each with its
 # result. For both boards, both languages, by day and by night:
 #   tools/sim.sh --board 175c --lang en --script exercises --out shots/
 #   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script exercises --out shots/
-# The serial log has "Training: punch count=5 gain=3 miss" and "Training: pushup count=3
-# gain=2 miss=late" (the 1.75C adds input_drops=0), which the checks below enforce
+# The serial log has "Training: punch count=5 gain=3 miss record" and "Training: pushup
+# count=3 gain=2 miss=late record" (both sessions are new records; the 1.75C adds
+# input_drops=0), which the checks below enforce
 # (tools/gate.sh runs this script on both boards): the push-ups' let-go needs the touch reads
 # while a lift waits to be confirmed (readTrainingTouch, handleTouch's poll on the 1.75).
 # Timing: a tap is 80 ms down then 400 ms settling (sim/main.cpp), and an exercise starts
@@ -14,7 +16,10 @@
 # 400-1100 ms in; each punch landed makes the next swing 35 ms shorter and its window 12 ms
 # narrower each side (exercise.h): from the start, swing n starts at 0, 1500, 2965, 4395,
 # 5790, 7150 ms, with windows 400-1100, 1894-2570, 3354-4006, 4778-5406, 6168-6772 and
-# 7522-8102 ms. A `pushup` step lets go in the middle of the rep's green band.
+# 7522-8102 ms. A `pushup` step lets go in the middle of the rep's green
+# band; with `edge`, 25 ms before its end: still in the band when the let-go is timed at
+# the finger leaving (about 20 ms late at worst), too late if it were timed at the lift's
+# confirmation (40 ms after that), so the third rep checks that.
 
 # new game: pick Charmander, hatch the egg
 wait 1s
@@ -57,7 +62,7 @@ shot 26b-punch-x2
 wait 2s
 shot 27-punch-result
 expect-once Training:
-expect Training: punch count=5 gain=3 miss
+expect Training: punch count=5 gain=3 miss record
 wait 4s
 shot 28-after-punch
 
@@ -73,11 +78,11 @@ hold 233 270 100ms
 shot 31-pushups-too-early
 pushup 233 270 32-pushups-down
 pushup 233 270
-pushup 233 270
+pushup 233 270 edge
 shot 33-pushups-three
 hold 233 270 2500ms
 shot 34-pushups-result
 expect-once Training:
-expect Training: pushup count=3 gain=2 miss=late
+expect Training: pushup count=3 gain=2 miss=late record
 wait 4s
 shot 35-after-pushups
