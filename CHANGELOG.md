@@ -76,7 +76,8 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
     a bar fills; let go while it is in the green band. Too early or too late is the miss.
     Each rep has its own speed and band, so it has to be watched, and they get quicker and
     shorter. A let-go counts only once the touch panel has reported no finger for 40 ms,
-    so one empty report from the panel can't end a run.
+    so one empty report from the panel can't end a run, and a finger let go and pressed
+    straight back down counts as a rep and the next push-up.
   - Each exercise keeps its own record (new save keys `punhi` and `pushi`); the old
     12-swing punch record (`phi`) is left in the save, unread.
 - The Christmas tree, the Halloween pumpkins and two of the Easter eggs moved left, out of

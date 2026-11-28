@@ -375,7 +375,9 @@ On the 1.75C:
 - The push-ups (#126) judge the moment a finger lets go: `TrainingTouch` turns
   the lift of a hit's finger into a `RELEASE` event once reports with no finger
   have gone on for 40 ms (`LiftConfirm`), timed at the first of them, so one
-  empty/ACK report between contacts is not a let-go. While a lift waits for that,
+  empty/ACK report between contacts is not a let-go. A contact after two of them,
+  before that, is a let-go and a new press (`RELEASE_HIT`: a push-up let go and
+  pressed again at once). While a lift waits for that,
   the reader keeps reading the chip as if a finger were down (its interrupt asks
   for nothing once the finger is off). A touch that began on the exit chip never
   lets go, a push-up that slides onto the chip never exits, and a release is never
@@ -386,8 +388,10 @@ On the 1.75C:
 - If the worker can't be created, training won't start and says so.
 
 On hardware the old tap-as-fast-as-you-can bag went from about 48 to **57
-taps** in a session with no noticeable lag. The endless rhythm punch and the
-push-ups (#126) have not been tried on the panel yet. `TRAINTRACE ON` / `OFF` / `?` prints raw CST9217 reports
+taps** in a session with no noticeable lag. On the endless rhythm punch and the
+push-ups (#126, 2026-11-28, about 1,000 traced reads) the CST9217 reported no
+empty read while a finger was held: every lift was its release report (`00...`)
+and then empty reads. `TRAINTRACE ON` / `OFF` / `?` prints raw CST9217 reports
 (`TRAINRAW ...`) for diagnosis; it's off by default and not saved.
 
 The original board keeps its touch polling. Its exit is a tap on the top strip
