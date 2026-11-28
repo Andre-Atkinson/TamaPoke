@@ -73,6 +73,12 @@ end goes through the shared reward path. The logic moves into a header behind
 the same interface as the others, with a test that pins today's physics so the
 move can't change the feel.
 
+Since #127 the ball that reaches the floor rests there for 60 ms (`SETTLE_MS`, as
+Peekaboo's) before it counts as dropped (the game is over, or in the warm-up the
+ball is dealt again): a tap made while the screen still showed it above the floor
+can be read just after the frame that took it past, and a tap within the hit
+radius of the ball still hits it in that time.
+
 ### Berry Catch
 
 ```
@@ -96,8 +102,10 @@ move can't change the feel.
   and none comes before the first 5 berries are caught (it was the first 5 s).
 - **Favourite berry** counts 2 once she has discovered it (`berryKnown`), with
   a heart. The game never reveals the favourite.
-- Ramp (originally over the 30 s; since #127 over the berries caught): a berry every 1100 → 650 ms, falling 150 → 260 px/s,
-  rotten share 10 % → 30 %.
+- Ramp (originally over the 30 s; since #127 over the berries caught): the gap
+  between berries falls from 1100 towards 450 ms and the fall rises from 150
+  towards 420 px/s, never reaching either; no rotten berry below 5 caught, then
+  10 % rising towards 35 % (`spawnGapFor`, `fallSpeedFor`, `rottenPctFor`).
 
 ### Peekaboo
 
@@ -119,6 +127,11 @@ move can't change the feel.
   19 hits. Since #127 there is no pop-up limit (it was 20 per game, about 30 s):
   the game goes on to 255 hits or the first miss (see `game_peek.h`).
 - Hit area: the bush plus the pet's height above it, at least 100 px wide.
+- Taps are read before the frame that steps the game, so a tap made just before
+  the pet ducked can be read just after: an untapped pop-up stays tappable for
+  60 ms past its time (`SETTLE_MS`) before it is the miss that ends the game, and
+  a second tap on the pet just hit within 150 ms (`BOUNCE_MS`) is the same tap.
+  Keepy-uppy does the same for the ball (below).
 
 ### Berry Song
 
@@ -140,8 +153,12 @@ move can't change the feel.
   a 100-note tune repeated ends it with the fanfare (it was twelve notes).
 - No timer while it's her turn. **The pads light up, so it works with the
   sound muted** (BOOT button), and the colours differ in brightness too.
-- Playback 500 ms a note, faster to 350 ms by the 8th note. Score = longest
+- Playback 500 ms a note, faster to 350 ms by the 8th note, and on shortening
+  after that (`200 + 1200/n` ms: 300 at 12 notes, 212 at 100). Score = longest
   song repeated. A typical run (5–7 notes) takes about 30–40 s.
+- A double tap is not a wrong note (since #127): a second press on the pad just
+  pressed, within 150 ms (`BOUNCE_MS`, as Peekaboo's), is ignored unless it is
+  the next note of the song.
 
 ### Bubble Pop (optional fifth)
 
@@ -196,7 +213,8 @@ game left open in the dark (`bedApply`).
 Nothing new runs outside a game: no timers, no wakeups, the picker is RAM
 only. Inside a game it's the same as today (85 ms frames, 240 MHz). Because a
 game keeps the screen on, **every game ends after 15 s with no touch** and pays
-for what was done (Berry Song needs this; the others end sooner anyway). One
+for what was done (a game nobody touches ends only here: since #127 none of
+them has a timer or a limit of its own). One
 NVS write per finished game, as today.
 
 ### Reward

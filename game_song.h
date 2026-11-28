@@ -7,7 +7,9 @@
 // and the score is the longest tune repeated. The tune keeps growing, with no win at 12, and
 // its notes keep getting shorter (noteMsFor); only a 100-note tune repeated wins (the fanfare),
 // a cap no run gets near. No timer while it's the player's turn, and the pads light up, so it
-// works with the sound off.
+// works with the sound off. After the warm-up a second press on the pad just pressed, within
+// BOUNCE_MS (a double tap, as Peekaboo's, game_peek.h), is the same press: it is ignored
+// unless it is the next note, so a finger that lands twice never ends a run.
 struct SongGame {
   static constexpr uint8_t PADS = 4;
   static constexpr uint8_t MAX_LEN = 100, START_LEN = 2;
@@ -21,6 +23,7 @@ struct SongGame {
   static constexpr uint32_t NEXT_MS = 700;    // pause after a round is repeated
   static constexpr uint32_t WRONG_MS = 1000;  // pause before the tune plays again (the warm-up)
   static constexpr uint32_t PRESS_MS = 250;   // a pressed pad stays lit
+  static constexpr uint32_t BOUNCE_MS = 150;  // a second press on a pad this soon after is the same press
   static constexpr uint32_t NEVER = 0xFFFFFFFFu;
   static constexpr uint8_t NO_PAD = 0xFF;
   enum : uint8_t { LEAD = 0, SHOW, TURN, PAUSE, WRONG, DONE };
@@ -34,6 +37,8 @@ struct SongGame {
   bool won = false;
   bool missed = false;      // over: a wrong note after the first tune was repeated
   uint32_t t = 0, phaseEnd = 0;
+  uint8_t lastPad = NO_PAD; // the pad pressed last (NO_PAD: none yet) and when
+  uint32_t lastAt = 0;
   uint8_t lit = NO_PAD;     // pad drawn lit
   uint32_t litUntil = 0;
   uint8_t note = NO_PAD;    // tone to play now (taken by the sketch)
@@ -67,6 +72,8 @@ struct SongGame {
     phaseEnd = LEAD_MS;
     lit = note = NO_PAD;
     litUntil = 0;
+    lastPad = NO_PAD;
+    lastAt = 0;
     events = 0;
   }
   bool done() const { return phase == DONE; }
@@ -127,6 +134,10 @@ struct SongGame {
     if (phase != TURN) return;
     uint8_t p = padAt(x, y);
     if (p == NO_PAD) return;
+    // the pad pressed a moment ago, pressed again: a double tap. It counts only as the next note.
+    if (p == lastPad && t - lastAt < BOUNCE_MS && p != seq[k]) return;  // (it doesn't start a new window)
+    lastPad = p;
+    lastAt = t;
     lit = p;
     litUntil = t + PRESS_MS;
     if (p == seq[k]) {

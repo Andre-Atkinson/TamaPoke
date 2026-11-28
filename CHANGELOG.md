@@ -100,9 +100,13 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
     down to 550 ms. A second tap on the pet just hit is never a miss (the bushes' hit areas
     overlap, so it may lie in another bush's too), and neither is a double tap a moment after
     it ducked (150 ms); a tap read just after the pet ducked still counts for 60 ms, so a
-    slow frame never turns a tap made in time into a miss.
+    slow frame never turns a tap made in time into a miss. Keepy-uppy does the same for the
+    ball: when it reaches the floor it rests there for 60 ms, still hit by a tap on it, before
+    it counts as dropped (or, in the warm-up, is dealt again).
   - **Berry Song:** one wrong note ends it (it was three), and the tune grows a note a round
     with no stop at 12, the notes getting shorter (down to about 210 ms); only a 100-note tune wins.
+    A second press on the pad just pressed, within 150 ms, is a double tap and is ignored
+    unless it is the next note, so it never ends a run.
   - **Pay:** speed now rises with the run in steps, shown as **x1**, **x2**... under the
     score: each game's step is about half its par (8 hits, 10 berries, 7 pop-ups, 3 notes), a
     game at par still pays +3, 30 keepy-uppy hits pay +9, a 12-note song +10. Any game

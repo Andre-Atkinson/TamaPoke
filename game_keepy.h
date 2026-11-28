@@ -11,19 +11,31 @@
 // clock, so no hit's arc gets shorter than about a second (test/test_minigames.cpp). The
 // game ends by itself at 255 hits. Only the input changed from the original: a hit counts
 // when the finger touches.
+//
+// Taps and frames, on both boards (loop() in TamaPoke.ino, renderGame in gameui.cpp): each
+// pass of the loop reads the touch first (handleTouch -> gameTouch, polled every 20 ms) and
+// steps the game afterwards, by the real time since the last frame (85 ms, POWER_GAME_FRAME_MS).
+// A tap made while the screen still showed the ball above the floor can therefore be read
+// after the frame that took it past FLOOR_Y. So the ball that reaches the floor is not
+// dropped yet: it rests on the floor line for SETTLE_MS (as PeekGame::SETTLE_MS, Peekaboo's),
+// still hit by a tap within HIT_R of it, and only when that has passed is it dropped (the
+// game is over) or, in the warm-up, dealt again.
 struct KeepyGame {
   static constexpr float ARENA_CX = 233, ARENA_CY = 233;
   static constexpr float WALL_R = 205;   // round wall the ball bounces off
   static constexpr float FLOOR_Y = 384;  // below this the ball is dropped
   static constexpr float HIT_R = 74;     // tap distance that hits the ball
   static constexpr uint32_t STEP_MS = 85;
+  static constexpr uint32_t SETTLE_MS = 60;  // a ball that reached the floor is dropped this long after
   static constexpr uint8_t MAX_HITS = 255;  // the game ends by itself here (GAME_REC_MAX)
   static constexpr uint8_t PACE_FROM = 31;  // past this many hits the whole game speeds up
   static_assert(MAX_HITS == GAME_REC_MAX[GAME_KEEPY], "the cap is the record's top");
 
   float ballX = 233, ballY = 96, ballVX = 0, ballVY = 0, petX = 233;
   uint8_t score = 0;
-  bool dropped = false;  // the ball hit the floor after the first hit: over
+  bool dropped = false;  // the ball hit the floor after the first hit, and nobody hit it in the settle: over
+  bool onFloor = false;  // the ball reached the floor and rests on it for SETTLE_MS (a tap still hits it)
+  uint32_t floorAt = 0;  // game time it reached the floor
   float hitX = 0, hitY = 0;  // last hit (impact ring)
   uint32_t hitT = 0;         // game time of the last hit
   bool hasHit = false;
@@ -35,6 +47,8 @@ struct KeepyGame {
     rng.seedWith(seed);
     score = 0;
     dropped = false;
+    onFloor = false;
+    floorAt = 0;
     petX = 233;
     t = hitT = 0;
     hasHit = false;
@@ -51,6 +65,7 @@ struct KeepyGame {
     if (sp > 4.0f) sp = 4.0f;
     ballVX = rng.below(2) ? sp : -sp;
     ballVY = 0;
+    onFloor = false;
   }
   bool done() const { return dropped || score >= MAX_HITS; }
   // The game's pace, 1 for the first 31 hits (the physics as it always was) and then rising
@@ -77,6 +92,7 @@ struct KeepyGame {
     ballVX += dx * 0.12f;
     if (ballVX > 6.5f) ballVX = 6.5f;
     if (ballVX < -6.5f) ballVX = -6.5f;
+    onFloor = false;  // hit in the settle: the ball goes up again
     hitX = ballX;
     hitY = ballY;
     hitT = t;
@@ -89,12 +105,20 @@ struct KeepyGame {
   void step(uint32_t dtMs) {
     if (done()) return;
     t += dtMs;
+    if (onFloor) {  // the ball rests on the floor line: dropped (or dealt again) once the settle has passed
+      if (t >= floorAt + SETTLE_MS) {
+        onFloor = false;
+        if (score == 0) respawn();
+        else dropped = true;
+      }
+      return;
+    }
     float k = dtMs / (float)STEP_MS;  // physics per 85 ms, whatever the frame took
     if (k > 3.0f) k = 3.0f;
     k *= paceAt(score);
     int n = (int)ceilf(k);
     if (n < 1) n = 1;
-    for (int i = 0; i < n && !done(); i++) physics(k / n);
+    for (int i = 0; i < n && !done() && !onFloor; i++) physics(k / n);
   }
 
  private:
@@ -116,9 +140,11 @@ struct KeepyGame {
       ballX = ARENA_CX + nx * WALL_R;
       ballY = ARENA_CY + ny * WALL_R;
     }
-    if (ballY > FLOOR_Y) {  // a drop: before the first hit the ball comes back, after it that is the end
-      if (score == 0) respawn();
-      else dropped = true;
+    if (ballY > FLOOR_Y) {  // it reached the floor: it rests there for the settle (the top), then
+      ballY = FLOOR_Y;      // is dropped (after the first hit that is the end) or dealt again (before it)
+      ballVX = ballVY = 0;
+      onFloor = true;
+      floorAt = t;
     }
     float chase = (ballX - petX) * 0.12f;  // the pet follows it along the ground
     if (chase > 7) chase = 7;

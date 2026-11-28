@@ -69,7 +69,7 @@ struct CatchGame {
   // The ramps, by berries caught c. Integer maths (the host tests and the board agree).
   // Spawn gap in ms: 1100 at 0 caught, about 650 at 25, 567 at 50, 514 at 100.
   static uint32_t spawnGapFor(uint16_t c) { return 450u + 7150u / (11u + c); }
-  // Fall speed in px/s: 150 at 0, about 260 at 25, 307 at 50, 348 at 100.
+  // Fall speed in px/s: 150 at 0, about 260 at 25, 307 at 50, 349 at 100.
   static uint32_t fallSpeedFor(uint16_t c) { return 420u - 9720u / (36u + c); }
   // Rotten share in percent: 0 below CLEAN_CATCHES, then 10 rising towards 35 (never reaching it).
   static uint8_t rottenPctFor(uint16_t c) {

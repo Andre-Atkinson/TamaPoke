@@ -24,6 +24,23 @@ tap 233 200
 wait 6s
 serial SCENE auto clear auto
 
+# 0. A game nobody touches ends at its 15 s idle end and pays only the little it always paid
+# (R2-5 of #129: finishGame passes `games.played` as `touched`): joy +5 and no heart, not the +35
+# of a game she played. The new pet's joy is 80, so +5 is 85 and +35 would be 100 (the ENE and
+# the FOOD it costs are the same either way, so the joy is the check; the "Play:" line is the
+# same either way). It runs first, while the joy is still below the +35's reach.
+game peek
+tap 202 404
+tap 169 320
+wait 16s
+expect-once Play: peek score=0 speed=+0
+wait 5s
+serial STATS
+wait 300ms
+expect com=75 fel=85 ene=70
+expect-not fel=100
+wait 1s
+
 # 1. Keepy-uppy: 20 hits, then the ball is left to drop
 game keepy
 tap 202 404

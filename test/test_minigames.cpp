@@ -669,31 +669,102 @@ TEST(keepy, la_pared_redonda_devuelve_la_bola) {
   CHECK(fabsf(k.ballVX + 4.0f * 0.85f) < 0.1f);
 }
 
+// the frame that takes the ball past the floor line: it rests on the line for SETTLE_MS before
+// it is dropped (R2-2 of #129), so `k.onFloor` is set and nothing else has happened yet
+static void keepyToFloor(KeepyGame &k) {
+  k.ballY = 383; k.ballVY = 5; k.ballX = 233; k.ballVX = 0;
+  k.step(85);
+  CHECK(k.onFloor);
+  CHECK(!k.done());
+  CHECK_EQ(k.ballY, KeepyGame::FLOOR_Y);  // it rests on the floor line, it doesn't sink under it
+}
+
 TEST(keepy, before_the_first_hit_a_drop_deals_a_new_ball_and_after_it_a_drop_ends_the_game) {
   KeepyGame k;
   k.reset(5);
   for (int drop = 1; drop <= 5; drop++) {  // the warm-up: dropped, dealt again, never over
-    k.ballY = 383; k.ballVY = 5; k.ballX = 233; k.ballVX = 0;
-    k.step(85);
+    keepyToFloor(k);
+    k.step(KeepyGame::SETTLE_MS);
     CHECK(!k.done());
     CHECK(!k.dropped);
+    CHECK(!k.onFloor);
     CHECK_EQ(k.ballY, 96.0f);
     CHECK_EQ(k.score, (uint8_t)0);
   }
   k.ballX = 233; k.ballY = 200;
   k.touchDown(233, 200);  // the first hit: the warm-up is over
   CHECK_EQ(k.score, (uint8_t)1);
-  k.ballY = 383; k.ballVY = 5; k.ballX = 233; k.ballVX = 0;
-  k.step(85);
+  keepyToFloor(k);
+  CHECK(!k.dropped);  // not yet: the settle
+  k.step(KeepyGame::SETTLE_MS);
   CHECK(k.done());  // one drop ends it, and no new ball comes
   CHECK(k.dropped);
-  CHECK(k.ballY > 384.0f);
+  CHECK(k.ballY >= KeepyGame::FLOOR_Y);
   CHECK_EQ(k.result(), (uint16_t)1);  // it keeps what was done
   float y = k.ballY;
   k.step(85);
   CHECK_EQ(k.ballY, y);  // over: it no longer moves
   k.touchDown((int)k.ballX, (int)k.ballY);
   CHECK_EQ(k.score, (uint8_t)1);  // ...nor hits
+}
+
+// R2-2 of #129: a tap made while the screen showed the ball above the floor can be read after
+// the frame that took it past the line (the loop reads the touch, then steps the game; see the
+// top of game_keepy.h). With literal times: a tap 40 and 59 ms after the crossing still hits
+// (the game goes on); with no tap the ball is dropped (the game is over, or in the warm-up
+// dealt again) 60 ms after it, and a tap that late is too late.
+TEST(keepy, a_tap_up_to_59_ms_after_the_ball_crossed_the_floor_still_hits_it_and_with_none_it_drops_at_60) {
+  static_assert(KeepyGame::SETTLE_MS == 60, "the literal times below are around a 60 ms settle");
+  for (int warm = 0; warm < 2; warm++) {
+    for (uint32_t late : { 40u, 59u, 60u, 0u }) {  // a tap `late` ms after the crossing (0: no tap)
+      KeepyGame k;
+      k.reset(5);
+      if (!warm) {
+        k.touchDown((int)k.ballX, (int)k.ballY);  // one hit first: no warm-up
+        CHECK_EQ(k.score, (uint8_t)1);
+      }
+      uint8_t before = k.score;
+      keepyToFloor(k);
+      uint32_t t0 = k.t;
+      if (late == 0) {
+        k.step(59);
+        CHECK(!k.done() && k.onFloor);  // still resting
+        k.step(1);                      // 60 ms after the crossing
+        CHECK_EQ(k.dropped, warm == 0);
+        CHECK_EQ(k.done(), warm == 0);
+        CHECK(!k.onFloor);
+        if (warm) CHECK_EQ(k.ballY, 96.0f);  // dealt again
+      } else if (late < 60) {
+        k.step(late);
+        CHECK_EQ(k.t - t0, late);
+        // the tap is on the ball as the screen showed it (a bit above the line, within HIT_R)
+        CHECK(k.touchDown(233, 384 - 30));
+        CHECK_EQ(k.score, (uint8_t)(before + 1));
+        CHECK(!k.done() && !k.onFloor);
+        CHECK(k.ballVY < 0);               // it goes up again
+        k.step(KeepyGame::SETTLE_MS * 2);  // and the settle's end changes nothing
+        CHECK(!k.done());
+        CHECK(k.ballY < KeepyGame::FLOOR_Y);
+      } else {  // 60 ms: the settle is over, the ball is gone
+        k.step(late);
+        CHECK_EQ(k.dropped, warm == 0);
+        if (warm == 0) CHECK(!k.touchDown(233, 384));
+        CHECK_EQ(k.score, before);
+      }
+    }
+  }
+}
+
+// a ball resting on the floor is still the ball: only a tap within HIT_R of it hits
+TEST(keepy, a_tap_far_from_the_ball_resting_on_the_floor_does_not_hit_it) {
+  KeepyGame k;
+  k.reset(5);
+  k.touchDown((int)k.ballX, (int)k.ballY);
+  keepyToFloor(k);
+  k.step(30);
+  CHECK(!k.touchDown(233, 384 - 74));
+  CHECK_EQ(k.score, (uint8_t)1);
+  CHECK(k.onFloor);
 }
 
 TEST(keepy, the_pace_is_1_up_to_31_hits_then_rises_ever_more_slowly_and_never_reaches_2_5) {
@@ -750,8 +821,8 @@ TEST(keepy, a_hit_on_a_ball_at_the_floor_line_always_leaves_about_a_second_at_ev
       k.ballX = 233; k.ballY = 384; k.ballVX = 0; k.ballVY = 7;
       CHECK(k.touchDown(233, 384));
       uint32_t t0 = k.t;
-      for (int i = 0; i < 400 && !k.done(); i++) k.step(frame);
-      CHECK_MSG(k.done(), "the ball never came back at score " + std::to_string(s));
+      for (int i = 0; i < 400 && !k.done() && !k.onFloor; i++) k.step(frame);  // to the floor, not the settle's end
+      CHECK_MSG(k.onFloor, "the ball never came back at score " + std::to_string(s));
       float ms = (float)(k.t - t0);
       if (ms < worst) worst = ms;
       CHECK_MSG(ms >= 900.0f, "score " + std::to_string(s) + ": only " + std::to_string(ms) + " ms in the air");
@@ -1267,6 +1338,7 @@ static PeekGame peekUpAt(uint8_t b) {
 // with the upper two), so a second tap on the pet just hit can lie in another bush's area
 // too. It is the same pet: never a miss, whichever area it is also in. The second tap comes
 // 200 ms after the hit, past BOUNCE_MS, with the pet still up and nodding.
+static_assert(PeekGame::BOUNCE_MS < 200, "the overlap test's second tap (200 ms after the hit) must come past the bounce");
 static void peekSecondTap(PeekGame &p, int x, int y) {
   p.step(200);
   CHECK(p.up() && p.hit);
@@ -1330,6 +1402,28 @@ TEST(peek, a_double_tap_right_after_the_duck_is_not_a_miss_but_a_tap_after_the_b
   }
 }
 
+// R2-1 of #129: the same, with literal times, so a BOUNCE_MS that drifts (20 ms, 1 ms) fails:
+// a second tap 120 ms after a hit, once the pet has ducked, is the same tap; 200 ms after it
+// is a deliberate one.
+static_assert(PeekGame::BOUNCE_MS > 120 && PeekGame::BOUNCE_MS < 200, "120 ms is a double tap, 200 ms is not");
+TEST(peek, a_second_tap_120_ms_after_a_hit_on_a_ducked_pet_is_not_a_miss_and_one_200_ms_after_is) {
+  for (uint32_t gap : { 120u, 200u }) {
+    PeekGame p = peekUp(4);
+    while (p.t + 2 < p.phaseEnd) p.step(1);  // the last moments of the time up
+    int x = PeekGame::BX[p.bush], y = PeekGame::BY[p.bush] - 60;
+    p.touchDown(x, y);
+    CHECK_EQ(p.score, (uint8_t)1);
+    p.step(2);
+    CHECK(!p.up());  // ducked: none up
+    p.step(gap - 2);  // `gap` ms after the hit
+    CHECK(!p.up() && !p.done());
+    p.touchDown(x, y);
+    CHECK_MSG(p.done() == (gap == 200), "a second tap " + std::to_string(gap) + " ms after the hit");
+    CHECK_EQ(p.missed, gap == 200);
+    CHECK_EQ(p.result(), (uint16_t)1);
+  }
+}
+
 // R1-6 of #129: a tap made before phaseEnd but read after the frame that stepped past it (the
 // loop reads the touch, then steps the game; see the top of game_peek.h) is still a hit for
 // SETTLE_MS, and the untapped miss ends the game only after that, in the warm-up or not.
@@ -1359,6 +1453,28 @@ TEST(peek, an_untapped_pop_up_is_a_miss_only_once_the_settle_has_passed_and_a_ta
     CHECK_EQ(q.done(), warm == 0);  // the warm-up has no miss: it ducks, the next one comes
     CHECK_EQ(q.missed, warm == 0);
     if (warm) CHECK(!q.up());
+  }
+}
+
+// R2-1 of #129: with literal times, so a SETTLE_MS that drifts (5 ms) fails: an untapped pop-up
+// 40 ms past phaseEnd is still tappable, and is a miss before 100 ms have passed.
+TEST(peek, an_untapped_pop_up_takes_a_hit_40_ms_after_phaseEnd_and_is_a_miss_by_100_ms) {
+  for (int tap = 0; tap < 2; tap++) {
+    PeekGame p = peekUp(6);
+    tapUp(p);  // a hit first: no warm-up
+    stepToDuck(p);
+    stepToUp(p);
+    CHECK(p.up() && !p.done());
+    p.step(p.phaseEnd - p.t + 40);  // 40 ms past phaseEnd
+    CHECK(p.up() && !p.done());
+    if (tap) {
+      tapUp(p);
+      CHECK_EQ(p.score, (uint8_t)2);
+      CHECK(!p.done());
+    } else {
+      p.step(60);  // 100 ms past phaseEnd
+      CHECK(p.done() && p.missed);
+    }
   }
 }
 
@@ -1493,6 +1609,7 @@ TEST(song, after_the_first_tune_one_wrong_note_ends_it_with_the_longest_tune_as_
   listen(s);  // 3 notes
   press(s, s.seq[0]);
   press(s, s.seq[1]);
+  s.step(200);  // (a wrong note on the pad just pressed, sooner than this, would be a double tap: R2-3)
   press(s, (uint8_t)((s.seq[2] + 1) % SongGame::PADS));  // one wrong note
   CHECK(s.done());
   CHECK(s.missed);
@@ -1501,6 +1618,82 @@ TEST(song, after_the_first_tune_one_wrong_note_ends_it_with_the_longest_tune_as_
   CHECK_EQ(s.result(), (uint16_t)2);
   press(s, s.seq[0]);  // over is over
   CHECK_EQ(s.result(), (uint16_t)2);
+}
+
+// R2-3 of #129: a double tap. After the first tune a second press on the pad just pressed,
+// within BOUNCE_MS, that is not the next note is the same press and ends nothing; one that is the
+// next note counts; a wrong press later does end the game.
+static_assert(SongGame::BOUNCE_MS == 150, "the literal times below are around a 150 ms bounce");
+// past the warm-up, in the player's turn on the 3-note tune
+static SongGame songInTune3(uint32_t seed) {
+  SongGame s;
+  s.reset(seed);
+  listen(s);
+  press(s, s.seq[0]);
+  s.step(SongGame::BOUNCE_MS + 50);
+  press(s, s.seq[1]);
+  CHECK_EQ(s.best, (uint8_t)2);
+  listen(s);
+  CHECK(s.playersTurn() && s.len == 3);
+  return s;
+}
+// a seed whose tune starts with two notes on different pads (same == false) or on the same pad
+static uint32_t songSeed(bool same) {
+  for (uint32_t seed = 1; seed < 200; seed++) {
+    SongGame s;
+    s.reset(seed);
+    if ((s.seq[0] == s.seq[1]) == same) return seed;
+  }
+  CHECK_MSG(false, "no seed for the song double-tap test");
+  return 1;
+}
+TEST(song, after_the_first_tune_a_second_press_on_the_same_pad_within_150_ms_that_is_not_the_next_note_is_ignored) {
+  SongGame s = songInTune3(songSeed(false));
+  s.takeEvents();
+  press(s, s.seq[0]);  // the first note
+  CHECK_EQ(s.k, (uint8_t)1);
+  s.step(120);
+  press(s, s.seq[0]);  // a double tap: the next note is another pad
+  CHECK(!s.done());
+  CHECK(!s.missed);
+  CHECK(!(s.takeEvents() & GEV_BAD));
+  CHECK_EQ(s.k, (uint8_t)1);
+  CHECK_EQ((int)s.phase, (int)SongGame::TURN);
+  press(s, s.seq[1]);  // and the tune goes on
+  press(s, s.seq[2]);
+  CHECK_EQ(s.best, (uint8_t)3);
+  CHECK(!s.done());
+}
+TEST(song, a_press_on_the_same_pad_that_is_the_next_note_counts_however_soon) {
+  SongGame s = songInTune3(songSeed(true));  // the tune's first two notes are the same pad
+  press(s, s.seq[0]);
+  s.step(20);
+  press(s, s.seq[1]);  // the same pad again, and the next note
+  CHECK_EQ(s.k, (uint8_t)2);
+  CHECK(!s.done());
+}
+TEST(song, a_wrong_press_on_the_same_pad_200_ms_later_ends_the_game_and_149_ms_is_still_a_double_tap) {
+  for (uint32_t gap : { 149u, 150u, 200u }) {
+    SongGame u = songInTune3(songSeed(false));
+    press(u, u.seq[0]);
+    u.step(gap);
+    press(u, u.seq[0]);  // not the next note
+    CHECK_MSG(u.done() == (gap >= 150), "a second press " + std::to_string(gap) + " ms after the first");
+    CHECK_EQ(u.missed, gap >= 150);
+    if (gap >= 150) CHECK_EQ(u.result(), (uint16_t)2);
+  }
+}
+// a press that was ignored does not start a window of its own: a finger that taps the same wrong
+// pad every 100 ms is a wrong note by the second tap, 200 ms after the first
+TEST(song, an_ignored_double_tap_does_not_extend_the_bounce) {
+  SongGame s = songInTune3(songSeed(false));
+  press(s, s.seq[0]);
+  s.step(100);
+  press(s, s.seq[0]);  // ignored (100 ms)
+  CHECK(!s.done());
+  s.step(100);
+  press(s, s.seq[0]);  // 200 ms after the first press, 100 after the ignored one
+  CHECK(s.done());
 }
 
 // the tune grows a note a round with no win at 12, up to the 100 notes that win

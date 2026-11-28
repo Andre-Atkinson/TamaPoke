@@ -127,7 +127,9 @@ travels to, and it stays through an ending: the next egg finds the plant as it w
   where the creature can't get to it); *Peekaboo*, a creature ducking back untapped or a tap
   on the wrong bush; *Berry Song*, one wrong note (the tune grows a note a round, with no limit
   but a 100-note tune, which wins). The records are new (the old ones are left in the save,
-  unread). Leaving by the *Hold: exit* chip pays for what was done, as a miss does, and shows
+  unread). A double tap never ends a run: *Peekaboo* and *Berry Song* ignore a second tap on
+  the same bush or pad a moment after the first, and *keepy-uppy*'s ball still counts a tap for
+  60 ms after it reached the floor. Leaving by the *Hold: exit* chip pays for what was done, as a miss does, and shows
   the result; a game you haven't touched yet just closes.
   Turning the screen off (PWR, or the 1.75C's pocket lock) ends the game at once and the
   creature keeps what its score so far earned, with no result screen; a game you haven't

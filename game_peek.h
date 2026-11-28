@@ -54,7 +54,7 @@ struct PeekGame {
 
   // How long the pet stays up / hides before the next pop-up, by the hits so far. The up time
   // goes 1500 -> 750 ms over the first 19 hits, as it always did, then on towards a floor:
-  // 650 ms at 39 hits, 590 at 99, 566 at 254, never under 550. The pet takes 150 ms to rise and
+  // 650 ms at 39 hits, 590 at 99, 565 at 254, never under 550. The pet takes 150 ms to rise and
   // 150 to hide (drawPeek), so even at the floor it is fully up for about 250 ms, and taps
   // count through the whole time up. The pause goes 500 -> 300 ms by 19 hits and stays there.
   static constexpr uint8_t RAMP_HITS = 19;
