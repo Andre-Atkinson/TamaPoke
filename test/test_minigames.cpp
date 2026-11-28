@@ -1122,10 +1122,19 @@ TEST(peek, the_time_up_and_the_pause_ramp_by_hits_towards_a_floor) {
   }
 }
 
+// Steps until the pet is up / has ducked, at most 30 s of game time: a game that stops short
+// (a broken rule ending it early) fails its checks instead of hanging the suite.
+static void stepToUp(PeekGame &p, uint32_t ms = 10) {
+  for (uint32_t i = 0; i < 30000 / ms && !p.up() && !p.done(); i++) p.step(ms);
+}
+static void stepToDuck(PeekGame &p, uint32_t ms = 10) {
+  for (uint32_t i = 0; i < 30000 / ms && p.up() && !p.done(); i++) p.step(ms);
+}
 static PeekGame peekUp(uint32_t seed = 1) {
   PeekGame p;
   p.reset(seed);
-  while (!p.up()) p.step(10);
+  stepToUp(p);
+  CHECK(p.up());
   return p;
 }
 // a bush whose centre is outside the one that is up (so a tap there is the wrong bush)
@@ -1163,7 +1172,7 @@ TEST(peek, before_the_first_hit_nothing_ends_the_game_and_the_pace_stays_slow) {
   CHECK(!p.done());
   CHECK(ups >= 20);
   // a wrong bush only rustles it
-  while (!p.up()) p.step(10);
+  stepToUp(p);
   uint8_t o = otherBush(p);
   CHECK(o < PeekGame::BUSHES);
   p.touchDown(PeekGame::BX[o], PeekGame::BY[o]);
@@ -1171,7 +1180,7 @@ TEST(peek, before_the_first_hit_nothing_ends_the_game_and_the_pace_stays_slow) {
   CHECK(!p.done());
   CHECK(!(p.takeEvents() & GEV_BAD));
   // and so does a tap on a bush while none is up
-  while (p.up()) p.step(10);
+  stepToDuck(p);
   p.touchDown(PeekGame::BX[0], PeekGame::BY[0]);
   CHECK(p.rustling(0));
   CHECK(!p.done());
@@ -1181,11 +1190,11 @@ TEST(peek, after_the_first_hit_a_pop_up_that_ducks_back_untapped_ends_the_game) 
   PeekGame p = peekUp();
   tapUp(p);
   CHECK_EQ(p.score, (uint8_t)1);
-  while (p.up()) p.step(10);  // it ducked after the hit: that is no miss
+  stepToDuck(p);  // it ducked after the hit: that is no miss
   CHECK(!p.done());
-  while (!p.up()) p.step(10);  // the next one, not tapped
+  stepToUp(p);  // the next one, not tapped
   CHECK(!p.done());
-  while (p.up()) p.step(10);
+  stepToDuck(p);
   CHECK(p.done());
   CHECK(p.missed);
   CHECK(p.takeEvents() & GEV_BAD);
@@ -1206,7 +1215,7 @@ TEST(peek, after_the_first_hit_a_tap_on_another_bush_or_on_any_bush_while_none_i
 
   PeekGame q = peekUp(2);
   tapUp(q);
-  while (q.up()) q.step(10);  // ducked: none up
+  stepToDuck(q);  // ducked: none up
   CHECK(!q.done());
   q.touchDown(PeekGame::BX[2], PeekGame::BY[2]);  // any bush
   CHECK(q.done());
@@ -1223,7 +1232,7 @@ TEST(peek, a_second_tap_on_the_bush_just_hit_and_a_tap_outside_every_bush_do_not
   p.touchDown(233, 120);
   p.touchDown(5, 5);
   CHECK(!p.done());
-  while (p.up()) p.step(10);
+  stepToDuck(p);
   p.touchDown(233, 120);  // none up, but not on a bush
   CHECK(!p.done());
 }
@@ -1233,10 +1242,11 @@ TEST(peek, a_tap_counts_through_the_whole_time_up_even_at_the_floor) {
     PeekGame p;
     p.reset(5);
     p.score = 200;  // up for about 570 ms, with the first hit long past
-    while (!p.up()) p.step(1);
+    stepToUp(p, 1);
     uint32_t up = p.phaseEnd - p.phaseStart;
     CHECK_EQ(up, PeekGame::upMsFor(200));
-    if (tapAt) while (p.t + 1 < p.phaseEnd) p.step(1);  // the last millisecond
+    if (tapAt)
+      for (int i = 0; i < 3000 && p.t + 1 < p.phaseEnd; i++) p.step(1);  // the last millisecond
     tapUp(p);
     CHECK_EQ(p.score, (uint8_t)201);
   }
