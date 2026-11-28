@@ -1265,7 +1265,13 @@ static PeekGame peekUpAt(uint8_t b) {
 
 // R1-1 of #129: the bushes' hit areas overlap (bush 0 and bush 2, bush 1 and bush 4, bush 3
 // with the upper two), so a second tap on the pet just hit can lie in another bush's area
-// too. It is the same pet: never a miss, whichever area it is also in.
+// too. It is the same pet: never a miss, whichever area it is also in. The second tap comes
+// 200 ms after the hit, past BOUNCE_MS, with the pet still up and nodding.
+static void peekSecondTap(PeekGame &p, int x, int y) {
+  p.step(200);
+  CHECK(p.up() && p.hit);
+  p.touchDown(x, y);
+}
 TEST(peek, a_second_tap_on_the_pet_just_hit_is_never_a_miss_where_two_bushes_overlap) {
   // the two points the review named: the head of the pet out of bush 2 (also in bush 0's
   // area), and the lower part of bush 0 (also in bush 2's)
@@ -1275,12 +1281,12 @@ TEST(peek, a_second_tap_on_the_pet_just_hit_is_never_a_miss_where_two_bushes_ove
   CHECK(PeekGame::inBush(0, lx, ly) && PeekGame::inBush(2, lx, ly));
   PeekGame a = peekUpAt(2);
   tapUp(a);
-  a.touchDown(hx, hy);
+  peekSecondTap(a, hx, hy);
   CHECK(!a.done());
   CHECK_EQ(a.score, (uint8_t)1);
   PeekGame b = peekUpAt(0);
   tapUp(b);
-  b.touchDown(lx, ly);
+  peekSecondTap(b, lx, ly);
   CHECK(!b.done());
   CHECK_EQ(b.score, (uint8_t)1);
   // every point of the bush up that is also inside another bush's area, for every bush
@@ -1295,7 +1301,7 @@ TEST(peek, a_second_tap_on_the_pet_just_hit_is_never_a_miss_where_two_bushes_ove
         overlaps++;
         PeekGame p = peekUpAt(up);
         tapUp(p);
-        p.touchDown(x, y);
+        peekSecondTap(p, x, y);
         CHECK_MSG(!p.done() && p.score == 1, "bush " + std::to_string(up) + " up and hit, a second tap at " +
                                                  std::to_string(x) + "," + std::to_string(y));
       }
