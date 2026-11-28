@@ -205,6 +205,41 @@ constexpr bool exitChipNeverReleases() {
     if (t.update(false, 0, 0, n) != T::NONE) return false;
   return true;
 }
+// A push-up let go and pressed again 45 ms later, as the 1.75C's chip reported it on the
+// hardware try (2026-11-28, TRAINTRACE; the first 12 of each read's 15 bytes): its release
+// report, an empty read, the contact back. A let-go timed at the release report, and a new
+// press (R2-2); one report with no finger before a contact would be the same finger.
+constexpr uint8_t triedDown[] = {0x06, 0x0C, 0x08, 0x3B, 0x00, 0x01, 0xAB, 0, 0, 0, 0x3C, 0x4A};
+constexpr uint8_t triedLift[] = {0x00, 0x0C, 0x08, 0x3B, 0x00, 0x01, 0xAB, 0, 0, 0, 0x3C, 0x4A};
+constexpr uint8_t triedEmpty[] = {0x0C, 0x08, 0x3B, 0x00, 0x01, 0xAB, 0, 0, 0, 0x3C, 0x4A, 0x09};
+constexpr uint8_t triedBack[] = {0x06, 0x0C, 0x08, 0x9D, 0x00, 0x01, 0xAB, 0, 0, 0, 0x3C, 0x4A};
+constexpr bool quickRePressIsALetGoAndANewPress() {
+  T t;
+  auto down = decodeTrainingReport(triedDown, sizeof(triedDown));
+  auto lift = decodeTrainingReport(triedLift, sizeof(triedLift));
+  auto empty = decodeTrainingReport(triedEmpty, sizeof(triedEmpty));
+  auto back = decodeTrainingReport(triedBack, sizeof(triedBack));
+  if (t.update(down.pressed, down.x, down.y, 1157839) != T::HIT) return false;
+  for (uint32_t n = 1157859; n <= 1158499; n += 20)
+    if (t.update(down.pressed, down.x, down.y, n) != T::NONE) return false;
+  if (t.update(lift.pressed, lift.x, lift.y, 1158519) != T::NONE) return false;
+  if (t.update(empty.pressed, empty.x, empty.y, 1158539) != T::NONE) return false;
+  if (t.update(back.pressed, back.x, back.y, 1158564) != T::RELEASE_HIT || t.liftAt() != 1158519) return false;
+  if (t.update(back.pressed, back.x, back.y, 1158584) != T::NONE) return false;
+  // the new finger lets go in its turn, timed at its own first report with no finger
+  if (t.update(lift.pressed, lift.x, lift.y, 1159135) != T::NONE) return false;
+  if (t.update(empty.pressed, empty.x, empty.y, 1159155) != T::NONE) return false;
+  return t.update(empty.pressed, empty.x, empty.y, 1159175) == T::RELEASE && t.liftAt() == 1159135;
+}
+// ...and pressed again on the exit chip: only the let-go (the chip's hold arms as usual)
+constexpr bool quickRePressOnTheExitChipOnlyLetsGo() {
+  T t;
+  if (t.update(true, 233, 233, 0) != T::HIT) return false;
+  if (t.update(false, 0, 0, 20) != T::NONE || t.update(false, 0, 0, 40) != T::NONE) return false;
+  return t.update(true, 233, 405, 50) == T::RELEASE && t.liftAt() == 20 && t.exitHeldMs(60) == 10;
+}
+static_assert(quickRePressIsALetGoAndANewPress(), "a re-press after two reports with no finger lets go, then presses");
+static_assert(quickRePressOnTheExitChipOnlyLetsGo(), "a re-press on the exit chip only lets go");
 static_assert(releaseIsConfirmedAndTimedAtTheLift(), "a let-go counts once confirmed, timed when it left");
 static_assert(oneEmptyReportIsNotALetGo(), "an ACK/empty report between contacts is not a let-go");
 static_assert(exitChipNeverReleases(), "a touch on the exit chip never lets a push-up go");

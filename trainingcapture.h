@@ -37,6 +37,7 @@ class TrainingCapture {
   uint32_t traceDropped() const { return traceDropped_; }
   bool down() const { return touch_.down(); }
   bool liftPending() const { return touch_.liftPending(); }  // a push-up's let-go to confirm (#126)
+  uint8_t liftReports() const { return touch_.liftReports(); }
   bool waitingRelease() const { return touch_.waitingRelease(); }
   uint32_t exitHeldMs(uint32_t now) const { return touch_.exitHeldMs(now); }
   uint32_t dropped() const { return dropped_; }  // read only after endDraw()
@@ -54,6 +55,7 @@ class TrainingCapture {
   };
  private:
   static void worker(void *arg);
+  void queue(const TrainingEvent &event);
   void startDraw();
   void endDraw();
   Reader reader_ = nullptr;

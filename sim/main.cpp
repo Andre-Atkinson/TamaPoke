@@ -21,6 +21,7 @@
 #include "../idlelife.h"
 #include "../bubble.h"
 #include "../gameui.h"
+#include "../trainingtouch.h"
 #include "../pet.h"
 
 extern Pet pet;  // the sketch's (TamaPoke.ino): the "nature" and "train" steps set it
@@ -259,6 +260,23 @@ int main(int argc, char **argv) {
         run((uint64_t)toLift);
         if (!c.text.empty() && !shot(c.text)) return 1;  // the finger still down
         simTouchSet(false, 0, 0);
+        if (c.d) {
+          // repress: down again once the touch poll has read LET_GO_REPORTS reports with no
+          // finger, before the lift is confirmed (R2-2); the finger stays down
+          bool ready = false;
+          for (int k = 0; k < 100 && !ready; k++) {
+            run(1);
+            ready = exerciseLiftReports() >= LiftConfirm::LET_GO_REPORTS;
+          }
+          if (!ready) {
+            fprintf(stderr, "%s:%d: pushup repress: the lift was confirmed before a second report "
+                            "with no finger was read\n", o.script.c_str(), c.line);
+            return 1;
+          }
+          simTouchSet(true, (int16_t)c.a, (int16_t)c.b);
+          run(SIM_TAP_DOWN_MS);
+          break;
+        }
         run(SETTLE_MS);
         break;
       }

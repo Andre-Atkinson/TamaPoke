@@ -62,6 +62,9 @@ constexpr int TRAIN_EXIT_STRIP_H = 42;
 // middle of its green band, or with `edge` just before the band's end. -1 when no push-up
 // is down.
 int32_t exerciseMsToLift(uint32_t now, bool edge);
+// ...and its `repress`: the reports with no finger the touch poll has read since the finger
+// lifted, 0 when no lift waits to be confirmed (TamaPoke.ino, LiftConfirm, R2-2).
+uint8_t exerciseLiftReports();
 #endif
 void renderExercise();
 void renderTrainPick();                     // the choice, on the stat card

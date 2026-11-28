@@ -1,8 +1,8 @@
 # The exercises (#78, endless and skill-based since #126): the stat card's TRAIN button and
 # the choice it opens, the rhythm punch (five punches on the beat, the pay step going up to
 # x2, then a swing let pass: the miss) and the push-ups (a first try let go too early, the
-# warm-up; three reps let go in the green, the last near the band's end; then one held too
-# long: the miss), each with its
+# warm-up; three reps let go in the green, the second pressed again at once, the last near the
+# band's end; then one held too long: the miss), each with its
 # result. For both boards, both languages, by day and by night:
 #   tools/sim.sh --board 175c --lang en --script exercises --out shots/
 #   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script exercises --out shots/
@@ -19,7 +19,10 @@
 # 7522-8102 ms. A `pushup` step lets go in the middle of the rep's green
 # band; with `edge`, 25 ms before its end: still in the band when the let-go is timed at
 # the finger leaving (about 20 ms late at worst), too late if it were timed at the lift's
-# confirmation (40 ms after that), so the third rep checks that.
+# confirmation (40 ms after that), so the third rep checks that. With `repress` the finger
+# goes down again once the touch poll has read two reports with no finger, before the lift
+# is confirmed: the second rep's let-go and the third's press (R2-2; read as the same finger,
+# the second would go on down and be too late).
 
 # new game: pick Charmander, hatch the egg
 wait 1s
@@ -77,7 +80,7 @@ shot 30-pushups-start
 hold 233 270 100ms
 shot 31-pushups-too-early
 pushup 233 270 32-pushups-down
-pushup 233 270
+pushup 233 270 repress
 pushup 233 270 edge
 shot 33-pushups-three
 hold 233 270 2500ms

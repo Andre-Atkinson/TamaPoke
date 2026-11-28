@@ -202,6 +202,77 @@ TEST(TrainingTouch, TheExitChipOffPanelAndSwallowedContactsNeverLetGo) {
   v.update(false, 0, 0, 3040);
   CHECK_EQ(v.update(false, 0, 0, 3060), T::RELEASE);
 }
+// R2-2: a contact after LET_GO_REPORTS reports with no finger, before the lift is confirmed,
+// is a new press: the finger let go (at the first of them). After one it is the same finger.
+TEST(LiftConfirm, TwoReportsWithNoFingerMakeAContactANewPress) {
+  LiftConfirm l;
+  CHECK(!l.pressedAgain());  // nothing lost
+  l.lost(100);
+  CHECK(l.sameFinger());
+  CHECK(!l.pressedAgain());
+  l.lost(120);
+  CHECK(!l.sameFinger());
+  CHECK(l.pressedAgain());
+  CHECK_EQ(l.at, (uint32_t)100);
+  l.lost(130);  // more reports keep it a new press, timed at the first
+  CHECK(l.pressedAgain());
+  CHECK_EQ(l.at, (uint32_t)100);
+  l.back();
+  CHECK(!l.pressedAgain());  // back: a later lift counts its own reports
+  l.lost(300);
+  CHECK(l.sameFinger());
+  CHECK(!l.pressedAgain());
+  CHECK_EQ(l.at, (uint32_t)300);
+  // the original 1.75's poll: reports 20 ms apart, then a frame; a contact after the frame
+  LiftConfirm f;
+  f.lost(85);
+  f.lost(105);
+  CHECK(!f.confirm(105));
+  CHECK(f.pressedAgain());
+  // ...or no finger after the frame: the lift is confirmed, and a contact is a plain new touch
+  CHECK(f.confirm(170));
+  CHECK(!f.pressedAgain());
+  CHECK(!f.sameFinger());
+  l.reset();
+  CHECK(!l.pending);
+  CHECK_EQ(l.reports, (uint8_t)0);
+}
+// R2-2, as the 1.75C's chip reported a push-up let go and pressed again 45 ms later on the
+// hardware try (2026-11-28, TRAINTRACE; trainingtouch.cpp checks the same reads at compile time)
+TEST(TrainingTouch, AQuickRePressAsTheChipReportedItIsALetGoAndANewPress) {
+  const uint8_t down[] = {0x06, 0x0C, 0x08, 0x3B, 0x00, 0x01, 0xAB, 0, 0, 0, 0x3C, 0x4A};
+  const uint8_t lifted[] = {0x00, 0x0C, 0x08, 0x3B, 0x00, 0x01, 0xAB, 0, 0, 0, 0x3C, 0x4A};
+  const uint8_t empty[] = {0x0C, 0x08, 0x3B, 0x00, 0x01, 0xAB, 0, 0, 0, 0x3C, 0x4A, 0x09};
+  const uint8_t back[] = {0x06, 0x0C, 0x08, 0x9D, 0x00, 0x01, 0xAB, 0, 0, 0, 0x3C, 0x4A};
+  auto d = decodeTrainingReport(down, 12), l = decodeTrainingReport(lifted, 12);
+  auto e = decodeTrainingReport(empty, 12), b = decodeTrainingReport(back, 12);
+  CHECK(d.pressed && b.pressed && !l.pressed && !e.pressed);
+  CHECK_EQ((int)l.kind, (int)TrainingReport::RELEASE);
+  CHECK_EQ((int)e.kind, (int)TrainingReport::EMPTY);
+  T t;
+  CHECK_EQ(t.update(d.pressed, d.x, d.y, 1157839), T::HIT);
+  for (uint32_t n = 1157859; n <= 1158499; n += 20) CHECK_EQ(t.update(d.pressed, d.x, d.y, n), T::NONE);
+  CHECK_EQ(t.update(l.pressed, l.x, l.y, 1158519), T::NONE);
+  CHECK_EQ(t.update(e.pressed, e.x, e.y, 1158539), T::NONE);
+  CHECK_EQ(t.update(b.pressed, b.x, b.y, 1158564), T::RELEASE_HIT);
+  CHECK_EQ(t.liftAt(), (uint32_t)1158519);
+  CHECK_EQ(t.update(b.pressed, b.x, b.y, 1158584), T::NONE);
+  // one report with no finger before the contact: the same finger still (R1-1, R2-1)
+  CHECK_EQ(t.update(l.pressed, l.x, l.y, 1159000), T::NONE);
+  CHECK_EQ(t.update(b.pressed, b.x, b.y, 1159020), T::NONE);
+  // the new finger lets go in its turn, timed at its own first report with no finger
+  CHECK_EQ(t.update(l.pressed, l.x, l.y, 1159135), T::NONE);
+  CHECK_EQ(t.update(e.pressed, e.x, e.y, 1159155), T::NONE);
+  CHECK_EQ(t.update(e.pressed, e.x, e.y, 1159175), T::RELEASE);
+  CHECK_EQ(t.liftAt(), (uint32_t)1159135);
+  // pressed again on the exit chip: only the let-go
+  T x;
+  CHECK_EQ(x.update(true, 233, 233, 0), T::HIT);
+  CHECK_EQ(x.update(false, 0, 0, 20), T::NONE);
+  CHECK_EQ(x.update(false, 0, 0, 40), T::NONE);
+  CHECK_EQ(x.update(true, 233, 405, 50), T::RELEASE);
+  CHECK_EQ(x.liftAt(), (uint32_t)20);
+}
 TEST(LiftConfirm, TheOriginal175sPollConfirmsTheSameWay) {
   LiftConfirm l;
   CHECK(!l.confirm(100));
@@ -611,6 +682,35 @@ TEST(PushUps, SurvivesMillisRollover) {
 // confirmation and a poll.
 static_assert(PushUps::LATE_MS >= LiftConfirm::CONFIRM_MS + TrainingTouch::POLL_MS + 20,
               "a let-go at the band's end is confirmed before the frame calls it late");
+// R2-2: let go in the band and pressed again before the lift is confirmed (after two reports
+// with no finger): a rep, then the next push-up down from the new press, as the 1.75C's
+// capture queues it (TrainingCapture::poll: the RELEASE at liftAt(), then the HIT).
+TEST(PushUps, AQuickRePressIsARepAndTheNextPushUpThroughTheTouchPolicy) {
+  for (uint32_t seed = 1; seed <= 20; seed++) {
+    PU p;
+    p.begin(0, seed);
+    uint32_t press = goodReps(p, 1, 0) + 500;
+    uint32_t lift = bandMid(p, press);
+    T t;
+    int result = PU::PU_NOTHING;
+    auto report = [&](bool pressed, uint32_t now) {
+      int u = p.update(now);
+      if (u != PU::PU_NOTHING) result = u;
+      T::Action a = t.update(pressed, 233, 270, now);
+      if ((a == T::RELEASE || a == T::RELEASE_HIT) && result == PU::PU_NOTHING) result = p.release(t.liftAt());
+      if (a == T::HIT || a == T::RELEASE_HIT) p.press(now);
+    };
+    report(true, press);
+    for (uint32_t n = press + 20; n < lift; n += 20) report(true, n);
+    report(false, lift);
+    report(false, lift + 20);
+    report(true, lift + 40);  // back before the lift is confirmed
+    CHECK_MSG(result == PU::PU_REP, "seed " + testStr(seed) + ": result " + testStr(result));
+    CHECK_EQ(p.reps, (uint8_t)2);
+    CHECK(p.down());  // the next push-up, from the new press
+    CHECK_EQ(p.pressAt, lift + 40);
+  }
+}
 TEST(PushUps, ALetGoOnTheBandsLastMsIsARepThroughTheTouchPolicy) {
   for (uint32_t seed = 1; seed <= 20; seed++) {
     PU p;

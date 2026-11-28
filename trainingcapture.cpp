@@ -33,9 +33,15 @@ void TrainingCapture::poll() {
       traceWrite_ = (traceWrite_ + 1) % 16; ++traceCount_;
     }
   }
-  // A let-go is timed when the finger left, not when the lift was confirmed (#126).
-  TrainingEvent event{action, action == TrainingTouch::RELEASE ? touch_.liftAt() : now};
-  if (event.action != TrainingTouch::NONE && xQueueSend(events_, &event, 0) != pdTRUE) ++dropped_;
+  // A let-go is timed when the finger left, not when the lift was confirmed (#126); a let-go
+  // and a new press at once go in that order (RELEASE_HIT, R2-2).
+  if (action == TrainingTouch::RELEASE || action == TrainingTouch::RELEASE_HIT)
+    queue({TrainingTouch::RELEASE, touch_.liftAt()});
+  if (action == TrainingTouch::RELEASE_HIT) queue({TrainingTouch::HIT, now});
+  else if (action == TrainingTouch::HIT || action == TrainingTouch::EXIT) queue({action, now});
+}
+void TrainingCapture::queue(const TrainingEvent &event) {
+  if (xQueueSend(events_, &event, 0) != pdTRUE) ++dropped_;
 }
 bool TrainingCapture::nextTrace(TrainingTrace &trace) {
   if (!traceCount_) return false;

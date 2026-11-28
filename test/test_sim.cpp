@@ -314,8 +314,8 @@ TEST(SimScript, nature_names_a_nature) {
   CHECK(!simParseScript("nature tidy lazy\n").error.empty());
 }
 
-// "pushup X Y [edge] [SHOT]" (#126): one push-up let go in its band (with `edge`, near the
-// band's end); it runs the firmware
+// "pushup X Y [edge] [repress] [SHOT]" (#126): one push-up let go in its band (with `edge`,
+// near the band's end; with `repress`, pressed again at once); it runs the firmware
 TEST(SimScript, pushup_takes_a_point_an_optional_edge_and_an_optional_shot) {
   SimScript s = simParseScript("pushup 233 270\npushup 233 270 41-pushup-down\n");
   CHECK_EQ(s.error, std::string(""));
@@ -339,7 +339,23 @@ TEST(SimScript, pushup_takes_a_point_an_optional_edge_and_an_optional_shot) {
     CHECK_EQ(e.cmds[1].c, (int32_t)1);
     CHECK_EQ(e.cmds[1].text, std::string("42-pushup-edge"));
   }
-  CHECK_EQ(simParseScript("pushup 233\n", "p.txt").error, std::string("p.txt:1: usage: pushup X Y [edge] [SHOT]"));
+  // `repress`: down again before the lift is confirmed (R2-2), after `edge`, before the shot
+  SimScript r = simParseScript("pushup 233 270 repress\npushup 233 270 edge repress 43-pushup-again\n");
+  CHECK_EQ(r.error, std::string(""));
+  CHECK_EQ(r.cmds.size(), (size_t)2);
+  if (r.cmds.size() == 2) {
+    CHECK_EQ(r.cmds[0].c, (int32_t)0);
+    CHECK_EQ(r.cmds[0].d, (int32_t)1);
+    CHECK_EQ(r.cmds[0].text, std::string(""));
+    CHECK_EQ(r.cmds[1].c, (int32_t)1);
+    CHECK_EQ(r.cmds[1].d, (int32_t)1);
+    CHECK_EQ(r.cmds[1].text, std::string("43-pushup-again"));
+  }
+  CHECK_EQ(s.cmds.size() == 2 ? s.cmds[0].d : -1, (int32_t)0);  // no re-press by default
+  CHECK(!simParseScript("pushup 233 270 repress edge\n").error.empty());  // edge comes first
+  CHECK(!simParseScript("pushup 233 270 edge repress x y\n").error.empty());
+  CHECK_EQ(simParseScript("pushup 233\n", "p.txt").error,
+           std::string("p.txt:1: usage: pushup X Y [edge] [repress] [SHOT]"));
   CHECK(!simParseScript("pushup 233 500\n").error.empty());
   CHECK(!simParseScript("pushup 233 270 a/b\n").error.empty());
   CHECK(!simParseScript("pushup 233 270 x y\n").error.empty());

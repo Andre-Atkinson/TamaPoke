@@ -1525,6 +1525,15 @@ bool petFollowing(uint32_t now) {
 // The original 1.75's push-up let-go, confirmed by its touch polls (LiftConfirm, #126).
 static LiftConfirm trainLift;
 #endif
+#if HOST_SIM
+uint8_t exerciseLiftReports() {
+#if BOARD_AMOLED_175C
+  return trainingCapture.liftReports();
+#else
+  return trainLift.pending ? trainLift.reports : 0;
+#endif
+}
+#endif
 
 // el toque se resuelve al LEVANTAR el dedo para distinguir tap de deslizar
 void handleTouch() {
@@ -1594,9 +1603,12 @@ void handleTouch() {
     uint32_t now = millis();
     if (pressed && !wasPressed) {
       wakeUI();
-      // A contact while a lift waits to be confirmed is the same finger (an ACK in the middle of
-      // a tap or a hold, read on a poll that may come a frame later): not a new tap (R1-1, R2-1)
+      // A contact while a lift waits to be confirmed, after one report with no finger, is the
+      // same finger (an ACK in the middle of a tap or a hold, read on a poll that may come a
+      // frame later): not a new tap (R1-1, R2-1). After LiftConfirm::LET_GO_REPORTS of them
+      // the finger let go and this is a new press: the let-go first (R2-2).
       bool same = trainLift.sameFinger();
+      if (trainLift.pressedAgain()) exerciseRelease(trainLift.at);
       trainLift.back();
       counts = y >= TRAIN_EXIT_STRIP_H;
       if (!counts) {
@@ -1610,7 +1622,7 @@ void handleTouch() {
       }
     }
     if (!pressed) {
-      if (wasPressed && counts) trainLift.lost(now);
+      if ((wasPressed && counts) || trainLift.pending) trainLift.lost(now);
       if (trainLift.confirm(now)) exerciseRelease(trainLift.at);
     }
     wasPressed = pressed;
