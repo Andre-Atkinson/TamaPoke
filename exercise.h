@@ -59,8 +59,9 @@ inline bool exAtOrAfter(uint32_t t, uint32_t since) { return (int32_t)(t - since
 // On the 1.75C a tap is judged on when it was captured (TrainingCapture's timestamp), so a
 // frame being drawn never moves it out of its window. The original 1.75 has no capture
 // worker: a tap is timed at the loop's next poll (exerciseTap(millis()) in handleTouch),
-// which doesn't run while a frame draws, so it can be up to a frame late (about 85 ms); even
-// the narrowest window, 2 x WINDOW_MIN_MS wide, is wider than that.
+// which doesn't run while a frame draws, so it can be up to a frame late (POWER_GAME_FRAME_MS,
+// 85 ms); even the narrowest window, 2 x WINDOW_MIN_MS wide, is wider than that (a
+// static_assert in TamaPoke.ino checks it, and the push-ups' narrowest band).
 struct RhythmPunch {
   static constexpr uint32_t SWING0_MS = 1500, SWING_STEP_MS = 35, SWING_MIN_MS = 350;
   static constexpr uint32_t WINDOW0_MS = 350, WINDOW_STEP_MS = 12, WINDOW_MIN_MS = 60;

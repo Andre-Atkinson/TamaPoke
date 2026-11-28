@@ -85,6 +85,8 @@ TEST(TrainingTouch, ExitHoldSurvivesRollover) {
   CHECK_EQ(t.update(true, 233, 405, start + 1000), T::EXIT);
 }
 
+// Since #126 a lift keeps the chip read every 20 ms until it is confirmed, so a tap's lift is a
+// run of empty reports (a RELEASE, which the punch ignores), and the next contact is a new HIT.
 TEST(TrainingTouch, ContactEmptyCyclesRecoverEveryTap) {
   const uint8_t down[] = {0x06, 0x0E, 0x0E, 0x99, 0, 1, 0xAB};
   const uint8_t empty[] = {0xAB, 0, 0, 0, 0, 0, 0xAB};
@@ -94,6 +96,8 @@ TEST(TrainingTouch, ContactEmptyCyclesRecoverEveryTap) {
     CHECK_EQ(t.update(r.pressed, r.x, r.y, n * 200), T::HIT);
     r = decodeTrainingReport(empty, 7);
     CHECK_EQ(t.update(r.pressed, r.x, r.y, n * 200 + 100), T::NONE);
+    CHECK_EQ(t.update(r.pressed, r.x, r.y, n * 200 + 120), T::NONE);
+    CHECK_EQ(t.update(r.pressed, r.x, r.y, n * 200 + 140), T::RELEASE);
   }
 }
 TEST(TrainingTouch, ContactFramesAndTrackIdsAreNotTapCounters) {
@@ -149,9 +153,9 @@ TEST(TrainingTouch, AnEmptyReportBetweenContactsIsNotALetGo) {
   CHECK_EQ(t.update(e.pressed, e.x, e.y, 3040), T::RELEASE);
   CHECK_EQ(t.liftAt(), (uint32_t)3000);
 }
-// R1-1: a contact back within CONFIRM_MS of the first report with no finger is the same
-// finger: not a let-go, and not a new HIT (a punch's tap would count twice).
-TEST(TrainingTouch, AContactBackWithinConfirmMsOfAnEmptyReportIsTheSameFinger) {
+// R1-1, R2-1: a contact back before the lift is confirmed is the same finger: not a let-go, and
+// not a new HIT (a punch's tap would count twice), however late it is read.
+TEST(TrainingTouch, AContactBackBeforeTheLiftIsConfirmedIsTheSameFinger) {
   T t;
   CHECK_EQ(t.update(true, 233, 233, 0), T::HIT);
   CHECK_EQ(t.update(false, 0, 0, 20), T::NONE);
@@ -161,11 +165,18 @@ TEST(TrainingTouch, AContactBackWithinConfirmMsOfAnEmptyReportIsTheSameFinger) {
   CHECK_EQ(t.update(false, 0, 0, 120), T::NONE);
   CHECK_EQ(t.update(false, 0, 0, 140), T::RELEASE);
   CHECK_EQ(t.liftAt(), (uint32_t)100);
-  // CONFIRM_MS after it: a new touch, a HIT
+  // the original 1.75's poll: one report with no finger just before a frame, the contact read
+  // 65 ms later, past CONFIRM_MS: still the same finger (R2-1)
   T u;
   CHECK_EQ(u.update(true, 233, 233, 0), T::HIT);
   CHECK_EQ(u.update(false, 0, 0, 20), T::NONE);
-  CHECK_EQ(u.update(true, 233, 233, 20 + LiftConfirm::CONFIRM_MS), T::HIT);
+  CHECK_EQ(u.update(true, 233, 233, 20 + 65), T::NONE);
+  // once the lift is confirmed, a contact is a new touch, a HIT
+  T v;
+  CHECK_EQ(v.update(true, 233, 233, 0), T::HIT);
+  CHECK_EQ(v.update(false, 0, 0, 20), T::NONE);
+  CHECK_EQ(v.update(false, 0, 0, 20 + LiftConfirm::CONFIRM_MS), T::RELEASE);
+  CHECK_EQ(v.update(true, 233, 233, 80), T::HIT);
   // across the millis() wrap
   T w;
   CHECK_EQ(w.update(true, 233, 233, 0xFFFFFFF0u), T::HIT);
@@ -203,19 +214,23 @@ TEST(LiftConfirm, TheOriginal175sPollConfirmsTheSameWay) {
   l.lost(300);
   l.back();
   CHECK(!l.confirm(400));  // the finger came back: no let-go
-  // the same finger: back within CONFIRM_MS of the first report with no finger (R1-1)
+  // the same finger: a contact while the lift waits to be confirmed (R1-1, R2-1)
   LiftConfirm s;
-  CHECK(!s.sameFinger(100));  // nothing lost: a new touch
+  CHECK(!s.sameFinger());  // nothing lost: a new touch
   s.lost(100);
-  s.lost(130);
-  CHECK(s.sameFinger(100));
-  CHECK(s.sameFinger(100 + LiftConfirm::CONFIRM_MS - 1));
-  CHECK(!s.sameFinger(100 + LiftConfirm::CONFIRM_MS));
+  CHECK(s.sameFinger());
   s.back();
-  CHECK(!s.sameFinger(110));  // once back, a later contact is new
-  s.lost(0xFFFFFFF0u);
-  CHECK(s.sameFinger(0xFFFFFFF0u + 39));  // across the wrap
-  CHECK(!s.sameFinger(0xFFFFFFF0u + 40));
+  CHECK(!s.sameFinger());  // once back, a later contact is new
+  // the original 1.75's poll around a frame (R2-1): a report with no finger at 85, the next
+  // poll 65 ms on. A contact then is the same finger; no finger then confirms the lift.
+  LiftConfirm f;
+  f.lost(85);
+  CHECK(f.sameFinger());
+  CHECK(!f.confirm(85));
+  f.lost(150);
+  CHECK(f.confirm(150));
+  CHECK_EQ(f.at, (uint32_t)85);
+  CHECK(!f.sameFinger());  // confirmed: a contact now is a new touch
   l.lost(0xFFFFFFF0u);
   CHECK(!l.confirm(0xFFFFFFF0u + 39));
   CHECK(l.confirm(0xFFFFFFF0u + 40));  // across the millis() wrap
@@ -588,6 +603,34 @@ TEST(PushUps, SurvivesMillisRollover) {
   CHECK_EQ(p.update(press + p.bandLo), PU::PU_NOTHING);
   CHECK(p.inBand(press + p.bandLo));
   CHECK_EQ(p.release(bandMid(p, press)), PU::PU_REP);
+}
+
+// The touch policy into the push-ups, as gameui.cpp wires them (R2-3): a HIT presses, a RELEASE
+// lets go at its lift time, and the frame's update() may run before any report is read. A
+// finger lifted on the band's last ms is a rep, not late: LATE_MS outlasts the lift's
+// confirmation and a poll.
+static_assert(PushUps::LATE_MS >= LiftConfirm::CONFIRM_MS + TrainingTouch::POLL_MS + 20,
+              "a let-go at the band's end is confirmed before the frame calls it late");
+TEST(PushUps, ALetGoOnTheBandsLastMsIsARepThroughTheTouchPolicy) {
+  for (uint32_t seed = 1; seed <= 20; seed++) {
+    PU p;
+    p.begin(0, seed);
+    uint32_t press = goodReps(p, 1, 0) + 500;  // one rep done: the next one is judged
+    uint32_t end = press + p.bandHi;           // the band's last ms
+    T t;
+    int result = PU::PU_NOTHING;
+    auto report = [&](bool pressed, uint32_t now) {
+      int u = p.update(now);  // the frame, just before this report is read
+      if (u != PU::PU_NOTHING) result = u;
+      T::Action a = t.update(pressed, 233, 270, now);
+      if (a == T::HIT) p.press(now);
+      if (a == T::RELEASE && result == PU::PU_NOTHING) result = p.release(t.liftAt());
+    };
+    for (uint32_t n = press; n < end; n += 20) report(true, n);
+    for (uint32_t n = end; n <= end + 200; n += 20) report(false, n);
+    CHECK_MSG(result == PU::PU_REP, "seed " + testStr(seed) + ": result " + testStr(result));
+    CHECK_EQ(p.reps, (uint8_t)2);
+  }
 }
 
 // ---------------------------------------------------------------- the pay (exercise.h, #126)

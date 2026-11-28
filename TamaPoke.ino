@@ -47,6 +47,10 @@ static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright unt
 // Push-ups left between reps end themselves after IDLE_END_MS: the screen must not dim before
 // that. (renderExercise() keeps both exercises awake itself while they run.)
 static_assert(PushUps::IDLE_END_MS <= POWER_GAME_AWAKE_MS, "idle push-ups end before the game's keep-awake does");
+// The original 1.75 reads a training tap or let-go up to a frame late (exercise.h): even the
+// narrowest punch window and push-up band stay wider than a frame (#126).
+static_assert(2 * RhythmPunch::WINDOW_MIN_MS > POWER_GAME_FRAME_MS && PushUps::BAND_MIN_MS > POWER_GAME_FRAME_MS,
+              "the narrowest window and band are wider than a training frame");
 #include "trainingcapture.h"
 #include "app.h"
 #include "gameui.h"
@@ -1590,9 +1594,9 @@ void handleTouch() {
     uint32_t now = millis();
     if (pressed && !wasPressed) {
       wakeUI();
-      // the same finger back (an ACK in the middle of a tap) is not a new tap, as in
-      // TrainingTouch::update (R1-1)
-      bool same = trainLift.sameFinger(now);
+      // A contact while a lift waits to be confirmed is the same finger (an ACK in the middle of
+      // a tap or a hold, read on a poll that may come a frame later): not a new tap (R1-1, R2-1)
+      bool same = trainLift.sameFinger();
       trainLift.back();
       counts = y >= TRAIN_EXIT_STRIP_H;
       if (!counts) {
@@ -2014,7 +2018,7 @@ static uint32_t screenKey() {
                         (uint32_t)pet.trAtk, (uint32_t)pet.trDef, (uint32_t)pet.trSpe, (uint32_t)pet.geneAtk,
                         (uint32_t)pet.geneDef, (uint32_t)pet.geneSpe, (uint32_t)pet.careMistakes,
                         (uint32_t)pet.fullness, (uint32_t)pet.joy, (uint32_t)pet.energy, (uint32_t)pet.hygiene,
-                        (uint32_t)pet.berryKnown, (uint32_t)pet.punchHi, (uint32_t)gLang,
+                        (uint32_t)pet.berryKnown, (uint32_t)gLang,
                         (uint32_t)pet.gameHi, (uint32_t)pet.catchHi, (uint32_t)pet.peekHi, (uint32_t)pet.songHi,
                         (uint32_t)pet.pace, (uint32_t)pet.bedPreset, (uint32_t)pet.eggPickMode,
                         (uint32_t)pet.sickMode, (uint32_t)pet.isSick() })  // #15: the Care row, the Progress line

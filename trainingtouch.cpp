@@ -30,11 +30,17 @@ constexpr bool ackInsideATapIsOneHit() {
   if (t.update(false, 0, 0, 220) != T::NONE) return false;
   if (t.update(false, 0, 0, 240) != T::NONE) return false;
   if (t.update(false, 0, 0, 260) != T::RELEASE || t.liftAt() != 220) return false;
-  // a contact CONFIRM_MS after the first report with no finger is a new tap
+  // a new tap after the lift was confirmed
   if (t.update(false, 0, 0, 400) != T::NONE) return false;
   if (t.update(true, 233, 120, 420) != T::HIT) return false;
+  // one report with no finger and the contact read a frame later (the 1.75's poll): the same
+  // finger still (R2-1), however late it is read
   if (t.update(false, 0, 0, 440) != T::NONE) return false;
-  return t.update(true, 233, 120, 440 + LiftConfirm::CONFIRM_MS) == T::HIT;
+  if (t.update(true, 233, 120, 440 + 65) != T::NONE) return false;
+  if (t.update(false, 0, 0, 525) != T::NONE) return false;
+  if (t.update(false, 0, 0, 545) != T::NONE) return false;
+  if (t.update(false, 0, 0, 565) != T::RELEASE) return false;
+  return t.update(true, 233, 120, 600) == T::HIT;
 }
 constexpr bool oldQuitStrip() {
   T t;
@@ -129,6 +135,8 @@ static_assert(decodeTrainingReport(bad, sizeof(bad)).valid && !decodeTrainingRep
               !decodeTrainingReport(down, 6).valid, "completed filtered report is empty; short read is error");
 static_assert(decodeTrainingReport(cover, sizeof(cover)).valid && !decodeTrainingReport(cover, sizeof(cover)).pressed &&
               !decodeTrainingReport(outside, sizeof(outside)).valid, "cover is empty; invalid coordinates cannot score");
+// Since #126 a lift keeps the chip read every 20 ms until it is confirmed (readTrainingTouch),
+// so a tap's lift is a run of empty reports, and the next contact is a new HIT.
 constexpr bool legacyEmptyRearms() {
   T t;
   auto contact = decodeTrainingReport(down, sizeof(down));
@@ -136,6 +144,8 @@ constexpr bool legacyEmptyRearms() {
   for (uint32_t n = 0; n < 100; ++n) {
     if (t.update(contact.pressed, contact.x, contact.y, n * 200) != T::HIT) return false;
     if (t.update(empty.pressed, empty.x, empty.y, n * 200 + 100) != T::NONE) return false;
+    if (t.update(empty.pressed, empty.x, empty.y, n * 200 + 120) != T::NONE) return false;
+    if (t.update(empty.pressed, empty.x, empty.y, n * 200 + 140) != T::RELEASE) return false;
   }
   return true;
 }

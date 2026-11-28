@@ -5,9 +5,14 @@
 // A finger lifting, confirmed (#126): the push-ups judge the moment it let go, so one report
 // with no finger between contacts (an EMPTY or ACK from the chip, decodeTrainingReport) must
 // not read as letting go. The lift is timed at the first report with no finger (lost) and
-// counts once reports with no finger have gone on for CONFIRM_MS (confirm); a contact before
-// then (back) was the same finger. Both boards use it: TrainingTouch on the 1.75C, the
-// sketch's own touch poll on the original 1.75.
+// counts once reports with no finger have gone on for CONFIRM_MS (confirm). A contact before
+// then, however late it is read, is the same finger (sameFinger, then back): the original
+// 1.75 reads the chip only between frames, so its reports can be 65 ms or more apart, and a
+// contact read then is still the finger that never left (R2-1). Both boards use it:
+// TrainingTouch on the 1.75C, the sketch's own touch poll on the original 1.75.
+// Its limit: a finger let go and put down again before the lift is confirmed reads as never
+// having left, so a push-up let go and pressed again that quickly keeps going down (R2-2,
+// open until the hardware shows whether two reports with no finger come in a row mid-hold).
 struct LiftConfirm {
   static constexpr uint32_t CONFIRM_MS = 40;  // two more 20 ms polls with no finger
   bool pending = false;
@@ -17,11 +22,10 @@ struct LiftConfirm {
     if (!pending) { pending = true; at = now; }
   }
   constexpr void back() { pending = false; }
-  // A contact at `now`, with a lift waiting, within CONFIRM_MS of its first report with no
-  // finger: the same finger (a report with no finger, an ACK or an EMPTY, in the middle of a
-  // tap or a hold). Not a let-go, and not a new touch-down either, or a punch's tap would
-  // count twice. Ask before back().
-  constexpr bool sameFinger(uint32_t now) const { return pending && now - at < CONFIRM_MS; }
+  // A contact while a lift waits to be confirmed: the same finger (reports with no finger, ACKs
+  // or EMPTYs, in the middle of a tap or a hold). Not a let-go, and not a new touch-down
+  // either, or a punch's tap would count twice. Ask before back().
+  constexpr bool sameFinger() const { return pending; }
   // A report with no finger at `now`: true once, when the lift is confirmed (timed at `at`).
   constexpr bool confirm(uint32_t now) {
     if (!pending || now - at < CONFIRM_MS) return false;
@@ -85,7 +89,7 @@ class TrainingTouch {
     }
     if (start) {
       // The same finger back is not a new HIT (LiftConfirm::sameFinger); it still lets go later.
-      bool same = lift_.sameFinger(now);
+      bool same = lift_.sameFinger();
       lift_.back();
       exitArmed_ = onPanel(x, y) && inExit(x, y);
       exitStart_ = now;
