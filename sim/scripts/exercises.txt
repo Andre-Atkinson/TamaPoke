@@ -6,7 +6,9 @@
 #   tools/sim.sh --board 175c --lang en --script exercises --out shots/
 #   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script exercises --out shots/
 # The serial log has "Training: punch count=5 gain=3 miss" and "Training: pushup count=3
-# gain=2 miss=late" (the 1.75C adds input_drops=0).
+# gain=2 miss=late" (the 1.75C adds input_drops=0), which the checks below enforce
+# (tools/gate.sh runs this script on both boards): the push-ups' let-go needs the touch reads
+# while a lift waits to be confirmed (readTrainingTouch, handleTouch's poll on the 1.75).
 # Timing: a tap is 80 ms down then 400 ms settling (sim/main.cpp), and an exercise starts
 # when the tap that chose it lifts. The punch's first swing is 1.5 s with its window
 # 400-1100 ms in; each punch landed makes the next swing 35 ms shorter and its window 12 ms
@@ -54,6 +56,8 @@ shot 26b-punch-x2
 # the sixth swing passes with no punch: the miss (~8.1 s), its result, then back to the pet
 wait 2s
 shot 27-punch-result
+expect-once Training:
+expect Training: punch count=5 gain=3 miss
 wait 4s
 shot 28-after-punch
 
@@ -73,5 +77,7 @@ pushup 233 270
 shot 33-pushups-three
 hold 233 270 2500ms
 shot 34-pushups-result
+expect-once Training:
+expect Training: pushup count=3 gain=2 miss=late
 wait 4s
 shot 35-after-pushups
