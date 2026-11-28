@@ -222,6 +222,14 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
         c.text = w[4];
       }
       c.op = OP_HOLD;
+    } else if (op == "pushup") {
+      if ((n != 3 && n != 4) || !toInt(w[1], c.a, 0, 465) || !toInt(w[2], c.b, 0, 465))
+        return fail("usage: pushup X Y [SHOT]");
+      if (n == 4) {  // a shot just before the finger lifts
+        if (!shotName(w[3])) return fail("shot names use letters, digits, '-', '_' and '.' only");
+        c.text = w[3];
+      }
+      c.op = OP_PUSHUP;
     } else if (op == "swipe") {
       c.op = OP_SWIPE;
       c.ms = 240;

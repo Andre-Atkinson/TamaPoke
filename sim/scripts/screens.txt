@@ -75,7 +75,8 @@ hold 233 40 1200ms
 wait 1s
 
 # card page 2 button: TRAIN opens the exercise choice; the punch (#78), two punches on the
-# beat (its windows are 400-1100 ms into each 1.5 s swing), then its result after 18 s
+# beat (its first windows are 400-1100 and 1894-2570 ms in), then its result once the third
+# swing passes with no punch, the miss (#126)
 # (1.75C: hold the "Hold to exit" chip 1 s to leave early; 1.75: tap "tap: back")
 swipe up
 swipe left
@@ -83,10 +84,10 @@ tap 233 320
 tap 233 140
 wait 300ms
 tap 233 240
-wait 750ms
+wait 900ms
 tap 233 240
 shot 15-training
-wait 16s
+wait 2s
 shot 16-training-result
 wait 4s
 

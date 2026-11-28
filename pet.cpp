@@ -977,44 +977,45 @@ uint8_t Pet::playReward(uint8_t n) {
   return trSpe - before;  // what really went in: at 100 nothing does (#76)
 }
 
-// The calm exercises (exercise.h, #78). Each punch or rep is worth 1.5 points
-// (exerciseGain), the nature's bonus goes on top (#25: greedy for strength, tidy for
-// stamina, +25% rounded up, so a full session is 23), and the points that fit under 100 go
-// in. The session's work is what it burns, so a pet already at 100 still gets the exercise.
+// The exercises (exercise.h, #78, endless since #126). Each hit pays half its step, rising
+// every EX_TIER_HITS hits (exerciseGain); the nature's bonus goes on top (#25: greedy for
+// strength, tidy for stamina, +25% rounded up), and the points that fit under 100 go in. The
+// session's work is what it burns, so a pet already at 100 still gets the exercise.
 uint8_t Pet::trainStrength(uint8_t punches) {
   if (ceremony != CER_NONE || isEgg() || !punches) return 0;
-  if (punches > EX_COUNT) punches = EX_COUNT;
+  if (punches > EX_MAX_COUNT) punches = EX_MAX_COUNT;
   uint8_t work = exerciseGain(punches);
   uint8_t before = trAtk;
   uint16_t v = (uint16_t)trAtk + natureTrainGain(nature, TRAIN_STRENGTH, work);
   trAtk = v > 100 ? 100 : (uint8_t)v;
   if (punches > punchHi) punchHi = punches;  // record de golpes
-  exerciseDone(work);
+  exerciseDone(punches);
   return trAtk - before;  // what really went in: at 100 the screen showed the full gain
 }
 
 uint8_t Pet::trainStamina(uint8_t reps) {
   if (ceremony != CER_NONE || isEgg() || !reps) return 0;
-  if (reps > EX_COUNT) reps = EX_COUNT;
+  if (reps > EX_MAX_COUNT) reps = EX_MAX_COUNT;
   uint8_t work = exerciseGain(reps);
   uint8_t before = trDef;
   uint16_t v = (uint16_t)trDef + natureTrainGain(nature, TRAIN_STAMINA, work);
   trDef = v > 100 ? 100 : (uint8_t)v;
-  exerciseDone(work);
+  if (reps > pushHi) pushHi = reps;  // record de flexiones (#126)
+  exerciseDone(reps);
   return trDef - before;
 }
 
 // What a session of either exercise costs and gives, the old strength bag's: it tires
-// (energy -12, not under 5) and makes a little hungry, burns weight (a full session 24,
-// as the bag's 72 taps did), cheers up, shows the heart for a good session (5 points or
-// more, the bag's 20 taps), and counts as the day's care and as exercise (#44).
-void Pet::exerciseDone(uint8_t work) {
+// (energy -12, not under 5) and makes a little hungry, burns 2 weight a hit (12 hits burn 24,
+// as the bag's 72 taps did), cheers up, shows the heart for a good session (4 hits or more,
+// the bag's 20 taps), and counts as the day's care and as exercise (#44).
+void Pet::exerciseDone(uint8_t hits) {
   energy = dropTo(energy, 12, 5);
   fullness = dropTo(fullness, 5, 5);
-  int burn = (int)weight - work * 4 / 3;
+  int burn = (int)weight - hits * 2;
   weight = burn > 0 ? burn : 0;
   joy = clamp100(joy + 6);
-  if (work >= 5) heartUntil = millis() + HEART_MS;
+  if (hits >= 4) heartUntil = millis() + HEART_MS;
   addBond(2);
   registerCare();
   exercised = true;  // el ejercicio quema peso: el proximo tick ve un IN SHAPE como del jugador (#44)
@@ -1149,7 +1150,8 @@ void Pet::save() {
   prefs.putUShort("mgc", catchHi);
   prefs.putUShort("mgp", peekHi);
   prefs.putUShort("mgs", songHi);
-  prefs.putUChar("phi", punchHi);
+  prefs.putUChar("punhi", punchHi);  // #126; the old 12-swing record `phi` stays unread
+  prefs.putUChar("pushi", pushHi);
   prefs.putUShort("tdefm", goodTicks);
   prefs.putBool("sick", sick);  // #15
   prefs.putUShort("sickg", germMin);
@@ -1229,7 +1231,8 @@ void Pet::load() {
   catchHi = gameRecordOk(GAME_CATCH, prefs.getUShort("mgc", 0));
   peekHi = gameRecordOk(GAME_PEEK, prefs.getUShort("mgp", 0));
   songHi = gameRecordOk(GAME_SONG, prefs.getUShort("mgs", 0));
-  punchHi = prefs.getUChar("phi", 0);
+  punchHi = prefs.getUChar("punhi", 0);  // the endless exercises' records (#126)
+  pushHi = prefs.getUChar("pushi", 0);
   prefs.getString("nick", nick, sizeof(nick));
   acc = prefs.getUChar("acc", ACC_NONE);  // saves from before #116: none, wearing nothing
   accSeen = prefs.getUShort("accseen", 0);
@@ -1261,7 +1264,8 @@ void Pet::load() {
   energy = clamp100(energy);
   hygiene = clamp100(hygiene);
   if (poops > 3) poops = 3;
-  if (punchHi > EX_COUNT) punchHi = 0;  // a record no session can land: damaged, read as none
+  if (punchHi > EX_MAX_COUNT) punchHi = 0;  // a record no session can land: damaged, read as none
+  if (pushHi > EX_MAX_COUNT) pushHi = 0;
   weight = clamp100(weight);
   trAtk = clamp100(trAtk);  // training points are 0-100: the bars, the ribbons and idle life read them
   trDef = clamp100(trDef);

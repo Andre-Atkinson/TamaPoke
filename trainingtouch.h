@@ -2,13 +2,37 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// Pure training input policy (the rhythm punch and the stamina hold, #78). Coordinates
+// A finger lifting, confirmed (#126): the push-ups judge the moment it let go, so one report
+// with no finger between contacts (an EMPTY or ACK from the chip, decodeTrainingReport) must
+// not read as letting go. The lift is timed at the first report with no finger (lost) and
+// counts once reports with no finger have gone on for CONFIRM_MS (confirm); a contact before
+// then (back) was the same finger. Both boards use it: TrainingTouch on the 1.75C, the
+// sketch's own touch poll on the original 1.75.
+struct LiftConfirm {
+  static constexpr uint32_t CONFIRM_MS = 40;  // two more 20 ms polls with no finger
+  bool pending = false;
+  uint32_t at = 0;  // the first report with no finger
+  constexpr void reset() { pending = false; at = 0; }
+  constexpr void lost(uint32_t now) {
+    if (!pending) { pending = true; at = now; }
+  }
+  constexpr void back() { pending = false; }
+  // A report with no finger at `now`: true once, when the lift is confirmed (timed at `at`).
+  constexpr bool confirm(uint32_t now) {
+    if (!pending || now - at < CONFIRM_MS) return false;
+    pending = false;
+    return true;
+  }
+};
+
+// Pure training input policy (the rhythm punch and the push-ups, #78, #126). Coordinates
 // are the existing native 466x466 UI coordinates (both axes mirrored by the board's
-// touch setup). A touch-down anywhere but the exit chip is a HIT (a punch's tap, or the
-// start of a hold); a release is never a tap.
+// touch setup). A touch-down anywhere but the exit chip is a HIT (a punch's tap, or a
+// push-up going down); the confirmed lift of a HIT's finger is a RELEASE (a push-up let go),
+// timed at liftAt(). A release is never a tap.
 class TrainingTouch {
  public:
-  enum Action : uint8_t { NONE, HIT, EXIT };
+  enum Action : uint8_t { NONE, HIT, EXIT, RELEASE };
   static constexpr int EXIT_X = 153, EXIT_Y = 384, EXIT_W = 160, EXIT_H = 48;
   static constexpr uint32_t EXIT_HOLD_MS = 1000;
   static constexpr uint32_t REPORT_GAP_MS = 100;  // a missing stream cannot complete a hold
@@ -24,14 +48,14 @@ class TrainingTouch {
   constexpr void reset(bool requireRelease = false) {
     down_ = false; blocked_ = requireRelease; exitArmed_ = false; hitDown_ = false;
     exitStart_ = lastReport_ = 0;
+    lift_.reset();
   }
   constexpr bool down() const { return down_; }
-  // The stamina hold (#78): the finger of a HIT is still on the glass and still
-  // reporting. A touch that began on the exit chip, or one swallowed after an exit or a
-  // lock (requireRelease), never holds; a stream that stops pauses it, as for the exit.
-  constexpr bool holding(uint32_t now) const {
-    return hitDown_ && now - lastReport_ <= REPORT_GAP_MS;
-  }
+  // When the finger of the last RELEASE left the glass (its first report with no finger).
+  constexpr uint32_t liftAt() const { return lift_.at; }
+  // A lift waits for its confirming reports: the chip must still be read, as while a finger
+  // is down (the reader reads only then, or on the chip's interrupt).
+  constexpr bool liftPending() const { return lift_.pending; }
   constexpr bool waitingRelease() const { return blocked_; }
   constexpr uint32_t exitHeldMs(uint32_t now) const {
     return exitArmed_ && now - lastReport_ <= REPORT_GAP_MS ? now - exitStart_ : 0;
@@ -46,8 +70,16 @@ class TrainingTouch {
     if (down_ && now - lastReport_ > REPORT_GAP_MS) exitArmed_ = false;
     down_ = pressed;
     lastReport_ = now;
-    if (!pressed) { exitArmed_ = false; hitDown_ = false; return NONE; }
+    if (!pressed) {
+      exitArmed_ = false;
+      // A HIT's finger left: a RELEASE once confirmed. A touch that began on the exit chip,
+      // or one swallowed after an exit or a lock (requireRelease), never releases.
+      if (hitDown_) lift_.lost(now);
+      hitDown_ = false;
+      return lift_.confirm(now) ? RELEASE : NONE;
+    }
     if (start) {
+      lift_.back();  // back within CONFIRM_MS: the same finger, not a let-go (and still a HIT)
       exitArmed_ = onPanel(x, y) && inExit(x, y);
       exitStart_ = now;
       hitDown_ = onPanel(x, y) && !exitArmed_;
@@ -65,6 +97,7 @@ class TrainingTouch {
  private:
   bool down_ = false, blocked_ = false, exitArmed_ = false, hitDown_ = false;
   uint32_t exitStart_ = 0, lastReport_ = 0;
+  LiftConfirm lift_;
 };
 
 struct TrainingReport {

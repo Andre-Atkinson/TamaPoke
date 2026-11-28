@@ -41,11 +41,12 @@ wait 3s
 shot ribbon-banner
 wait 5s
 
-# the rhythm punch (#78), with the strength goal two points off: two punches on the beat
-# make +3 (1.5 a punch). As for the game, the banner waits under the result (#69) and
-# shows once the punch's screen has closed. The punch starts as the PUNCH tap lifts; its
-# windows are 400-1100 ms into each 1.5 s swing (exercise.h), and a tap is 480 ms long.
-train 28 10 30
+# the rhythm punch (#78), with the strength goal one point off: two punches on the beat
+# make +1 (half a point each, rounded up: exerciseGain, #126). As for the game, the banner
+# waits under the result (#69) and shows once the punch's screen has closed. The punch starts
+# as the PUNCH tap lifts; its first windows are 400-1100, 1894-2570 and 3354-4006 ms in
+# (exercise.h), and a tap is 480 ms long. The third swing let pass is the miss (~4.1 s).
+train 29 10 30
 swipe up
 swipe left
 tap 233 320
@@ -53,10 +54,10 @@ tap 233 140
 wait 300ms
 shot punch-open
 tap 233 240
-wait 750ms
+wait 900ms
 tap 233 240
-# the session is 18 s; its result for 3.5 s, then the banner
-wait 16s
+# the miss; its result for 3.5 s, then the banner
+wait 2s
 shot punch-result
 wait 3500ms
 shot punch-ribbon-banner

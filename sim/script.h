@@ -13,6 +13,11 @@
 //                            at the end of the hold, the finger still down (#78).
 //                            tools/gate.sh counts only `shot` lines in screens.txt, so a
 //                            hold's shot isn't counted there
+//   pushup X Y [SHOT]        one push-up let go in its green band (#126): the finger goes
+//                            down at (X,Y) and lifts at the middle of the band of the rep
+//                            the firmware planned (exerciseMsToBandMid); with SHOT, also
+//                            save SHOT.png just before it lifts. Not counted in screens.txt
+//                            either. Too early or too late is a plain `hold`.
 //   swipe left|right|up|down deslizar desde el centro
 //   swipe X0 Y0 X1 Y1 [DUR]  deslizar entre dos puntos (DUR >= 160ms, y < ~750ms para que cuente; 240ms)
 //   press pwr [N]            N pulsaciones cortas de PWR (3 = bloqueo de bolsillo)
@@ -89,7 +94,7 @@
 
 enum SimOp : uint8_t {
   OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING, OP_PMU,
-  OP_TAP, OP_HOLD, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
+  OP_TAP, OP_HOLD, OP_PUSHUP, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
   OP_WAIT, OP_SERIAL, OP_SHOT, OP_IDLE, OP_SAY, OP_NATURE,
   OP_TRAIN, OP_GAME, OP_POOPS, OP_EXPECT, OP_EXPECT_NOT, OP_EXPECT_ONCE, OP_STEPS,
 };

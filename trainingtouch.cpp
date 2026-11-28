@@ -140,21 +140,39 @@ static_assert(decodeTrainingReport(zeroHeaderNoTrailer, sizeof(zeroHeaderNoTrail
               !decodeTrainingReport(zeroHeaderNoTrailer, sizeof(zeroHeaderNoTrailer)).pressed,
               "legacy empty packet without trailer must not latch previous contact");
 static_assert(emptyClearsReleaseGuard(), "legacy empty sample clears a held-exit guard");
-// The stamina hold (#78): a HIT's finger holds while it reports; the exit chip never does.
-constexpr bool holdWhileReporting() {
+// The push-ups (#126): a HIT's finger lifting is a RELEASE once reports with no finger go on
+// for LiftConfirm::CONFIRM_MS, timed at the first of them; one report with no finger between
+// contacts is the same finger; the exit chip never releases.
+constexpr bool releaseIsConfirmedAndTimedAtTheLift() {
   T t;
   if (t.update(true, 233, 233, 0) != T::HIT) return false;
-  for (uint32_t n = 20; n <= 5000; n += 20)
-    if (t.update(true, 233, 233, n) != T::NONE || !t.holding(n)) return false;
-  return !t.holding(5101) && t.update(false, 0, 0, 5120) == T::NONE && !t.holding(5120);
+  for (uint32_t n = 20; n <= 1000; n += 20)
+    if (t.update(true, 233, 233, n) != T::NONE) return false;
+  return t.update(false, 0, 0, 1020) == T::NONE && t.update(false, 0, 0, 1040) == T::NONE &&
+         t.update(false, 0, 0, 1060) == T::RELEASE && t.liftAt() == 1020 &&
+         t.update(false, 0, 0, 1080) == T::NONE;
 }
-constexpr bool exitChipNeverHolds() {
+constexpr bool oneEmptyReportIsNotALetGo() {
   T t;
-  for (uint32_t n = 0; n < 1000; n += 20)
-    if (t.update(true, 233, 405, n) != T::NONE || t.holding(n)) return false;
-  return t.update(true, 233, 405, 1000) == T::EXIT && !t.holding(1000);
+  auto contact = decodeTrainingReport(down, sizeof(down));
+  auto empty = decodeTrainingReport(stale, sizeof(stale));
+  if (t.update(contact.pressed, contact.x, contact.y, 0) != T::HIT) return false;
+  for (uint32_t n = 20; n <= 2000; n += 40) {
+    if (t.update(empty.pressed, empty.x, empty.y, n) == T::RELEASE) return false;
+    if (t.update(contact.pressed, contact.x, contact.y, n + 20) == T::RELEASE) return false;
+  }
+  return true;
 }
-static_assert(holdWhileReporting(), "a held finger holds while reports keep coming, not after");
-static_assert(exitChipNeverHolds(), "a hold on the exit chip exits and never trains");
+constexpr bool exitChipNeverReleases() {
+  T t;
+  for (uint32_t n = 0; n < 500; n += 20)
+    if (t.update(true, 233, 405, n) != T::NONE) return false;
+  for (uint32_t n = 500; n < 1500; n += 20)
+    if (t.update(false, 0, 0, n) != T::NONE) return false;
+  return true;
+}
+static_assert(releaseIsConfirmedAndTimedAtTheLift(), "a let-go counts once confirmed, timed when it left");
+static_assert(oneEmptyReportIsNotALetGo(), "an ACK/empty report between contacts is not a let-go");
+static_assert(exitChipNeverReleases(), "a touch on the exit chip never lets a push-up go");
 static_assert(T::POLL_MS == 20, "keep proven cadence, not four-times-faster ACK traffic");
 }  // namespace

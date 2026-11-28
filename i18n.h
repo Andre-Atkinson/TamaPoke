@@ -41,10 +41,13 @@ enum StrId : uint8_t {
   S_RELEASE_FMT, S_YES, S_NO,
   // minijuego y ejercicios (#78): the punch's result and hint
   S_PUNCHES_FMT, S_STR_GAIN_FMT, S_NEW_RECORD, S_RECORD_FMT, S_PUNCH_HINT,
-  // the calm exercises (#78): the hold's result and hints, the stat card's TRAIN button
-  // and the choice it opens (title, then each exercise's name and what it trains)
+  // the exercises (#78): the push-ups' result and hints (#126: they were the stamina hold's),
+  // how a session's miss went (#126: the punch's, push-ups let go too early or too late;
+  // also the push-ups' warm-up hint), the stat card's TRAIN button and the choice it opens
+  // (title, then each exercise's name and what it trains)
   S_REPS_FMT, S_STA_GAIN_FMT, S_HOLD_HINT, S_HOLD_KEEP,
-  S_ONE_PUNCH, S_ONE_REP,  // the results' singular: "1 PUNCH", "1 REP"
+  S_MISSED, S_TOO_EARLY, S_TOO_LATE,
+  S_ONE_PUNCH, S_ONE_REP,  // the results' singular: "1 PUNCH", "1 PUSH-UP"
   S_TRAIN, S_EX_TITLE, S_EX_PUNCH, S_EX_STR, S_EX_HOLD, S_EX_STA,
   S_TRAIN_ASLEEP,  // the toast when TRAIN is tapped while the pet sleeps (#89)
   S_SPD_GAIN_FMT,  // the Play minigame result's speed gain (#76), as the punch shows its strength

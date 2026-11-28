@@ -1,5 +1,5 @@
 // The minigames' screens and the calm exercises (gameui.h). Moved out of TamaPoke.ino
-// (#41); the exercises replaced the strength-training sack (#78).
+// (#41); the exercises replaced the strength-training sack (#78), endless since #126.
 #include <Arduino.h>
 #include "app.h"
 #include "audio.h"
@@ -29,21 +29,21 @@ static uint16_t gameShownScore = 0;  // puntuacion de la partida que se ensena e
 static bool gameNewHi = false;
 static uint8_t gameSpeedGain = 0;    // the speed the game trained, for the result (#76)
 
-// the calm exercises (#78; their rules are in exercise.h)
+// the exercises (#78, endless since #126; their rules are in exercise.h)
 bool trainOpen = false;
 bool trainPick = false;
 static uint8_t trainKind = EX_PUNCH;
 static RhythmPunch punch;
-static StaminaHold hold;
+static PushUps pushups;
 static PunchLunge punchLunge;      // the last landed punch's lunge (#90)
 static uint32_t trainOverUntil = 0;  // the result is on screen until this millis(); 0 while training
 static uint8_t trainCount = 0, trainGain = 0;
 static bool trainNewHi = false;
-static uint32_t repAt = 0;           // when the last rep was done (the ring flashes)
-#if !BOARD_AMOLED_175C
-static bool trainHeld = false;       // the 1.75: a finger that didn't start on the top strip is on
-static uint32_t trainHeldAt = 0;     // ...as of the last successful touch poll (exerciseHeld)
-#endif
+// How the session ended, for the result and its serial line (#126): by itself or the exit,
+// or by the miss (the punch's, or push-ups let go too early or too late).
+enum : uint8_t { TRAIN_ENDED = 0, TRAIN_MISSED, TRAIN_EARLY, TRAIN_LATE };
+static uint8_t trainMiss = TRAIN_ENDED;
+static const char *const TRAIN_MISS_LOG[] = { "", " miss", " miss=early", " miss=late" };
 
 // ---------- minijuegos de Play (logica en minigames.h) ----------
 
@@ -144,18 +144,20 @@ static void gameEndNow(const char *why) {
   swallowGesture = true;
 }
 
-// ---------- the calm exercises (#78): the rhythm punch and the stamina hold ----------
+// ---------- the exercises (#78, #126): the rhythm punch and the push-ups ----------
 // The stat card's TRAIN button opens a choice on the card (trainPick, renderTrainPick);
-// a tap there starts one (startExercise). Touches reach them through exerciseTap() and,
-// for the hold, the board's holding state (exerciseHolding). Leaving early by the exit
-// (exerciseExit) ends the session and pays for what was done; with nothing done the
-// screen just closes and nothing is spent.
+// a tap there starts one (startExercise). Touches reach them through exerciseTap() (a
+// touch-down) and exerciseRelease() (a confirmed lift, timed when the finger left). A
+// session runs until its miss (or nobody there for 15 s) and pays for what was done, as
+// leaving early by the exit (exerciseExit) does; with nothing done the screen just closes
+// and nothing is spent.
 
 static bool gameNight();           // prototipos (definidas mas abajo)
 static uint16_t gameInk();
 static void drawGameScene(bool words);
 static void drawGameBar(uint32_t left, uint32_t total);
 static void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS);
+static void exerciseHitSound(uint8_t done, uint8_t hit);
 static void planLunge();
 
 #define GAME_BAR_Y 130              // the time bar (drawGameBar): its top, its height...
@@ -170,18 +172,16 @@ void startExercise(uint8_t kind) {
 #if BOARD_AMOLED_175C
   if (!trainingCaptureReady) { showControlToast("Touch capture unavailable"); return; }
   trainingCapture.reset();  // opened by a tap, which resolves on the lift: no finger is down
-#else
-  trainHeld = false;
 #endif
   uint32_t now = millis();
   trainKind = kind;
   if (kind == EX_PUNCH) planLunge();  // once per session (punchlunge.h)
   punch.begin(now);
-  hold.begin(now);
+  pushups.begin(now, (uint32_t)random(0x7FFFFFFF) ^ micros());
   trainOverUntil = 0;
   trainCount = trainGain = 0;
   trainNewHi = false;
-  repAt = 0;
+  trainMiss = TRAIN_ENDED;
   trainOpen = true;
 }
 
@@ -189,15 +189,19 @@ void startExercise(uint8_t kind) {
 // `why` at the end of the line. False when nothing was done: nothing paid, nothing spent.
 static bool payExercise(const char *why) {
   bool p = trainKind == EX_PUNCH;
-  trainCount = p ? punch.punches : hold.reps;
+  trainCount = p ? punch.punches : pushups.reps;
+  trainMiss = p ? (punch.missed ? TRAIN_MISSED : TRAIN_ENDED)
+                : pushups.miss == PushUps::MISS_EARLY ? TRAIN_EARLY
+                : pushups.miss == PushUps::MISS_LATE  ? TRAIN_LATE : TRAIN_ENDED;
   if (!trainCount) return false;
-  trainNewHi = p && trainCount > pet.punchHi;
+  trainNewHi = trainCount > (p ? pet.punchHi : pet.pushHi);
   trainGain = p ? pet.trainStrength(trainCount) : pet.trainStamina(trainCount);
 #if BOARD_AMOLED_175C
-  Serial.printf("Training: %s count=%u gain=%u input_drops=%lu%s\n", p ? "punch" : "hold", trainCount,
-                trainGain, (unsigned long)trainingCapture.dropped(), why);
+  Serial.printf("Training: %s count=%u gain=%u%s input_drops=%lu%s\n", p ? "punch" : "pushup", trainCount,
+                trainGain, TRAIN_MISS_LOG[trainMiss], (unsigned long)trainingCapture.dropped(), why);
 #else
-  Serial.printf("Training: %s count=%u gain=%u%s\n", p ? "punch" : "hold", trainCount, trainGain, why);
+  Serial.printf("Training: %s count=%u gain=%u%s%s\n", p ? "punch" : "pushup", trainCount, trainGain,
+                TRAIN_MISS_LOG[trainMiss], why);
 #endif
   return true;
 }
@@ -210,7 +214,7 @@ static void finishExercise(uint32_t now) {
     leaveTraining();
     return;
   }
-  sfxPlay(trainNewHi ? SFX_MEDAL : SFX_PLAY);
+  sfxPlay(trainNewHi ? SFX_MEDAL : trainMiss != TRAIN_ENDED ? SFX_DENY : SFX_PLAY);
   trainOverUntil = now + 3500;
   if (!trainOverUntil) trainOverUntil = 1;  // 0 means "still training"
 }
@@ -251,36 +255,41 @@ static void planLunge() {
 // the same ATTACK size (a PUT of an updated sprite, or SPEC, mid-session).
 void exerciseSpriteChanged() { punchLunge = PunchLunge(); }
 
-void exerciseTap(uint32_t at) {
-  if (!trainOpen || trainOverUntil || trainKind != EX_PUNCH) return;
-  if (punch.tap(at)) sfxPlay(SFX_PLAY);
+// A hit's sound: the punch's, or the push-ups' notes up the scale; the hit that raises the
+// pay step chimes instead (#126). `done`: hits so far, this one included.
+static void exerciseHitSound(uint8_t done, uint8_t hit) {
+  sfxPlay(done % EX_TIER_HITS == 0 ? (uint8_t)SFX_LEVEL : hit);
 }
+
+void exerciseTap(uint32_t at) {
+  if (!trainOpen || trainOverUntil) return;
+  if (trainKind == EX_PUNCH) {
+    if (punch.tap(at) == RhythmPunch::TAP_LANDED) exerciseHitSound(punch.punches, SFX_PLAY);
+  } else {
+    pushups.press(at);
+  }
+}
+
+void exerciseRelease(uint32_t at) {
+  if (!trainOpen || trainOverUntil || trainKind != EX_HOLD) return;
+  uint8_t r = pushups.release(at);
+  if (r == PushUps::PU_REP) exerciseHitSound(pushups.reps, (uint8_t)(SFX_NOTE0 + (pushups.reps - 1) % 4));
+  else if (r == PushUps::PU_RETRY) sfxPlay(SFX_DENY);  // the warm-up: try again
+}
+
+#if HOST_SIM
+int32_t exerciseMsToBandMid(uint32_t now) {
+  if (!trainOpen || trainOverUntil || trainKind != EX_HOLD || !pushups.down()) return -1;
+  uint32_t mid = pushups.pressAt + (pushups.bandLo + pushups.bandHi) / 2;
+  return exAtOrAfter(now, mid) ? 0 : (int32_t)(mid - now);
+}
+#endif
 
 bool exerciseExit() {
   if (!trainOpen) return true;
   if (trainOverUntil) return false;  // the result screen closes by itself
   finishExercise(millis());
   return !trainOpen;
-}
-
-#if !BOARD_AMOLED_175C
-void exerciseHeld(bool on) {
-  trainHeld = on;
-  trainHeldAt = millis();
-}
-#endif
-
-// A finger is on for the stamina hold (the 1.75C asks the capture, which the loop owns
-// here: renderExercise() reads it before its capture frame starts the worker). The 1.75
-// holds only while its last poll is fresh: handleTouch() returns early when the chip
-// doesn't answer, so without this a stalled stream would keep counting reps, where the
-// 1.75C pauses on the same gap.
-static bool exerciseHolding(uint32_t now) {
-#if BOARD_AMOLED_175C
-  return !screenIsLocked() && trainingCapture.holding(now);
-#else
-  return trainHeld && now - trainHeldAt <= TrainingTouch::REPORT_GAP_MS;
-#endif
 }
 
 #define TRAIN_HINT_Y 46  // the hint's top, the same on both screens
@@ -293,16 +302,30 @@ static_assert(TRAIN_BACK_Y + 16 <= TRAIN_EXIT_STRIP_H, "the exit label is inside
 static_assert(TRAIN_EXIT_STRIP_H <= TRAIN_HINT_Y, "the exit strip ends above the hint");
 #endif
 
-// the hint at the top and the count under it, the same on both screens
-static void drawTrainHead(const char *hint, uint8_t count, uint16_t ink) {
-  gfx->setTextColor(ink);
+// the hint at the top (in `hintInk`) and the count under it, the same on both screens
+static void drawTrainHead(const char *hint, uint8_t count, uint16_t ink, uint16_t hintInk) {
+  gfx->setTextColor(hintInk);
   setSize(2);
   setCur(centerX(hint, 2), TRAIN_HINT_Y);
   printT(hint);
-  char b[4];
+  char b[4];  // the count is at most EX_MAX_COUNT: three digits
   snprintf(b, sizeof(b), "%u", count);
+  gfx->setTextColor(ink);
   setSize(5);
   setCur(centerX(b, 5), TRAIN_COUNT_Y);
+  printT(b);
+}
+
+// The pay step the next hit is paid at (#126), "x1", "x2"..., under the count on both screens.
+#define TRAIN_TIER_Y 120
+#define TRAIN_TIER_H 16  // size 2
+static_assert(TRAIN_TIER_Y >= TRAIN_COUNT_Y + 40, "the pay step is under the count");
+static void drawTier(uint8_t done) {
+  char b[6];
+  snprintf(b, sizeof(b), "x%u", exerciseTier(done));
+  gfx->setTextColor(UI_BAR_WARN);
+  setSize(2);
+  setCur(centerX(b, 2), TRAIN_TIER_Y);
   printT(b);
 }
 
@@ -318,11 +341,10 @@ static void drawTrainHead(const char *hint, uint8_t count, uint16_t ink) {
 #define PUNCH_KNOCK_MS 400  // a punch knocks the bag back out for this long
 #define PUNCH_LEAN_MS 250   // ...and the pet leans into it
 #define PUNCH_LEAN_PX 16    // ...this far, at most
-// The lunge's room (punchlunge.h) on this screen: the tallest frame stays under the time bar
+// The lunge's room (punchlunge.h) on this screen: the tallest frame stays under the pay step
 // (which is under the count), with a small gap, and the room's four corners, the lean
 // included, are on the round panel (so all of it is).
-static_assert(TRAIN_GROUND - PunchLunge::ROOM_UP >= GAME_BAR_Y + GAME_BAR_H + 4, "the lunge stays under the time bar");
-static_assert(GAME_BAR_Y >= TRAIN_COUNT_Y + 40, "the time bar is under the count");
+static_assert(TRAIN_GROUND - PunchLunge::ROOM_UP >= TRAIN_TIER_Y + TRAIN_TIER_H + 4, "the lunge stays under the pay step");
 static constexpr bool onRoundPanel(int x, int y) { return (x - CX) * (x - CX) + (y - CY) * (y - CY) <= CX * CX; }
 static_assert(onRoundPanel(PUNCH_PET_X - PunchLunge::ROOM_SIDE, TRAIN_GROUND - PunchLunge::ROOM_UP) &&
                   onRoundPanel(PUNCH_PET_X - PunchLunge::ROOM_SIDE, TRAIN_GROUND) &&
@@ -333,14 +355,19 @@ static_assert(onRoundPanel(PUNCH_PET_X - PunchLunge::ROOM_SIDE, TRAIN_GROUND - P
 static_assert(TRAIN_PET_S <= 5, "the lunge's sprite test covers this scale");
 
 static void drawPunch(uint32_t now, uint16_t ink) {
-  drawTrainHead(T(S_PUNCH_HINT), punch.punches, ink);
-  uint32_t e = punch.elapsed(now);
-  drawGameBar(e < RhythmPunch::TOTAL_MS ? RhythmPunch::TOTAL_MS - e : 0, RhythmPunch::TOTAL_MS);
+  drawTrainHead(T(S_PUNCH_HINT), punch.punches, ink, ink);
+  drawTier(punch.punches);
 
   uint32_t since = now - punch.lastPunchAt;
-  bool knocked = punch.punches && since < PUNCH_KNOCK_MS;
+  // The knock, the lean and the burst are over before the next window opens: the swings get
+  // quicker as the run goes on (#126), and the bag is in its true place for the "now!".
+  uint32_t knockMs = PUNCH_KNOCK_MS;
+  if (punch.punches && punch.nextOpen() - punch.lastPunchAt < knockMs) knockMs = punch.nextOpen() - punch.lastPunchAt;
+  if (knockMs < 1) knockMs = 1;
+  uint32_t leanMs = PUNCH_LEAN_MS < knockMs ? PUNCH_LEAN_MS : knockMs;
+  bool knocked = punch.punches && since < knockMs;
   float ang = BAG_OUT + (BAG_IN - BAG_OUT) * punch.reach(now);
-  if (knocked) ang += 0.3f * (1.0f - (float)since / PUNCH_KNOCK_MS);
+  if (knocked) ang += 0.3f * (1.0f - (float)since / (float)knockMs);
   int bx = BAG_PIVOT_X + (int)(BAG_ROPE * sinf(ang));
   int by = BAG_PIVOT_Y + (int)(BAG_ROPE * cosf(ang));
   gfx->fillRect(BAG_PIVOT_X - 20, BAG_PIVOT_Y - 8, 40, 8, ink);  // the hook
@@ -356,8 +383,8 @@ static void drawPunch(uint32_t now, uint16_t ink) {
     gfx->drawRoundRect(x0 - 7, by - 7, BAG_W + 14, BAG_H + 14, 26, UI_BAR_WARN);
   }
 
-  int lean = punch.punches && since < PUNCH_LEAN_MS
-                 ? (int)(PUNCH_LEAN_PX * sinf((float)since * 3.14159265f / PUNCH_LEAN_MS)) : 0;
+  int lean = punch.punches && since < leanMs
+                 ? (int)(PUNCH_LEAN_PX * sinf((float)since * 3.14159265f / (float)leanMs)) : 0;
   // A landed punch: the pet's own ATTACK, from its strike, on its feet at IDLE's size
   // (punchlunge.h, #90). The plan was made when the session started; a sprite that changed
   // since (ensureMon() reloaded it) is planned again here, once (the plan records it either way).
@@ -366,7 +393,7 @@ static void drawPunch(uint32_t now, uint16_t ink) {
   int fi = pmd.loaded ? punchLunge.frameAt(punch, now, atk.ms) : -1;
   if (fi >= 0) drawPmdFrame(pmd, PMD_ATTACK, (uint8_t)fi, punchLunge.feet[fi], PUNCH_PET_X + lean, TRAIN_GROUND, punchLunge.s);
   else drawGamePet(PMD_IDLE, PUNCH_PET_X + lean, TRAIN_GROUND, TRAIN_PET_S);
-  if (knocked && since < 300) {  // the hit: a burst on the bag's near side
+  if (knocked && since < 300) {  // the hit: a burst on the bag's near side (knockMs at most)
     int cx = x0 + 6, cy = by + BAG_H / 2;
     for (int i = 0; i < 8; i++) {
       float a = (float)i * 0.785398f;
@@ -378,23 +405,61 @@ static void drawPunch(uint32_t now, uint16_t ink) {
   }
 }
 
-// The hold: the pet in a ring, lifting itself once a rep while a finger is on.
+// The push-ups (#126): the bar with its green band under the count, and the pet in a ring,
+// going down as the bar fills and pushing up at a rep.
 #define HOLD_RING_Y 276
 #define HOLD_RING_R 100
-#define HOLD_LIFT_PX 26
+#define HOLD_LIFT_PX 26     // a rep: the pet pushes up this far...
+#define PUSH_UP_MS 300      // ...over this long
+#define PUSH_DOWN_PX 16     // the pet goes down this far at a full bar
+#define PUSH_BAR_Y 148
+#define PUSH_BAR_W 300
+#define PUSH_BAR_H 22
+#define PUSH_RETRY_MS 1200  // a warm-up try let go at the wrong moment: the hint says which way
+static_assert(PUSH_BAR_Y >= TRAIN_TIER_Y + TRAIN_TIER_H + 8, "the bar is under the pay step");
+static_assert(PUSH_BAR_Y + PUSH_BAR_H + 4 <= HOLD_RING_Y - HOLD_RING_R, "the bar is above the ring");
 
-static void drawHold(uint32_t now, uint16_t ink, bool holding) {
-  drawTrainHead(T(holding ? S_HOLD_KEEP : S_HOLD_HINT), hold.reps, ink);
-  drawGameBar(hold.into, StaminaHold::REP_MS);  // the rep under way: stops while lifted
-  uint16_t ring = repAt && now - repAt < 250 ? UI_WHITE : holding ? UI_BAR_OK : UI_TRACK;
+static void drawPushUps(uint32_t now, uint16_t ink) {
+  const char *hint = T(pushups.down() ? S_HOLD_KEEP : S_HOLD_HINT);
+  uint16_t hintInk = ink;
+  if (pushups.retry != PushUps::MISS_NONE && now - pushups.retryAt < PUSH_RETRY_MS) {
+    hint = T(pushups.retry == PushUps::MISS_EARLY ? S_TOO_EARLY : S_TOO_LATE);
+    hintInk = UI_BAR_BAD;
+  }
+  drawTrainHead(hint, pushups.reps, ink, hintInk);
+  drawTier(pushups.reps);
+
+  // the bar: the green band where letting go is a rep, and the fill with its marker
+  const int bx = CX - PUSH_BAR_W / 2;
+  bool in = pushups.inBand(now);
+  float f = pushups.fill(now);
+  gfx->fillRoundRect(bx, PUSH_BAR_Y, PUSH_BAR_W, PUSH_BAR_H, 8, UI_TRACK);
+  int lo = (int)((uint32_t)PUSH_BAR_W * pushups.bandLo / pushups.fillMs);
+  int hi = (int)((uint32_t)PUSH_BAR_W * pushups.bandHi / pushups.fillMs);
+  gfx->fillRect(bx + lo, PUSH_BAR_Y, hi - lo, PUSH_BAR_H, UI_BAR_OK);
+  int fx = (int)(PUSH_BAR_W * f);
+  if (fx > 0) gfx->fillRect(bx, PUSH_BAR_Y + 7, fx, PUSH_BAR_H - 14, UI_BAR_WARN);
+  if (pushups.down()) gfx->fillRect(bx + fx - 2, PUSH_BAR_Y - 5, 5, PUSH_BAR_H + 10, in ? UI_WHITE : ink);
+  gfx->drawRoundRect(bx, PUSH_BAR_Y, PUSH_BAR_W, PUSH_BAR_H, 8, ink);
+
+  uint32_t sinceRep = now - pushups.lastRepAt;
+  bool up = pushups.reps && sinceRep < PUSH_UP_MS;
+  uint16_t ring = up ? UI_WHITE : in ? UI_BAR_OK : pushups.down() ? UI_BAR_WARN : UI_TRACK;
   for (int r = 0; r < 3; r++) gfx->drawCircle(CX, HOLD_RING_Y, HOLD_RING_R - r, ring);
-  int dy = -(int)(HOLD_LIFT_PX * sinf(hold.progress() * 3.14159265f));  // still while paused
+  int dy = up ? -(int)(HOLD_LIFT_PX * sinf((float)sinceRep * 3.14159265f / PUSH_UP_MS)) : (int)(PUSH_DOWN_PX * f);
   drawGamePet(PMD_IDLE, CX, TRAIN_GROUND + dy, TRAIN_PET_S);
 }
 
-// the result (3.5 s): what was done, what it trained, and the punch record
+// the result (3.5 s): how it ended (the miss), what was done, what it trained, and the record
 static void drawExerciseResult(uint16_t ink) {
   bool p = trainKind == EX_PUNCH;
+  if (trainMiss != TRAIN_ENDED) {
+    const char *m = T(trainMiss == TRAIN_EARLY ? S_TOO_EARLY : trainMiss == TRAIN_LATE ? S_TOO_LATE : S_MISSED);
+    gfx->setTextColor(UI_BAR_BAD);
+    setSize(3);
+    setCur(centerX(m, 3), 100);
+    printT(m);
+  }
   char b[24];  // buffer sizes: TestBuffersDeTexto in test/test_tools.py
   if (trainCount == 1) snprintf(b, sizeof(b), "%s", T(p ? S_ONE_PUNCH : S_ONE_REP));
   else snprintf(b, sizeof(b), T(p ? S_PUNCHES_FMT : S_REPS_FMT), trainCount);
@@ -409,7 +474,6 @@ static void drawExerciseResult(uint16_t ink) {
   setSize(3);
   setCur(centerX(g, 3), 210);
   printT(g);
-  if (!p) return;
   setSize(2);
   if (trainNewHi) {
     gfx->setTextColor(UI_BAR_WARN);
@@ -417,7 +481,7 @@ static void drawExerciseResult(uint16_t ink) {
     printT(T(S_NEW_RECORD));
   } else {
     char r[18];
-    snprintf(r, sizeof(r), T(S_RECORD_FMT), pet.punchHi);
+    snprintf(r, sizeof(r), T(S_RECORD_FMT), p ? pet.punchHi : pet.pushHi);
     gfx->setTextColor(ink);
     setCur(centerX(r, 2), 256);
     printT(r);
@@ -439,20 +503,15 @@ void renderExercise() {
     return;
   }
 
-  bool holding = false;
   if (trainKind == EX_HOLD) {
-    holding = exerciseHolding(now);
-    if (hold.step(now, holding)) {
-      repAt = now;
-      sfxPlay(SFX_NOTE0 + (hold.reps - 1) % 4);  // each rep a note up the scale
-    }
-    if (holding) wakeUI();  // a still finger is someone there: no dimming mid-hold
+    if (pushups.update(now) == PushUps::PU_RETRY) sfxPlay(SFX_DENY);  // the warm-up, held too long
   } else {
-    // A punch session outlasts the game's keep-awake (18 s against POWER_GAME_AWAKE_MS) and
-    // a player who only watches never touches: keep it bright until it ends.
-    wakeUI();
+    punch.update(now);
   }
-  if (trainKind == EX_PUNCH ? punch.over(now) : hold.over(now)) {
+  // A session ends by itself (its miss, or 15 s with nobody there), and a still finger or a
+  // player timing the bag isn't touching: keep it bright until it ends.
+  wakeUI();
+  if (trainKind == EX_PUNCH ? punch.over() : pushups.over()) {
     finishExercise(now);
     if (!trainOpen) return;
     // The result's first frame: the sky again, without the stars (#84). The pass that ends the
@@ -470,7 +529,7 @@ void renderExercise() {
   TrainingCapture::Frame captureFrame(trainingCapture, !screenIsLocked());
 #endif
   if (trainKind == EX_PUNCH) drawPunch(now, ink);
-  else drawHold(now, ink, holding);
+  else drawPushUps(now, ink);
 #if BOARD_AMOLED_175C
   // Visible, clear of the pet and the bag, fully inside the circle.
   const int ex = TrainingTouch::EXIT_X, ey = TrainingTouch::EXIT_Y;

@@ -126,14 +126,20 @@ travels to, and it stays through an ending: the next egg finds the plant as it w
   **+2/min** faster (8 a minute, 10 for a lazy one). Now and then in the evening, before
   quiet hours, it asks for it ("Sleepy... warm milk?"), twice an evening at most and not
   once it has had its milk.
-- 🥊 **Training** (the *Train* button on the stat card): two calm exercises, each up to
-  12 punches or reps worth 1.5 points (+18 a session at most; its nature can add a quarter),
-  and each tires it like a game:
+- 🥊 **Training** (the *Train* button on the stat card): two exercises of skill with no set
+  length (#126). A session goes on until the first miss and gets harder with every hit, and
+  the miss only ends it: it pays for every hit, and each hit pays more the longer the run
+  goes, half a point for each of the first five, then a point, a point and a half and so on
+  every five hits (the screen shows the step, **x1**, **x2**...; 12 hits pay 11, 22 pay
+  30; its nature can add a quarter). Until the first hit lands it is a warm-up, where a miss
+  costs nothing. Each keeps a record, and each tires it like a game:
   - **Punch** trains **STRENGTH**: tap as the swinging bag reaches the creature (it lights
-    up), and the creature strikes it with its own attack. Off-beat taps do nothing and cost
-    nothing.
-  - **Hold** trains **STAMINA**: keep a finger on the screen while it does reps; lifting
-    only pauses it.
+    up), and the creature strikes it with its own attack. Each punch makes the swings
+    quicker and the moment shorter; a swing let pass or a tap while the bag isn't lit is the
+    miss.
+  - **Push-ups** train **STAMINA**: press and hold, and the creature goes down while a bar
+    fills; let go while it is in the green band for a rep. Letting go too early or too late
+    is the miss. Each rep has its own speed and band, and they get quicker and shorter.
   Leaving early keeps what was earned, and so does turning the screen off (PWR, or the
   1.75C's pocket lock): the session ends at once and the screen comes back on to the
   creature. While it sleeps, *Train* just says so and the card stays open.
@@ -394,7 +400,7 @@ first page, under the berry and age):
 
 ### Fitness
 Training points 0–100 for **strength** (the rhythm punch), **stamina** (steady care:
-every need at 40+, and the stamina hold) and **speed** (the Play minigames), shown on the
+every need at 40+, and the push-ups) and **speed** (the Play minigames), shown on the
 card's Fitness page with a ribbon at each goal. They show in the pet's idle life (looks
 only). Its nature trains one of them a little faster (see **Nature**).
 
@@ -556,7 +562,7 @@ themselves after 6 s.
 - Horizontal swipe = open the **Pokédex / gallery**.
 - Vertical swipe up = open the **stat card** (5 pages: Profile / Fitness / Medals /
   Progress / Care; swipe between them; tap the name on Profile to rename; on Fitness the
-  "Train" button offers the punch and the hold; on Care four buttons cycle the pace
+  "Train" button offers the punch and the push-ups; on Care four buttons cycle the pace
   Normal ↔ Relaxed, the bedtime Off → 21–07 → 22–07 → 23–08, the eggs Surprise ↔ Choose
   and sickness Off ↔ On).
 - Swipe down = **set the clock** and the **settings**. The first row is sound, brightness and
@@ -624,7 +630,8 @@ Pokédex number (persisted in NVS).
 
 Each creature trains three stats, from 0 to 100 points each, which start again
 with every new pet:
-- **Strength** ← the rhythm punch: 1.5 points a punch, at most 18 a session.
+- **Strength** ← the rhythm punch: more a punch the longer the run (12 punches pay 11,
+  22 pay 30).
 - **Stamina** ← steady care: a point for every 30 awake minutes with every need
   at 40 or more. The minutes add up (a minute under 40 just doesn't count), survive
   a restart, and don't count while the pet sleeps or self-care keeps it on the
@@ -632,13 +639,13 @@ with every new pet:
   brings it back), so a pet that is put to bed for a while when it's tired builds
   stamina far faster: looked after hourly with such naps, the stamina ribbon comes
   in about a day and a half; never napped, it takes a week or more.
-  The stamina hold adds a faster way: 1.5 points a rep, at most 18 a session.
+  The push-ups add a faster way, paid like the punch.
 - **Speed** ← the Play minigames: a fifth of the game's score (3 for a game at par).
 
 The stat card's **Fitness** page shows the three bars, what trains each, a ribbon
 at each goal, and the weight (which goes up with candy and burns off with exercise).
 Each Play minigame's result shows the speed it trained (**SPEED +3**), as the
-punch shows its strength and the hold its stamina. Reaching **30** strength, **10** stamina or **30** speed earns
+punch shows its strength and the push-ups their stamina. Reaching **30** strength, **10** stamina or **30** speed earns
 that stat's **ribbon** (Medals page). Training also shows in the creature's own
 life, as looks only: a strong pet kicks its ball further, a fast one strolls and
 chases the ball up to 30 % faster, and one with stamina hops a little longer when
@@ -788,7 +795,7 @@ set after a power cut.
 - `caremenu.h` — the care strips the Food, Play and moon buttons open: where they sit and which item a tap lands on (#13)
 - `owner.h` / `owner.cpp` — the player's name (`OWNER <name>`): which characters the font can draw, and its NVS key
 - `holiday.h` / `holiday.cpp` — the special days (#26): Easter and the other dates, the player's birthday (`BDAY <month> <day>`) and its NVS key, and how often the greeting comes; `scene.cpp` draws the decorations
-- `gameui.h` / `gameui.cpp` — the minigames' screens and the calm exercises' (the rhythm punch and the stamina hold, #78; their rules are in `minigames.h` and `exercise.h`)
+- `gameui.h` / `gameui.cpp` — the minigames' screens and the exercises' (the rhythm punch and the push-ups, #78, #126; their rules are in `minigames.h` and `exercise.h`)
 - `punchlunge.h` — the rhythm punch's lunge (#90): which ATTACK frames a landed punch plays, standing each on its own feet at IDLE's size, and the room they must fit
 - `screens.h` / `screens.cpp` — the other screens: starter and egg choice, the pet card's pages, clock and settings, the nickname keyboard, the Pokédex gallery
 - `pet.h` / `pet.cpp` — pet state and logic (stats, evolution, life cycle, streak/bond/medals, NVS)

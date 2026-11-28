@@ -1,11 +1,18 @@
-# The calm exercises (#78): the stat card's TRAIN button and the choice it opens, the
-# rhythm punch (three punches on the beat) and the stamina hold (a pause, then all 12
-# reps), each with its result. For both boards, both languages, by day and by night:
+# The exercises (#78, endless and skill-based since #126): the stat card's TRAIN button and
+# the choice it opens, the rhythm punch (five punches on the beat, the pay step going up to
+# x2, then a swing let pass: the miss) and the push-ups (a first try let go too early, the
+# warm-up; three reps let go in the green; then one held too long: the miss), each with its
+# result. For both boards, both languages, by day and by night:
 #   tools/sim.sh --board 175c --lang en --script exercises --out shots/
 #   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script exercises --out shots/
+# The serial log has "Training: punch count=5 gain=3 miss" and "Training: pushup count=3
+# gain=2 miss=late" (the 1.75C adds input_drops=0).
 # Timing: a tap is 80 ms down then 400 ms settling (sim/main.cpp), and an exercise starts
-# when the tap that chose it lifts. The punch's windows are 400-1100 ms into each 1.5 s
-# swing (exercise.h).
+# when the tap that chose it lifts. The punch's first swing is 1.5 s with its window
+# 400-1100 ms in; each punch landed makes the next swing 35 ms shorter and its window 12 ms
+# narrower each side (exercise.h): from the start, swing n starts at 0, 1500, 2965, 4395,
+# 5790, 7150 ms, with windows 400-1100, 1894-2570, 3354-4006, 4778-5406, 6168-6772 and
+# 7522-8102 ms. A `pushup` step lets go in the middle of the rep's green band.
 
 # new game: pick Charmander, hatch the egg
 wait 1s
@@ -32,28 +39,39 @@ wait 300ms
 shot 24-punch-now
 # ~700 ms: inside the first window. The shot is taken with the finger still down.
 hold 233 240 150ms 25-punch-hit
-# ~1.25 s; the second window is 1.9-2.6 s, the third 3.4-4.1 s
+# ~2.0 s, ~3.4 s: the second and third swings
 wait 700ms
 tap 233 240
 wait 1s
 tap 233 240
 shot 26-punch-mid
-# the session is 18 s: the result, then back to the pet
-wait 15s
+# ~4.9 s and ~6.3 s: the fourth and the fifth, which puts the pay step up to x2 (a chime)
+wait 1s
+tap 233 240
+wait 900ms
+tap 233 240
+shot 26b-punch-x2
+# the sixth swing passes with no punch: the miss (~8.1 s), its result, then back to the pet
+wait 2s
 shot 27-punch-result
 wait 4s
 shot 28-after-punch
 
-# the hold: untouched, held (a rep and a bit, shot with the finger down), lifted (paused),
-# then held to the end of the 12 reps
+# the push-ups: the first rep's band shown; a first try let go at once, too early (the
+# warm-up: said, and tried again); three reps let go in the green (one shot with the finger
+# down in the band); then one held 2.5 s, too late: the miss, its result, back to the pet
 swipe up
 swipe left
 tap 233 320
 tap 233 240
-shot 30-hold-start
-hold 233 270 2200ms 31-hold-held
-shot 32-hold-paused
-hold 233 270 17s
-shot 33-hold-result
+shot 30-pushups-start
+hold 233 270 100ms
+shot 31-pushups-too-early
+pushup 233 270 32-pushups-down
+pushup 233 270
+pushup 233 270
+shot 33-pushups-three
+hold 233 270 2500ms
+shot 34-pushups-result
 wait 4s
-shot 34-after-hold
+shot 35-after-pushups

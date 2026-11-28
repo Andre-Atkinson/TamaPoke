@@ -268,7 +268,7 @@ TEST(SimScript, idle_names_an_activity) {
 }
 
 // "hold X Y DUR SHOT" (#78): a shot at the end of the hold, before the finger lifts, so a
-// script can see a screen that changes while a finger stays down (the stamina hold)
+// script can see a screen that changes while a finger stays down (a push-up, #126)
 TEST(SimScript, hold_can_take_a_shot_before_the_finger_lifts) {
   SimScript s = simParseScript("hold 233 280 4s 31-hold_held.en\n");
   CHECK_EQ(s.error, std::string(""));
@@ -312,6 +312,24 @@ TEST(SimScript, nature_names_a_nature) {
            std::string("r.txt:2: usage: nature easygoing|greedy|playful|tidy|lazy"));
   CHECK(!simParseScript("nature\n").error.empty());
   CHECK(!simParseScript("nature tidy lazy\n").error.empty());
+}
+
+// "pushup X Y [SHOT]" (#126): one push-up let go in its band; it runs the firmware
+TEST(SimScript, pushup_takes_a_point_and_an_optional_shot) {
+  SimScript s = simParseScript("pushup 233 270\npushup 233 270 41-pushup-down\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)2);
+  if (s.cmds.size() != 2) return;
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_PUSHUP);
+  CHECK_EQ(s.cmds[0].a, (int32_t)233);
+  CHECK_EQ(s.cmds[0].b, (int32_t)270);
+  CHECK_EQ(s.cmds[0].text, std::string(""));
+  CHECK_EQ(s.cmds[1].text, std::string("41-pushup-down"));
+  CHECK_EQ(simPreBootEnd(s), (size_t)0);
+  CHECK_EQ(simParseScript("pushup 233\n", "p.txt").error, std::string("p.txt:1: usage: pushup X Y [SHOT]"));
+  CHECK(!simParseScript("pushup 233 500\n").error.empty());
+  CHECK(!simParseScript("pushup 233 270 a/b\n").error.empty());
+  CHECK(!simParseScript("pushup 233 270 x y\n").error.empty());
 }
 
 // "game NAME" (#94): the next Play deals this minigame; it runs the firmware, so it closes

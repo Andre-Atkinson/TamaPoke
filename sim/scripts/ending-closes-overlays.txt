@@ -8,7 +8,7 @@
 # nothing left open over it, and three taps hatch it for the next section.
 # The serial log (shots/serial.log) has, in this order:
 #   Play: peek score=N speed=+M (ending)      A. the minigame paid before the run-away
-#   Training: punch count=2 gain=3 ... (ending)  B. the exercise paid before the farewell
+#   Training: punch count=2 gain=1 ... (ending)  B. the exercise paid before the farewell
 #   Play: keepy score=0 speed=+0              K. the result screen's own line, then no
 #                                                "(ending)" line: paid once, at its end
 #   lim=0 ... then lim=100                    L. STATS before the bath and during the
