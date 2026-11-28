@@ -1590,7 +1590,10 @@ void handleTouch() {
     uint32_t now = millis();
     if (pressed && !wasPressed) {
       wakeUI();
-      trainLift.back();  // back within CONFIRM_MS: the same finger
+      // the same finger back (an ACK in the middle of a tap) is not a new tap, as in
+      // TrainingTouch::update (R1-1)
+      bool same = trainLift.sameFinger(now);
+      trainLift.back();
       counts = y >= TRAIN_EXIT_STRIP_H;
       if (!counts) {
         if (exerciseExit()) {  // closed: leaveTraining() swallows the rest of this touch
@@ -1598,7 +1601,7 @@ void handleTouch() {
           wasPressed = pressed;
           return;
         }
-      } else {
+      } else if (!same) {
         exerciseTap(now);
       }
     }

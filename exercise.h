@@ -59,8 +59,8 @@ inline bool exAtOrAfter(uint32_t t, uint32_t since) { return (int32_t)(t - since
 // On the 1.75C a tap is judged on when it was captured (TrainingCapture's timestamp), so a
 // frame being drawn never moves it out of its window. The original 1.75 has no capture
 // worker: a tap is timed at the loop's next poll (exerciseTap(millis()) in handleTouch),
-// which doesn't run while a frame draws, so it can be up to a frame late; the narrowest
-// window, WINDOW_MIN_MS either side, still allows for that.
+// which doesn't run while a frame draws, so it can be up to a frame late (about 85 ms); even
+// the narrowest window, 2 x WINDOW_MIN_MS wide, is wider than that.
 struct RhythmPunch {
   static constexpr uint32_t SWING0_MS = 1500, SWING_STEP_MS = 35, SWING_MIN_MS = 350;
   static constexpr uint32_t WINDOW0_MS = 350, WINDOW_STEP_MS = 12, WINDOW_MIN_MS = 60;
@@ -68,7 +68,7 @@ struct RhythmPunch {
   // captured just before it closed and not yet read (the next poll, or the drain after the
   // frame) is judged first.
   static constexpr uint32_t SETTLE_MS = 60;
-  static constexpr uint32_t BOUNCE_MS = 120;
+  static constexpr uint32_t BOUNCE_MS = 150;
   static constexpr uint32_t WARMUP_MS = 15000;  // no punch by then: the session ends, nothing paid
   enum Tap : uint8_t { TAP_NOTHING = 0, TAP_LANDED, TAP_MISSED };
 
@@ -194,7 +194,7 @@ struct PushUps {
   static constexpr uint32_t FILL0_MS = 1800, FILL_STEP_MS = 50, FILL_MIN_MS = 500;
   static constexpr uint32_t BAND0_MS = 500, BAND_STEP_MS = 16, BAND_MIN_MS = 100;
   // still down this long after the band: too late (the lift's confirmation,
-  // TrainingTouch::RELEASE_CONFIRM_MS, and the next poll may still be on their way)
+  // LiftConfirm::CONFIRM_MS, and the next poll may still be on their way)
   static constexpr uint32_t LATE_MS = 100;
   static constexpr uint32_t IDLE_END_MS = 15000;
   enum Phase : uint8_t { READY = 0, DOWN, OVER };

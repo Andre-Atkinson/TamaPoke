@@ -8,12 +8,17 @@
 #include <string>
 #include <vector>
 using T = TrainingTouch;
+// Training taps are at least RhythmPunch::SWING_MIN_MS (350 ms) apart; each one's lift is
+// confirmed (a RELEASE, which the punch ignores) before the next goes down.
 TEST(TrainingTouch, OneHundredRapidTapsNoRepeatWhileHeld) {
   T t;
   for (uint32_t n = 0; n < 100; ++n) {
-    CHECK_EQ(t.update(true, 233, 120, n * 30), T::HIT);
-    CHECK_EQ(t.update(true, 234, 120, n * 30 + 5), T::NONE);
-    CHECK_EQ(t.update(false, 0, 0, n * 30 + 15), T::NONE);
+    uint32_t at = n * RhythmPunch::SWING_MIN_MS;
+    CHECK_EQ(t.update(true, 233, 120, at), T::HIT);
+    CHECK_EQ(t.update(true, 234, 120, at + 5), T::NONE);
+    CHECK_EQ(t.update(false, 0, 0, at + 20), T::NONE);
+    CHECK_EQ(t.update(false, 0, 0, at + 40), T::NONE);
+    CHECK_EQ(t.update(false, 0, 0, at + 60), T::RELEASE);
   }
 }
 TEST(TrainingTouch, TopAndBroadScreenAreHits) {
@@ -134,16 +139,38 @@ TEST(TrainingTouch, AnEmptyReportBetweenContactsIsNotALetGo) {
   T t;
   CHECK_EQ(t.update(c.pressed, c.x, c.y, 0), T::HIT);
   for (uint32_t n = 20; n < 2900; n += 40) {
-    CHECK(t.update(e.pressed, e.x, e.y, n) != T::RELEASE);
-    // the contact again is a HIT, as it always was (a punch's bounce, RhythmPunch::BOUNCE_MS);
-    // the push-ups ignore a touch-down while one is down (PushUps::press)
-    CHECK(t.update(c.pressed, c.x, c.y, n + 20) != T::RELEASE);
+    CHECK_EQ(t.update(e.pressed, e.x, e.y, n), T::NONE);
+    // the contact again is the same finger (R1-1): neither a let-go nor a new HIT
+    CHECK_EQ(t.update(c.pressed, c.x, c.y, n + 20), T::NONE);
   }
   // reports with no finger for CONFIRM_MS: the let-go, timed at the first of them
   CHECK_EQ(t.update(e.pressed, e.x, e.y, 3000), T::NONE);
   CHECK_EQ(t.update(e.pressed, e.x, e.y, 3020), T::NONE);
   CHECK_EQ(t.update(e.pressed, e.x, e.y, 3040), T::RELEASE);
   CHECK_EQ(t.liftAt(), (uint32_t)3000);
+}
+// R1-1: a contact back within CONFIRM_MS of the first report with no finger is the same
+// finger: not a let-go, and not a new HIT (a punch's tap would count twice).
+TEST(TrainingTouch, AContactBackWithinConfirmMsOfAnEmptyReportIsTheSameFinger) {
+  T t;
+  CHECK_EQ(t.update(true, 233, 233, 0), T::HIT);
+  CHECK_EQ(t.update(false, 0, 0, 20), T::NONE);
+  CHECK_EQ(t.update(true, 233, 233, 20 + LiftConfirm::CONFIRM_MS - 1), T::NONE);
+  // still a finger down that lets go later, timed at its own first report with no finger
+  CHECK_EQ(t.update(false, 0, 0, 100), T::NONE);
+  CHECK_EQ(t.update(false, 0, 0, 120), T::NONE);
+  CHECK_EQ(t.update(false, 0, 0, 140), T::RELEASE);
+  CHECK_EQ(t.liftAt(), (uint32_t)100);
+  // CONFIRM_MS after it: a new touch, a HIT
+  T u;
+  CHECK_EQ(u.update(true, 233, 233, 0), T::HIT);
+  CHECK_EQ(u.update(false, 0, 0, 20), T::NONE);
+  CHECK_EQ(u.update(true, 233, 233, 20 + LiftConfirm::CONFIRM_MS), T::HIT);
+  // across the millis() wrap
+  T w;
+  CHECK_EQ(w.update(true, 233, 233, 0xFFFFFFF0u), T::HIT);
+  CHECK_EQ(w.update(false, 0, 0, 0xFFFFFFFFu), T::NONE);
+  CHECK_EQ(w.update(true, 233, 233, 10), T::NONE);
 }
 TEST(TrainingTouch, TheExitChipOffPanelAndSwallowedContactsNeverLetGo) {
   T t;  // held on the exit chip, then lifted
@@ -176,6 +203,19 @@ TEST(LiftConfirm, TheOriginal175sPollConfirmsTheSameWay) {
   l.lost(300);
   l.back();
   CHECK(!l.confirm(400));  // the finger came back: no let-go
+  // the same finger: back within CONFIRM_MS of the first report with no finger (R1-1)
+  LiftConfirm s;
+  CHECK(!s.sameFinger(100));  // nothing lost: a new touch
+  s.lost(100);
+  s.lost(130);
+  CHECK(s.sameFinger(100));
+  CHECK(s.sameFinger(100 + LiftConfirm::CONFIRM_MS - 1));
+  CHECK(!s.sameFinger(100 + LiftConfirm::CONFIRM_MS));
+  s.back();
+  CHECK(!s.sameFinger(110));  // once back, a later contact is new
+  s.lost(0xFFFFFFF0u);
+  CHECK(s.sameFinger(0xFFFFFFF0u + 39));  // across the wrap
+  CHECK(!s.sameFinger(0xFFFFFFF0u + 40));
   l.lost(0xFFFFFFF0u);
   CHECK(!l.confirm(0xFFFFFFF0u + 39));
   CHECK(l.confirm(0xFFFFFFF0u + 40));  // across the millis() wrap
@@ -275,6 +315,16 @@ TEST(RhythmPunch, ASecondTapInALandedSwingIsTheMissButABounceIsNot) {
   CHECK_EQ(r.tap(750 + RP::BOUNCE_MS), RP::TAP_MISSED);
   CHECK(r.missed);
 }
+// BOUNCE_MS must never swallow a real tap: from a punch landed at the last ms of a window to the
+// next window's first, the gap is longer than the bounce, at every swing.
+TEST(RhythmPunch, TheBounceIsShorterThanTheGapFromTheLatestPunchToTheNextWindow) {
+  for (uint8_t n = 0; n < EX_MAX_COUNT; n++) {
+    uint32_t latest = RP::swingMs(n) / 2 + RP::windowMs(n);  // into swing n
+    uint32_t nextOpen = RP::swingMs(n) + RP::swingMs(n + 1) / 2 - RP::windowMs(n + 1);
+    CHECK_MSG(nextOpen - latest > RP::BOUNCE_MS, "the next window opens after the bounce");
+  }
+  CHECK_EQ(RP::BOUNCE_MS, 150u);
+}
 TEST(RhythmPunch, ASwingThatPassesIsTheMissOnceItSettlesAndTapsAreJudgedWhenCaptured) {
   RP r = perfectPunches(5);
   uint32_t close = r.nextStart + RP::swingMs(5) / 2 + RP::windowMs(5);
@@ -288,6 +338,60 @@ TEST(RhythmPunch, ASwingThatPassesIsTheMissOnceItSettlesAndTapsAreJudgedWhenCapt
   CHECK(q.over());
   CHECK(q.missed);
   CHECK_EQ(q.endAt, close);
+}
+// The touch policy into the punch, as gameui.cpp wires them: a HIT is the punch's tap (a
+// RELEASE is the push-ups' and the punch ignores it).
+struct PunchTouch {
+  T touch;
+  RP punch;
+  int taps = 0;
+  void report(bool pressed, uint32_t now) {
+    if (touch.update(pressed, 233, 240, now) == T::HIT) {
+      taps++;
+      punch.tap(now);
+    }
+  }
+  // a finger down from `from` to `to` (reports every 20 ms), with the reports at `acks` (ms)
+  // having no finger in them (an ACK or an EMPTY from the chip); then reports with no finger
+  // until `until`
+  void finger(uint32_t from, uint32_t to, uint32_t until, std::vector<uint32_t> acks = {}) {
+    for (uint32_t n = from; n <= to; n += 20) {
+      bool ack = false;
+      for (uint32_t a : acks) ack = ack || a == n;
+      report(!ack, n);
+    }
+    for (uint32_t n = to + 20; n <= until; n += 20) report(false, n);
+  }
+};
+// R1-1: a tap held about 200 ms with one ACK report in it is one tap, not a second one that
+// is past BOUNCE_MS of the landed punch and ends the run.
+TEST(RhythmPunch, ATapHeldWithAnAckReportInsideItIsOneTapAndNeverTheMiss) {
+  PunchTouch p;
+  p.punch.begin(0);
+  p.finger(740, 940, 1100, {900});
+  CHECK_EQ(p.taps, 1);
+  CHECK_EQ(p.punch.punches, (uint8_t)1);
+  CHECK(!p.punch.over());
+  // the next swing's punch lands as well
+  uint32_t second = p.punch.nextStart + RP::swingMs(1) / 2;
+  p.finger(second - 10, second + 190, second + 300, {second + 150});
+  CHECK_EQ(p.taps, 2);
+  CHECK_EQ(p.punch.punches, (uint8_t)2);
+  CHECK(!p.punch.over());
+  // with the ACK on the first report, and on the last one down
+  PunchTouch q;
+  q.punch.begin(0);
+  q.finger(740, 940, 1100, {740 + 20, 940});
+  CHECK_EQ(q.punch.punches, (uint8_t)1);
+  CHECK(!q.punch.over());
+  // a real second tap more than CONFIRM_MS after the lift, in the same swing, is still the miss
+  PunchTouch r;
+  r.punch.begin(0);
+  r.finger(740, 760, 900);
+  r.finger(920, 940, 1000);
+  CHECK_EQ(r.taps, 2);
+  CHECK(r.punch.over());
+  CHECK(r.punch.missed);
 }
 TEST(RhythmPunch, ARunEndsByItselfAtTheMostPunches) {
   RP r = perfectPunches(EX_MAX_COUNT);
@@ -332,7 +436,7 @@ TEST(PushUps, EveryRepsBandIsInsideItsFillAndNarrowsDownToAFloor) {
       p.plan();
       uint32_t base = PU::fillBaseMs(n);
       CHECK(p.fillMs >= base * 80 / 100 && p.fillMs <= base * 120 / 100);
-      CHECK_MSG(p.bandLo >= p.fillMs * 35 / 100, "the band starts a third into the fill");
+      CHECK_MSG(p.bandLo >= p.fillMs * 35 / 100, "the band starts 35% into the fill");
       CHECK_MSG(p.bandHi <= p.fillMs * 95 / 100, "the bar is never full before it's too late");
       CHECK_EQ(p.bandHi - p.bandLo, PU::bandMs(n));
     }
@@ -415,6 +519,30 @@ TEST(PushUps, TheFirstRepIsAWarmUp) {
   CHECK_EQ(p.release(bandMid(p, 6000)), PU::PU_REP);
   CHECK_EQ(p.retry, (uint8_t)PU::MISS_NONE);
   CHECK_EQ(p.reps, (uint8_t)1);
+}
+// A try at the warm-up that failed (shown and tried again) is somebody there: the 15 s with
+// no finger start again from it, not from the start of the session.
+TEST(PushUps, AFailedWarmUpTryStartsTheIdleTimerAgain) {
+  PU p;
+  p.begin(0, 3);
+  p.press(10000);
+  uint32_t at = 10000 + p.bandLo - 1;  // let go too early
+  CHECK_EQ(p.release(at), PU::PU_RETRY);
+  CHECK_EQ(p.readyAt, at);
+  p.update(at + PU::IDLE_END_MS - 1);
+  CHECK(!p.over());
+  p.update(at + PU::IDLE_END_MS);
+  CHECK(p.over());
+  PU q;  // held too long, found by the frame's update
+  q.begin(0, 3);
+  q.press(10000);
+  at = 10000 + q.bandHi + PU::LATE_MS;
+  CHECK_EQ(q.update(at), PU::PU_RETRY);
+  CHECK_EQ(q.readyAt, at);
+  q.update(at + PU::IDLE_END_MS - 1);
+  CHECK(!q.over());
+  q.update(at + PU::IDLE_END_MS);
+  CHECK(q.over());
 }
 TEST(PushUps, ATouchDownWhileDownIsTheSameFingerAndALiftWithNoPressIsNothing) {
   PU p;

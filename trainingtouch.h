@@ -17,6 +17,11 @@ struct LiftConfirm {
     if (!pending) { pending = true; at = now; }
   }
   constexpr void back() { pending = false; }
+  // A contact at `now`, with a lift waiting, within CONFIRM_MS of its first report with no
+  // finger: the same finger (a report with no finger, an ACK or an EMPTY, in the middle of a
+  // tap or a hold). Not a let-go, and not a new touch-down either, or a punch's tap would
+  // count twice. Ask before back().
+  constexpr bool sameFinger(uint32_t now) const { return pending && now - at < CONFIRM_MS; }
   // A report with no finger at `now`: true once, when the lift is confirmed (timed at `at`).
   constexpr bool confirm(uint32_t now) {
     if (!pending || now - at < CONFIRM_MS) return false;
@@ -79,11 +84,13 @@ class TrainingTouch {
       return lift_.confirm(now) ? RELEASE : NONE;
     }
     if (start) {
-      lift_.back();  // back within CONFIRM_MS: the same finger, not a let-go (and still a HIT)
+      // The same finger back is not a new HIT (LiftConfirm::sameFinger); it still lets go later.
+      bool same = lift_.sameFinger(now);
+      lift_.back();
       exitArmed_ = onPanel(x, y) && inExit(x, y);
       exitStart_ = now;
       hitDown_ = onPanel(x, y) && !exitArmed_;
-      return hitDown_ ? HIT : NONE;
+      return hitDown_ && !same ? HIT : NONE;
     }
     // Sliding into the button or back in after leaving it never arms exit.
     if (!onPanel(x, y) || !inExit(x, y)) exitArmed_ = false;

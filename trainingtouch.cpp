@@ -4,14 +4,37 @@
 // Every firmware build compiles these tests, even without a host C++ compiler.
 namespace {
 using T = TrainingTouch;
+// Training taps are 350 ms or more apart (a swing is at least RhythmPunch::SWING_MIN_MS), and
+// a lift is confirmed after LiftConfirm::CONFIRM_MS of reports with no finger, so a tap's
+// finger has been confirmed gone (a RELEASE, which the punch ignores) before the next goes down.
 constexpr bool rapid() {
   T t;
   for (uint32_t n = 0; n < 100; ++n) {
-    if (t.update(true, 233, 120, n * 30) != T::HIT) return false;
-    if (t.update(true, 235, 122, n * 30 + 5) != T::NONE) return false;
-    if (t.update(false, 0, 0, n * 30 + 15) != T::NONE) return false;
+    if (t.update(true, 233, 120, n * 350) != T::HIT) return false;
+    if (t.update(true, 235, 122, n * 350 + 5) != T::NONE) return false;
+    if (t.update(false, 0, 0, n * 350 + 20) != T::NONE) return false;
+    if (t.update(false, 0, 0, n * 350 + 40) != T::NONE) return false;
+    if (t.update(false, 0, 0, n * 350 + 60) != T::RELEASE) return false;
   }
   return true;
+}
+// One report with no finger inside a held tap (an ACK or EMPTY from the chip, then the contact
+// again) is the same finger: one HIT, not two, or a punch's tap would count twice (R1-1).
+constexpr bool ackInsideATapIsOneHit() {
+  T t;
+  if (t.update(true, 233, 120, 0) != T::HIT) return false;
+  for (uint32_t n = 20; n <= 160; n += 20)
+    if (t.update(true, 233, 120, n) != T::NONE) return false;
+  if (t.update(false, 0, 0, 180) != T::NONE) return false;
+  if (t.update(true, 233, 120, 200) != T::NONE) return false;  // back 20 ms later: the same
+  if (t.update(false, 0, 0, 220) != T::NONE) return false;
+  if (t.update(false, 0, 0, 240) != T::NONE) return false;
+  if (t.update(false, 0, 0, 260) != T::RELEASE || t.liftAt() != 220) return false;
+  // a contact CONFIRM_MS after the first report with no finger is a new tap
+  if (t.update(false, 0, 0, 400) != T::NONE) return false;
+  if (t.update(true, 233, 120, 420) != T::HIT) return false;
+  if (t.update(false, 0, 0, 440) != T::NONE) return false;
+  return t.update(true, 233, 120, 440 + LiftConfirm::CONFIRM_MS) == T::HIT;
 }
 constexpr bool oldQuitStrip() {
   T t;
@@ -83,7 +106,8 @@ constexpr uint8_t stale[] = {0xAB, 0, 0, 0, 0, 0, 0xAB};
 constexpr uint8_t bad[] = {0x06, 0x0E, 0x0E, 0x99, 0, 1, 0};
 constexpr uint8_t cover[] = {0x06, 0x0E, 0x0E, 0x99, 0x80, 1, 0xAB};
 constexpr uint8_t outside[] = {0x06, 0xFF, 0x0E, 0x99, 0, 1, 0xAB};
-static_assert(rapid(), "100 fast taps count once each; no repeat while held");
+static_assert(rapid(), "100 taps 350 ms apart count once each; no repeat while held");
+static_assert(ackInsideATapIsOneHit(), "an ACK/empty report inside a held tap is the same finger, not a second HIT");
 static_assert(oldQuitStrip(), "top strip hits, never quits");
 static_assert(broadTarget(), "large tap zone around and below the visible sack");
 static_assert(fastExitTaps(), "repeated quick taps on exit never quit or score");
