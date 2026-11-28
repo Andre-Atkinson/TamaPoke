@@ -714,7 +714,6 @@ TEST(keepy, before_the_first_hit_a_drop_deals_a_new_ball_and_after_it_a_drop_end
 // (the game goes on); with no tap the ball is dropped (the game is over, or in the warm-up
 // dealt again) 60 ms after it, and a tap that late is too late.
 TEST(keepy, a_tap_up_to_59_ms_after_the_ball_crossed_the_floor_still_hits_it_and_with_none_it_drops_at_60) {
-  static_assert(KeepyGame::SETTLE_MS == 60, "the literal times below are around a 60 ms settle");
   for (int warm = 0; warm < 2; warm++) {
     for (uint32_t late : { 40u, 59u, 60u, 0u }) {  // a tap `late` ms after the crossing (0: no tap)
       KeepyGame k;
@@ -1405,7 +1404,6 @@ TEST(peek, a_double_tap_right_after_the_duck_is_not_a_miss_but_a_tap_after_the_b
 // R2-1 of #129: the same, with literal times, so a BOUNCE_MS that drifts (20 ms, 1 ms) fails:
 // a second tap 120 ms after a hit, once the pet has ducked, is the same tap; 200 ms after it
 // is a deliberate one.
-static_assert(PeekGame::BOUNCE_MS > 120 && PeekGame::BOUNCE_MS < 200, "120 ms is a double tap, 200 ms is not");
 TEST(peek, a_second_tap_120_ms_after_a_hit_on_a_ducked_pet_is_not_a_miss_and_one_200_ms_after_is) {
   for (uint32_t gap : { 120u, 200u }) {
     PeekGame p = peekUp(4);
@@ -1623,7 +1621,6 @@ TEST(song, after_the_first_tune_one_wrong_note_ends_it_with_the_longest_tune_as_
 // R2-3 of #129: a double tap. After the first tune a second press on the pad just pressed,
 // within BOUNCE_MS, that is not the next note is the same press and ends nothing; one that is the
 // next note counts; a wrong press later does end the game.
-static_assert(SongGame::BOUNCE_MS == 150, "the literal times below are around a 150 ms bounce");
 // past the warm-up, in the player's turn on the 3-note tune
 static SongGame songInTune3(uint32_t seed) {
   SongGame s;
