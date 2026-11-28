@@ -23,6 +23,17 @@ void startGame();
 // in place of the bag's pick, so a script doesn't depend on how the dice fall (every
 // random() call before it, the idle life's and the scene's too, moves them).
 void gameForceNext(uint8_t g);
+// The simulator's "gameplay point|miss" step (#127): the open game's next point, or its miss, as
+// a touch the player could make now. The games' dice decide where the ball, the pet, the berry
+// or the next note is, so a script can't name the place; this asks the game. Returns:
+// GAMEAIM_WAIT nothing to answer yet (title card, a tune playing, no pop-up or berry up);
+// GAMEAIM_IDLE no touch makes it (a keepy-uppy ball dropped only by leaving it): wait for the
+// game to end; GAMEAIM_TAP a tap at (x, y); GAMEAIM_HOLD a finger down at (x, y) until the
+// score changes (Berry Catch: the pet walks to the finger).
+enum { GAMEAIM_WAIT = 0, GAMEAIM_IDLE, GAMEAIM_TAP, GAMEAIM_HOLD };
+uint8_t gameSimAim(bool point, int16_t &x, int16_t &y);
+uint16_t gameSimScore();  // the open game's score so far (0 with none open, or none played)
+bool gameSimOpen();       // a game is on screen and not yet over (its title card, or in play)
 #endif
 void gameTouch(bool pressed, int16_t x, int16_t y);
 void renderGame();

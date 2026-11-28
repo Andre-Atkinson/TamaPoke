@@ -1,0 +1,77 @@
+# The Play minigames are endless (#127): each game is played to a few points, then missed, and
+# the miss ends it at once and pays what was done. For both boards, both languages, by day and
+# by night:
+#   tools/sim.sh --board 175c --lang en --script endless-games --out shots/
+#   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script endless-games --out shots/
+# The games' dice decide where the ball, the pet, the berry or the next note is, so the
+# `gameplay point` and `gameplay miss` steps ask the game where to touch (sim/script.h). Each
+# section plays one game, looks at its screen with some points (the score, the record and the
+# pay step "x2" or "x3" under it), and misses: a dropped ball, a good berry that reaches the
+# ground, a wrong bush, a wrong note. The miss ends the game that frame: its result screen
+# comes at once, with the line "Play: GAME score=N speed=+M" paid once (the pay is
+# gameSpeedPay: keepy-uppy 8 hits pay 1, Berry Catch 12 points 1, Peekaboo 14 hits 3, Berry
+# Song a 6-note tune 3). Before the miss nothing is paid ("expect-not Play:"). The Play button
+# is at (202, 404) and its strip's Poke Ball at (169, 320) (#13); a game shows its title card
+# for 1.2 s, then plays, and its result stays up for 4 s.
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial SCENE auto clear auto
+
+# 1. Keepy-uppy: 8 hits, then the ball is left to drop
+game keepy
+tap 202 404
+tap 169 320
+gameplay point 8
+shot 01-keepy-play
+expect-not Play:
+gameplay miss
+shot 02-keepy-result
+expect-once Play:
+expect Play: keepy score=8 speed=+1
+wait 5s
+
+# 2. Berry Catch: 12 berries caught (the rotten ones come after the fifth), then a good berry
+# the pet isn't at
+game catch
+tap 202 404
+tap 169 320
+gameplay point 12
+shot 03-catch-play
+expect-not Play:
+gameplay miss
+shot 04-catch-result
+expect-once Play:
+expect Play: catch score=12 speed=+1
+wait 5s
+
+# 3. Peekaboo: 14 hits, then a tap on the wrong bush
+game peek
+tap 202 404
+tap 169 320
+gameplay point 14
+shot 05-peek-play
+expect-not Play:
+gameplay miss
+shot 06-peek-result
+expect-once Play:
+expect Play: peek score=14 speed=+3
+wait 5s
+
+# 4. Berry Song: the first 2-note tune, then each one a note longer up to 6 notes, then a wrong note
+game song
+tap 202 404
+tap 169 320
+gameplay point 5
+shot 07-song-play
+expect-not Play:
+gameplay miss
+shot 08-song-result
+expect-once Play:
+expect Play: song score=6 speed=+3
+wait 5s

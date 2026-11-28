@@ -7,7 +7,9 @@
 
 // The Play button's game session: picks the game, runs title -> play -> over,
 // routes touches (and the exit chip) and reports the raw score. Pure logic; the
-// sketch draws from the state and pays the reward (Pet::playGame).
+// sketch draws from the state and pays the reward (Pet::playGame). A game is over when
+// its own rules end it (the first miss after its warm-up, or its cap: gamecore.h, and the
+// top of each game's header), or nobody touched it for GameFlow::IDLE_MS.
 struct MiniGames {
   GameRng rng;
   GameBag bag;
@@ -50,7 +52,7 @@ struct MiniGames {
       default: return keepy.done();
     }
   }
-  // Berry Song repeated all 12 notes (the sketch plays a fanfare instead of the usual end sound)
+  // Berry Song repeated its 100-note tune (the sketch plays a fanfare instead of the usual end sound)
   bool won() const { return flow.game == GAME_SONG && song.won; }
   bool over() const { return flow.phase == GP_OVER; }
   bool playing() const { return flow.phase == GP_PLAY; }

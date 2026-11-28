@@ -313,6 +313,12 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
         if (w[1] == GAME_KEYS[i]) c.a = i;
       if (c.a < 0) return fail("usage: game keepy|catch|peek|song");
       c.op = OP_GAME;
+    } else if (op == "gameplay") {
+      if (n < 2 || n > 3 || (w[1] != "point" && w[1] != "miss") || (n == 3 && !toInt(w[2], c.b, 1, 255)))
+        return fail("usage: gameplay point|miss [N] (N: the points, 1-255)");
+      c.a = w[1] == "point";
+      if (n == 2) c.b = 1;
+      c.op = OP_GAMEPLAY;
     } else if (op == "expect" || op == "expect-not" || op == "expect-once") {
       // the rest of the line, trimmed: `line` already stops at a '#' (a comment), so a
       // trailing comment can't become part of the text and make an expect-not pass for good

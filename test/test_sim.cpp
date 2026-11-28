@@ -363,6 +363,31 @@ TEST(SimScript, pushup_takes_a_point_an_optional_edge_and_an_optional_shot) {
   CHECK(!simParseScript("pushup 233 270 x edge\n").error.empty());  // edge comes before the shot
 }
 
+// "gameplay point|miss" (#127): the open game's next point or its miss; it runs the firmware
+TEST(SimScript, gameplay_asks_for_a_point_or_a_miss) {
+  SimScript s = simParseScript("gameplay point\ngameplay miss\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)2);
+  if (s.cmds.size() != 2) return;
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_GAMEPLAY);
+  CHECK_EQ(s.cmds[0].a, (int32_t)1);
+  CHECK_EQ((int)s.cmds[1].op, (int)OP_GAMEPLAY);
+  CHECK_EQ(s.cmds[1].a, (int32_t)0);
+  CHECK_EQ(s.cmds[0].b, (int32_t)1);  // one point by default
+  SimScript n = simParseScript("gameplay point 14\n");
+  CHECK_EQ(n.error, std::string(""));
+  CHECK_EQ(n.cmds.size(), (size_t)1);
+  if (n.cmds.size() == 1) CHECK_EQ(n.cmds[0].b, (int32_t)14);
+  CHECK_EQ(simPreBootEnd(simParseScript("battery 50\ngameplay point\n")), (size_t)1);
+  CHECK_EQ(simParseScript("wait 1s\ngameplay hit\n", "g.txt").error,
+           std::string("g.txt:2: usage: gameplay point|miss [N] (N: the points, 1-255)"));
+  CHECK(!simParseScript("gameplay\n").error.empty());
+  CHECK(!simParseScript("gameplay point 0\n").error.empty());
+  CHECK(!simParseScript("gameplay point 256\n").error.empty());
+  CHECK(!simParseScript("gameplay point x\n").error.empty());
+  CHECK(!simParseScript("gameplay point 2 3\n").error.empty());
+}
+
 // "game NAME" (#94): the next Play deals this minigame; it runs the firmware, so it closes
 // the boot steps like any other step that runs
 TEST(SimScript, game_names_a_minigame) {

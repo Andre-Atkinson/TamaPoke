@@ -352,6 +352,45 @@ int main(int argc, char **argv) {
         gameForceNext((uint8_t)c.a);
         run(50);
         break;
+      case OP_GAMEPLAY: {
+        // The open game's next point (c.a 1; c.b of them) or its miss (0): ask the game where to
+        // touch and do it (a tap; Berry Catch's finger stays down until the score moves), again
+        // until the point is scored (Berry Song: the whole tune is repeated) or the game is over
+        // (a miss ends it). Waits for what the game is showing, up to 30 s of game time.
+        bool point = c.a != 0;
+        for (int n = 0; n < (point ? c.b : 1); n++) {
+          uint16_t before = gameSimScore();
+          uint64_t missAt = 0;  // a miss: when its touch was made (or the wait for the drop began)
+          for (int k = 0; k < 3000; k++) {
+            if (!gameSimOpen() || (point && gameSimScore() > before)) break;
+            if (missAt && mockMillis64() - missAt > 8000) break;  // the miss ends the game, not the idle end
+            int16_t x = 0, y = 0;
+            uint8_t aim = gameSimAim(point, x, y);
+            if (!point && !missAt && aim != GAMEAIM_WAIT) missAt = mockMillis64();
+            if (aim == GAMEAIM_TAP) {
+              simTouchSet(true, x, y);
+              run(SIM_TAP_DOWN_MS);
+              simTouchSet(false, 0, 0);
+              run(SETTLE_MS);
+              k += (SIM_TAP_DOWN_MS + SETTLE_MS) / 10;
+            } else if (aim == GAMEAIM_HOLD) {
+              simTouchSet(true, x, y);
+              for (int h = 0; h < 600 && gameSimOpen() && !(point && gameSimScore() > before); h++) run(10);
+              simTouchSet(false, 0, 0);
+              run(SETTLE_MS);
+              k += 600;
+            } else {
+              run(10);
+            }
+          }
+          if (point ? gameSimScore() <= before : gameSimOpen()) {
+            fprintf(stderr, "%s:%d: gameplay %s: the game did not %s within %s\n", o.script.c_str(), c.line,
+                    point ? "point" : "miss", point ? "score" : "end", point ? "30 s" : "8 s of the miss");
+            return 1;
+          }
+        }
+        break;
+      }
       case OP_SHOT:
         if (!shot(c.text)) return 1;
         break;

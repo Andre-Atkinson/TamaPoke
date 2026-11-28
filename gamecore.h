@@ -5,6 +5,17 @@
 // drawing, no millis(), no Arduino random()) so it runs on the PC
 // (test/test_minigames.cpp). The sketch feeds touches and time and draws from
 // the state. Coordinates are the native 466x466 UI coordinates.
+//
+// Endless and skill-based (#127, owner's decisions 2026-11-28, as the exercises' #126). A game
+// has no fixed length and no lives: once the player has made a first point, one miss ends it,
+// and it still pays for everything done. Until that first point the game is a warm-up where a
+// miss costs nothing and doesn't end it (a ball that drops is dealt again, a berry that lands
+// is free, a pop-up that ducks or a wrong bush only rustles, a wrong note plays the tune
+// again), so a start that takes a try or two never ends at 0. Every difficulty ramp rises with
+// the points made (never with time), slower and slower, towards a floor past what anyone keeps
+// up for long (test/test_minigames.cpp proves each game stays fair at every level). Each game
+// also ends by itself at a storage cap no run gets near (GAME_REC_MAX), so the score and the
+// records stay small. The pay per point rises with the run in steps, as the exercises' does.
 
 enum GameId : uint8_t { GAME_KEEPY = 0, GAME_CATCH, GAME_PEEK, GAME_SONG, GAME_COUNT };
 // each game's name in the serial log (the "Play:" lines) and in the simulator's "game" step
@@ -13,15 +24,45 @@ inline const char *const GAME_KEYS[GAME_COUNT] = { "keepy", "catch", "peek", "so
 // ---------------------------------------------------------------- reward
 
 // A "good game" in each one. At par every game pays the same reward: full JOY,
-// +3 SPEED and a heart (Pet::playGame -> Pet::playReward with 15 points).
+// +3 SPEED (gameSpeedPay) and a heart (Pet::playGame -> Pet::playReward). It also
+// scales what a run costs the pet (gameNormScore).
 constexpr uint8_t GAME_PAR[GAME_COUNT] = { 15, 20, 14, 6 };
-// Highest record each game can really produce. A saved record above it can only
-// be a damaged or foreign save, so it loads as 0 (keepy-uppy scores are 8-bit).
-constexpr uint16_t GAME_REC_MAX[GAME_COUNT] = { 255, 200, 20, 12 };
+// The score each game ends by itself at, and the highest record it can really produce (a
+// saved record above it can only be a damaged or foreign save, so it loads as 0): keepy-uppy
+// 255 hits, Berry Catch 200 berries caught (up to 400 points: a favourite berry the player has
+// found counts 2), Peekaboo 255 hits, Berry Song a 100-note tune repeated (the win).
+constexpr uint16_t GAME_REC_MAX[GAME_COUNT] = { 255, 400, 255, 100 };
 constexpr uint8_t GAME_SCORE_CAP = 30;  // normalised score ceiling
 
-// Raw score -> the 0..30 score Pet::playReward pays out. Keepy-uppy (par 15)
-// keeps its raw score up to the cap.
+// Points per pay step, about half each game's par, so a step takes about the same effort in
+// every game and a game at par still pays today's +3 speed. A point is paid at its step: the
+// first GAME_STEP points at step 1, the next ones at step 2...
+constexpr uint8_t GAME_STEP[GAME_COUNT] = { 8, 10, 7, 3 };
+// The most speed a game can pay: a training stat's top.
+constexpr uint8_t GAME_PAY_MAX = 100;
+
+// The step the next point is paid at, with `score` points so far (the screen's "x1", "x2"...).
+inline uint8_t gameStep(uint8_t game, uint16_t score) {
+  if (game >= GAME_COUNT) return 1;
+  if (score > GAME_REC_MAX[game]) score = GAME_REC_MAX[game];
+  return (uint8_t)(score / GAME_STEP[game] + 1);
+}
+
+// Speed for a run of `score` points: each point of step k pays k / GAME_STEP (a whole step k
+// pays k), summed, rounded half up, never past GAME_PAY_MAX. At par every game pays 3 (keepy-uppy 15,
+// Berry Catch 20, Peekaboo 14, Berry Song 6); keepy-uppy 30 pays 9, Berry Song 12 pays 10.
+// In 32 bits, with room: the largest sum (keepy-uppy at its cap) is a few thousand.
+inline uint8_t gameSpeedPay(uint8_t game, uint16_t score) {
+  if (game >= GAME_COUNT) return 0;
+  if (score > GAME_REC_MAX[game]) score = GAME_REC_MAX[game];
+  uint32_t s = GAME_STEP[game], full = score / s, rest = score % s;
+  uint32_t units = s * full * (full + 1) / 2 + rest * (full + 1);  // the sum, in 1/GAME_STEP points
+  uint32_t pay = (2 * units + s) / (2 * s);                        // rounded half up
+  return pay > GAME_PAY_MAX ? GAME_PAY_MAX : (uint8_t)pay;
+}
+
+// Raw score -> the 0..30 score Pet::playReward spends the run's cost by (energy, food, weight)
+// and the result screen's joy line reads. Keepy-uppy (par 15) keeps its raw score up to the cap.
 inline uint8_t gameNormScore(uint8_t game, uint16_t raw) {
   if (game >= GAME_COUNT) return 0;
   uint32_t n = (uint32_t)raw * 15 / GAME_PAR[game];

@@ -33,6 +33,79 @@ TEST(minigames, un_record_que_el_juego_no_puede_dar_se_lee_como_0) {
   CHECK_EQ(gameRecordOk(GAME_COUNT, 1), (uint16_t)0);
 }
 
+// ---------------------------------------------------------------- the pay (#127)
+// The reference: point i (0-based) of a run is paid at step i / GAME_STEP + 1 and pays that
+// step / GAME_STEP; the sum, rounded half up (in floating point, with a hair of slack for the
+// .5 cases that don't add up exactly).
+static uint32_t payRef(uint8_t g, uint32_t score) {
+  double sum = 0;
+  for (uint32_t i = 0; i < score; i++) sum += (double)(i / GAME_STEP[g] + 1) / GAME_STEP[g];
+  uint32_t p = (uint32_t)floor(sum + 0.5 + 1e-9);
+  return p > 100 ? 100 : p;
+}
+
+TEST(minigames, the_speed_pay_is_the_ladder_a_table_of_values) {
+  CHECK_EQ(gameSpeedPay(GAME_KEEPY, 0), (uint8_t)0);
+  CHECK_EQ(gameSpeedPay(GAME_KEEPY, 15), (uint8_t)3);
+  CHECK_EQ(gameSpeedPay(GAME_KEEPY, 30), (uint8_t)9);
+  CHECK_EQ(gameSpeedPay(GAME_CATCH, 20), (uint8_t)3);
+  CHECK_EQ(gameSpeedPay(GAME_PEEK, 14), (uint8_t)3);
+  CHECK_EQ(gameSpeedPay(GAME_SONG, 2), (uint8_t)1);
+  CHECK_EQ(gameSpeedPay(GAME_SONG, 6), (uint8_t)3);
+  CHECK_EQ(gameSpeedPay(GAME_SONG, 9), (uint8_t)6);
+  CHECK_EQ(gameSpeedPay(GAME_SONG, 12), (uint8_t)10);
+  // the first step pays 1/8 a point in keepy-uppy: 8 hits pay 1, 4 round to 1 (half up), 3 to 0
+  CHECK_EQ(gameSpeedPay(GAME_KEEPY, 8), (uint8_t)1);
+  CHECK_EQ(gameSpeedPay(GAME_KEEPY, 4), (uint8_t)1);
+  CHECK_EQ(gameSpeedPay(GAME_KEEPY, 3), (uint8_t)0);
+  CHECK_EQ(gameSpeedPay(GAME_COUNT, 30), (uint8_t)0);  // not a game
+  for (uint8_t g = 0; g < GAME_COUNT; g++)
+    CHECK_MSG(gameSpeedPay(g, GAME_PAR[g]) == 3, "par pays +3 in game " + std::to_string(g));
+}
+
+TEST(minigames, the_speed_pay_follows_the_ladder_at_every_score_and_never_passes_100) {
+  for (uint8_t g = 0; g < GAME_COUNT; g++) {
+    uint8_t prev = 0;
+    for (uint32_t s = 0; s <= GAME_REC_MAX[g]; s++) {
+      uint8_t pay = gameSpeedPay(g, (uint16_t)s);
+      CHECK_MSG(pay == payRef(g, s),
+                "game " + std::to_string(g) + " score " + std::to_string(s) + ": " + std::to_string(pay) + " not " +
+                    std::to_string(payRef(g, s)));
+      CHECK_MSG(pay >= prev && pay <= 100, "not rising, or over 100: game " + std::to_string(g) + " score " + std::to_string(s));
+      prev = pay;
+    }
+    // past the cap (a bad score) pays what the cap does; nothing wraps in 32 bits
+    CHECK_EQ(gameSpeedPay(g, 65535), gameSpeedPay(g, GAME_REC_MAX[g]));
+    CHECK_EQ(gameSpeedPay(g, GAME_REC_MAX[g]), (uint8_t)100);  // a run to the cap is worth the stat's top
+  }
+}
+
+TEST(minigames, a_pay_step_takes_about_the_same_effort_in_every_game) {
+  for (uint8_t g = 0; g < GAME_COUNT; g++) {
+    CHECK_MSG(GAME_STEP[g] * 2 >= GAME_PAR[g] - 1 && GAME_STEP[g] * 2 <= GAME_PAR[g] + 1,
+              "a step is about half the par: game " + std::to_string(g));
+    CHECK_EQ(gameStep(g, 0), (uint8_t)1);
+    CHECK_EQ(gameStep(g, GAME_STEP[g] - 1), (uint8_t)1);
+    CHECK_EQ(gameStep(g, GAME_STEP[g]), (uint8_t)2);
+    CHECK_EQ(gameStep(g, 2 * GAME_STEP[g] - 1), (uint8_t)2);
+    CHECK_EQ(gameStep(g, 2 * GAME_STEP[g]), (uint8_t)3);
+    CHECK_EQ(gameStep(g, GAME_PAR[g]), (uint8_t)(GAME_PAR[g] / GAME_STEP[g] + 1));
+    CHECK_EQ(gameStep(g, 65535), gameStep(g, GAME_REC_MAX[g]));  // no wrap
+  }
+  CHECK_EQ(gameStep(GAME_COUNT, 50), (uint8_t)1);
+}
+
+TEST(minigames, each_game_ends_by_itself_at_the_cap_its_record_can_hold) {
+  CHECK_EQ(GAME_REC_MAX[GAME_KEEPY], (uint16_t)255);
+  CHECK_EQ(GAME_REC_MAX[GAME_CATCH], (uint16_t)400);
+  CHECK_EQ(GAME_REC_MAX[GAME_PEEK], (uint16_t)255);
+  CHECK_EQ(GAME_REC_MAX[GAME_SONG], (uint16_t)100);
+  CHECK_EQ(KeepyGame::MAX_HITS, (uint8_t)255);
+  CHECK_EQ(CatchGame::MAX_CATCHES * 2, (int)GAME_REC_MAX[GAME_CATCH]);  // a known favourite scores 2
+  CHECK_EQ(PeekGame::MAX_HITS, (uint8_t)255);
+  CHECK_EQ(SongGame::MAX_LEN, (uint8_t)100);
+}
+
 // ---------------------------------------------------------------- bolsa
 template <uint8_t N>
 static void checkBag(uint32_t seed) {
@@ -266,20 +339,26 @@ TEST(minigames, el_boton_de_salir_funciona_tambien_en_la_portada) {
   CHECK(out);
 }
 
-TEST(minigames, la_partida_acaba_cuando_acaba_el_juego) {
+TEST(minigames, la_partida_acaba_cuando_acaba_el_juego_y_conserva_lo_conseguido) {
   MiniGames m;
   uint32_t now = 0;
   m.begin(GAME_CATCH, now, 0, false);
   playUntil(m, now);
-  for (int i = 0; i < 400 && !m.over(); i++) {
-    m.frame(now += 85);
-    if (i % 50 == 0) {  // tocar de vez en cuando (soltando y apoyando): no es inactividad
-      m.touch(false, 233, 350, now);
-      m.touch(true, 233, 350, now);
-    }
-  }
+  m.touch(true, 150, 350, now);  // steers the pet to one side
+  m.touch(false, 150, 350, now + 20);
+  m.catcher.nextSpawn = 1000000;  // no more berries but the one below
+  m.catcher.warm = false;
+  m.catcher.score = 3;
+  m.catcher.caught = 3;
+  m.catcher.berries[0].live = true;
+  m.catcher.berries[0].x = 366;  // far from the pet: it lands uncaught
+  m.catcher.berries[0].y = CatchGame::CATCH_Y - 1;
+  m.catcher.berries[0].vy = 200;
+  m.catcher.berries[0].kind = CatchGame::RED;
+  for (int i = 0; i < 100 && !m.over(); i++) m.frame(now += 85);
   CHECK(m.over());
   CHECK(m.catcher.done());
+  CHECK_EQ(m.score(), (uint16_t)3);
 }
 
 TEST(minigames, sin_tocar_la_partida_acaba_a_los_15_s_con_lo_conseguido) {
@@ -354,6 +433,7 @@ TEST(minigames, deslizar_en_Berry_Catch_sigue_contando_como_actividad) {
   uint32_t now = 0;
   m.begin(GAME_CATCH, now, 0, false);
   playUntil(m, now);
+  m.catcher.nextSpawn = 1000000;  // no berries: a miss would end the game, and this checks the idle end
   m.touch(true, 150, 350, now);
   uint32_t t0 = now;
   int x = 150, dir = 20;
@@ -533,10 +613,10 @@ TEST(keepy, la_fisica_es_la_de_antes) {
   k.step(85);  // k = 1
   CHECK(fabsf(k.ballVY - 0.40f) < 1e-5f);
   CHECK(fabsf(k.ballY - 96.40f) < 1e-4f);
-  k.step(170);  // k = 2
+  k.step(170);  // k = 2: two sub-steps of 85 ms (#127: never more than 85 ms of game time at once)
   CHECK(fabsf(k.ballVY - 1.20f) < 1e-5f);
-  CHECK(fabsf(k.ballY - 98.80f) < 1e-4f);
-  k.score = 40;  // la gravedad se topa en 0.80
+  CHECK(fabsf(k.ballY - 98.40f) < 1e-4f);
+  k.score = 31;  // la gravedad se topa en 0.80 (31 es el ultimo a ritmo 1)
   k.ballVY = 0;
   k.step(85);
   CHECK(fabsf(k.ballVY - 0.80f) < 1e-5f);
@@ -589,68 +669,261 @@ TEST(keepy, la_pared_redonda_devuelve_la_bola) {
   CHECK(fabsf(k.ballVX + 4.0f * 0.85f) < 0.1f);
 }
 
-TEST(keepy, tres_caidas_acaban_y_la_tercera_no_saca_otra_bola) {
+TEST(keepy, before_the_first_hit_a_drop_deals_a_new_ball_and_after_it_a_drop_ends_the_game) {
   KeepyGame k;
   k.reset(5);
-  for (int miss = 1; miss <= 3; miss++) {
+  for (int drop = 1; drop <= 5; drop++) {  // the warm-up: dropped, dealt again, never over
     k.ballY = 383; k.ballVY = 5; k.ballX = 233; k.ballVX = 0;
     k.step(85);
-    CHECK_EQ(k.misses, (uint8_t)miss);
-    if (miss < 3) CHECK_EQ(k.ballY, 96.0f);  // sale otra
+    CHECK(!k.done());
+    CHECK(!k.dropped);
+    CHECK_EQ(k.ballY, 96.0f);
+    CHECK_EQ(k.score, (uint8_t)0);
   }
-  CHECK(k.done());
+  k.ballX = 233; k.ballY = 200;
+  k.touchDown(233, 200);  // the first hit: the warm-up is over
+  CHECK_EQ(k.score, (uint8_t)1);
+  k.ballY = 383; k.ballVY = 5; k.ballX = 233; k.ballVX = 0;
+  k.step(85);
+  CHECK(k.done());  // one drop ends it, and no new ball comes
+  CHECK(k.dropped);
   CHECK(k.ballY > 384.0f);
+  CHECK_EQ(k.result(), (uint16_t)1);  // it keeps what was done
   float y = k.ballY;
   k.step(85);
-  CHECK_EQ(k.ballY, y);  // acabado: ya no se mueve
+  CHECK_EQ(k.ballY, y);  // over: it no longer moves
+  k.touchDown((int)k.ballX, (int)k.ballY);
+  CHECK_EQ(k.score, (uint8_t)1);  // ...nor hits
 }
 
-// ---------------------------------------------------------------- Berry Catch
-TEST(catch, el_ritmo_sube_a_lo_largo_de_los_30_s) {
-  CHECK_EQ(CatchGame::spawnGapAt(0), (uint32_t)1100);
-  CHECK_EQ(CatchGame::spawnGapAt(15000), (uint32_t)875);
-  CHECK_EQ(CatchGame::spawnGapAt(30000), (uint32_t)650);
-  CHECK_EQ(CatchGame::spawnGapAt(90000), (uint32_t)650);
-  CHECK_EQ(CatchGame::fallSpeedAt(0), 150.0f);
-  CHECK_EQ(CatchGame::fallSpeedAt(15000), 205.0f);
-  CHECK_EQ(CatchGame::fallSpeedAt(30000), 260.0f);
-  CHECK_EQ(CatchGame::rottenPctAt(4999), (uint8_t)0);
-  CHECK_EQ(CatchGame::rottenPctAt(5000), (uint8_t)13);
-  CHECK_EQ(CatchGame::rottenPctAt(30000), (uint8_t)30);
-}
-
-TEST(catch, las_bayas_caen_dentro_de_la_franja_y_sin_podridas_al_principio) {
-  for (uint32_t seed = 1; seed <= 60; seed++) {
-    CatchGame c;
-    c.reset(seed, 0, false);
-    int spawned = 0, rotten = 0;
-    for (int i = 0; i < 400 && !c.done(); i++) {
-      bool live[CatchGame::MAX_BERRIES];
-      for (int b = 0; b < CatchGame::MAX_BERRIES; b++) live[b] = c.berries[b].live;
-      c.step(85);
-      for (int b = 0; b < CatchGame::MAX_BERRIES; b++) {
-        const CatchGame::Berry &br = c.berries[b];
-        if (br.live && !live[b]) {
-          spawned++;
-          CHECK_RANGE(br.x, (int16_t)CatchGame::X_MIN, (int16_t)CatchGame::X_MAX);
-          if (br.kind == CatchGame::ROTTEN) {
-            rotten++;
-            CHECK_MSG(c.t >= CatchGame::CLEAN_START_MS, "baya podrida antes de 5 s");
-          }
-        }
-      }
-    }
-    CHECK_RANGE(spawned, 30, 40);  // ~35 en 30 s
-    if (seed == 1) CHECK_MSG(rotten > 0, "nunca salen podridas");
+TEST(keepy, the_pace_is_1_up_to_31_hits_then_rises_ever_more_slowly_and_never_reaches_2_5) {
+  for (uint16_t s = 0; s <= 31; s++) CHECK_EQ(KeepyGame::paceAt(s), 1.0f);
+  CHECK(KeepyGame::paceAt(32) > 1.0f);
+  CHECK(fabsf(KeepyGame::paceAt(91) - 1.75f) < 1e-5f);
+  CHECK(fabsf(KeepyGame::paceAt(151) - 2.0f) < 1e-5f);
+  CHECK_RANGE(KeepyGame::paceAt(255), 2.17f, 2.19f);
+  float prev = 1.0f, prevStep = 1e9f;
+  for (uint16_t s = 32; s <= 255; s++) {
+    float p = KeepyGame::paceAt(s);
+    CHECK_MSG(p > prev, "the pace does not rise with every hit: " + std::to_string(s));
+    CHECK_MSG(p - prev <= prevStep + 1e-6f, "the pace does not slow its rise: " + std::to_string(s));
+    CHECK(p < 2.5f);
+    prevStep = p - prev;
+    prev = p;
   }
 }
 
-static CatchGame catchWithBerry(int x, uint8_t kind, uint8_t fav = 0, bool known = false) {
+// A frame's physics runs in as few sub-steps as keep each under STEP_MS of game time: at pace 2.1 and
+// 85 ms that is 3 of 0.7 steps. (Falling from rest, y gains g*r*r*(n+1)/(2n) over n sub-steps of r/n.)
+TEST(keepy, a_frame_of_a_fast_game_is_split_into_sub_steps_of_at_most_85_ms_of_game_time) {
+  KeepyGame k;
+  k.reset(1);
+  k.score = 200;  // the pace is about 2.1 here, gravity 0.80
+  float r = KeepyGame::paceAt(200);
+  int n = (int)ceilf(r);
+  CHECK_EQ(n, 3);
+  k.ballX = 233; k.ballY = 96; k.ballVX = 0; k.ballVY = 0; k.petX = 233;
+  k.step(85);
+  CHECK(fabsf(k.ballVY - 0.80f * r) < 1e-4f);
+  float expect = 96.0f + 0.80f * r * r * (n + 1) / (2.0f * n);
+  CHECK_MSG(fabsf(k.ballY - expect) < 1e-3f, "y " + std::to_string(k.ballY) + " not " + std::to_string(expect));
+  // up to 31 hits a frame of 85 ms or less is one step, as it always was
+  KeepyGame j;
+  j.reset(1);
+  j.score = 31;
+  j.ballX = 233; j.ballY = 96; j.ballVX = 0; j.ballVY = 0;
+  j.step(85);
+  CHECK(fabsf(j.ballY - (96.0f + 0.80f)) < 1e-4f);
+}
+
+// A hit on a ball at the floor line (the latest a hit can come) leaves the ball in the air for
+// at least this long before it comes back to the floor, at every score: the pace never makes
+// the arc too short to answer. The arc is 25 steps of 85 ms game time at the top lift and
+// gravity, 2.18 times faster at the end: 0.98 s at worst (measured at several frame sizes).
+TEST(keepy, a_hit_on_a_ball_at_the_floor_line_always_leaves_about_a_second_at_every_score) {
+  float worst = 1e9f;
+  for (int s = 0; s <= 253; s++) {  // s hits before this one: the 254th is the last that doesn't end the game
+    for (uint32_t frame : { 40u, 100u }) {
+      KeepyGame k;
+      k.reset(1);
+      k.score = (uint8_t)s;
+      k.ballX = 233; k.ballY = 384; k.ballVX = 0; k.ballVY = 7;
+      CHECK(k.touchDown(233, 384));
+      uint32_t t0 = k.t;
+      for (int i = 0; i < 400 && !k.done(); i++) k.step(frame);
+      CHECK_MSG(k.done(), "the ball never came back at score " + std::to_string(s));
+      float ms = (float)(k.t - t0);
+      if (ms < worst) worst = ms;
+      CHECK_MSG(ms >= 900.0f, "score " + std::to_string(s) + ": only " + std::to_string(ms) + " ms in the air");
+    }
+  }
+  CHECK_MSG(worst >= 940.0f, "the worst arc is " + std::to_string(worst) + " ms");
+}
+
+// A bot that taps the falling ball once it is low (so late), with a random offset of up to 40 px,
+// on frames of 40 to 100 ms, never drops it: it reaches the 255th hit that ends the game.
+TEST(keepy, a_late_and_untidy_player_reaches_the_cap_without_a_drop) {
+  for (uint32_t seed = 1; seed <= 24; seed++) {
+    KeepyGame k;
+    k.reset(seed * 977);
+    GameRng jitter(seed * 31 + 7);
+    uint8_t farthest = 0;
+    for (int i = 0; i < 400000 && !k.done(); i++) {
+      k.step(40 + jitter.below(61));
+      if (k.done()) break;
+      if (k.ballVY > 0 && k.ballY >= 250) {
+        int dx, dy;
+        do {
+          dx = (int)jitter.below(81) - 40;
+          dy = (int)jitter.below(81) - 40;
+        } while (dx * dx + dy * dy > 40 * 40);
+        k.touchDown((int)k.ballX + dx, (int)k.ballY + dy);
+        farthest = k.score;
+      }
+    }
+    CHECK_MSG(k.done() && !k.dropped && k.score == 255,
+              "seed " + std::to_string(seed) + " ended at " + std::to_string(k.score) + (k.dropped ? " (dropped)" : ""));
+    (void)farthest;
+  }
+}
+
+
+// ---------------------------------------------------------------- Berry Catch
+TEST(catch, the_ramps_rise_with_the_berries_caught_towards_a_floor) {
+  CHECK_EQ(CatchGame::spawnGapFor(0), (uint32_t)1100);
+  CHECK_EQ(CatchGame::spawnGapFor(25), (uint32_t)648);
+  CHECK_EQ(CatchGame::spawnGapFor(50), (uint32_t)567);
+  CHECK_EQ(CatchGame::spawnGapFor(100), (uint32_t)514);
+  CHECK_EQ(CatchGame::fallSpeedFor(0), (uint32_t)150);
+  CHECK_EQ(CatchGame::fallSpeedFor(25), (uint32_t)261);
+  CHECK_EQ(CatchGame::fallSpeedFor(50), (uint32_t)307);
+  CHECK_EQ(CatchGame::fallSpeedFor(100), (uint32_t)349);
+  for (uint16_t c = 0; c < CatchGame::CLEAN_CATCHES; c++) CHECK_EQ(CatchGame::rottenPctFor(c), (uint8_t)0);
+  CHECK_EQ(CatchGame::rottenPctFor(5), (uint8_t)10);
+  CHECK_EQ(CatchGame::rottenPctFor(25), (uint8_t)22);
+  for (uint16_t c = 1; c <= CatchGame::MAX_CATCHES; c++) {
+    CHECK_MSG(CatchGame::spawnGapFor(c) <= CatchGame::spawnGapFor(c - 1), "berries come no more often at " + std::to_string(c));
+    CHECK_MSG(CatchGame::fallSpeedFor(c) >= CatchGame::fallSpeedFor(c - 1), "berries fall no faster at " + std::to_string(c));
+    CHECK_MSG(CatchGame::rottenPctFor(c) >= CatchGame::rottenPctFor(c - 1), "no more rotten ones at " + std::to_string(c));
+    CHECK(CatchGame::spawnGapFor(c) > 450);          // a floor past what anyone keeps up for long
+    CHECK(CatchGame::fallSpeedFor(c) < 420);
+    CHECK(CatchGame::rottenPctFor(c) < 35);
+  }
+  // a count, and not a score: far past the cap the maths still holds (no wrap)
+  CHECK(CatchGame::spawnGapFor(65535) >= 450 && CatchGame::fallSpeedFor(65535) <= 420 && CatchGame::rottenPctFor(65535) < 35);
+}
+
+// The plan needs a berry to arrive after the one before it. Between two spawns the berries
+// caught can go up by a few (the next spawn reads the count at its own time), which makes the
+// next berry fall faster; the spawn gap has to cover that, with room for a slow frame.
+TEST(catch, berries_arrive_in_the_order_they_spawn_at_every_level) {
+  for (uint16_t c = 0; c < CatchGame::MAX_CATCHES; c++) {
+    for (uint16_t d = 0; d <= 4 && c + d <= CatchGame::MAX_CATCHES; d++) {
+      float travel = CatchGame::CATCH_Y - CatchGame::SPAWN_Y;
+      float arriveLater = CatchGame::spawnGapFor(c) + 1000.0f * travel / CatchGame::fallSpeedFor(c + d);
+      float arriveEarlier = 1000.0f * travel / CatchGame::fallSpeedFor(c);
+      CHECK_MSG(arriveLater - arriveEarlier >= 250.0f,  // a frame's slack either side
+                "a berry arrives before the one ahead at " + std::to_string(c) + " caught, " + std::to_string(d) + " more");
+    }
+  }
+}
+
+// The player's side of the plan: reacts only to berries that have been visible for 250 ms,
+// steers to the next one to arrive when it is good and holds still when it is rotten.
+static void catchBotSteer(CatchGame &c) {
+  if (!c.steered) c.touch(233);  // a first touch, wherever
+  const CatchGame::Berry *next = nullptr;
+  float nextEta = 1e9f;
+  for (const CatchGame::Berry &b : c.berries) {
+    if (!b.live || b.y >= CatchGame::CATCH_Y) continue;
+    if ((b.y - CatchGame::SPAWN_Y) / b.vy < 0.25f) continue;
+    float eta = (CatchGame::CATCH_Y - b.y) / b.vy;
+    if (eta < nextEta) { nextEta = eta; next = &b; }
+  }
+  if (!next) return;
+  if (next->kind == CatchGame::ROTTEN) c.touch((int)(c.petX + 0.5f));
+  else c.touch(next->x);
+}
+
+TEST(catch, the_spawner_plans_good_berries_within_reach_and_rotten_ones_out_of_it) {
+  int goods = 0, rottens = 0;
+  for (uint32_t seed = 1; seed <= 12; seed++) {
+    CatchGame c;
+    c.reset(seed, 0, false);
+    GameRng jitter(seed * 13 + 5);
+    for (int i = 0; i < 20000 && !c.done(); i++) {
+      int16_t px = c.planX;
+      float pt = c.planT;
+      catchBotSteer(c);
+      c.step(40 + jitter.below(61));
+      if (c.planT == pt) continue;  // nothing spawned in this step
+      CHECK_MSG(c.planT > pt, "a berry arrives before the one planned ahead of it");
+      const CatchGame::Berry *nb = nullptr;
+      for (const CatchGame::Berry &b : c.berries)
+        if (b.live && b.y == CatchGame::SPAWN_Y) nb = &b;
+      CHECK(nb != nullptr);
+      if (!nb) break;
+      CHECK_RANGE(nb->x, (int16_t)CatchGame::X_MIN, (int16_t)CatchGame::X_MAX);
+      int dist = nb->x > px ? nb->x - px : px - nb->x;
+      if (nb->kind == CatchGame::ROTTEN) {
+        rottens++;
+        CHECK_MSG(dist >= CatchGame::AVOID, "a rotten berry within reach of the plan: " + std::to_string(dist) + " px");
+        CHECK_EQ(c.planX, px);  // the plan stays; only its time moves on
+      } else {
+        goods++;
+        float room = CatchGame::PLAN_SPEED * (c.planT - pt) / 1000.0f;
+        CHECK_MSG((float)dist <= room + 1.0f, "a good berry out of the plan's reach: " + std::to_string(dist) + " px");
+        CHECK_EQ(c.planX, nb->x);  // and it is the new plan
+      }
+    }
+  }
+  CHECK(goods > 500 && rottens > 50);
+}
+
+// Fairness at every level: a player who only reacts to berries that have been up for 250 ms,
+// at the pet's real speed, on frames of 40 to 100 ms, catches every good berry and never a
+// rotten one up to the cap, for many seeds.
+static void catchBotRun(uint32_t seed, uint32_t minDt, uint32_t maxDt, bool favKnown, int &rottenSeen, int &rottenEarly) {
+  CatchGame c;
+  c.reset(seed * 7919u, (uint8_t)(seed % 3), favKnown);
+  GameRng jitter(seed * 17 + 3);
+  uint16_t caughtBefore = 0;
+  for (int i = 0; i < 200000 && !c.done(); i++) {
+    catchBotSteer(c);
+    c.step(minDt + jitter.below(maxDt - minDt + 1));
+    for (const CatchGame::Berry &b : c.berries)
+      if (b.live && b.kind == CatchGame::ROTTEN && b.y == CatchGame::SPAWN_Y) {
+        rottenSeen++;
+        if (c.caught < CatchGame::CLEAN_CATCHES) rottenEarly++;
+      }
+    caughtBefore = c.caught;
+  }
+  CHECK_MSG(!c.lost, "seed " + std::to_string(seed) + " lost after " + std::to_string(caughtBefore) + " caught");
+  CHECK_MSG(c.done() && c.caught == CatchGame::MAX_CATCHES,
+            "seed " + std::to_string(seed) + " ended at " + std::to_string(c.caught) + " caught");
+  if (!favKnown) CHECK_EQ(c.result(), (uint16_t)CatchGame::MAX_CATCHES);
+}
+
+TEST(catch, a_player_who_reacts_to_what_was_up_for_250_ms_catches_every_good_berry_and_no_rotten_one) {
+  int rottenSeen = 0, rottenEarly = 0;
+  for (uint32_t seed = 1; seed <= 24; seed++) catchBotRun(seed, 40, 100, false, rottenSeen, rottenEarly);
+  CHECK_MSG(rottenSeen > 500, "the bot never met rotten berries: " + std::to_string(rottenSeen));
+  CHECK_EQ(rottenEarly, 0);  // none before CLEAN_CATCHES berries are caught
+}
+
+TEST(catch, the_same_player_on_slow_frames_still_keeps_up) {
+  int rottenSeen = 0, rottenEarly = 0;
+  for (uint32_t seed = 31; seed <= 40; seed++) catchBotRun(seed, 85, 100, false, rottenSeen, rottenEarly);
+  CHECK_EQ(rottenEarly, 0);
+}
+
+static CatchGame catchWithBerry(int x, uint8_t kind, uint8_t fav = 0, bool known = false, bool steer = true) {
   CatchGame c;
   c.reset(1, fav, known);
   c.nextSpawn = 1000000;  // sin bayas nuevas
   c.petX = 233;
   c.targetX = 233;
+  if (steer) c.touch(233);  // the player has touched: what the pet catches counts
   c.berries[0].live = true;
   c.berries[0].x = (int16_t)x;
   c.berries[0].y = CatchGame::CATCH_Y - 1;
@@ -675,6 +948,7 @@ TEST(catch, se_atrapa_a_55_px_del_bicho_y_no_a_56) {
   for (int i = 0; i < 10; i++) c.step(85);
   CHECK(!c.berries[0].live);  // y se pierde abajo
   CHECK_EQ(c.score, (int16_t)0);
+  CHECK(!c.done());  // in the warm-up, which this is, it costs nothing
 }
 
 TEST(catch, un_paso_largo_no_atraviesa_la_linea_sin_atrapar) {
@@ -685,24 +959,105 @@ TEST(catch, un_paso_largo_no_atraviesa_la_linea_sin_atrapar) {
   CHECK_EQ(c.score, (int16_t)1);
 }
 
-TEST(catch, las_podridas_quitan_2_sin_bajar_de_0) {
-  CatchGame c = catchWithBerry(233, CatchGame::ROTTEN);
-  c.score = 5;
+TEST(catch, until_the_player_steers_the_pet_eats_what_falls_on_it_for_nothing) {
+  CatchGame c = catchWithBerry(233, CatchGame::RED, 0, false, false);
+  CHECK(!c.steered);
   c.step(85);
-  CHECK_EQ(c.score, (int16_t)3);
+  CHECK(c.ate);  // eaten, and shown
+  CHECK(c.takeEvents() & GEV_GOOD);
+  CHECK_EQ(c.score, (int16_t)0);  // but not the player's doing
+  CHECK_EQ(c.caught, (uint16_t)0);
+  CHECK(c.warm);  // and it doesn't end the warm-up
+  CHECK(!c.done());
+  c.touch(233);  // the first steer
+  CHECK(c.steered);
+  CHECK(c.warm);
+  c.berries[0].live = true; c.berries[0].x = 233; c.berries[0].y = CatchGame::CATCH_Y - 1; c.berries[0].vy = 200;
+  c.berries[0].kind = CatchGame::RED;
+  c.step(85);
+  CHECK_EQ(c.score, (int16_t)1);  // now it counts
+  CHECK(!c.warm);
+}
+
+TEST(catch, in_the_warm_up_a_good_berry_that_lands_costs_nothing_and_never_ends_the_game) {
+  CatchGame c;
+  c.reset(7, 0, false);
+  c.nextSpawn = 1000000;  // only the berries below
+  c.touch(100);  // the player steers the pet to one side...
+  for (int round = 0; round < 6; round++) {  // ...and berries land on the other
+    c.berries[0].live = true;
+    c.berries[0].x = 366;
+    c.berries[0].y = CatchGame::SPAWN_Y;
+    c.berries[0].vy = 300;
+    c.berries[0].kind = (uint8_t)(round % 3);
+    for (int i = 0; i < 40; i++) c.step(100);
+    CHECK(!c.berries[0].live);  // it landed
+    CHECK(c.warm);
+    CHECK(!c.done());
+  }
+  CHECK(c.steered);
+  CHECK_EQ(c.score, (int16_t)0);
+}
+
+TEST(catch, after_the_warm_up_a_good_berry_that_reaches_the_ground_ends_the_game_with_what_was_caught) {
+  CatchGame c = catchWithBerry(233, CatchGame::GREEN);
+  c.step(85);  // the first catch ends the warm-up
+  CHECK(!c.warm);
+  CHECK(!c.done());
+  c.berries[1].live = true; c.berries[1].x = 366; c.berries[1].y = CatchGame::CATCH_Y - 1;
+  c.berries[1].vy = 200; c.berries[1].kind = CatchGame::RED;
+  c.step(85);  // 17 px: past the mouth line, a long way short of the ground
+  CHECK(c.berries[1].live);
+  CHECK(!c.done());
+  for (int i = 0; i < 20 && !c.done(); i++) c.step(85);
+  CHECK(c.done());
+  CHECK(c.lost);
+  CHECK(c.berries[1].y >= CatchGame::GONE_Y);
+  CHECK_EQ(c.result(), (uint16_t)1);  // it keeps what it caught
+}
+
+TEST(catch, after_the_warm_up_a_rotten_berry_ends_the_game_and_no_longer_costs_points) {
+  CatchGame c = catchWithBerry(233, CatchGame::ROTTEN);
+  c.warm = false;
+  c.score = 5;
+  c.caught = 5;
+  c.step(85);
+  CHECK(c.done());
   CHECK(c.hurting());
   CHECK(c.takeEvents() & GEV_BAD);
-  c = catchWithBerry(233, CatchGame::ROTTEN);
-  c.score = 1;
+  CHECK_EQ(c.score, (int16_t)5);  // none taken off
+  CHECK_EQ(c.result(), (uint16_t)5);
+}
+
+TEST(catch, a_rotten_berry_that_lands_uncaught_is_no_miss) {
+  CatchGame c = catchWithBerry(366, CatchGame::ROTTEN);
+  c.warm = false;
+  c.score = 5;
+  c.caught = 5;
+  for (int i = 0; i < 30; i++) c.step(85);
+  CHECK(!c.berries[0].live);
+  CHECK(!c.done());
+  CHECK_EQ(c.score, (int16_t)5);
+}
+
+TEST(catch, a_known_favourite_scores_2_but_is_one_berry_and_the_cap_ends_the_game_at_400_points) {
+  CatchGame c = catchWithBerry(233, CatchGame::BLUE, CatchGame::BLUE, true);
+  c.warm = false;
+  c.score = 398;
+  c.caught = CatchGame::MAX_CATCHES - 1;
+  CHECK(!c.done());
   c.step(85);
-  CHECK_EQ(c.score, (int16_t)0);
-  CHECK_EQ(c.result(), (uint16_t)0);
+  CHECK_EQ(c.score, (int16_t)400);
+  CHECK_EQ(c.caught, CatchGame::MAX_CATCHES);
+  CHECK(c.done());
+  CHECK_EQ((int)c.result(), (int)GAME_REC_MAX[GAME_CATCH]);
 }
 
 TEST(catch, la_baya_favorita_vale_doble_solo_si_ya_se_conoce) {
   CatchGame c = catchWithBerry(233, CatchGame::BLUE, CatchGame::BLUE, true);
   c.step(85);
   CHECK_EQ(c.score, (int16_t)2);
+  CHECK_EQ(c.caught, (uint16_t)1);
   uint8_t e = c.takeEvents();
   CHECK(e & GEV_HEART);
   CHECK(e & GEV_GOOD);
@@ -731,59 +1086,40 @@ TEST(catch, el_bicho_va_hacia_el_dedo_a_700_px_por_segundo) {
   CHECK(fabsf(c.petX - 333.0f) < 0.01f);  // llega y no se pasa
 }
 
-TEST(catch, termina_a_los_30_s_y_no_salen_mas_bayas) {
+TEST(catch, there_is_no_timer_and_a_finished_game_deals_no_more_berries) {
   CatchGame c;
   c.reset(2, 0, false);
-  while (c.t < CatchGame::DURATION_MS - 100) c.step(100);
+  for (int i = 0; i < 6000; i++) c.step(100);  // ten minutes, nobody touching: berries only
   CHECK(!c.done());
-  for (auto &b : c.berries) b.live = false;
-  c.nextSpawn = CatchGame::DURATION_MS - 50;  // tocaria una baya justo al final
-  c.step(250);  // el ultimo paso se pasa de los 30 s
-  CHECK(c.done());
-  CHECK_EQ(c.t, CatchGame::DURATION_MS);  // el reloj no pasa de 30 s
-  CHECK_EQ(c.timeLeft(), (uint32_t)0);
+  CHECK(c.t >= 600000);
+  CatchGame d;
+  d.reset(2, 0, false);
+  d.lost = true;  // over
+  d.nextSpawn = 0;
+  d.step(100);
   int live = 0;
-  for (auto &b : c.berries) live += b.live;
-  CHECK_EQ(live, 0);  // la partida acabo: ya no sale ninguna
+  for (auto &b : d.berries) live += b.live;
+  CHECK_EQ(live, 0);  // a finished game deals no more berries...
+  CHECK_EQ(d.t, (uint32_t)0);  // ...and its clock stops
 }
 
 // ---------------------------------------------------------------- Peekaboo
-TEST(peek, veinte_apariciones_y_nunca_dos_seguidas_en_el_mismo_arbusto) {
-  for (uint32_t seed = 1; seed <= 200; seed++) {
-    PeekGame p;
-    p.reset(seed);
-    int ups = 0;
-    uint8_t prev = PeekGame::BUSHES;
-    bool used[PeekGame::BUSHES] = {};
-    bool wasUp = false;
-    for (int i = 0; i < 2000 && !p.done(); i++) {
-      p.step(50);
-      if (p.up() && !wasUp) {
-        ups++;
-        CHECK_MSG(p.bush != prev, "mismo arbusto dos veces seguidas");
-        prev = p.bush;
-        used[p.bush] = true;
-      }
-      wasUp = p.up();
-    }
-    CHECK(p.done());
-    CHECK_EQ(ups, 20);
-    if (seed == 1)
-      for (bool u : used) CHECK_MSG(u, "algun arbusto nunca se usa");
-  }
-}
-
-TEST(peek, cada_vez_asoma_menos_tiempo) {
+TEST(peek, the_time_up_and_the_pause_ramp_by_hits_towards_a_floor) {
   CHECK_EQ(PeekGame::upMsFor(0), (uint32_t)1500);
   CHECK_EQ(PeekGame::upMsFor(19), (uint32_t)750);
+  CHECK_EQ(PeekGame::upMsFor(20), (uint32_t)740);
+  CHECK_EQ(PeekGame::upMsFor(39), (uint32_t)650);
+  CHECK_EQ(PeekGame::upMsFor(99), (uint32_t)590);
+  CHECK_EQ(PeekGame::upMsFor(254), (uint32_t)565);
   CHECK_EQ(PeekGame::gapMsFor(0), (uint32_t)500);
   CHECK_EQ(PeekGame::gapMsFor(19), (uint32_t)300);
-  for (uint8_t i = 1; i < 20; i++) CHECK(PeekGame::upMsFor(i) <= PeekGame::upMsFor(i - 1));
-  // una partida sin tocar dura unos 30 s
-  PeekGame p;
-  p.reset(4);
-  while (!p.done()) p.step(10);
-  CHECK_RANGE(p.t, (uint32_t)25000, (uint32_t)35000);
+  CHECK_EQ(PeekGame::gapMsFor(255), (uint32_t)300);
+  for (uint16_t i = 1; i <= 255; i++) {
+    CHECK_MSG(PeekGame::upMsFor((uint8_t)i) <= PeekGame::upMsFor((uint8_t)(i - 1)), "it stays up longer at " + std::to_string(i));
+    CHECK_MSG(PeekGame::gapMsFor((uint8_t)i) <= PeekGame::gapMsFor((uint8_t)(i - 1)), "the pause grows at " + std::to_string(i));
+    CHECK_MSG(PeekGame::upMsFor((uint8_t)i) >= 550, "under the 550 ms floor at " + std::to_string(i));
+    CHECK(PeekGame::gapMsFor((uint8_t)i) >= 300);
+  }
 }
 
 static PeekGame peekUp(uint32_t seed = 1) {
@@ -792,6 +1128,13 @@ static PeekGame peekUp(uint32_t seed = 1) {
   while (!p.up()) p.step(10);
   return p;
 }
+// a bush whose centre is outside the one that is up (so a tap there is the wrong bush)
+static uint8_t otherBush(const PeekGame &p) {
+  for (uint8_t b = 0; b < PeekGame::BUSHES; b++)
+    if (b != p.bush && !PeekGame::inBush(p.bush, PeekGame::BX[b], PeekGame::BY[b])) return b;
+  return PeekGame::BUSHES;
+}
+static void tapUp(PeekGame &p) { p.touchDown(PeekGame::BX[p.bush], PeekGame::BY[p.bush] - 60); }
 
 TEST(peek, tocarlo_mientras_asoma_suma_una_vez) {
   PeekGame p = peekUp();
@@ -804,40 +1147,133 @@ TEST(peek, tocarlo_mientras_asoma_suma_una_vez) {
   CHECK(p.phaseEnd <= p.t + PeekGame::DUCK_AFTER_HIT_MS);  // se esconde enseguida
 }
 
-TEST(peek, tocar_cuando_ya_se_escondio_no_suma) {
-  PeekGame p = peekUp();
-  uint8_t b = p.bush;
+TEST(peek, before_the_first_hit_nothing_ends_the_game_and_the_pace_stays_slow) {
+  PeekGame p;
+  p.reset(3);
+  int ups = 0;
+  bool wasUp = false;
+  for (int i = 0; i < 6000; i++) {  // a minute of pop-ups nobody taps
+    p.step(10);
+    if (p.up() && !wasUp) {
+      ups++;
+      CHECK_EQ(p.phaseEnd - p.phaseStart, (uint32_t)1500);  // the warm-up's misses don't speed it up
+    }
+    wasUp = p.up();
+  }
+  CHECK(!p.done());
+  CHECK(ups >= 20);
+  // a wrong bush only rustles it
+  while (!p.up()) p.step(10);
+  uint8_t o = otherBush(p);
+  CHECK(o < PeekGame::BUSHES);
+  p.touchDown(PeekGame::BX[o], PeekGame::BY[o]);
+  CHECK(p.rustling(o));
+  CHECK(!p.done());
+  CHECK(!(p.takeEvents() & GEV_BAD));
+  // and so does a tap on a bush while none is up
   while (p.up()) p.step(10);
-  p.touchDown(PeekGame::BX[b], PeekGame::BY[b] - 60);
-  CHECK_EQ(p.score, (uint8_t)0);
-  CHECK(p.rustling(b));  // solo se mueve el arbusto
+  p.touchDown(PeekGame::BX[0], PeekGame::BY[0]);
+  CHECK(p.rustling(0));
+  CHECK(!p.done());
 }
 
-TEST(peek, tocar_otro_arbusto_no_cuesta_nada) {
+TEST(peek, after_the_first_hit_a_pop_up_that_ducks_back_untapped_ends_the_game) {
   PeekGame p = peekUp();
-  uint8_t other = PeekGame::BUSHES;  // un arbusto cuyo centro queda fuera de la zona del que asoma
-  for (uint8_t b = 0; b < PeekGame::BUSHES && other == PeekGame::BUSHES; b++)
-    if (b != p.bush && !PeekGame::inBush(p.bush, PeekGame::BX[b], PeekGame::BY[b])) other = b;
-  CHECK(other < PeekGame::BUSHES);
-  p.touchDown(PeekGame::BX[other], PeekGame::BY[other]);
-  CHECK_EQ(p.score, (uint8_t)0);
-  CHECK(p.rustling(other));
-  CHECK(p.up());  // el bicho sigue asomado
-  p.touchDown(PeekGame::BX[p.bush], PeekGame::BY[p.bush]);
+  tapUp(p);
   CHECK_EQ(p.score, (uint8_t)1);
+  while (p.up()) p.step(10);  // it ducked after the hit: that is no miss
+  CHECK(!p.done());
+  while (!p.up()) p.step(10);  // the next one, not tapped
+  CHECK(!p.done());
+  while (p.up()) p.step(10);
+  CHECK(p.done());
+  CHECK(p.missed);
+  CHECK(p.takeEvents() & GEV_BAD);
+  CHECK_EQ(p.result(), (uint16_t)1);  // what was hit is kept
+  p.touchDown(PeekGame::BX[0], PeekGame::BY[0]);
+  CHECK_EQ(p.result(), (uint16_t)1);  // and over is over
 }
 
-TEST(peek, el_segundo_asomo_tambien_se_puede_golpear) {
-  PeekGame p = peekUp(2);
-  uint8_t first = p.bush;
-  p.touchDown(PeekGame::BX[first], PeekGame::BY[first] - 60);
+TEST(peek, after_the_first_hit_a_tap_on_another_bush_or_on_any_bush_while_none_is_up_ends_the_game) {
+  PeekGame p = peekUp();
+  tapUp(p);
+  uint8_t o = otherBush(p);
+  p.touchDown(PeekGame::BX[o], PeekGame::BY[o]);  // the wrong bush, while one is up
+  CHECK(p.done());
+  CHECK(p.missed);
+  CHECK(p.takeEvents() & GEV_BAD);
+  CHECK_EQ(p.result(), (uint16_t)1);
+
+  PeekGame q = peekUp(2);
+  tapUp(q);
+  while (q.up()) q.step(10);  // ducked: none up
+  CHECK(!q.done());
+  q.touchDown(PeekGame::BX[2], PeekGame::BY[2]);  // any bush
+  CHECK(q.done());
+  CHECK(q.missed);
+}
+
+TEST(peek, a_second_tap_on_the_bush_just_hit_and_a_tap_outside_every_bush_do_nothing) {
+  PeekGame p = peekUp();
+  tapUp(p);
+  tapUp(p);  // the same bush again, in the duck: not a miss, not a point
+  CHECK(!p.done());
   CHECK_EQ(p.score, (uint8_t)1);
-  CHECK(p.hit);
+  for (uint8_t b = 0; b < PeekGame::BUSHES; b++) CHECK(!PeekGame::inBush(b, 233, 120));
+  p.touchDown(233, 120);
+  p.touchDown(5, 5);
+  CHECK(!p.done());
   while (p.up()) p.step(10);
-  while (!p.up()) p.step(10);  // otro asomo
-  CHECK_EQ(p.pops, (uint8_t)1);
-  p.touchDown(PeekGame::BX[p.bush], PeekGame::BY[p.bush] - 60);
-  CHECK_EQ(p.score, (uint8_t)2);
+  p.touchDown(233, 120);  // none up, but not on a bush
+  CHECK(!p.done());
+}
+
+TEST(peek, a_tap_counts_through_the_whole_time_up_even_at_the_floor) {
+  for (int tapAt = 0; tapAt < 2; tapAt++) {
+    PeekGame p;
+    p.reset(5);
+    p.score = 200;  // up for about 570 ms, with the first hit long past
+    while (!p.up()) p.step(1);
+    uint32_t up = p.phaseEnd - p.phaseStart;
+    CHECK_EQ(up, PeekGame::upMsFor(200));
+    if (tapAt) while (p.t + 1 < p.phaseEnd) p.step(1);  // the last millisecond
+    tapUp(p);
+    CHECK_EQ(p.score, (uint8_t)201);
+  }
+}
+
+TEST(peek, a_player_who_taps_each_pop_up_after_350_ms_reaches_the_cap_never_twice_on_one_bush_running) {
+  for (uint32_t seed = 1; seed <= 24; seed++) {
+    PeekGame p;
+    p.reset(seed * 331);
+    GameRng jitter(seed * 7 + 1);
+    uint8_t prev = PeekGame::BUSHES;
+    bool wasUp = false;
+    int pops = 0;
+    for (int i = 0; i < 400000 && !p.done(); i++) {
+      p.step(40 + jitter.below(61));
+      if (p.up() && !wasUp) {
+        pops++;
+        CHECK_MSG(p.bush != prev, "the same bush twice running");
+        prev = p.bush;
+        CHECK_EQ(p.phaseEnd - p.phaseStart, PeekGame::upMsFor(p.score));
+      }
+      wasUp = p.up();
+      if (p.up() && !p.hit && p.t - p.phaseStart >= 350) tapUp(p);
+    }
+    CHECK_MSG(p.done() && !p.missed && p.score == 255, "seed " + std::to_string(seed) + " ended at " + std::to_string(p.score));
+    CHECK_EQ(pops, 255);
+  }
+}
+
+TEST(peek, the_255th_hit_ends_the_game_by_itself) {
+  PeekGame p = peekUp(9);
+  p.score = 254;
+  tapUp(p);
+  CHECK(p.done());
+  CHECK(!p.missed);
+  CHECK_EQ(p.result(), (uint16_t)255);
+  CHECK(p.takeEvents() & GEV_GOOD);
 }
 
 TEST(peek, la_zona_de_toque_es_el_arbusto_y_lo_que_asoma) {
@@ -889,51 +1325,66 @@ TEST(song, mientras_suena_la_melodia_los_toques_no_cuentan) {
   CHECK(s.busy());
   press(s, s.seq[0]);
   CHECK_EQ(s.k, (uint8_t)0);
-  CHECK_EQ(s.tries, SongGame::TRIES);
+  CHECK(!(s.takeEvents() & GEV_BAD));
   listen(s);
   CHECK(!s.busy());
   CHECK(s.playersTurn());
 }
 
-TEST(song, un_fallo_cuesta_un_intento_y_repite_la_misma_melodia) {
+TEST(song, before_the_first_tune_is_repeated_a_wrong_note_costs_nothing_and_plays_the_tune_again) {
   SongGame s;
   s.reset(8);
-  listen(s);
-  press(s, s.seq[0]);
-  press(s, (uint8_t)((s.seq[1] + 1) % SongGame::PADS));  // mal
-  CHECK_EQ(s.tries, (uint8_t)(SongGame::TRIES - 1));
-  CHECK(s.takeEvents() & GEV_BAD);
-  std::vector<uint8_t> again = listen(s);
-  CHECK_EQ(again.size(), (size_t)2);  // la misma longitud
-  CHECK_EQ(s.len, (uint8_t)2);
+  for (int miss = 0; miss < 12; miss++) {  // as many as the player likes
+    std::vector<uint8_t> heard = listen(s);
+    CHECK_EQ(heard.size(), (size_t)2);  // the same tune
+    CHECK_EQ(s.len, (uint8_t)2);
+    press(s, s.seq[0]);
+    press(s, (uint8_t)((s.seq[1] + 1) % SongGame::PADS));  // wrong
+    CHECK(!s.done());
+    CHECK_EQ((int)s.phase, (int)SongGame::WRONG);
+    CHECK(s.takeEvents() & GEV_BAD);
+    CHECK_EQ(s.best, (uint8_t)0);
+  }
 }
 
-TEST(song, tres_fallos_acaban_con_la_mejor_melodia_como_puntuacion) {
+TEST(song, after_the_first_tune_one_wrong_note_ends_it_with_the_longest_tune_as_the_score) {
   SongGame s;
   s.reset(9);
   listen(s);
   press(s, s.seq[0]);
-  press(s, s.seq[1]);  // 2 notas bien
-  for (int miss = 0; miss < 3; miss++) {
-    listen(s);
-    press(s, (uint8_t)((s.seq[0] + 1) % SongGame::PADS));
-  }
+  press(s, s.seq[1]);  // the first tune, repeated
+  CHECK_EQ(s.best, (uint8_t)2);
+  CHECK(!s.warm());
+  listen(s);  // 3 notes
+  press(s, s.seq[0]);
+  press(s, s.seq[1]);
+  press(s, (uint8_t)((s.seq[2] + 1) % SongGame::PADS));  // one wrong note
   CHECK(s.done());
+  CHECK(s.missed);
   CHECK(!s.won);
+  CHECK(s.takeEvents() & GEV_BAD);
+  CHECK_EQ(s.result(), (uint16_t)2);
+  press(s, s.seq[0]);  // over is over
   CHECK_EQ(s.result(), (uint16_t)2);
 }
 
-TEST(song, repetir_las_12_notas_gana) {
+// the tune grows a note a round with no win at 12, up to the 100 notes that win
+TEST(song, repeating_a_100_note_tune_wins) {
   SongGame s;
   s.reset(3);
   for (uint8_t len = 2; len <= SongGame::MAX_LEN; len++) {
-    listen(s);
+    CHECK(!s.done());
+    std::vector<uint8_t> heard = listen(s);
+    CHECK_EQ(heard.size(), (size_t)len);
     for (uint8_t i = 0; i < len; i++) press(s, s.seq[i]);
+    CHECK_EQ(s.best, len);
+    if (len == 12) CHECK(!s.won && !s.done());  // 12 is no longer the end
   }
   CHECK(s.done());
   CHECK(s.won);
+  CHECK(!s.missed);
   CHECK(s.takeEvents() & GEV_WIN);
-  CHECK_EQ(s.result(), (uint16_t)12);
+  CHECK_EQ(s.result(), (uint16_t)100);
 }
 
 TEST(song, esta_ocupada_en_todas_las_fases_menos_el_turno_y_el_final) {
@@ -948,26 +1399,32 @@ TEST(song, esta_ocupada_en_todas_las_fases_menos_el_turno_y_el_final) {
   CHECK_EQ((int)s.phase, (int)SongGame::TURN);
   CHECK(!s.busy());
   press(s, s.seq[0]);
+  press(s, (uint8_t)((s.seq[1] + 1) % SongGame::PADS));  // falla en el calentamiento
+  CHECK_EQ((int)s.phase, (int)SongGame::WRONG);
+  CHECK(s.busy());
+  listen(s);
+  press(s, s.seq[0]);
   press(s, s.seq[1]);  // acierta la ronda
   CHECK_EQ((int)s.phase, (int)SongGame::PAUSE);
   CHECK(s.busy());
   listen(s);
-  press(s, (uint8_t)((s.seq[0] + 1) % SongGame::PADS));  // falla
-  CHECK_EQ((int)s.phase, (int)SongGame::WRONG);
-  CHECK(s.busy());
-  for (int miss = 0; miss < 2; miss++) {
-    listen(s);
-    press(s, (uint8_t)((s.seq[0] + 1) % SongGame::PADS));
-  }
+  press(s, (uint8_t)((s.seq[0] + 1) % SongGame::PADS));  // falla: se acabo
   CHECK(s.done());
   CHECK(!s.busy());
 }
 
-TEST(song, las_notas_se_aceleran_con_melodias_largas) {
+TEST(song, the_notes_keep_getting_shorter_towards_a_floor) {
   CHECK_EQ(SongGame::noteMsFor(2), (uint32_t)500);
   CHECK_EQ(SongGame::noteMsFor(5), (uint32_t)425);
   CHECK_EQ(SongGame::noteMsFor(8), (uint32_t)350);
-  CHECK_EQ(SongGame::noteMsFor(12), (uint32_t)350);
+  CHECK_EQ(SongGame::noteMsFor(9), (uint32_t)333);
+  CHECK_EQ(SongGame::noteMsFor(12), (uint32_t)300);
+  CHECK_EQ(SongGame::noteMsFor(24), (uint32_t)250);
+  CHECK_EQ(SongGame::noteMsFor(100), (uint32_t)212);
+  for (uint8_t n = 3; n <= SongGame::MAX_LEN; n++) {
+    CHECK_MSG(SongGame::noteMsFor(n) <= SongGame::noteMsFor(n - 1), "a note is longer at " + std::to_string(n));
+    CHECK(SongGame::noteMsFor(n) >= 200);
+  }
 }
 
 TEST(song, cada_boton_se_toca_en_su_circulo_y_no_se_solapan) {
@@ -1012,7 +1469,8 @@ TEST(minigames, sin_ningun_toque_la_partida_no_puntua_aunque_el_bicho_atrape_bay
     m.begin(GAME_CATCH, now, 0, false);
     runToEnd(m, now);
     CHECK(m.over());
-    if (m.catcher.result() > 0) caughtAlone = true;
+    if (m.catcher.ate) caughtAlone = true;  // eaten and shown, for nothing
+    CHECK_MSG(m.catcher.result() == 0, "the game itself scores a berry nobody steered for, seed " + std::to_string(seed));
     CHECK_MSG(m.score() == 0, "puntua sin tocar, semilla " + std::to_string(seed));
   }
   CHECK_MSG(caughtAlone, "el caso no se da: el bicho nunca atrapa nada solo");
@@ -1063,7 +1521,7 @@ TEST(minigames, en_Berry_Song_deslizar_hasta_un_boton_no_toca_nota) {
   m.touch(true, SongGame::PX[p], SongGame::PY[p], now + 20);  // y desliza hasta el bueno
   m.touch(true, SongGame::PX[p], SongGame::PY[p], now + 40);
   CHECK_EQ(m.song.k, (uint8_t)0);
-  CHECK_EQ(m.song.tries, SongGame::TRIES);
+  CHECK(!m.song.done());
 }
 
 TEST(minigames, una_partida_sin_tocar_tras_otra_jugada_tampoco_puntua) {
@@ -1080,7 +1538,8 @@ TEST(minigames, una_partida_sin_tocar_tras_otra_jugada_tampoco_puntua) {
     m.rng.seedWith(seed);
     m.begin(GAME_CATCH, now, 0, false);  // la siguiente, sin tocar
     runToEnd(m, now);
-    if (m.catcher.result() > 0) caughtAlone = true;
+    if (m.catcher.ate) caughtAlone = true;
+    CHECK_MSG(m.catcher.result() == 0, "the game scores what the pet ate alone");
     CHECK_MSG(m.score() == 0, "hereda la actividad de la partida anterior");
   }
   CHECK(caughtAlone);
@@ -1142,7 +1601,7 @@ TEST(minigames, an_untouched_game_the_screen_turns_off_pays_nothing) {
     m.begin(GAME_CATCH, now, 0, false);
     playUntil(m, now);
     for (int i = 0; i < 120 && !m.over(); i++) m.frame(now += 85);
-    if (m.over() || m.catcher.result() == 0) continue;
+    if (m.over() || !m.catcher.ate) continue;
     caughtAlone = true;
     CHECK(!m.endDark());
     CHECK(m.over());

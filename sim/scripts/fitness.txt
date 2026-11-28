@@ -103,5 +103,5 @@ tap 233 420
 wait 520ms  # 1 s less the strip's extra tap (#13): the same game as before
 tap 202 404
 tap 169 320
-wait 22s
+wait 18s
 shot game-result-night

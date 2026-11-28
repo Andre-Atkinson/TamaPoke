@@ -80,6 +80,35 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
     straight back down counts as a rep and the next push-up.
   - Each exercise keeps its own record (new save keys `punhi` and `pushi`); the old
     12-swing punch record (`phi`) is left in the save, unread.
+- **The Play minigames are endless and skill-based** (#127), like the exercises. No game has a
+  timer, lives or a set length any more: it goes on until the first miss and gets harder with
+  every point. The miss only ends it, and it still pays for every point. Until the first point
+  a game is a warm-up where a miss costs nothing (a dropped ball is dealt again, a berry
+  that lands is free, a pop-up that ducks or a wrong bush only rustles, a wrong note plays the
+  tune again). Every ramp goes by the points made, never by time, slower and slower towards a
+  floor, and each game ends by itself at a cap no run gets near (255 hits, 200 berries, 255
+  hits, a 100-note tune).
+  - **Keepy-uppy:** one drop ends it (it was three). Up to 31 hits it plays as before; past 31
+    the whole game speeds up (2x at 151 hits, 2.18x at 255) and the creature keeps up.
+  - **Berry Catch:** no 30 s timer. A good berry reaching the ground, or catching a rotten
+    one (no longer 2 points off), ends it. Berries come faster, fall faster and more of them
+    are rotten with every berry caught, and no berry is placed where the creature couldn't
+    reach it: standing still never catches a rotten one, and the next good one is always in
+    reach.
+  - **Peekaboo:** no 20 pop-up limit. A creature that ducks back untapped, or a tap on the
+    wrong bush (or on any bush while none is up), ends it. It stays up less with every hit,
+    down to 550 ms.
+  - **Berry Song:** one wrong note ends it (it was three), and the tune grows a note a round
+    with no stop at 12, the notes getting shorter (down to about 210 ms); only a 100-note tune wins.
+  - **Pay:** speed now rises with the run in steps, shown as **x1**, **x2**... under the
+    score: each game's step is about half its par (8 hits, 10 berries, 7 pop-ups, 3 notes), a
+    game at par still pays +3, 30 keepy-uppy hits pay +9, a 12-note song +10. Any game
+    you touched gives full JOY (+35), a heart and +2 bond, even one that ended at 0; the
+    energy, food and weight it costs still follow how far it got.
+  - Each game keeps a fresh record (new save keys `keephi`, `catchhi`, `peekhi` and
+    `songhi`); the old `ghi`, `mgc`, `mgp` and `mgs` are left in the save, unread.
+  - The simulator has a `gameplay point|miss` step that plays a game to a point or a miss
+    (`sim/scripts/endless-games.txt`).
 - The Christmas tree, the Halloween pumpkins and two of the Easter eggs moved left, out of
   the berry garden's corner, and so did two spots of spring flowers and autumn leaves.
 

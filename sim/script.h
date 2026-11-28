@@ -76,6 +76,17 @@
 //                            simulator has this.
 //   game NAME                the next Play deals this minigame (#94), one of keepy, catch, peek
 //                            or song, in place of the bag's pick. Only the simulator has this.
+//   gameplay point|miss [N]  the open Play minigame's next point (N points, one after the other),
+//                            or its miss (#127): the step
+//                            asks the game where to touch (a tap on the ball, the pop-up, the
+//                            next note; in Berry Catch a finger held where the next good berry
+//                            falls, or away from it), does it, and goes on until the point is
+//                            scored (Berry Song: the whole tune repeated) or the miss has ended
+//                            the game, waiting for what the game shows meanwhile (the title
+//                            card, a tune playing, a pop-up to come), up to 30 s. It fails the
+//                            run if that doesn't happen (a miss must end the game within 8 s
+//                            of its touch: the game's own end, not the 15 s idle one). A game that ends on a miss pays at
+//                            once and prints its "Play:" line. Only the simulator has this.
 //   expect TEXT              a check on the serial output (#99): some line printed since the
 //                            previous check contains TEXT. '*' in TEXT stands for any run of
 //                            characters, so "expect Play: peek score=* (screen off)" passes
@@ -106,7 +117,7 @@ enum SimOp : uint8_t {
   OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING, OP_PMU,
   OP_TAP, OP_HOLD, OP_PUSHUP, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
   OP_WAIT, OP_SERIAL, OP_SHOT, OP_IDLE, OP_SAY, OP_NATURE,
-  OP_TRAIN, OP_GAME, OP_POOPS, OP_EXPECT, OP_EXPECT_NOT, OP_EXPECT_ONCE, OP_STEPS,
+  OP_TRAIN, OP_GAME, OP_GAMEPLAY, OP_POOPS, OP_EXPECT, OP_EXPECT_NOT, OP_EXPECT_ONCE, OP_STEPS,
 };
 
 struct SimCmd {

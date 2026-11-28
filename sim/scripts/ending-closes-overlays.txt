@@ -9,14 +9,14 @@
 # The serial log (shots/serial.log) has, in this order:
 #   Play: peek score=N speed=+M (ending)      A. the minigame paid before the run-away
 #   Training: punch count=2 gain=1 ... (ending)  B. the exercise paid before the farewell
-#   Play: keepy score=0 speed=+0              K. the result screen's own line, then no
+#   Play: keepy score=2 speed=+0              K. the result screen's own line, then no
 #                                                "(ending)" line: paid once, at its end
 #   lim=0 ... then lim=100                    L. STATS before the bath and during the
 #                                                run-away: the bath finished first
 #   lim=0 ... then lim=100                    M. the same for the farewell choice's
 #                                                button, tapped during a bath
 #   ERR gallery not opened: an ending is on screen   M. GAL during the farewell
-# The scores differ from run to run (the games' dice follow the time and the board).
+# The games are played with `gameplay point` steps, so the scores don't depend on the dice.
 
 clock 2026-11-13 10:00
 battery 64
@@ -29,16 +29,12 @@ tap 233 200
 tap 233 200
 wait 6s
 
-# A. a minigame being played (Peekaboo, taps round the bushes), then RUN
+# A. a minigame being played (Peekaboo, 2 hits: a tap on a wrong bush would end it now, #127, so
+# the hits are `gameplay point` steps), then RUN
 game peek
 tap 202 404
 tap 169 320
-wait 1700ms
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
+gameplay point 2
 shot A1-minigame-open
 serial RUN
 wait 1s
@@ -189,15 +185,15 @@ tap 233 200
 tap 233 200
 wait 6s
 
-# K. a minigame on its result screen (keepy-uppy, one tap that missed, three drops: it ends
-# and shows its result for 4 s, as in game-screen-off.txt), then BYE: it only closes, paid
+# K. a minigame on its result screen (keepy-uppy, 2 hits, then the ball dropped: the drop ends
+# it and shows its result for 4 s, as in game-screen-off.txt), then BYE: it only closes, paid
 # at its end
 game keepy
 tap 202 404
 tap 169 320
-wait 1700ms
-tap 40 233
-wait 11s
+gameplay point 2
+gameplay miss
+wait 500ms
 shot K1-game-result-open
 serial BYE
 wait 1s
