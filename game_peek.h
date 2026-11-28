@@ -5,10 +5,24 @@
 // Endless (#127): there is no pop-up limit. Until the first hit the game is a warm-up where a
 // pop-up that ducks back untapped, or a tap on a bush other than the one up (or on any bush
 // while none is up), only rustles. From then on either of those ends the game, and it pays for
-// the hits. A second tap on the bush just hit and a tap outside every bush still do nothing,
-// and the duck after a hit is not a miss. The time up keeps shortening with the hits
+// the hits. A tap outside every bush does nothing, the duck after a hit is not a miss, and a
+// second tap on the pet just hit is never one: inside the hit bush's own area, whatever other
+// bush's area it also lies in (the areas overlap), and for BOUNCE_MS after the hit even once
+// it has ducked (a double tap). The time up keeps shortening with the hits
 // (upMsFor), down to a floor, and the pause between pop-ups to its own (gapMsFor); both
 // go by hits, so the warm-up's misses don't speed the game up. It ends by itself at 255 hits.
+//
+// Taps and frames, on both boards (loop() in TamaPoke.ino, renderGame in gameui.cpp): each
+// pass of the loop reads the touch first (handleTouch -> gameTouch, polled every 20 ms) and
+// steps the game afterwards, by the real time since the last frame (MiniGames::frame). A tap
+// is therefore judged against the game's clock as of the last frame, never later than when it
+// was made, except for a tap made between a pass's touch read and its frame (the rest of the
+// loop's work, a few ms, up to the 20 ms poll gap): that one is read in the next pass, after
+// a frame that may already be past phaseEnd. So a pop-up that is untapped at phaseEnd ducks
+// (the picture) but stays tappable for SETTLE_MS more (a hit still counts), and the untapped
+// miss ends the game only once that has passed, as RhythmPunch::SETTLE_MS does (exercise.h).
+// The next pop-up's schedule still counts from phaseEnd, so the settle slows nothing down.
+// The settle is far over the longest loop work between a touch read and the frame.
 struct PeekGame {
   static constexpr uint8_t BUSHES = 5;
   static constexpr uint8_t MAX_HITS = 255;  // the game ends by itself here (GAME_REC_MAX)
@@ -21,6 +35,8 @@ struct PeekGame {
   static constexpr uint32_t FIRST_GAP_MS = 600;
   static constexpr uint32_t DUCK_AFTER_HIT_MS = 400;  // a happy nod, then it ducks
   static constexpr uint32_t RUSTLE_MS = 300;
+  static constexpr uint32_t SETTLE_MS = 60;   // an untapped pop-up is a miss this long after phaseEnd
+  static constexpr uint32_t BOUNCE_MS = 150;  // a second tap this soon after a hit is the same tap
   enum : uint8_t { WAIT = 0, UP, DONE };
 
   uint8_t phase = WAIT;
@@ -28,6 +44,8 @@ struct PeekGame {
   uint8_t score = 0;
   bool missed = false;                 // over: a pop-up ducked untapped, or a wrong tap (after the first hit)
   bool hit = false;                    // this pop-up was already tapped
+  uint8_t hitBush = BUSHES;            // the bush last hit (BUSHES: none yet) and when
+  uint32_t hitAt = 0;
   uint32_t t = 0, phaseStart = 0, phaseEnd = 0;
   uint8_t rustleBush = BUSHES;
   uint32_t rustleT = 0;
@@ -62,6 +80,8 @@ struct PeekGame {
     score = 0;
     missed = false;
     hit = false;
+    hitBush = BUSHES;
+    hitAt = 0;
     t = phaseStart = 0;
     phaseEnd = FIRST_GAP_MS;
     rustleBush = BUSHES;
@@ -105,24 +125,31 @@ struct PeekGame {
   void step(uint32_t dtMs) {
     if (done()) return;
     t += dtMs;
-    while (phase != DONE && t >= phaseEnd) advance();
+    // an untapped pop-up is judged SETTLE_MS after it ducks (see the top)
+    while (phase != DONE && t >= phaseEnd + (phase == UP && !hit ? SETTLE_MS : 0)) advance();
   }
 
   void touchDown(int x, int y) {
     if (done()) return;
     if (phase == UP && !hit && inBush(bush, x, y)) {
       hit = true;
+      hitBush = bush;
+      hitAt = t;
       score++;
       events |= GEV_GOOD;
       if (score >= MAX_HITS) {
         phase = DONE;
-      } else if (phaseEnd > t + DUCK_AFTER_HIT_MS) {
+      } else if (phaseEnd > t + DUCK_AFTER_HIT_MS || t >= phaseEnd) {  // (a hit in the settle)
         phaseEnd = t + DUCK_AFTER_HIT_MS;
       }
       return;
     }
+    // The pet just hit is never a miss: the bush up and hit (whichever other bush's area the
+    // tap is also in), or the bush hit a moment ago (a double tap, even once it has ducked).
+    if (phase == UP && hit && inBush(bush, x, y)) return;
+    if (hitBush < BUSHES && t - hitAt < BOUNCE_MS && inBush(hitBush, x, y)) return;
     for (uint8_t b = 0; b < BUSHES; b++) {
-      if (inBush(b, x, y) && !(phase == UP && b == bush)) {  // the bush up (and hit) is no miss
+      if (inBush(b, x, y)) {
         if (warm()) {
           rustleBush = b;
           rustleT = t;

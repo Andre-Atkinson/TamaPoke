@@ -380,12 +380,14 @@ TEST(SimScript, gameplay_asks_for_a_point_or_a_miss) {
   if (n.cmds.size() == 1) CHECK_EQ(n.cmds[0].b, (int32_t)14);
   CHECK_EQ(simPreBootEnd(simParseScript("battery 50\ngameplay point\n")), (size_t)1);
   CHECK_EQ(simParseScript("wait 1s\ngameplay hit\n", "g.txt").error,
-           std::string("g.txt:2: usage: gameplay point|miss [N] (N: the points, 1-255)"));
+           std::string("g.txt:2: usage: gameplay point [N] | gameplay miss (N: the points, 1-255)"));
   CHECK(!simParseScript("gameplay\n").error.empty());
   CHECK(!simParseScript("gameplay point 0\n").error.empty());
   CHECK(!simParseScript("gameplay point 256\n").error.empty());
   CHECK(!simParseScript("gameplay point x\n").error.empty());
   CHECK(!simParseScript("gameplay point 2 3\n").error.empty());
+  CHECK(!simParseScript("gameplay miss 3\n").error.empty());  // a miss has no count
+  CHECK(!simParseScript("gameplay miss 1\n").error.empty());
 }
 
 // "game NAME" (#94): the next Play deals this minigame; it runs the firmware, so it closes

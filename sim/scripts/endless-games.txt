@@ -12,7 +12,8 @@
 # gameSpeedPay: keepy-uppy 20 hits pay 5, Berry Catch 30 points 6, Peekaboo 21 hits 6, Berry
 # Song a 9-note tune 6; the old pay, a fifth of the normalised score, would give 4, 4, 4 and 4). Before the miss nothing is paid ("expect-not Play:"). The Play button
 # is at (202, 404) and its strip's Poke Ball at (169, 320) (#13); a game shows its title card
-# for 1.2 s, then plays, and its result stays up for 4 s.
+# for 1.2 s, then plays, and its result stays up for 4 s. Sections 5 and 6 leave by the
+# exit chip (#129).
 
 # new game: pick Charmander, hatch the egg
 wait 1s
@@ -75,3 +76,27 @@ shot 08-song-result
 expect-once Play:
 expect Play: song score=9 speed=+6
 wait 5s
+
+# 5. Leaving a played game by the exit chip (hold it for 1 s) pays what was done, as a miss
+# does (#129, R1-2): Berry Song, 8 notes' worth of points, the tune playing, then the exit.
+# The same line and the same pay as section 4, and the result screen.
+game song
+tap 202 404
+tap 169 320
+gameplay point 8
+expect-not Play:
+hold 233 40 1100ms
+shot 09-song-exit-result
+expect-once Play:
+expect Play: song score=9 speed=+6
+wait 5s
+
+# 6. A game nobody touched just closes by the exit chip: no "Play:" line, nothing paid
+game peek
+tap 202 404
+tap 169 320
+wait 2s
+hold 233 40 1100ms
+shot 10-untouched-exit
+wait 1s
+expect-not Play:

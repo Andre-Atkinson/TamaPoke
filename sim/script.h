@@ -76,8 +76,8 @@
 //                            simulator has this.
 //   game NAME                the next Play deals this minigame (#94), one of keepy, catch, peek
 //                            or song, in place of the bag's pick. Only the simulator has this.
-//   gameplay point|miss [N]  the open Play minigame's next point (N points, one after the other),
-//                            or its miss (#127): the step
+//   gameplay point [N]       the open Play minigame's next point (N points, one after the other),
+//   gameplay miss            or its miss (one: no count, #127): the step
 //                            asks the game where to touch (a tap on the ball, the pop-up, the
 //                            next note; in Berry Catch a finger held where the next good berry
 //                            falls, or away from it), does it, and goes on until the point is

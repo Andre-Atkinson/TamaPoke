@@ -828,8 +828,18 @@ TEST(catch, berries_arrive_in_the_order_they_spawn_at_every_level) {
   }
 }
 
+// Where on a good berry the bot stands: anywhere a catch is possible, so within CATCH_DX - 5
+// of its x, a fixed pseudo-random offset per berry (R1-3 of #129: a bot that always stood on
+// the berry's exact x was never off the plan's position, so the rotten berries' margin from
+// it, AVOID, was never needed and could be cut down without a test noticing).
+static int catchBotOff(const CatchGame::Berry &b) {
+  uint32_t h = ((uint32_t)b.x * 2654435761u) >> 16;
+  return (int)(h % (2 * (CatchGame::CATCH_DX - 5) + 1)) - (CatchGame::CATCH_DX - 5);
+}
+
 // The player's side of the plan: reacts only to berries that have been visible for 250 ms,
-// steers to the next one to arrive when it is good and holds still when it is rotten.
+// steers to the next one to arrive when it is good (off-centre, see catchBotOff) and holds
+// still when it is rotten.
 static void catchBotSteer(CatchGame &c) {
   if (!c.steered) c.touch(233);  // a first touch, wherever
   const CatchGame::Berry *next = nullptr;
@@ -842,7 +852,7 @@ static void catchBotSteer(CatchGame &c) {
   }
   if (!next) return;
   if (next->kind == CatchGame::ROTTEN) c.touch((int)(c.petX + 0.5f));
-  else c.touch(next->x);
+  else c.touch(next->x + catchBotOff(*next));
 }
 
 TEST(catch, the_spawner_plans_good_berries_within_reach_and_rotten_ones_out_of_it) {
@@ -867,7 +877,11 @@ TEST(catch, the_spawner_plans_good_berries_within_reach_and_rotten_ones_out_of_i
       int dist = nb->x > px ? nb->x - px : px - nb->x;
       if (nb->kind == CatchGame::ROTTEN) {
         rottens++;
-        CHECK_MSG(dist >= CatchGame::AVOID, "a rotten berry within reach of the plan: " + std::to_string(dist) + " px");
+        // out of reach of a pet standing anywhere it caught the last good berry: farther from
+        // the plan than two catch widths (a literal, not AVOID itself), as catchBotSteer's
+        // off-centre stands need
+        CHECK_MSG(dist > 2 * CatchGame::CATCH_DX, "a rotten berry within reach of the plan: " + std::to_string(dist) + " px");
+        CHECK(dist >= CatchGame::AVOID);
         CHECK_EQ(c.planX, px);  // the plan stays; only its time moves on
       } else {
         goods++;
@@ -1235,6 +1249,111 @@ TEST(peek, a_second_tap_on_the_bush_just_hit_and_a_tap_outside_every_bush_do_not
   stepToDuck(p);
   p.touchDown(233, 120);  // none up, but not on a bush
   CHECK(!p.done());
+}
+
+// a game with bush `b` up (the seed that deals it first, searched for)
+static PeekGame peekUpAt(uint8_t b) {
+  for (uint32_t seed = 1; seed < 200; seed++) {
+    PeekGame p;
+    p.reset(seed);
+    stepToUp(p);
+    if (p.up() && p.bush == b) return p;
+  }
+  CHECK_MSG(false, "no seed pops bush " + std::to_string(b) + " up first");
+  return peekUp();
+}
+
+// R1-1 of #129: the bushes' hit areas overlap (bush 0 and bush 2, bush 1 and bush 4, bush 3
+// with the upper two), so a second tap on the pet just hit can lie in another bush's area
+// too. It is the same pet: never a miss, whichever area it is also in.
+TEST(peek, a_second_tap_on_the_pet_just_hit_is_never_a_miss_where_two_bushes_overlap) {
+  // the two points the review named: the head of the pet out of bush 2 (also in bush 0's
+  // area), and the lower part of bush 0 (also in bush 2's)
+  int hx = PeekGame::BX[2], hy = PeekGame::BY[2] - 90;
+  int lx = PeekGame::BX[0] - 40, ly = PeekGame::BY[0] + 20;
+  CHECK(PeekGame::inBush(2, hx, hy) && PeekGame::inBush(0, hx, hy));
+  CHECK(PeekGame::inBush(0, lx, ly) && PeekGame::inBush(2, lx, ly));
+  PeekGame a = peekUpAt(2);
+  tapUp(a);
+  a.touchDown(hx, hy);
+  CHECK(!a.done());
+  CHECK_EQ(a.score, (uint8_t)1);
+  PeekGame b = peekUpAt(0);
+  tapUp(b);
+  b.touchDown(lx, ly);
+  CHECK(!b.done());
+  CHECK_EQ(b.score, (uint8_t)1);
+  // every point of the bush up that is also inside another bush's area, for every bush
+  int overlaps = 0;
+  for (uint8_t up = 0; up < PeekGame::BUSHES; up++) {
+    for (int y = 0; y < 466; y += 5) {
+      for (int x = 0; x < 466; x += 5) {
+        if (!PeekGame::inBush(up, x, y)) continue;
+        bool also = false;
+        for (uint8_t o = 0; o < PeekGame::BUSHES; o++) also |= o != up && PeekGame::inBush(o, x, y);
+        if (!also) continue;
+        overlaps++;
+        PeekGame p = peekUpAt(up);
+        tapUp(p);
+        p.touchDown(x, y);
+        CHECK_MSG(!p.done() && p.score == 1, "bush " + std::to_string(up) + " up and hit, a second tap at " +
+                                                 std::to_string(x) + "," + std::to_string(y));
+      }
+    }
+  }
+  CHECK(overlaps > 50);  // the areas do overlap: the loop above checked something
+}
+
+// ...and for BOUNCE_MS after a hit, a second tap on the bush hit is the same tap even once
+// the pet ducked (a hit just before the time up ducks it at once), but a deliberate one
+// later is a miss
+TEST(peek, a_double_tap_right_after_the_duck_is_not_a_miss_but_a_tap_after_the_bounce_is) {
+  for (int late = 0; late < 2; late++) {
+    PeekGame p = peekUp(4);
+    while (p.t + 2 < p.phaseEnd) p.step(1);  // the last moments of the time up
+    int x = PeekGame::BX[p.bush], y = PeekGame::BY[p.bush] - 60;
+    p.touchDown(x, y);
+    CHECK_EQ(p.score, (uint8_t)1);
+    p.step(2);
+    CHECK(!p.up());  // ducked: none up
+    p.step(late ? PeekGame::BOUNCE_MS - 2 : PeekGame::BOUNCE_MS - 3);
+    p.touchDown(x, y);  // 1 ms under BOUNCE_MS after the hit, or exactly BOUNCE_MS
+    CHECK_EQ(p.done(), late == 1);
+    CHECK_EQ(p.missed, late == 1);
+    CHECK_EQ(p.result(), (uint16_t)1);
+  }
+}
+
+// R1-6 of #129: a tap made before phaseEnd but read after the frame that stepped past it (the
+// loop reads the touch, then steps the game; see the top of game_peek.h) is still a hit for
+// SETTLE_MS, and the untapped miss ends the game only after that, in the warm-up or not.
+TEST(peek, an_untapped_pop_up_is_a_miss_only_once_the_settle_has_passed_and_a_tap_in_it_is_a_hit) {
+  for (int warm = 0; warm < 2; warm++) {
+    PeekGame p = peekUp(6), q = peekUp(6);
+    if (!warm) {  // one hit first, then the next pop-up
+      for (PeekGame *g : { &p, &q }) {
+        tapUp(*g);
+        stepToDuck(*g);
+        stepToUp(*g);
+        CHECK(!g->done());
+      }
+    }
+    uint8_t before = p.score;
+    // the frame that steps just past phaseEnd: ducked on screen, still tappable
+    p.step(p.phaseEnd - p.t + 1);
+    CHECK(p.up() && !p.done());
+    tapUp(p);
+    CHECK_EQ(p.score, (uint8_t)(before + 1));
+    CHECK(!p.done());
+    CHECK(p.phaseEnd >= p.t + PeekGame::DUCK_AFTER_HIT_MS);  // and it nods before it ducks
+    // untapped: not a miss at the last millisecond of the settle, a miss at its end
+    q.step(q.phaseEnd - q.t + PeekGame::SETTLE_MS - 1);
+    CHECK(!q.done());
+    q.step(1);
+    CHECK_EQ(q.done(), warm == 0);  // the warm-up has no miss: it ducks, the next one comes
+    CHECK_EQ(q.missed, warm == 0);
+    if (warm) CHECK(!q.up());
+  }
 }
 
 TEST(peek, a_tap_counts_through_the_whole_time_up_even_at_the_floor) {

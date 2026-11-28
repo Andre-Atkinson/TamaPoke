@@ -20,6 +20,7 @@
 // Used only in this file, and called above its definition (in TamaPoke.ino the
 // prototype arduino-cli generates covered that).
 static void gameSounds();
+static void finishGame();
 
 // minijuegos de Play (minigames.h): uno al azar de la bolsa cada vez
 bool gameOpen = false;
@@ -123,9 +124,11 @@ void startGame() {
   gameNewHi = false;
 }
 
-// Un informe del tactil con un juego abierto. El dedo que mantiene "salir" deja el
-// juego sin premio, como antes tocar la cabecera; el resto del toque se traga para
-// que al soltar no se resuelva como un toque en la pantalla principal.
+// Un informe del tactil con un juego abierto. El dedo que mantiene "salir" termina el
+// juego (R1-2 de #129: una partida sin fin puede durar minutos): lo hecho se paga como
+// en cualquier final (finishGame: record, velocidad, la linea "Play:" y la pantalla de
+// resultado), y si nadie la toco se cierra sin mas, sin pagar nada; el resto del toque
+// se traga para que al soltar no se resuelva como un toque en la pantalla principal.
 void gameTouch(bool pressed, int16_t x, int16_t y) {
   bool start = pressed && !wasPressed;
   // Un toque que empieza con la pantalla apagada o atenuada solo la despierta
@@ -145,7 +148,9 @@ void gameTouch(bool pressed, int16_t x, int16_t y) {
   // soltar o al moverse de verdad (games.counted); si no, Berry Song no acabaria.
   if (start || (!pressed && wasPressed) || games.counted) wakeUI();
   if (exitHeld) {
-    gameOpen = false;
+    // endDark(): true for a game in play that the player touched, and it ends the game
+    if (games.endDark()) finishGame();
+    else gameOpen = false;
     holdFired = true;
     swallowGesture = true;
     return;
@@ -164,7 +169,7 @@ static void gameSounds() {
   else if ((e & GEV_GOOD) && games.game() != GAME_SONG) sfxPlay(games.game() == GAME_CATCH ? SFX_EAT : SFX_PLAY);
 }
 
-// fin de la partida (el juego acabo o nadie lo toco en 15 s): record y recompensa
+// fin de la partida (el juego acabo, nadie lo toco en 15 s o el dedo mantuvo "salir"): record y recompensa
 static void finishGame() {
   uint8_t g = games.game();
   gameShownScore = games.score();

@@ -57,14 +57,14 @@ struct MiniGames {
   bool over() const { return flow.phase == GP_OVER; }
   bool playing() const { return flow.phase == GP_PLAY; }
 
-  // The screen went dark with the game open (#94: PWR, the 1.75C's pocket lock; bedtime and
-  // the battery shutdown go the same way): the game ends now, keeping its score. True when
-  // the pet is paid for score() (Pet::playGame), as the game's own end would pay it: a game
-  // in play that the player touched, even one scoring 0. A game nobody touched (its title
-  // card, or no touch counted yet) pays nothing and spends nothing, as the exit chip leaves
-  // it and as an exercise with nothing done (#92). A game already over was paid at its end
-  // (the sketch's finishGame runs on the frame that ends it), so it isn't paid again, and
-  // neither is this one on a second call.
+  // The game ends now: by the exit chip (#129), or because the screen went dark with it open
+  // (#94: PWR, the 1.75C's pocket lock; bedtime and the battery shutdown go the same way),
+  // keeping its score. True when the pet is paid for score() (Pet::playGame), as the game's
+  // own end would pay it: a game in play that the player touched, even one scoring 0. A game
+  // nobody touched (its title card, or no touch counted yet) pays nothing and spends nothing,
+  // as an exercise with nothing done (#92). A game already over was paid at its end (the
+  // sketch's finishGame runs on the frame that ends it), so it isn't paid again, and neither
+  // is this one on a second call.
   bool endDark() {
     bool pay = flow.phase == GP_PLAY && played;
     flow.phase = GP_OVER;
@@ -87,8 +87,9 @@ struct MiniGames {
     if (gameDone() || flow.idleOut()) flow.phase = GP_OVER;
   }
 
-  // One touch report. Returns true when the player held the exit chip: leave
-  // now, without a reward. Touches before play starts (title card) and after
+  // One touch report. Returns true when the player held the exit chip: leave now. The
+  // sketch ends the game as any end does (endDark(): pay for a touched game, close an
+  // untouched one, #129). Touches before play starts (title card) and after
   // it ends do nothing. `dark`: the screen was off or dimmed when the report
   // came in; a touch that starts then is swallowed until it lifts (it only
   // wakes the screen) and never reaches the game.

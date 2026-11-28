@@ -314,8 +314,10 @@ SimScript simParseScript(const std::string &text, const std::string &name) {
       if (c.a < 0) return fail("usage: game keepy|catch|peek|song");
       c.op = OP_GAME;
     } else if (op == "gameplay") {
-      if (n < 2 || n > 3 || (w[1] != "point" && w[1] != "miss") || (n == 3 && !toInt(w[2], c.b, 1, 255)))
-        return fail("usage: gameplay point|miss [N] (N: the points, 1-255)");
+      // a miss is one thing: a count after `miss` would be ignored, so it is an error
+      if (n < 2 || n > 3 || (w[1] != "point" && w[1] != "miss") || (n == 3 && w[1] == "miss") ||
+          (n == 3 && !toInt(w[2], c.b, 1, 255)))
+        return fail("usage: gameplay point [N] | gameplay miss (N: the points, 1-255)");
       c.a = w[1] == "point";
       if (n == 2) c.b = 1;
       c.op = OP_GAMEPLAY;

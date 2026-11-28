@@ -97,7 +97,10 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
     reach.
   - **Peekaboo:** no 20 pop-up limit. A creature that ducks back untapped, or a tap on the
     wrong bush (or on any bush while none is up), ends it. It stays up less with every hit,
-    down to 550 ms.
+    down to 550 ms. A second tap on the pet just hit is never a miss (the bushes' hit areas
+    overlap, so it may lie in another bush's too), and neither is a double tap a moment after
+    it ducked (150 ms); a tap read just after the pet ducked still counts for 60 ms, so a
+    slow frame never turns a tap made in time into a miss.
   - **Berry Song:** one wrong note ends it (it was three), and the tune grows a note a round
     with no stop at 12, the notes getting shorter (down to about 210 ms); only a 100-note tune wins.
   - **Pay:** speed now rises with the run in steps, shown as **x1**, **x2**... under the
@@ -107,8 +110,11 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
     energy, food and weight it costs still follow how far it got.
   - Each game keeps a fresh record (new save keys `keephi`, `catchhi`, `peekhi` and
     `songhi`); the old `ghi`, `mgc`, `mgp` and `mgs` are left in the save, unread.
-  - The simulator has a `gameplay point|miss` step that plays a game to a point or a miss
-    (`sim/scripts/endless-games.txt`).
+  - **Leaving by the exit chip** (*Hold: exit*) pays what was done, like a miss: a run can
+    last minutes, so it is no longer thrown away. The speed, the record, the `Play:` line and
+    the result screen come as at any end; a game nobody touched just closes, for nothing.
+  - The simulator has a `gameplay point [N]` and a `gameplay miss` step that play a game to a
+    point or a miss (`sim/scripts/endless-games.txt`).
 - The Christmas tree, the Halloween pumpkins and two of the Easter eggs moved left, out of
   the berry garden's corner, and so did two spots of spring flowers and autumn leaves.
 

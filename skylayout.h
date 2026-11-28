@@ -54,7 +54,7 @@ inline const uint16_t STARS[][2] = { {120,140},{330,120},{370,210},{95,230},{250
 
 // The same stars over a minigame's or an exercise's screen at night (drawGameScene(),
 // gameui.cpp; #84) stay out of its words. During play they skip the HUD band at the top: the
-// exit chip or the hint, the score, the record, the lives and the time bar all end above
+// exit chip or the hint, the score, the record and the pay step all end above
 // GAME_HUD_BOTTOM. Under a screen of words in the middle of the sky (a game's title card, a
 // minigame's or an exercise's result) none shows: they would sit among its lines.
 #define GAME_HUD_BOTTOM 150
