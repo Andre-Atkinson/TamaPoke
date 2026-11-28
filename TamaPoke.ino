@@ -44,9 +44,13 @@
 #include "minigames.h"
 static_assert(POWER_GAME_AWAKE_MS == GameFlow::IDLE_MS, "a game stays bright until its own idle end");
 #include "exercise.h"
-// An untouched hold ends itself after IDLE_END_MS: the screen must not dim before that.
-// (The punch session is longer, so renderExercise() keeps it awake itself.)
-static_assert(StaminaHold::IDLE_END_MS <= POWER_GAME_AWAKE_MS, "an idle hold ends before the game's keep-awake does");
+// Push-ups left between reps end themselves after IDLE_END_MS: the screen must not dim before
+// that. (renderExercise() keeps both exercises awake itself while they run.)
+static_assert(PushUps::IDLE_END_MS <= POWER_GAME_AWAKE_MS, "idle push-ups end before the game's keep-awake does");
+// The original 1.75 reads a training tap or let-go up to a frame late (exercise.h): even the
+// narrowest punch window and push-up band stay wider than a frame (#126).
+static_assert(2 * RhythmPunch::WINDOW_MIN_MS > POWER_GAME_FRAME_MS && PushUps::BAND_MIN_MS > POWER_GAME_FRAME_MS,
+              "the narrowest window and band are wider than a training frame");
 #include "trainingcapture.h"
 #include "app.h"
 #include "gameui.h"
@@ -1295,7 +1299,9 @@ bool inPetZone(int16_t x, int16_t y) {
 // Wire errors are still errors; no I2C or serial printing inside the ISR.
 TrainingReport readTrainingTouch() {
   bool irq = takeTouchIrq();
-  if (!irq && !trainingCapture.down() && digitalRead(TP_INT) != LOW) return {};
+  // A push-up's let-go is confirmed by reports with no finger (LiftConfirm, #126): read on
+  // while it waits, as while a finger is down.
+  if (!irq && !trainingCapture.down() && !trainingCapture.liftPending() && digitalRead(TP_INT) != LOW) return {};
   TrainingReport failed;
   failed.attempted = true; failed.irq = irq;
   Wire.beginTransmission(TOUCH_ADDR);
@@ -1339,8 +1345,10 @@ void drainTrainingTouch() {
       continue;
     }
     // Capture time, not render/drain time: a tap is judged on when it happened
-    // (RhythmPunch::tap), so drawing a frame never moves it out of its window.
+    // (RhythmPunch::tap), so drawing a frame never moves it out of its window, and a
+    // let-go on when the finger left (PushUps::release, #126).
     if (event.action == TrainingTouch::HIT) exerciseTap(event.at);
+    else if (event.action == TrainingTouch::RELEASE) exerciseRelease(event.at);
   }
   wasPressed = trainingCapture.down();
 }
@@ -1357,7 +1365,7 @@ void leaveTraining() {
   trainingCapture.reset(held);
   wasPressed = false;
   trainingNeedsRelease = held;
-  touchNeedsRelease = held;  // never leak an exit hold or a stamina hold into the pet/menus
+  touchNeedsRelease = held;  // never leak an exit hold or a push-up into the pet/menus
   gTouchIrq = true;
 #endif
 }
@@ -1513,6 +1521,20 @@ bool petFollowing(uint32_t now) {
   return touchG.dragging(now) && petGesturesLive(petGestureGate());
 }
 
+#if !BOARD_AMOLED_175C
+// The original 1.75's push-up let-go, confirmed by its touch polls (LiftConfirm, #126).
+static LiftConfirm trainLift;
+#endif
+#if HOST_SIM
+uint8_t exerciseLiftReports() {
+#if BOARD_AMOLED_175C
+  return trainingCapture.liftReports();
+#else
+  return trainLift.pending ? trainLift.reports : 0;
+#endif
+}
+#endif
+
 // el toque se resuelve al LEVANTAR el dedo para distinguir tap de deslizar
 void handleTouch() {
   if (screenIsLocked() || autoTouch.active) return;  // no touch I2C while either lock is on
@@ -1542,7 +1564,9 @@ void handleTouch() {
 #if BOARD_AMOLED_175C
   if (!takeTouchIrq() && !wasPressed) return;
 #else
-  if (!gTouchIrq && !wasPressed) return;
+  // ...and while training waits to confirm a push-up's let-go (trainLift, #126): its
+  // confirming reports have no finger, so no interrupt asks for them.
+  if (!gTouchIrq && !wasPressed && !(trainOpen && trainLift.pending)) return;
   gTouchIrq = false;
 #endif
   // Un ciclo de solo direccion antes de leer. Sin esto, getPoint() se colgaba
@@ -1572,24 +1596,35 @@ void handleTouch() {
 #if !BOARD_AMOLED_175C
   // Original board: its exit, a tap on the top strip (y < TRAIN_EXIT_STRIP_H, marked by the
   // "tap: back" label), which now ends the session and pays for what was done (#78).
-  // Anywhere else a touch-down is a punch's tap and the finger that stays is the stamina
-  // hold; a release is never a tap.
+  // Anywhere else a touch-down is a punch's tap or a push-up going down, and its lift, once
+  // confirmed (LiftConfirm, #126), the push-up let go; a release is never a tap.
   if (trainOpen) {
     static bool counts = false;  // this contact didn't start on the top strip
+    uint32_t now = millis();
     if (pressed && !wasPressed) {
       wakeUI();
+      // A contact while a lift waits to be confirmed, after one report with no finger, is the
+      // same finger (an ACK in the middle of a tap or a hold, read on a poll that may come a
+      // frame later): not a new tap (R1-1, R2-1). After LiftConfirm::LET_GO_REPORTS of them
+      // the finger let go and this is a new press: the let-go first (R2-2).
+      bool same = trainLift.sameFinger();
+      if (trainLift.pressedAgain()) exerciseRelease(trainLift.at);
+      trainLift.back();
       counts = y >= TRAIN_EXIT_STRIP_H;
       if (!counts) {
-        exerciseHeld(false);
         if (exerciseExit()) {  // closed: leaveTraining() swallows the rest of this touch
+          trainLift.reset();
           wasPressed = pressed;
           return;
         }
-      } else {
-        exerciseTap(millis());
+      } else if (!same) {
+        exerciseTap(now);
       }
     }
-    exerciseHeld(pressed && counts);
+    if (!pressed) {
+      if ((wasPressed && counts) || trainLift.pending) trainLift.lost(now);
+      if (trainLift.confirm(now)) exerciseRelease(trainLift.at);
+    }
     wasPressed = pressed;
     return;
   }
@@ -1995,7 +2030,7 @@ static uint32_t screenKey() {
                         (uint32_t)pet.trAtk, (uint32_t)pet.trDef, (uint32_t)pet.trSpe, (uint32_t)pet.geneAtk,
                         (uint32_t)pet.geneDef, (uint32_t)pet.geneSpe, (uint32_t)pet.careMistakes,
                         (uint32_t)pet.fullness, (uint32_t)pet.joy, (uint32_t)pet.energy, (uint32_t)pet.hygiene,
-                        (uint32_t)pet.berryKnown, (uint32_t)pet.punchHi, (uint32_t)gLang,
+                        (uint32_t)pet.berryKnown, (uint32_t)gLang,
                         (uint32_t)pet.gameHi, (uint32_t)pet.catchHi, (uint32_t)pet.peekHi, (uint32_t)pet.songHi,
                         (uint32_t)pet.pace, (uint32_t)pet.bedPreset, (uint32_t)pet.eggPickMode,
                         (uint32_t)pet.sickMode, (uint32_t)pet.isSick() })  // #15: the Care row, the Progress line

@@ -21,6 +21,7 @@
 #include "../idlelife.h"
 #include "../bubble.h"
 #include "../gameui.h"
+#include "../trainingtouch.h"
 #include "../pet.h"
 
 extern Pet pet;  // the sketch's (TamaPoke.ino): the "nature" and "train" steps set it
@@ -241,6 +242,44 @@ int main(int argc, char **argv) {
         simTouchSet(false, 0, 0);
         run(SETTLE_MS);
         break;
+      case OP_PUSHUP: {
+        // down, until the firmware has the push-up down (its touch poll, 20 ms), then on to the
+        // middle of the band it planned (with `edge`, to just before its end), and up: the let-go
+        // lands within a poll of that moment
+        simTouchSet(true, (int16_t)c.a, (int16_t)c.b);
+        int32_t toLift = -1;
+        for (int k = 0; k < 50 && toLift < 0; k++) {
+          run(10);
+          toLift = exerciseMsToLift(millis(), c.c != 0);
+        }
+        if (toLift < 0) {
+          fprintf(stderr, "%s:%d: pushup: no push-up went down (not on the push-ups, or over)\n",
+                  o.script.c_str(), c.line);
+          return 1;
+        }
+        run((uint64_t)toLift);
+        if (!c.text.empty() && !shot(c.text)) return 1;  // the finger still down
+        simTouchSet(false, 0, 0);
+        if (c.d) {
+          // repress: down again once the touch poll has read LET_GO_REPORTS reports with no
+          // finger, before the lift is confirmed (R2-2); the finger stays down
+          bool ready = false;
+          for (int k = 0; k < 100 && !ready; k++) {
+            run(1);
+            ready = exerciseLiftReports() >= LiftConfirm::LET_GO_REPORTS;
+          }
+          if (!ready) {
+            fprintf(stderr, "%s:%d: pushup repress: the lift was confirmed before a second report "
+                            "with no finger was read\n", o.script.c_str(), c.line);
+            return 1;
+          }
+          simTouchSet(true, (int16_t)c.a, (int16_t)c.b);
+          run(SIM_TAP_DOWN_MS);
+          break;
+        }
+        run(SETTLE_MS);
+        break;
+      }
       case OP_SWIPE: {
         const int steps = 8;
         simTouchSet(true, (int16_t)c.a, (int16_t)c.b);

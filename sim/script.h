@@ -13,6 +13,21 @@
 //                            at the end of the hold, the finger still down (#78).
 //                            tools/gate.sh counts only `shot` lines in screens.txt, so a
 //                            hold's shot isn't counted there
+//   pushup X Y [edge] [repress] [SHOT]
+//                            one push-up let go in its green band (#126): the finger goes
+//                            down at (X,Y) and lifts at the middle of the band of the rep
+//                            the firmware planned (exerciseMsToLift); with `edge`, 25 ms
+//                            before the band's end instead, which is still in the band as the
+//                            firmware reads the lift (up to 20 ms late) but would not be at
+//                            the lift's confirmation, 40 ms later: it checks that the let-go
+//                            is timed when the finger left. With SHOT, also save SHOT.png
+//                            just before it lifts (so no shot is named `edge` or
+//                            `repress`). With `repress`, the finger goes down again at (X,Y)
+//                            once the firmware has read LiftConfirm::LET_GO_REPORTS reports
+//                            with no finger, before the lift is confirmed, and stays down: a
+//                            let-go and a new push-up (R2-2); the next `pushup` lifts it.
+//                            Not counted in screens.txt either. Too early or too late is a
+//                            plain `hold`.
 //   swipe left|right|up|down deslizar desde el centro
 //   swipe X0 Y0 X1 Y1 [DUR]  deslizar entre dos puntos (DUR >= 160ms, y < ~750ms para que cuente; 240ms)
 //   press pwr [N]            N pulsaciones cortas de PWR (3 = bloqueo de bolsillo)
@@ -89,7 +104,7 @@
 
 enum SimOp : uint8_t {
   OP_LANG, OP_CLOCK, OP_BATTERY, OP_USB, OP_CHARGING, OP_PMU,
-  OP_TAP, OP_HOLD, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
+  OP_TAP, OP_HOLD, OP_PUSHUP, OP_SWIPE, OP_PRESS_PWR, OP_PRESS_BOOT,
   OP_WAIT, OP_SERIAL, OP_SHOT, OP_IDLE, OP_SAY, OP_NATURE,
   OP_TRAIN, OP_GAME, OP_POOPS, OP_EXPECT, OP_EXPECT_NOT, OP_EXPECT_ONCE, OP_STEPS,
 };

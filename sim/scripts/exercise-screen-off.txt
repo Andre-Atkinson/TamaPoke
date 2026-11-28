@@ -4,11 +4,12 @@
 #   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script exercise-screen-off --out shots/
 # PWR (and on the 1.75C the pocket lock, three presses) ends an exercise at once and pays for
 # what was done, with no result screen; the screen comes back on to the creature. The serial
-# log (shots/serial.log) has one line per ending, "Training: punch count=2 gain=3 ... (screen
-# off)", "Training: hold count=1 gain=1 ... (screen off)", "Training: punch count=1 gain=1 ...
+# log (shots/serial.log) has one line per ending, "Training: punch count=2 gain=1 ... (screen
+# off)", "Training: pushup count=1 gain=1 ... (screen off)", "Training: punch count=1 gain=1 ...
 # (screen off)", and "TRAIN: asleep" for the note. The last section presses PWR on the result
-# screen of a finished punch: that ending prints the normal "Training: punch count=2 gain=3"
-# line once, and no "(screen off)" line (it was paid at the end of the session, not again).
+# screen of a punch ended by its miss (#126): that ending prints the normal "Training: punch
+# count=2 gain=1 miss" line once, and no "(screen off)" line (it was paid at the end of the
+# session, not again).
 # Then a ribbon finished by a session that PWR ends: its banner waits in the dark and shows
 # when the screen is back on (shot 56). Last, the battery runs out mid-punch: the punch is
 # paid ("Training: punch count=1 gain=1 ... (screen off)") before the PMU powers the board
@@ -20,8 +21,9 @@
 # check looks at the lines printed since the check before it, and a '*' stands for any run
 # of characters: the 1.75C adds "input_drops=0" before "(screen off)".
 # Timing as in exercises.txt: a tap is 80 ms down then 400 ms settling, an exercise starts
-# when the tap that chose it lifts, and the punch's windows are 400-1100 ms into each 1.5 s
-# swing (exercise.h).
+# when the tap that chose it lifts, and the punch's first windows are 400-1100, 1894-2570 and
+# 3354-4006 ms from its start (exercise.h): after two punches the third swing passing is the
+# miss, at about 4.1 s, so each PWR below comes before it.
 
 # new game: pick Charmander, hatch the egg
 wait 1s
@@ -44,29 +46,30 @@ shot 40-punch-two
 press pwr
 shot 41-punch-pwr-off
 expect-once Training:
-expect Training: punch count=2 gain=3*(screen off)
+expect Training: punch count=2 gain=1*(screen off)
 wait 5s
 # PWR again: the creature, not the exercise (no result screen, nothing resumed)
 press pwr
 wait 1s
 shot 42-punch-pwr-on
-# the Fitness page: strength +3 (two punches)
+# the Fitness page: strength +1 (two punches)
 swipe up
 swipe left
 shot 43-fitness-after-punch
 
-# the hold: a rep and a bit, lifted, then PWR: one rep paid
+# the push-ups: one rep let go in the green (the shot just before it lifts), then PWR: one
+# rep paid
 tap 233 320
 tap 233 240
-hold 233 270 2200ms 44-hold-held
+pushup 233 270 44-pushup-down
 press pwr
-shot 45-hold-pwr-off
+shot 45-pushups-pwr-off
 expect-once Training:
-expect Training: hold count=1 gain=1*(screen off)
+expect Training: pushup count=1 gain=1*(screen off)
 wait 5s
 press pwr
 wait 1s
-shot 46-hold-pwr-on
+shot 46-pushups-pwr-on
 
 # the pocket lock (three presses): on the 1.75C the lock hint, then dark, and three more
 # presses unlock. The 1.75 has no lock: it reads PWR every 250 ms, so quick presses merge
@@ -108,11 +111,11 @@ tap 264 404
 wait 1s
 shot 51-awake-again
 
-# PWR on the RESULT screen: the session ran to its end and was paid there (one "Training:
-# punch count=2 gain=3" line, no "(screen off)"), so PWR only closes the result and pays
-# nothing again. Dark at the press, the creature when the screen comes back on, and the
-# Fitness page shows strength 7 (3 + 1 from the sections above + this punch's 3, paid once;
-# 10 would be a second payment).
+# PWR on the RESULT screen: the session ran to its end (the third swing let pass, the miss)
+# and was paid there (one "Training: punch count=2 gain=1 miss" line, no "(screen off)"), so
+# PWR only closes the result and pays nothing again. Dark at the press, the creature when the
+# screen comes back on, and the Fitness page shows strength 3 (1 + 1 from the sections above
+# + this punch's 1, paid once; 4 would be a second payment).
 swipe up
 swipe left
 tap 233 320
@@ -121,11 +124,11 @@ wait 300ms
 tap 233 240
 wait 800ms
 tap 233 240
-wait 17s
+wait 2s
 shot 52-punch-result-before-pwr
 # paid at the end of the session, with no PWR press in it
 expect-once Training:
-expect Training: punch count=2 gain=3
+expect Training: punch count=2 gain=1 miss
 expect-not Training:*(screen off)
 press pwr
 shot 53-result-pwr-off
@@ -139,11 +142,11 @@ shot 55-fitness-after-result-pwr
 # PWR on the result paid nothing again
 expect-not Training:
 
-# A ribbon a session ended by PWR completes (#69, #88): strength set to 28 (the ribbon's goal
-# is 30), two punches (+3), PWR. The ribbon is gained at the press (its chime) and its banner
+# A ribbon a session ended by PWR completes (#69, #88): strength set to 29 (the ribbon's goal
+# is 30), two punches (+1), PWR. The ribbon is gained at the press (its chime) and its banner
 # waits in the dark: 6 s later, longer than the banner's 4 s, PWR back on shows it. The card
 # is still open on its Fitness page from the section above.
-train 28 1 0
+train 29 1 0
 tap 233 320
 tap 233 140
 wait 300ms
@@ -156,7 +159,7 @@ press pwr
 wait 500ms
 shot 56-ribbon-banner-after-pwr
 expect-once Training:
-expect Training: punch count=2 gain=3*(screen off)
+expect Training: punch count=2 gain=1*(screen off)
 
 # The battery runs out mid-punch (0 %, no USB): the punch is paid before the power-off.
 swipe up

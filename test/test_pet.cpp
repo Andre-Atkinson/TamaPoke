@@ -5,7 +5,7 @@
 #include "../dex.h"
 #include "../bedtime.h"
 #include "../audio.h"  // SFX_*, audioSetEnabled/audioSetSleeping (the shim's, muted)
-#include "../exercise.h"  // EX_COUNT, EX_GAIN_CAP (#78)
+#include "../exercise.h"  // exerciseGain, EX_MAX_COUNT (#78, #126)
 #include "../i18n.h"  // bannerLines, medalName (#82)
 #include <math.h>
 #include <string.h>
@@ -721,39 +721,46 @@ TEST(stats, el_huevo_no_tiene_stats) {
   CHECK_EQ(p.speStat(), (uint16_t)0);
 }
 
-// The calm exercises (#78, exercise.h): each punch or rep is worth 1.5 training points,
-// so a full session of EX_COUNT gives EX_GAIN_CAP (18, the old bag's cap per session).
-TEST(train, a_punch_is_worth_one_and_a_half_strength_points_up_to_18) {
+// The exercises (#78, exercise.h, endless since #126): each hit pays half its step, rising
+// every EX_TIER_HITS hits (exerciseGain): 4 hits pay 2, 12 pay 11, 22 pay 30.
+TEST(train, a_punch_pays_more_the_longer_the_run) {
   Pet p;
   makePet(p, 4);
-  CHECK_EQ(p.trainStrength(4), (uint8_t)6);
-  CHECK_EQ(p.trAtk, (uint8_t)6);
-  CHECK_EQ(p.trainStrength(3), (uint8_t)4);  // 4.5, rounded down
-  CHECK_EQ(p.trainStrength(EX_COUNT), (uint8_t)EX_GAIN_CAP);
-  CHECK_EQ(p.trAtk, (uint8_t)(6 + 4 + EX_GAIN_CAP));
-  CHECK_MSG(p.trainStrength(200) == EX_GAIN_CAP, "more than a session can land pays a session");
+  CHECK_EQ(p.trainStrength(4), (uint8_t)2);  // half a point each
+  CHECK_EQ(p.trAtk, (uint8_t)2);
+  CHECK_EQ(p.trainStrength(12), (uint8_t)11);
+  CHECK_EQ(p.trainStrength(22), (uint8_t)30);  // the ribbon's worth in one run
+  CHECK_EQ(p.trAtk, (uint8_t)43);
+  CHECK_MSG(p.trainStrength(255) == 57, "more than a session can land pays EX_MAX_COUNT's: what fits");
+  CHECK_EQ(p.trAtk, (uint8_t)100);
   CHECK_EQ(p.trDef, (uint8_t)0);
 }
 
-TEST(train, the_punch_record_is_the_most_punches_in_a_session) {
+TEST(train, each_exercise_keeps_its_record_of_the_most_hits_in_a_session) {
   Pet p;
   makePet(p, 4);
   p.trainStrength(7);
   CHECK_EQ(p.punchHi, (uint8_t)7);
   p.trainStrength(5);
   CHECK_EQ(p.punchHi, (uint8_t)7);
-  p.trainStrength(200);  // no session lands more than EX_COUNT: the record can't either
-  CHECK_EQ(p.punchHi, (uint8_t)EX_COUNT);
+  p.trainStrength(255);  // no session lands more than EX_MAX_COUNT: the record can't either
+  CHECK_EQ(p.punchHi, (uint8_t)EX_MAX_COUNT);
+  CHECK_EQ(p.pushHi, (uint8_t)0);
+  p.trainStamina(9);
+  CHECK_EQ(p.pushHi, (uint8_t)9);
+  p.trainStamina(3);
+  CHECK_EQ(p.pushHi, (uint8_t)9);
+  CHECK_EQ(p.punchHi, (uint8_t)EX_MAX_COUNT);
 }
 
-TEST(train, a_rep_is_worth_one_and_a_half_stamina_points_up_to_18) {
+TEST(train, a_push_up_pays_like_a_punch_and_trains_stamina_only) {
   Pet p;
   makePet(p, 4);
-  CHECK_EQ(p.trainStamina(4), (uint8_t)6);
-  CHECK_EQ(p.trDef, (uint8_t)6);
-  CHECK_EQ(p.trainStamina(200), (uint8_t)EX_GAIN_CAP);
-  CHECK_EQ(p.trDef, (uint8_t)(6 + EX_GAIN_CAP));
-  CHECK_MSG(p.trAtk == 0 && p.punchHi == 0, "the hold trains stamina only, and has no record");
+  CHECK_EQ(p.trainStamina(4), (uint8_t)2);
+  CHECK_EQ(p.trDef, (uint8_t)2);
+  CHECK_EQ(p.trainStamina(20), (uint8_t)25);
+  CHECK_EQ(p.trDef, (uint8_t)27);
+  CHECK_MSG(p.trAtk == 0 && p.punchHi == 0, "the push-ups train stamina only, and keep their own record");
 }
 
 // Arreglado al portar la bateria: trainStrength() devolvia la subida teorica
@@ -762,17 +769,17 @@ TEST(train, each_exercise_announces_what_really_went_in) {
   makePet(p, 4);
   p.trAtk = 95;
   p.trDef = 97;
-  CHECK_EQ(p.trainStrength(EX_COUNT), (uint8_t)5);  // 18, but only 5 fit
+  CHECK_EQ(p.trainStrength(12), (uint8_t)5);  // 11, but only 5 fit
   CHECK_EQ(p.trAtk, (uint8_t)100);
-  CHECK_EQ(p.trainStamina(EX_COUNT), (uint8_t)3);
+  CHECK_EQ(p.trainStamina(12), (uint8_t)3);
   CHECK_EQ(p.trDef, (uint8_t)100);
-  for (int i = 0; i < 3; i++) p.trainStrength(EX_COUNT);
+  for (int i = 0; i < 3; i++) p.trainStrength(12);
   CHECK_EQ(p.trAtk, (uint8_t)100);
 }
 
 // Both exercises cost and reward like the old bag: tired (-12, not under 5), a little
-// hungry (-5), weight burnt (a full session 24), joy +6, the heart from 5 points, bond +2,
-// the day's care and "exercised" (#44).
+// hungry (-5), weight burnt (2 a hit: 12 hits burn 24), joy +6, the heart from 4 hits, bond
+// +2, the day's care and "exercised" (#44).
 static void readyToTrain(Pet &p) {
   makePet(p, 4);
   setStats(p, 80, 50, 80, 80);
@@ -787,9 +794,9 @@ TEST(train, both_exercises_tire_feed_burn_and_cheer_like_the_bag) {
     readyToTrain(p);
     p.lastSeenEpoch = 100u * 86400 + 10 * 3600;  // a known day, so the care can be seen
     p.lastCareDay = 0;
-    if (kind == 0) p.trainStrength(EX_COUNT);
-    else p.trainStamina(EX_COUNT);
-    const char *k = kind ? "hold" : "punch";
+    if (kind == 0) p.trainStrength(12);
+    else p.trainStamina(12);
+    const char *k = kind ? "push-ups" : "punch";
     CHECK_MSG(p.lastCareDay == 100, k);  // it is the day's care (registerCare)
     CHECK_MSG(p.energy == 68, k);
     CHECK_MSG(p.fullness == 75, k);
@@ -798,10 +805,23 @@ TEST(train, both_exercises_tire_feed_burn_and_cheer_like_the_bag) {
     CHECK_MSG(p.bond == 16, k);  // +2 for the exercise, +4 for the day's first care
     CHECK_MSG(p.showHeart(), k);
     p.energy = 3;  // el suelo protege de dejarlo a cero
-    if (kind == 0) p.trainStrength(EX_COUNT);
-    else p.trainStamina(EX_COUNT);
+    if (kind == 0) p.trainStrength(12);
+    else p.trainStamina(12);
     CHECK_MSG(p.energy == 3, k);
   }
+}
+
+// A long run costs no more energy or food than a short one: only its weight burnt grows.
+TEST(train, a_long_run_burns_more_weight_and_costs_the_same) {
+  Pet p;
+  readyToTrain(p);
+  p.weight = 100;
+  p.trainStrength(40);
+  CHECK_EQ(p.weight, (uint8_t)20);  // 2 a hit
+  CHECK_EQ(p.energy, (uint8_t)68);
+  CHECK_EQ(p.fullness, (uint8_t)75);
+  p.trainStamina(EX_MAX_COUNT);
+  CHECK_EQ(p.weight, (uint8_t)0);  // never under 0
 }
 
 // An egg doesn't exercise: nothing paid, nothing spent.
@@ -811,29 +831,30 @@ TEST(train, an_egg_does_not_exercise) {
     readyToTrain(p);
     p.speciesId = -1;
     uint8_t atk = p.trAtk, def = p.trDef;
-    const char *k = kind ? "hold" : "punch";
-    uint8_t got = kind ? p.trainStamina(EX_COUNT) : p.trainStrength(EX_COUNT);
+    const char *k = kind ? "push-ups" : "punch";
+    uint8_t got = kind ? p.trainStamina(12) : p.trainStrength(12);
     CHECK_MSG(got == 0, k);
     CHECK_MSG(p.trAtk == atk && p.trDef == def, k);
     CHECK_MSG(p.energy == 80 && p.fullness == 80 && p.weight == 40 && p.joy == 50, k);
     CHECK_MSG(p.bond == 10 && !p.showHeart(), k);
+    CHECK_MSG(p.punchHi == 0 && p.pushHi == 0, k);
   }
 }
 
-TEST(train, a_short_session_burns_less_and_shows_the_heart_from_five_points) {
+TEST(train, a_short_session_burns_less_and_shows_the_heart_from_four_hits) {
   Pet p;
   readyToTrain(p);
   CHECK(!p.showHeart());
-  p.trainStrength(3);  // 4 points: burns 5, no heart
-  CHECK_EQ(p.weight, (uint8_t)35);
+  p.trainStrength(3);  // burns 6, no heart
+  CHECK_EQ(p.weight, (uint8_t)34);
   CHECK(!p.showHeart());
-  p.trainStamina(4);  // 6 points: burns 8, heart
-  CHECK_EQ(p.weight, (uint8_t)27);
+  p.trainStamina(4);  // burns 8, heart
+  CHECK_EQ(p.weight, (uint8_t)26);
   CHECK(p.showHeart());
 }
 
-// Nothing done (the hold left untouched, no punch landed, the exit straight away): nothing
-// paid and nothing spent, and it isn't the day's care.
+// Nothing done (no push-up done, no punch landed, the exit straight away): nothing paid and
+// nothing spent, and it isn't the day's care.
 TEST(train, a_session_with_nothing_done_neither_pays_nor_costs) {
   for (int kind = 0; kind < 2; kind++) {
     Pet p;
@@ -841,51 +862,70 @@ TEST(train, a_session_with_nothing_done_neither_pays_nor_costs) {
     p.lastSeenEpoch = 100u * 86400 + 10 * 3600;
     p.lastCareDay = 0;
     uint8_t got = kind ? p.trainStamina(0) : p.trainStrength(0);
-    const char *k = kind ? "hold" : "punch";
+    const char *k = kind ? "push-ups" : "punch";
     CHECK_MSG(got == 0, k);
     CHECK_MSG(p.energy == 80 && p.fullness == 80 && p.weight == 40 && p.joy == 50, k);
     CHECK_MSG(p.bond == 10 && p.lastCareDay == 0 && !p.showHeart(), k);
   }
 }
 
-TEST(train, the_record_survives_a_restart_and_an_impossible_one_reads_as_none) {
+// The records (#126: NVS `punhi` and `pushi`) survive a restart, and one no session can land
+// (past EX_MAX_COUNT: a damaged save) reads as none, each on its own.
+TEST(train, the_records_survive_a_restart_and_an_impossible_one_reads_as_none) {
   Pet a;
   makePet(a, 4);
   a.trainStrength(9);
+  a.trainStamina(14);
   Pet b;
   b.begin();
   CHECK_EQ(b.punchHi, (uint8_t)9);
+  CHECK_EQ(b.pushHi, (uint8_t)14);
   Preferences raw;
   raw.begin("tamapoke", false);
-  raw.putUChar("phi", EX_COUNT + 1);
+  raw.putUChar("punhi", EX_MAX_COUNT + 1);
   raw.end();
   Pet c;
   c.begin();
   CHECK_EQ(c.punchHi, (uint8_t)0);
+  CHECK_EQ(c.pushHi, (uint8_t)14);
   raw.begin("tamapoke", false);
-  raw.putUChar("phi", EX_COUNT);  // justo en el maximo: se conserva
+  raw.putUChar("punhi", EX_MAX_COUNT);  // justo en el maximo: se conserva
+  raw.putUChar("pushi", EX_MAX_COUNT + 1);
   raw.end();
   Pet d;
   d.begin();
-  CHECK_EQ(d.punchHi, (uint8_t)EX_COUNT);
+  CHECK_EQ(d.punchHi, (uint8_t)EX_MAX_COUNT);
+  CHECK_EQ(d.pushHi, (uint8_t)0);
+  raw.begin("tamapoke", false);
+  raw.putUChar("pushi", EX_MAX_COUNT);
+  raw.end();
+  Pet e;
+  e.begin();
+  CHECK_EQ(e.pushHi, (uint8_t)EX_MAX_COUNT);
 }
 
-// The old bag's tap record (`shi`) is retired, not migrated: nothing reads, writes or clears
-// it, so an older firmware flashed back still finds the player's record.
-TEST(train, the_old_bag_record_is_left_in_nvs_as_it_was) {
+// The records from before the exercises were endless are retired, not migrated (#126, owner's
+// decision 2026-11-28: fresh records): the 12-swing punch's `phi` and the old bag's tap record
+// `shi` are neither read, written nor cleared, so an older firmware flashed back still finds
+// the player's records, and the new ones start at none.
+TEST(train, the_old_records_are_left_in_nvs_as_they_were) {
   Pet a;
   makePet(a, 4);
   Preferences raw;
   raw.begin("tamapoke", false);
   raw.putUShort("shi", 57);
+  raw.putUChar("phi", 12);
   raw.end();
   Pet b;
   b.begin();
-  b.trainStrength(EX_COUNT);  // saves
+  CHECK_MSG(b.punchHi == 0, "the 12-swing record is not the endless punch's");
+  b.trainStrength(5);  // saves
   raw.begin("tamapoke", true);
   CHECK_EQ(raw.getUShort("shi", 0), (uint16_t)57);
+  CHECK_EQ(raw.getUChar("phi", 0), (uint8_t)12);
+  CHECK_EQ(raw.getUChar("punhi", 0), (uint8_t)5);
   raw.end();
-  CHECK_EQ(b.punchHi, (uint8_t)EX_COUNT);
+  CHECK_EQ(b.punchHi, (uint8_t)5);
 }
 
 TEST(play, minijuego_entrena_velocidad_y_guarda_record) {
@@ -1572,12 +1612,12 @@ static void hourlyCare(Pet &p) {
 }
 
 TEST(ribbons, the_thresholds_are_reachable) {
-  CHECK(RIBBON_STR <= 2 * EX_GAIN_CAP);  // the punch's cap per session (Pet::trainStrength, #78)
+  CHECK(RIBBON_STR <= exerciseGain(22));  // one 22-punch run (Pet::trainStrength, #78, #126)
   CHECK(RIBBON_SPD <= 10 * 3);  // a game at par
   Pet p;
   makePet(p, 4);
   for (int i = 0; i < 10; i++) p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);
-  for (int i = 0; i < 2; i++) p.trainStrength(EX_COUNT);
+  p.trainStrength(22);
   p.exerciseOver();  // as the last game's screen closes
   CHECK(p.hasMedal(MED_SPD));
   CHECK(p.hasMedal(MED_STR));
@@ -2061,7 +2101,7 @@ TEST(nature, the_training_bonus_is_25_percent_rounded_up) {
   }
 }
 
-// strength: the rhythm punch (Pet::trainStrength, #78), 1.5 points a punch, 18 at most a session
+// strength: the rhythm punch (Pet::trainStrength, #78, #126): 1 punch pays 1, 22 pay 30
 TEST(nature, greedy_trains_strength_25_percent_more) {
   for (uint8_t n = 0; n < NAT_COUNT; n++) {
     bool bonus = n == NAT_GREEDY;
@@ -2069,29 +2109,29 @@ TEST(nature, greedy_trains_strength_25_percent_more) {
     makePet(p, 4);
     p.nature = n;
     CHECK_EQ(p.trainStrength(1), (uint8_t)(bonus ? 2 : 1));  // a small gain still counts
-    CHECK_EQ(p.trainStrength(EX_COUNT), (uint8_t)(bonus ? 23 : 18));
-    CHECK_EQ(p.trAtk, (uint8_t)(bonus ? 25 : 19));
+    CHECK_EQ(p.trainStrength(22), (uint8_t)(bonus ? 38 : 30));
+    CHECK_EQ(p.trAtk, (uint8_t)(bonus ? 40 : 31));
     p.trAtk = 90;  // the cap still holds, and the punch says what really went in
-    CHECK_EQ(p.trainStrength(EX_COUNT), (uint8_t)10);
+    CHECK_EQ(p.trainStrength(22), (uint8_t)10);
     CHECK_EQ(p.trAtk, (uint8_t)100);
     CHECK_EQ(p.trSpe, (uint8_t)0);
     CHECK_EQ(p.trDef, (uint8_t)0);
   }
 }
 
-// stamina's active route: the stamina hold (Pet::trainStamina, #78), 1.5 points a rep, 18 at
-// most a session; tidy trains it 25% more, as it does the passive one (Pet::tick)
-TEST(nature, tidy_trains_stamina_in_the_hold_25_percent_more) {
+// stamina's active route: the push-ups (Pet::trainStamina, #78, #126), paid like the punch;
+// tidy trains it 25% more, as it does the passive one (Pet::tick)
+TEST(nature, tidy_trains_stamina_in_the_push_ups_25_percent_more) {
   for (uint8_t n = 0; n < NAT_COUNT; n++) {
     bool bonus = n == NAT_TIDY;
     Pet p;
     makePet(p, 4);
     p.nature = n;
     CHECK_EQ(p.trainStamina(1), (uint8_t)(bonus ? 2 : 1));
-    CHECK_EQ(p.trainStamina(EX_COUNT), (uint8_t)(bonus ? 23 : 18));
-    CHECK_EQ(p.trDef, (uint8_t)(bonus ? 25 : 19));
+    CHECK_EQ(p.trainStamina(22), (uint8_t)(bonus ? 38 : 30));
+    CHECK_EQ(p.trDef, (uint8_t)(bonus ? 40 : 31));
     p.trDef = 90;
-    CHECK_EQ(p.trainStamina(EX_COUNT), (uint8_t)10);
+    CHECK_EQ(p.trainStamina(22), (uint8_t)10);
     CHECK_EQ(p.trDef, (uint8_t)100);
     CHECK_EQ(p.trAtk, (uint8_t)0);
     CHECK_EQ(p.trSpe, (uint8_t)0);
@@ -4100,7 +4140,7 @@ TEST(quietalerts, a_fit_earned_by_training_sounds_in_quiet_hours_without_a_clock
   Pet p;
   exerciseAtNight(p);
   uint32_t n = mockSfxCount();
-  p.trainStrength(EX_COUNT);  // burns 24: no weight left
+  p.trainStrength(12);  // burns 24: no weight left
   CHECK_EQ(p.weight, (uint8_t)0);
   advance(p, 1);
   CHECK(p.hasMedal(MED_FIT));
@@ -4114,7 +4154,7 @@ TEST(quietalerts, a_fit_earned_by_training_sounds_in_quiet_hours_on_the_days_fir
   p.lastSeenEpoch = 100u * 86400 + 23 * 3600;  // 23:00 of a known day
   p.lastCareDay = 0;
   uint32_t n = mockSfxCount();
-  p.trainStrength(EX_COUNT);
+  p.trainStrength(12);
   CHECK_EQ(p.weight, (uint8_t)0);
   CHECK_EQ(p.lastCareDay, (uint32_t)100);  // the care counted
   CHECK(p.hasMedal(MED_FIT));
@@ -4140,7 +4180,7 @@ TEST(quietalerts, a_fit_earned_by_playing_a_game_sounds_in_quiet_hours) {
 TEST(quietalerts, an_exercise_fit_is_gained_by_the_next_tick_not_inside_the_game) {
   Pet p;
   exerciseAtNight(p);
-  p.trainStrength(EX_COUNT);
+  p.trainStrength(12);
   CHECK_EQ(p.weight, (uint8_t)0);
   CHECK_MSG(!p.hasMedal(MED_FIT), "not inside trainStrength()");
   CHECK(!p.showMedal());
@@ -4163,7 +4203,7 @@ TEST(quietalerts, only_the_tick_right_after_exercise_counts_as_the_players) {
   Pet p;
   exerciseAtNight(p);
   p.weight = 50;  // the exercise (24) leaves some: no IN SHAPE
-  p.trainStrength(EX_COUNT);
+  p.trainStrength(12);
   advance(p, 1);
   CHECK(!p.hasMedal(MED_FIT));
   p.ageMinutes = 9 * MINUTES_PER_LEVEL - 1;
@@ -4260,10 +4300,10 @@ TEST(quietalerts, a_ribbon_earned_by_exercise_sounds_in_quiet_hours) {
 
   Pet q;  // the punch's, gained by the next tick (the screen's end not seen)
   awakeWithSound(q);
-  q.trAtk = RIBBON_STR - 10;
+  q.trAtk = RIBBON_STR - 5;
   q.quietHours = true;
   n = mockSfxCount();
-  q.trainStrength(7);  // 7 punches: +10
+  q.trainStrength(7);  // 7 punches: +5
   advance(q, 1);
   CHECK(q.hasMedal(MED_STR));
   CHECK_EQ(mockSfxCount(), n + 1);
@@ -4381,10 +4421,10 @@ TEST(exercise, holding_starts_no_banner) {
 TEST(exercise, a_screen_closed_dark_keeps_its_banner_until_the_screen_is_back) {
   Pet p;
   makePet(p, 4);
-  p.trAtk = RIBBON_STR - 3;
+  p.trAtk = RIBBON_STR - 1;
   ExerciseScreen screen;
   screen.update(true, p, false);
-  p.trainStrength(2);  // +3: the ribbon's goal; then PWR ends the session
+  p.trainStrength(2);  // +1: the ribbon's goal; then PWR ends the session
   screen.update(false, p, true);
   CHECK_MSG(p.hasMedal(MED_STR), "gained as the screen closes");
   for (int i = 0; i < 600; i++) {  // a minute in the dark, a pass every 100 ms
@@ -4406,7 +4446,7 @@ TEST(exercise, a_screen_closed_dark_keeps_its_banner_until_the_screen_is_back) {
 TEST(exercise, only_a_screen_that_closed_dark_holds_until_it_is_back) {
   Pet p;
   makePet(p, 4);
-  p.trAtk = RIBBON_STR - 3;
+  p.trAtk = RIBBON_STR - 1;
   ExerciseScreen lit;
   lit.update(true, p, false);
   p.trainStrength(2);
@@ -4421,7 +4461,7 @@ TEST(exercise, only_a_screen_that_closed_dark_holds_until_it_is_back) {
 
   Pet q;
   makePet(q, 4);
-  q.trAtk = RIBBON_STR - 3;
+  q.trAtk = RIBBON_STR - 1;
   ExerciseScreen dark;
   dark.update(true, q, false);
   q.trainStrength(2);

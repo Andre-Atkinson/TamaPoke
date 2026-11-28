@@ -2,7 +2,7 @@
 # capitals ptglyphs.h draws (A' A~ E' I' O' O^ O~), and two names for the player in mixed
 # case, which also show the four no UI string uses (A` A^ E^ U').
 # By day (10:00): all of it. By night (22:00, shots 13-18): the main screen's status line
-# and release dialog and the 12-rep hold result, whose ink and colours change with the
+# and release dialog and the push-ups' result, whose ink and colours change with the
 # night, and the card pages, which keep their day colours (shot as a check). The banners
 # (MEDALHA!, OTIMO!) and the clock prompt (QUE HORAS SAO?) are not shot at night: they are
 # drawn in fixed colours (UI_BAR_WARN and UI_INK in drawCelebration, UI_BG_DAY and UI_INK
@@ -56,25 +56,28 @@ shot 06-release
 tap 298 278
 wait 520ms
 
-# the hold, one rep then no finger for 15 s: 1 REPETICAO, FOLEGO +n
+# the push-ups (#126), one rep then no finger for 15 s: 1 FLEXAO, FOLEGO +1
 swipe up
 swipe left
 tap 233 320
 tap 233 240
-hold 233 270 2200ms
+pushup 233 270
 wait 16s
-shot 07-hold-one-rep
+shot 07-pushups-one-rep
 wait 5s
 
-# the hold, all 12 reps with the stamina ribbon one point off: 12 REPETICOES, FOLEGO +n,
-# then the ribbon's banner (MEDALHA! FITA DE FOLEGO)
+# the push-ups, three reps with the stamina ribbon one point off, then one held too long:
+# DEMASIADO TARDE!, 3 FLEXOES, FOLEGO +2, then the ribbon's banner (MEDALHA! FITA DE FOLEGO)
 train 0 9 0
 swipe up
 swipe left
 tap 233 320
 tap 233 240
-hold 233 270 19s
-shot 08-hold-result
+pushup 233 270
+pushup 233 270
+pushup 233 270
+hold 233 270 2500ms
+shot 08-pushups-result
 wait 4s
 shot 09-ribbon-banner
 wait 6s
@@ -127,13 +130,16 @@ hold 233 200 3500ms
 shot 17-release-night
 tap 298 278
 wait 520ms
-# the hold, 12 reps, at night: 12 REPETICOES in the night ink, FOLEGO +n in the night
+# the push-ups at night, as above: 3 FLEXOES in the night ink, FOLEGO +2 in the night
 # stamina colour. Still 22:00: the clock was set less than a minute of taps ago.
 train 0 9 0
 swipe up
 swipe left
 tap 233 320
 tap 233 240
-hold 233 270 19s
-shot 18-hold-result-night
+pushup 233 270
+pushup 233 270
+pushup 233 270
+hold 233 270 2500ms
+shot 18-pushups-result-night
 wait 4s

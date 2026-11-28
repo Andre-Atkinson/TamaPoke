@@ -118,11 +118,15 @@ inline uint8_t brightnessFor(const PowerCtx &c) {
   return t;
 }
 
+// The frame while a minigame or an exercise is open: the games' physics are tuned to it, and
+// the original 1.75 reads a training tap up to a frame late (exercise.h, #126).
+constexpr uint32_t POWER_GAME_FRAME_MS = 85;
+
 // ms entre frames; 0 = no se dibuja (pantalla apagada). Cada frame cuesta un render
 // completo y el volcado del lienzo por QSPI, y el panel solo cambia si se redibuja.
 inline uint32_t frameIntervalMs(const PowerCtx &c) {
   if (c.screenOff) return 0;
-  if (c.gameOpen) return 85;  // el juego manda: su fisica esta afinada a este periodo
+  if (c.gameOpen) return POWER_GAME_FRAME_MS;  // el juego manda: su fisica esta afinada a este periodo
   uint32_t ms;
   uint8_t stage = dimStageNow(c);
   if (stage == DIM_OFF) ms = 1000;

@@ -60,6 +60,26 @@ fork's. `web/` here still holds upstream's 1.19 build and is not hosted.
 
 ### Changed
 
+- **Training is endless and skill-based** (#126). Both exercises on the stat card's *Train*
+  button now go on until the first miss instead of stopping at 12, and get harder with
+  every hit, so a good player can keep training. The miss only ends the session: it pays for
+  every hit, and each hit pays more the longer the run goes (half a point for each of the
+  first five, then a point, then a point and a half, a step up every five hits, shown as
+  **x1**, **x2**... under the count, with a chime at each step). 12 hits pay 11 (a perfect
+  12 paid 18 before), 22 pay 30, the strength ribbon in one run. Until the first hit lands
+  the session is a warm-up, where a miss costs nothing. The result says how it ended
+  (**MISSED!**, **TOO EARLY!**, **TOO LATE!**).
+  - **Punch:** each punch makes the swings quicker and the moment to tap shorter. A swing
+    let pass, or a tap while the bag isn't lit, is the miss, so tapping non-stop no longer
+    works.
+  - **Push-ups** replace the stamina hold: press and hold, and the creature goes down while
+    a bar fills; let go while it is in the green band. Too early or too late is the miss.
+    Each rep has its own speed and band, so it has to be watched, and they get quicker and
+    shorter. A let-go counts only once the touch panel has reported no finger for 40 ms,
+    so one empty report from the panel can't end a run, and a finger let go and pressed
+    straight back down counts as a rep and the next push-up.
+  - Each exercise keeps its own record (new save keys `punhi` and `pushi`); the old
+    12-swing punch record (`phi`) is left in the save, unread.
 - The Christmas tree, the Halloween pumpkins and two of the Easter eggs moved left, out of
   the berry garden's corner, and so did two spots of spring flowers and autumn leaves.
 

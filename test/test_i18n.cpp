@@ -7,6 +7,7 @@
 #include "../pet.h"  // MED_COUNT, Pet::nick
 #include "../dex.h"
 #include "../uitext.h"  // headerSize()
+#include "../exercise.h"  // EX_MAX_COUNT
 #include <algorithm>
 #include "../ptglyphs.h"
 #include "../cardlayout.h"
@@ -692,20 +693,24 @@ TEST(i18n, the_hold_to_exit_label_fits_its_button) {
   gLang = LANG_DEFAULT;
 }
 
-// The calm exercises' texts (#78, gameui.cpp) fit where they are drawn:
+// The training exercises' texts (#78, #126, gameui.cpp) fit where they are drawn:
 //  - the hints, size 2 at y=46, where the round panel is 278 px wide: with a 12 px margin
-//    each side, 21 letters;
+//    each side, 21 letters (the push-ups' too early / too late and the punch's missed are
+//    shown there too);
 //  - the choice's title, size 3 at y=48 (283 px): 14 letters, like the clock prompt's;
 //  - the choice's names, size 3, and what each trains, size 2, in a 320 px button with
 //    8 px inside each end: 16 and 25 letters; the stat card's TRAIN button, size 2 in
 //    274 px: 21 letters;
-//  - the result: the count (at most two digits), size 4 within 400 px, and the gain, size 3
-//    at y=210 within 360 px.
+//  - the result: the count (up to EX_MAX_COUNT, three digits), size 4 within 400 px, the miss
+//    word (missed, too early, too late), size 3 at y=100 (a chord of about 382 px), and the
+//    gain, size 3 at y=210 within 360 px.
 TEST(i18n, the_exercise_texts_fit_where_they_are_drawn) {
   for (int lang = 0; lang < LANG_COUNT; lang++) {
     gLang = (Lang)lang;
-    for (StrId id : {S_PUNCH_HINT, S_HOLD_HINT, S_HOLD_KEEP})
+    for (StrId id : {S_PUNCH_HINT, S_HOLD_HINT, S_HOLD_KEEP, S_MISSED, S_TOO_EARLY, S_TOO_LATE})
       CHECK_MSG(strlen(T(id)) * 12 <= 278 - 2 * 12, std::string("too wide: ") + T(id));
+    for (StrId id : {S_MISSED, S_TOO_EARLY, S_TOO_LATE})  // the result's miss word
+      CHECK_MSG(strlen(T(id)) * 18 <= 382, std::string("too wide: ") + T(id));
     CHECK_MSG(strlen(T(S_EX_TITLE)) * 18 <= 252, std::string("too wide: ") + T(S_EX_TITLE));
     for (StrId id : {S_EX_PUNCH, S_EX_HOLD})
       CHECK_MSG(strlen(T(id)) * 18 <= 320 - 16, std::string("too wide: ") + T(id));
@@ -719,7 +724,7 @@ TEST(i18n, the_exercise_texts_fit_where_they_are_drawn) {
       CHECK_MSG(strlen(T(id)) * 24 <= 400, std::string("too wide: ") + T(id));
     char b[32];
     for (StrId id : {S_PUNCHES_FMT, S_REPS_FMT}) {
-      snprintf(b, sizeof(b), T(id), 12u);
+      snprintf(b, sizeof(b), T(id), (unsigned)EX_MAX_COUNT);
       CHECK_MSG(strlen(b) * 24 <= 400, std::string("too wide: ") + b);
     }
     for (StrId id : {S_STR_GAIN_FMT, S_STA_GAIN_FMT}) {

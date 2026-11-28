@@ -147,15 +147,16 @@ static_assert(ACCM_LV10 == MED_LV10 && ACCM_LV25 == MED_LV25 && ACCM_LV50 == MED
                   ACCM_RIBBONS == (MED_STR | MED_STA | MED_SPD),
               "accessory.h's medals are pet.h's");
 // Training points (0-100) that earn each ribbon (#76), reachable in a normal pet's life:
-//   strength 30: the rhythm punch (#78) pays 1.5 points a punch, at most 18 a session, so
-//     two sessions;
+//   strength 30: the rhythm punch (#78) pays more a punch the longer the run (#126,
+//     exerciseGain): one 22-punch run, or a few shorter ones (12 punches pay 11);
 //   stamina 10: steady care pays 1 point per STAMINA_CARE_MIN awake minutes with every need
 //     at 40 or more, so 5 good hours. Energy counts too, and awake it only falls (about an
 //     hour from full to 40; only sleep brings it back), so the good minutes come from a pet
 //     that is fed, clean, happy AND rested: put to bed a while when it's tired, as its
 //     "Worn out..." status asks. Looked after hourly with such naps, about a day and a half
 //     (the test ribbons.the_thresholds_are_reachable plays it); never napped, about a week on
-//     the relaxed pace, longer on the normal one (the stamina hold, #78, adds a faster way: up to 18 a session).
+//     the relaxed pace, longer on the normal one (the push-ups, #78 and #126, add a faster way:
+//     12 reps pay 11, 22 pay 30).
 //     Owner's call, 2026-11-16: rest is part of steady care;
 //   speed 30: a Play minigame at par pays 3, so about ten games.
 #define RIBBON_STR 30
@@ -321,12 +322,13 @@ public:
   uint16_t lastMilestone = 0;  // hito de racha ya celebrado
   uint16_t gameHi = 0;     // record de keepy-uppy, el minijuego original (del jugador)
   uint16_t catchHi = 0, peekHi = 0, songHi = 0;  // records de Berry Catch, Peekaboo y Berry Song
-  // Most punches landed in one rhythm-punch session (#78), 0 to EX_COUNT: NVS `phi`, the
-  // player's like the minigames' records. The old tap-as-fast-as-you-can bag's record
-  // (`shi`) is no longer read, written or shown: a rhythm session lands far fewer punches,
-  // so it would be out of reach. Its key stays in NVS as it was, so an older firmware
-  // flashed back still finds it.
+  // Most punches landed in one rhythm-punch session and most push-ups in one session, 0 to
+  // EX_MAX_COUNT: NVS `punhi` and `pushi` (#126), the player's like the minigames' records.
+  // Records from before the exercises were endless are kept as they were and no longer read:
+  // the 12-swing punch's `phi` and the tap-as-fast-as-you-can bag's `shi` (#78), so an older
+  // firmware flashed back still finds them; the stamina hold had none.
   uint8_t punchHi = 0;
+  uint8_t pushHi = 0;
 
   void begin();                 // carga estado de NVS (o crea el primer huevo)
   void update(uint32_t nowMs);  // llamar en cada loop()
@@ -376,10 +378,11 @@ public:
   // result screen (#76).
   uint8_t playGame(uint8_t game, uint16_t raw);
   uint16_t gameBest(uint8_t game) const;  // record de un minijuego (0 si no existe)
-  // The calm exercises (exercise.h, #78): a rhythm-punch session with `punches` landed
-  // trains strength, a stamina-hold session with `reps` done trains stamina, 1.5 points
-  // each up to EX_GAIN_CAP. Both cost and reward like any exercise (exerciseDone); a
-  // session with nothing done does neither. They return the points that went in.
+  // The exercises (exercise.h, #78, endless since #126): a rhythm-punch session with
+  // `punches` landed trains strength, a push-up session with `reps` done trains stamina, each
+  // hit paying more the longer the run (exerciseGain), and each keeps its record. Both cost
+  // and reward like any exercise (exerciseDone); a session with nothing done does neither.
+  // They return the points that went in.
   uint8_t trainStrength(uint8_t punches);
   uint8_t trainStamina(uint8_t reps);
 
@@ -644,7 +647,7 @@ private:
   void registerCare();   // primer cuidado del dia: racha + vinculo
   void eatBerry(uint8_t color);  // a berry eaten (feedBerry, pickBerry): no care or save of its own
   uint8_t playReward(uint8_t n);  // recompensa de un minijuego, n = 0..GAME_SCORE_CAP; the speed gained
-  void exerciseDone(uint8_t work);  // an exercise session's cost and reward (#78)
+  void exerciseDone(uint8_t hits);  // an exercise session's cost and reward (#78)
   void addBond(uint8_t amt);
   void checkMedals(bool byTick);  // byTick: from the minute tick, no exercise since the last one
   bool exercised = false;  // a minigame or an exercise since the last tick (#44): RAM only

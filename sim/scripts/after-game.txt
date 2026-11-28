@@ -48,9 +48,10 @@ wait 15s
 shot game-result
 wait 6s
 
-# the rhythm punch (#78), two punches on the beat: +3 strength reaches the ribbon. Its
-# result has no stars at night either, and the ribbon's banner waits for it to close (#69).
-train 28 10 27
+# the rhythm punch (#78), two punches on the beat: +1 strength reaches the ribbon (#126).
+# Its result, at the third swing let pass, has no stars at night either, and the ribbon's
+# banner waits for it to close (#69).
+train 29 10 27
 swipe up
 swipe left
 tap 233 320
@@ -58,9 +59,9 @@ tap 233 140
 wait 300ms
 shot punch-play
 tap 233 240
-wait 750ms
+wait 900ms
 tap 233 240
-wait 16s
+wait 2s
 shot punch-result
 wait 3500ms
 shot punch-ribbon-banner

@@ -1,4 +1,4 @@
-// The minigames' screens and the calm exercises (#41: moved out of TamaPoke.ino; #78
+// The minigames' screens and the training exercises (#41: moved out of TamaPoke.ino; #78
 // replaced the strength-training sack): starting and finishing a game or an exercise,
 // its touches and sounds, and drawing it. The games' own logic is in minigames.h and the
 // exercises' in exercise.h; render() and handleTouch() call in here.
@@ -14,7 +14,7 @@ inline const char *const *const GAME_ICON[GAME_COUNT] = { SPR_ICON_PLAY, SPR_ICO
                                                           SPR_ICON_NOTE };
 
 extern bool gameOpen;   // a minigame is on screen
-extern bool trainOpen;  // an exercise is on screen (the rhythm punch or the stamina hold), or its result
+extern bool trainOpen;  // an exercise is on screen (the rhythm punch or the push-ups), or its result
 extern bool trainPick;  // the stat card shows the exercise choice in place of the stats
 
 void startGame();
@@ -27,11 +27,15 @@ void gameForceNext(uint8_t g);
 void gameTouch(bool pressed, int16_t x, int16_t y);
 void renderGame();
 
-// The calm exercises (#78). kind: EX_PUNCH or EX_HOLD (exercise.h).
+// The exercises (#78, endless since #126). kind: EX_PUNCH or EX_HOLD (the push-ups, exercise.h).
 void startExercise(uint8_t kind);
 // A touch-down while training, at the time it was captured (the 1.75C's HIT; the 1.75's
-// poll): on the punch screen it may land a punch. A release is never a tap.
+// poll): on the punch screen a punch (or the miss), on the push-ups going down. A release
+// is never a tap.
 void exerciseTap(uint32_t at);
+// A confirmed lift of a finger that went down as a tap (LiftConfirm, trainingtouch.h), timed
+// when it left: on the push-ups, letting go (a rep, or the miss).
+void exerciseRelease(uint32_t at);
 // The pet's sprite was just reloaded (ensureMon): the punch's lunge is planned again (#90).
 void exerciseSpriteChanged();
 // The exit while training: ends the session and pays for what was done (nothing on the
@@ -52,9 +56,15 @@ void playEndNow(const char *why);
 // The 1.75's exit: a touch-down above this y (the top strip) leaves. The exercise screens
 // draw "tap: back" inside it, so it is no longer invisible, and end it above the hint.
 constexpr int TRAIN_EXIT_STRIP_H = 42;
-// The 1.75: whether a finger that counts for the hold is on. Call it after every
-// successful poll: a hold goes stale when the reports stop (exerciseHolding in gameui.cpp).
-void exerciseHeld(bool on);
+#endif
+#if HOST_SIM
+// The simulator's `pushup` step: ms from now until the lift of the push-up going down: the
+// middle of its green band, or with `edge` just before the band's end. -1 when no push-up
+// is down.
+int32_t exerciseMsToLift(uint32_t now, bool edge);
+// ...and its `repress`: the reports with no finger the touch poll has read since the finger
+// lifted, 0 when no lift waits to be confirmed (TamaPoke.ino, LiftConfirm, R2-2).
+uint8_t exerciseLiftReports();
 #endif
 void renderExercise();
 void renderTrainPick();                     // the choice, on the stat card

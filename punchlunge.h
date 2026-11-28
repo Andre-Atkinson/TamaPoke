@@ -30,13 +30,15 @@
 #include "exercise.h"
 
 struct PunchLunge {
-  // Back to IDLE by then. A punch lands at most WINDOW_MS after its swing's contact and the
-  // next window opens WINDOW_MS before the next contact, so the pet is idle again well
-  // before the next "now!": the lunge never sits on the cue the player times against.
+  // Back to IDLE by then, and at least CLEAR_MS before the next swing's window opens
+  // (RhythmPunch::nextOpen), so the lunge never sits on the cue the player times against.
+  // As the swings get quicker (#126) the lunge is cut shorter: at the quickest, a punch
+  // landed at the very end of its window leaves the strike about 130 ms (the test checks it).
   static constexpr uint32_t MAX_MS = 700;
+  static constexpr uint32_t CLEAR_MS = 100;
   static constexpr uint8_t MAX_FRAMES = 24;  // PmdAct::ms[]: a TPK2 action has at most 24
   // The room on the punch screen, from the pet's feet and its centre (gameui.cpp checks it
-  // against the layout): the tallest frame stays under the time bar (57 rows at scale 4,
+  // against the layout): the tallest frame stays under the pay step (57 rows at scale 4,
   // with a small gap), and neither side reaches past the round panel's edge.
   static constexpr int ROOM_UP = 228;
   static constexpr int ROOM_SIDE = 120;
@@ -89,12 +91,19 @@ struct PunchLunge {
   bool isFor(const uint8_t *d, uint8_t w_, uint8_t h_, uint8_t n) const {
     return d == data && w_ == w && h_ == h && n == frames;
   }
+  // How long the lunge after the last punch may run: MAX_MS, or less so it is over CLEAR_MS
+  // before the next window opens.
+  static uint32_t lengthFor(const RhythmPunch &p) {
+    uint32_t gap = p.nextOpen() - p.lastPunchAt;
+    if ((int32_t)gap < (int32_t)CLEAR_MS) return 0;
+    return gap - CLEAR_MS < MAX_MS ? gap - CLEAR_MS : MAX_MS;
+  }
   // The frame to draw at `now` (its durations in `ms`), or -1 for the pet on IDLE: only
-  // after a landed punch, from the strike at the sprite's own pace, never past MAX_MS.
+  // after a landed punch, from the strike at the sprite's own pace, never past lengthFor().
   int frameAt(const RhythmPunch &p, uint32_t now, const uint16_t *ms) const {
     if (!ok || !p.punches) return -1;
     uint32_t t = now - p.lastPunchAt;
-    if (t >= MAX_MS) return -1;
+    if (t >= lengthFor(p)) return -1;
     for (uint8_t f = strike; f < frames; f++) {
       if (t < ms[f]) return f;
       t -= ms[f];
@@ -102,6 +111,3 @@ struct PunchLunge {
     return -1;
   }
 };
-
-static_assert(PunchLunge::MAX_MS + 100 <= RhythmPunch::SWING_MS - 2 * RhythmPunch::WINDOW_MS,
-              "the lunge is over at least 100 ms before the next window can open");

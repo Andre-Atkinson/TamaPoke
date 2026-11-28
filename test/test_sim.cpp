@@ -268,7 +268,7 @@ TEST(SimScript, idle_names_an_activity) {
 }
 
 // "hold X Y DUR SHOT" (#78): a shot at the end of the hold, before the finger lifts, so a
-// script can see a screen that changes while a finger stays down (the stamina hold)
+// script can see a screen that changes while a finger stays down (a push-up, #126)
 TEST(SimScript, hold_can_take_a_shot_before_the_finger_lifts) {
   SimScript s = simParseScript("hold 233 280 4s 31-hold_held.en\n");
   CHECK_EQ(s.error, std::string(""));
@@ -312,6 +312,55 @@ TEST(SimScript, nature_names_a_nature) {
            std::string("r.txt:2: usage: nature easygoing|greedy|playful|tidy|lazy"));
   CHECK(!simParseScript("nature\n").error.empty());
   CHECK(!simParseScript("nature tidy lazy\n").error.empty());
+}
+
+// "pushup X Y [edge] [repress] [SHOT]" (#126): one push-up let go in its band (with `edge`,
+// near the band's end; with `repress`, pressed again at once); it runs the firmware
+TEST(SimScript, pushup_takes_a_point_an_optional_edge_and_an_optional_shot) {
+  SimScript s = simParseScript("pushup 233 270\npushup 233 270 41-pushup-down\n");
+  CHECK_EQ(s.error, std::string(""));
+  CHECK_EQ(s.cmds.size(), (size_t)2);
+  if (s.cmds.size() != 2) return;
+  CHECK_EQ((int)s.cmds[0].op, (int)OP_PUSHUP);
+  CHECK_EQ(s.cmds[0].a, (int32_t)233);
+  CHECK_EQ(s.cmds[0].b, (int32_t)270);
+  CHECK_EQ(s.cmds[0].text, std::string(""));
+  CHECK_EQ(s.cmds[1].text, std::string("41-pushup-down"));
+  CHECK_EQ(s.cmds[0].c, (int32_t)0);  // the middle of the band
+  CHECK_EQ(s.cmds[1].c, (int32_t)0);
+  CHECK_EQ(simPreBootEnd(s), (size_t)0);
+  SimScript e = simParseScript("pushup 233 270 edge\npushup 233 270 edge 42-pushup-edge\n");
+  CHECK_EQ(e.error, std::string(""));
+  CHECK_EQ(e.cmds.size(), (size_t)2);
+  if (e.cmds.size() == 2) {
+    CHECK_EQ((int)e.cmds[0].op, (int)OP_PUSHUP);
+    CHECK_EQ(e.cmds[0].c, (int32_t)1);  // near the band's end
+    CHECK_EQ(e.cmds[0].text, std::string(""));
+    CHECK_EQ(e.cmds[1].c, (int32_t)1);
+    CHECK_EQ(e.cmds[1].text, std::string("42-pushup-edge"));
+  }
+  // `repress`: down again before the lift is confirmed (R2-2), after `edge`, before the shot
+  SimScript r = simParseScript("pushup 233 270 repress\npushup 233 270 edge repress 43-pushup-again\n");
+  CHECK_EQ(r.error, std::string(""));
+  CHECK_EQ(r.cmds.size(), (size_t)2);
+  if (r.cmds.size() == 2) {
+    CHECK_EQ(r.cmds[0].c, (int32_t)0);
+    CHECK_EQ(r.cmds[0].d, (int32_t)1);
+    CHECK_EQ(r.cmds[0].text, std::string(""));
+    CHECK_EQ(r.cmds[1].c, (int32_t)1);
+    CHECK_EQ(r.cmds[1].d, (int32_t)1);
+    CHECK_EQ(r.cmds[1].text, std::string("43-pushup-again"));
+  }
+  CHECK_EQ(s.cmds.size() == 2 ? s.cmds[0].d : -1, (int32_t)0);  // no re-press by default
+  CHECK(!simParseScript("pushup 233 270 repress edge\n").error.empty());  // edge comes first
+  CHECK(!simParseScript("pushup 233 270 edge repress x y\n").error.empty());
+  CHECK_EQ(simParseScript("pushup 233\n", "p.txt").error,
+           std::string("p.txt:1: usage: pushup X Y [edge] [repress] [SHOT]"));
+  CHECK(!simParseScript("pushup 233 500\n").error.empty());
+  CHECK(!simParseScript("pushup 233 270 a/b\n").error.empty());
+  CHECK(!simParseScript("pushup 233 270 x y\n").error.empty());
+  CHECK(!simParseScript("pushup 233 270 edge x y\n").error.empty());
+  CHECK(!simParseScript("pushup 233 270 x edge\n").error.empty());  // edge comes before the shot
 }
 
 // "game NAME" (#94): the next Play deals this minigame; it runs the firmware, so it closes
