@@ -20,6 +20,7 @@
 // Used only in this file, and called above its definition (in TamaPoke.ino the
 // prototype arduino-cli generates covered that).
 static void gameSounds();
+static void finishGame();
 
 // minijuegos de Play (minigames.h): uno al azar de la bolsa cada vez
 bool gameOpen = false;
@@ -50,6 +51,63 @@ static const char *const TRAIN_MISS_LOG[] = { "", " miss", " miss=early", " miss
 #if HOST_SIM
 static uint8_t forcedGame = GAME_COUNT;  // the simulator's "game" step; GAME_COUNT: the bag deals
 void gameForceNext(uint8_t g) { forcedGame = g; }
+
+// The simulator's "gameplay" step (gameui.h): what a player would touch now for the open
+// game's next point (or its miss), from the game's own state.
+uint8_t gameSimAim(bool point, int16_t &x, int16_t &y) {
+  if (!gameOpen || gameOverUntil || !games.playing()) return GAMEAIM_WAIT;
+  switch (games.game()) {
+    case GAME_KEEPY: {
+      if (!point) return GAMEAIM_IDLE;  // left alone, the ball drops
+      const KeepyGame &k = games.keepy;
+      x = (int16_t)k.ballX;
+      y = (int16_t)k.ballY;
+      return GAMEAIM_TAP;
+    }
+    case GAME_CATCH: {
+      // The berry that reaches the mouth line first (the lowest of the live ones, whatever its
+      // speed). A good one: the finger goes to where it falls (or away from it, for a miss). A
+      // rotten one: the finger holds still, where the pet is (the spawner keeps a rotten berry
+      // out of reach of a pet standing where it caught the last good one, game_catch.h).
+      const CatchGame &c = games.catcher;
+      const CatchGame::Berry *next = nullptr;
+      for (const CatchGame::Berry &b : c.berries)
+        if (b.live && b.y < CatchGame::CATCH_Y && (!next || b.y > next->y)) next = &b;
+      if (!next) return GAMEAIM_WAIT;
+      y = 350;
+      if (next->kind == CatchGame::ROTTEN) x = (int16_t)(c.petX + 0.5f);
+      else x = point ? next->x : (int16_t)(next->x < 233 ? CatchGame::X_MAX : CatchGame::X_MIN);  // away from it
+      return GAMEAIM_HOLD;
+    }
+    case GAME_PEEK: {
+      const PeekGame &p = games.peek;
+      if (point) {
+        if (!p.up() || p.hit) return GAMEAIM_WAIT;
+        x = PeekGame::BX[p.bush];
+        y = (int16_t)(PeekGame::BY[p.bush] - 60);
+        return GAMEAIM_TAP;
+      }
+      // a bush that isn't the one up (and whose centre is out of its hit area), or any bush while none is
+      for (uint8_t b = 0; b < PeekGame::BUSHES; b++) {
+        if (p.up() && (b == p.bush || PeekGame::inBush(p.bush, PeekGame::BX[b], PeekGame::BY[b]))) continue;
+        x = PeekGame::BX[b];
+        y = PeekGame::BY[b];
+        return GAMEAIM_TAP;
+      }
+      return GAMEAIM_WAIT;
+    }
+    default: {
+      const SongGame &s = games.song;
+      if (!s.playersTurn()) return GAMEAIM_WAIT;
+      uint8_t pad = point ? s.seq[s.k] : (uint8_t)((s.seq[s.k] + 1) % SongGame::PADS);
+      x = SongGame::PX[pad];
+      y = SongGame::PY[pad];
+      return GAMEAIM_TAP;
+    }
+  }
+}
+uint16_t gameSimScore() { return gameOpen ? games.score() : 0; }
+bool gameSimOpen() { return gameOpen && !gameOverUntil && !games.over(); }
 #endif
 
 void startGame() {
@@ -66,9 +124,11 @@ void startGame() {
   gameNewHi = false;
 }
 
-// Un informe del tactil con un juego abierto. El dedo que mantiene "salir" deja el
-// juego sin premio, como antes tocar la cabecera; el resto del toque se traga para
-// que al soltar no se resuelva como un toque en la pantalla principal.
+// Un informe del tactil con un juego abierto. El dedo que mantiene "salir" termina el
+// juego (R1-2 de #129: una partida sin fin puede durar minutos): lo hecho se paga como
+// en cualquier final (finishGame: record, velocidad, la linea "Play:" y la pantalla de
+// resultado), y si nadie la toco se cierra sin mas, sin pagar nada; el resto del toque
+// se traga para que al soltar no se resuelva como un toque en la pantalla principal.
 void gameTouch(bool pressed, int16_t x, int16_t y) {
   bool start = pressed && !wasPressed;
   // Un toque que empieza con la pantalla apagada o atenuada solo la despierta
@@ -88,7 +148,9 @@ void gameTouch(bool pressed, int16_t x, int16_t y) {
   // soltar o al moverse de verdad (games.counted); si no, Berry Song no acabaria.
   if (start || (!pressed && wasPressed) || games.counted) wakeUI();
   if (exitHeld) {
-    gameOpen = false;
+    // endDark(): true for a game in play that the player touched, and it ends the game
+    if (games.endDark()) finishGame();
+    else gameOpen = false;
     holdFired = true;
     swallowGesture = true;
     return;
@@ -102,17 +164,17 @@ static void gameSounds() {
   if (note < 4) sfxPlay(SFX_NOTE0 + note);
   uint8_t e = games.takeEvents();
   if (e & GEV_BAD) sfxPlay(SFX_DENY);
-  if (e & GEV_WIN) sfxPlay(SFX_EVOLVE);  // las 12 notas: la fanfarria (finishGame no suena otra)
+  if (e & GEV_WIN) sfxPlay(SFX_EVOLVE);  // la melodia de 100 notas: la fanfarria (finishGame no suena otra)
   else if (e & GEV_HEART) sfxPlay(SFX_HEART);
   else if ((e & GEV_GOOD) && games.game() != GAME_SONG) sfxPlay(games.game() == GAME_CATCH ? SFX_EAT : SFX_PLAY);
 }
 
-// fin de la partida (el juego acabo o nadie lo toco en 15 s): record y recompensa
+// fin de la partida (el juego acabo, nadie lo toco en 15 s o el dedo mantuvo "salir"): record y recompensa
 static void finishGame() {
   uint8_t g = games.game();
   gameShownScore = games.score();
   gameNewHi = gameShownScore > pet.gameBest(g);
-  gameSpeedGain = pet.playGame(g, gameShownScore);
+  gameSpeedGain = pet.playGame(g, gameShownScore, games.played);  // a game nobody touched pays little
   Serial.printf("Play: %s score=%u speed=+%u\n", GAME_KEYS[g], gameShownScore, gameSpeedGain);
   if (!games.won()) sfxPlay(gameNewHi && gameShownScore > 0 ? SFX_MEDAL : SFX_LEVEL);
   gameOverUntil = millis() + 4000;
@@ -155,14 +217,10 @@ static void gameEndNow(const char *why) {
 static bool gameNight();           // prototipos (definidas mas abajo)
 static uint16_t gameInk();
 static void drawGameScene(bool words);
-static void drawGameBar(uint32_t left, uint32_t total);
 static void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS);
 static void exerciseHitSound(uint8_t done, uint8_t hit);
 static void planLunge();
 
-#define GAME_BAR_Y 130              // the time bar (drawGameBar): its top, its height...
-#define GAME_BAR_H 10
-#define GAME_BAR_W 200              // ...and its width, centred
 #define TRAIN_GROUND 372            // the pet's feet on both exercise screens
 #define TRAIN_PET_S 4               // ...and its largest scale (a minigame's is 3)
 #define STAMINA_COL_NIGHT C565(0x9c, 0xcc, 0xf4)  // the stamina blue (FIT_STA_COLOR), lighter at night
@@ -636,29 +694,47 @@ static void drawGamePet(uint8_t act, int cx, int groundY, uint8_t maxS) {
   }
 }
 
-// marcador y record de este juego, debajo del boton de salir
+// The HUD under the exit chip: the score, the record and the pay step the next point is paid at
+// (#127, "x1", "x2"..., as the exercises' drawTier), where a bar or dots used to be. The games'
+// own scenes start under it (the keepy ball is drawn over it).
+#define GAME_SCORE_Y 68
+#define GAME_REC_Y 106
+#define GAME_STEP_Y 128
+#define GAME_STEP_H 16  // size 2
+static_assert(GAME_REC_Y >= GAME_SCORE_Y + 32, "the record is under the score (size 4)");
+static_assert(GAME_STEP_Y >= GAME_REC_Y + 16, "the pay step is under the record (size 2)");
+static_assert(GAME_STEP_Y + GAME_STEP_H <= GAME_HUD_BOTTOM, "the HUD ends where the stars may start (skylayout.h)");
+
+static void drawGameRec(uint16_t ink) {
+  // Las tallas de los buffers de texto las vigila TestBuffersDeTexto en
+  // test/test_tools.py.
+  char rec[24];
+  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameBest(games.game()));
+  gfx->setTextColor(ink);
+  setSize(2);
+  setCur(centerX(rec, 2), GAME_REC_Y);
+  printT(rec);
+}
+
+static void drawGameStep(uint16_t score) {
+  char b[6];
+  snprintf(b, sizeof(b), "x%u", gameStep(games.game(), score));
+  gfx->setTextColor(UI_BAR_WARN);
+  setSize(2);
+  setCur(centerX(b, 2), GAME_STEP_Y);
+  printT(b);
+}
+
+// marcador, record y escalon de este juego, debajo del boton de salir
 static void drawGameHud(uint16_t ink, uint16_t score) {
   char buf[8];
   snprintf(buf, sizeof(buf), "%u", score);
   gfx->setTextColor(ink);
   setSize(4);
-  setCur(centerX(buf, 4), 68);
+  setCur(centerX(buf, 4), GAME_SCORE_Y);
   printT(buf);
-  // Las tallas de los buffers de texto las vigila TestBuffersDeTexto en
-  // test/test_tools.py.
-  char rec[24];
-  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameBest(games.game()));
-  setSize(2);
-  setCur(centerX(rec, 2), 106);
-  printT(rec);
-}
-
-// barra fina de lo que queda de partida (Berry Catch: tiempo; Peekaboo: apariciones)
-static void drawGameBar(uint32_t left, uint32_t total) {
-  const int bw = GAME_BAR_W, by = GAME_BAR_Y;
-  int fw = total ? (int)((uint32_t)bw * left / total) : 0;
-  gfx->fillRoundRect(CX - bw / 2, by, bw, GAME_BAR_H, 4, UI_TRACK);
-  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, by, fw, GAME_BAR_H, 4, UI_BAR_OK);
+  drawGameRec(ink);
+  drawGameStep(score);
 }
 
 // "Mantener: salir", arriba en todos los juegos (como el de los ejercicios en la 1.75C). El
@@ -697,10 +773,6 @@ static void drawGameTitle(uint16_t ink) {
 static void drawKeepy(uint16_t ink) {
   const KeepyGame &k = games.keepy;
   drawGameHud(ink, k.score);
-  for (int i = 0; i < KeepyGame::LIVES; i++) {  // vidas
-    if (i < KeepyGame::LIVES - k.misses) gfx->fillCircle(205 + i * 28, 132, 6, UI_BAR_BAD);
-    else gfx->drawCircle(205 + i * 28, 132, 6, UI_TRACK);
-  }
   uint8_t act = (k.ballX > k.petX + 4) ? PMD_WALKR : (k.ballX < k.petX - 4) ? PMD_WALKL : PMD_IDLE;
   drawGamePet(act, (int)k.petX, 394, 3);
   // anillo de impacto que se expande y desvanece (feedback suave del golpe)
@@ -719,7 +791,6 @@ static const char *const *const CATCH_ICON[4] = { SPR_ICON_FOOD, SPR_ICON_BERRY_
 static void drawCatch(uint16_t ink) {
   const CatchGame &c = games.catcher;
   drawGameHud(ink, c.result());
-  drawGameBar(c.timeLeft(), CatchGame::DURATION_MS);
   uint8_t act = c.hurting() ? PMD_HURT
                 : c.eating() ? PMD_EAT
                 : c.targetX > c.petX + 4 ? PMD_WALKR
@@ -750,7 +821,6 @@ static void drawPeek(uint16_t ink) {
   const PeekGame &p = games.peek;
   bool night = gameNight();
   drawGameHud(ink, p.score);
-  drawGameBar(PeekGame::POPS - p.pops, PeekGame::POPS);
   for (uint8_t b = 0; b < PeekGame::BUSHES; b++) {  // fila de arriba primero: la de abajo tapa
     int shake = p.rustling(b) ? ((p.t / 40) % 2 ? 4 : -4) : 0;
     int x = PeekGame::BX[b] + shake, y = PeekGame::BY[b];
@@ -780,15 +850,8 @@ static void drawSong(uint16_t ink) {
   setSize(sz);
   setCur(centerX(msg, sz), 68);
   printT(msg);
-  char rec[24];  // ver drawGameHud
-  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameBest(GAME_SONG));
-  setSize(2);
-  setCur(centerX(rec, 2), 104);
-  printT(rec);
-  for (int i = 0; i < SongGame::TRIES; i++) {  // intentos
-    if (i < s.tries) gfx->fillCircle(205 + i * 28, 132, 6, UI_BAR_BAD);
-    else gfx->drawCircle(205 + i * 28, 132, 6, UI_TRACK);
-  }
+  drawGameRec(ink);
+  drawGameStep(s.result());
   uint8_t lit = s.litPad();
   uint8_t act = s.won ? PMD_POSE
                 : s.phase == SongGame::WRONG ? PMD_SIT

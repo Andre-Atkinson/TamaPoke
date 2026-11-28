@@ -5,14 +5,15 @@
 # PWR (and on the 1.75C the pocket lock, three presses) ends a minigame at once and the pet
 # gets what its score so far earns (Pet::playGame), with no result screen and no sound; a
 # game nobody touched pays nothing. The screen comes back on to the creature. The serial log
-# (shots/serial.log) has one "Play:" line per game, in this order (the scores and speeds
-# differ from run to run: the games' dice follow the time and the board):
+# (shots/serial.log) has one "Play:" line per game, in this order (the games are endless since
+# #127 and each is played with `gameplay point` steps, so the scores don't depend on the dice;
+# the catch and the last song are one stray tap, which scores 0):
 #   Play: song untouched (screen off)           1. nobody touched it: nothing paid
 #   Play: peek score=6 speed=+1 (screen off)    2. played: paid its score so far
-#   Play: keepy score=0 speed=+0                3. ran to its end: paid there, once; PWR on
+#   Play: keepy score=3 speed=+0                3. ran to its end: paid there, once; PWR on
 #                                                  its result screen adds no line
 #   Play: catch score=0 speed=+0 (screen off)   4. the pocket lock (one tap: played, so paid)
-#   Play: peek score=14 speed=+3 (screen off)   5. the speed ribbon (shot 15: its banner)
+#   Play: peek score=6 speed=+1 (screen off)    5. the speed ribbon (shot 15: its banner)
 #   Play: song score=0 speed=+0 (screen off)    6. the battery runs out mid-game
 # What must hold on every run, which the checks below enforce (#99; tools/gate.sh runs this
 # script on both boards and fails if one doesn't hold): each line is printed once, in its own
@@ -52,43 +53,19 @@ press pwr
 wait 1s
 shot 03-untouched-pwr-on
 
-# 2. A played game (Peekaboo, about 12 s of its 30), then PWR: dark at once, the pet keeps
+# 2. A played game (Peekaboo, 6 hits: +1 speed), then PWR: dark at once, the pet keeps
 # what the score so far earns; PWR again: the creature; the Fitness page shows the speed
-# it earned (the "speed=+" of the serial line)
+# it earned (the "speed=+" of the serial line). Games are endless since #127, so a played
+# game is `gameplay point`s: the dice put the pet on a different bush each time.
 game peek
 tap 202 404
 tap 169 320
-wait 1700ms
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
+gameplay point 6
 shot 04-game-playing
 press pwr
 shot 05-game-pwr-off
 expect-once Play:
-expect Play: peek score=* (screen off)
+expect Play: peek score=6 speed=+1 (screen off)
 wait 5s
 press pwr
 wait 1s
@@ -99,19 +76,18 @@ shot 07-fitness-speed
 swipe up
 wait 1s
 
-# 3. A game that ran to its end (keepy-uppy, one tap that missed, three drops): paid there,
-# with its result screen; PWR on the result only closes it (nothing paid again), and PWR
-# back on shows the creature
+# 3. A game that ran to its end (keepy-uppy, 3 hits, then the ball is left to drop: its one
+# miss ends it): paid there, with its result screen; PWR on the result only closes it (nothing
+# paid again), and PWR back on shows the creature
 game keepy
 tap 202 404
 tap 169 320
-wait 1700ms
-tap 40 233
-wait 11s
+gameplay point 3
+gameplay miss
 shot 08-keepy-result
 # paid at its end, with no PWR press in it
 expect-once Play:
-expect Play: keepy score=
+expect Play: keepy score=3 speed=+0
 expect-not Play: keepy*(screen off)
 press pwr
 shot 09-result-pwr-off
@@ -143,70 +119,19 @@ wait 1s
 shot 12-game-unlocked
 
 # 5. A ribbon a game ended by PWR completes (#69, #94): speed set to 29 (the speed ribbon's
-# goal is 30), Peekaboo played for about 25 s (a margin over the +1 the ribbon needs; it
-# still ends by PWR, before its 20th pop-up), PWR. The ribbon is gained at the press (its
-# chime) and its banner waits in the dark: 6 s later, longer than the banner's 4 s, PWR back
-# on shows it on the creature's screen.
+# goal is 30), Peekaboo played for 6 hits (+1 speed), PWR. The ribbon is gained at the press
+# (its chime) and its banner waits in the dark: 6 s later, longer than the banner's 4 s, PWR
+# back on shows it on the creature's screen.
 train 0 0 29
 game peek
 tap 202 404
 tap 169 320
-wait 1700ms
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
-tap 150 190
-tap 316 190
-tap 100 300
-tap 233 300
-tap 366 300
+gameplay point 6
 shot 13-ribbon-game
 press pwr
 shot 14-ribbon-pwr-off
 expect-once Play:
-expect Play: peek score=* (screen off)
+expect Play: peek score=6 speed=+1 (screen off)
 expect-not Play: peek score=* speed=+0 (screen off)
 wait 6s
 press pwr

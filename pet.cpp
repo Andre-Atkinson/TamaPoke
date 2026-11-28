@@ -936,16 +936,19 @@ bool Pet::giveMedicine() {
   return true;
 }
 
-// Fin de un minijuego de Play. Cada juego guarda su record con la puntuacion que
-// ve el jugador; la recompensa sale de la normalizada (gamecore.h), asi que una
-// buena partida paga lo mismo sea cual sea el juego que toco.
-uint8_t Pet::playGame(uint8_t game, uint16_t raw) {
+// Fin de un minijuego de Play (endless since #127). Cada juego guarda su record con la
+// puntuacion que ve el jugador. La velocidad sale de la puntuacion cruda (gameSpeedPay: cada
+// punto paga mas cuanto mas larga la partida); lo que cuesta la partida (energia, comida,
+// peso) y su alegria salen de la normalizada (gamecore.h). `touched`: the player played it
+// (any touch counted): joy, bond and the heart come from any such game, even one that scored
+// 0; a game nobody touched (it ended at the 15 s idle end) keeps the little it always paid.
+uint8_t Pet::playGame(uint8_t game, uint16_t raw, bool touched) {
   if (ceremony != CER_NONE || isEgg() || game >= GAME_COUNT) return 0;
   if (raw > GAME_REC_MAX[game]) raw = GAME_REC_MAX[game];
   uint16_t *rec = game == GAME_CATCH ? &catchHi : game == GAME_PEEK ? &peekHi
                 : game == GAME_SONG ? &songHi : &gameHi;
   if (raw > *rec) *rec = raw;  // nuevo record
-  return playReward(gameNormScore(game, raw));
+  return playReward(gameNormScore(game, raw), gameSpeedPay(game, raw), touched);
 }
 
 uint16_t Pet::gameBest(uint8_t game) const {
@@ -958,18 +961,18 @@ uint16_t Pet::gameBest(uint8_t game) const {
   }
 }
 
-uint8_t Pet::playReward(uint8_t n) {
+uint8_t Pet::playReward(uint8_t n, uint8_t speedPay, bool touched) {
   uint8_t before = trSpe;
-  // jugar entrena la velocidad (playful: +25%, #25); n <= GAME_SCORE_CAP and load() caps
-  // trSpe at 100, so v <= 108; 16 bits so a value past that can't wrap anyway
-  uint16_t v = (uint16_t)trSpe + natureTrainGain(nature, TRAIN_SPEED, n / 5);
+  // jugar entrena la velocidad (playful: +25%, #25); speedPay <= GAME_PAY_MAX and load() caps
+  // trSpe at 100, so v <= 225; 16 bits so a value past that can't wrap anyway
+  uint16_t v = (uint16_t)trSpe + natureTrainGain(nature, TRAIN_SPEED, speedPay);
   trSpe = v > 100 ? 100 : (uint8_t)v;
-  joy = clamp100(joy + 5 + (n > 15 ? 30 : n * 2) + playJoyExtra());
+  joy = clamp100(joy + (touched ? PLAY_JOY_TOUCHED : PLAY_JOY_IDLE) + playJoyExtra());
   energy = dropTo(energy, 10 + n / 2, 5);
   fullness = dropTo(fullness, 5, 5);
   int burn = (int)weight - n * 2;  // el ejercicio quema peso
   weight = burn > 0 ? burn : 0;
-  if (n >= 5) heartUntil = millis() + HEART_MS;
+  if (touched) heartUntil = millis() + HEART_MS;
   addBond(2);
   registerCare();
   exercised = true;  // el ejercicio quema peso: el proximo tick ve un IN SHAPE como del jugador (#44)
@@ -1146,10 +1149,12 @@ void Pet::save() {
   prefs.putUShort("medal", medals);
   prefs.putUShort("tmedal", totalMedals);
   prefs.putUShort("mstone", lastMilestone);
-  prefs.putUShort("ghi", gameHi);
-  prefs.putUShort("mgc", catchHi);
-  prefs.putUShort("mgp", peekHi);
-  prefs.putUShort("mgs", songHi);
+  // the Play minigames' records (#127): fresh keys, since the games' scores mean something
+  // else now. The old `ghi`, `mgc`, `mgp` and `mgs` are neither read nor written (left in NVS)
+  prefs.putUShort("keephi", gameHi);
+  prefs.putUShort("catchhi", catchHi);
+  prefs.putUShort("peekhi", peekHi);
+  prefs.putUShort("songhi", songHi);
   prefs.putUChar("punhi", punchHi);  // #126; the old 12-swing record `phi` stays unread
   prefs.putUChar("pushi", pushHi);
   prefs.putUShort("tdefm", goodTicks);
@@ -1227,10 +1232,10 @@ void Pet::load() {
   lastMilestone = prefs.getUShort("mstone", 0);
   // records de los minijuegos: un valor que el juego no puede dar (NVS danada o de
   // otro firmware) se lee como 0
-  gameHi = gameRecordOk(GAME_KEEPY, prefs.getUShort("ghi", 0));
-  catchHi = gameRecordOk(GAME_CATCH, prefs.getUShort("mgc", 0));
-  peekHi = gameRecordOk(GAME_PEEK, prefs.getUShort("mgp", 0));
-  songHi = gameRecordOk(GAME_SONG, prefs.getUShort("mgs", 0));
+  gameHi = gameRecordOk(GAME_KEEPY, prefs.getUShort("keephi", 0));  // the endless games' records (#127)
+  catchHi = gameRecordOk(GAME_CATCH, prefs.getUShort("catchhi", 0));
+  peekHi = gameRecordOk(GAME_PEEK, prefs.getUShort("peekhi", 0));
+  songHi = gameRecordOk(GAME_SONG, prefs.getUShort("songhi", 0));
   punchHi = prefs.getUChar("punhi", 0);  // the endless exercises' records (#126)
   pushHi = prefs.getUChar("pushi", 0);
   prefs.getString("nick", nick, sizeof(nick));

@@ -58,6 +58,12 @@
 #define MILK_JOY 5
 #define MILK_WEIGHT 4
 #define MILK_SLEEP_ENERGY 2
+// A Play minigame the player touched gives this much joy and a heart, whatever it scored (#127:
+// a game ends at its first miss, so a short run is still play); a playful pet gets
+// NAT_PLAY_JOY_EXTRA more. One nobody touched (it ended at the 15 s idle end) gives the little
+// it always did. Speed is what the score earns (gameSpeedPay in gamecore.h).
+#define PLAY_JOY_TOUCHED 35
+#define PLAY_JOY_IDLE 5
 
 // Sickness and medicine (#15; the owner's choices, 2026-11-17). Off unless the Care page's
 // setting is on (NVS "sickopt", sickMode). It is meant to cost something: the owner chose to
@@ -158,7 +164,9 @@ static_assert(ACCM_LV10 == MED_LV10 && ACCM_LV25 == MED_LV25 && ACCM_LV50 == MED
 //     the relaxed pace, longer on the normal one (the push-ups, #78 and #126, add a faster way:
 //     12 reps pay 11, 22 pay 30).
 //     Owner's call, 2026-11-16: rest is part of steady care;
-//   speed 30: a Play minigame at par pays 3, so about ten games.
+//   speed 30: a Play minigame at par pays 3, so about ten games; the games pay more the longer
+//     the run (#127, gameSpeedPay: 30 keepy-uppy hits pay 9, a 12-note song 10), so four good
+//     runs do it.
 #define RIBBON_STR 30
 #define RIBBON_STA 10
 #define RIBBON_SPD 30
@@ -320,8 +328,13 @@ public:
   // medallas: del individuo + contador acumulado entre todas las crianzas
   uint16_t medals = 0, totalMedals = 0;
   uint16_t lastMilestone = 0;  // hito de racha ya celebrado
-  uint16_t gameHi = 0;     // record de keepy-uppy, el minijuego original (del jugador)
-  uint16_t catchHi = 0, peekHi = 0, songHi = 0;  // records de Berry Catch, Peekaboo y Berry Song
+  // The Play minigames' records, 0 to GAME_REC_MAX (gamecore.h): keepy-uppy's hits, Berry
+  // Catch's points, Peekaboo's hits, Berry Song's longest tune. NVS `keephi`, `catchhi`,
+  // `peekhi` and `songhi` (#127), the player's. The records from before the games were endless
+  // are kept as they were and no longer read or written: `ghi`, `mgc`, `mgp` and `mgs`, so an
+  // older firmware flashed back still finds them.
+  uint16_t gameHi = 0;
+  uint16_t catchHi = 0, peekHi = 0, songHi = 0;
   // Most punches landed in one rhythm-punch session and most push-ups in one session, 0 to
   // EX_MAX_COUNT: NVS `punhi` and `pushi` (#126), the player's like the minigames' records.
   // Records from before the exercises were endless are kept as they were and no longer read:
@@ -372,11 +385,12 @@ public:
   bool lovesBerry(uint8_t color) const {
     return !isEgg() && (speciesId % 3) == color;  // gusto oculto por especie
   }
-  // fin de un minijuego de Play (gamecore.h): guarda el record de ese juego con la
-  // puntuacion tal cual y paga la recompensa de la puntuacion normalizada (entrena VEL).
-  // Returns the speed it really gained (0 at 100, or for a game that pays nothing), for the
-  // result screen (#76).
-  uint8_t playGame(uint8_t game, uint16_t raw);
+  // fin de un minijuego de Play (gamecore.h, endless since #127): guarda el record de ese
+  // juego con la puntuacion tal cual y paga la recompensa (entrena VEL: gameSpeedPay, mas por
+  // punto cuanto mas larga la partida; la alegria, el corazon y el vinculo vienen de cualquier
+  // juego `touched`). Returns the speed it really gained (0 at 100, or for a game that pays
+  // nothing), for the result screen (#76).
+  uint8_t playGame(uint8_t game, uint16_t raw, bool touched = true);
   uint16_t gameBest(uint8_t game) const;  // record de un minijuego (0 si no existe)
   // The exercises (exercise.h, #78, endless since #126): a rhythm-punch session with
   // `punches` landed trains strength, a push-up session with `reps` done trains stamina, each
@@ -646,7 +660,9 @@ private:
   uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo
   void eatBerry(uint8_t color);  // a berry eaten (feedBerry, pickBerry): no care or save of its own
-  uint8_t playReward(uint8_t n);  // recompensa de un minijuego, n = 0..GAME_SCORE_CAP; the speed gained
+  // recompensa de un minijuego: n = 0..GAME_SCORE_CAP (what the run costs), speedPay = 0..GAME_PAY_MAX;
+  // the speed gained
+  uint8_t playReward(uint8_t n, uint8_t speedPay, bool touched);
   void exerciseDone(uint8_t hits);  // an exercise session's cost and reward (#78)
   void addBond(uint8_t amt);
   void checkMedals(bool byTick);  // byTick: from the minute tick, no exercise since the last one

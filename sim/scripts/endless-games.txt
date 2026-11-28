@@ -1,0 +1,119 @@
+# The Play minigames are endless (#127): each game is played to a few points, then missed, and
+# the miss ends it at once and pays what was done. For both boards, both languages, by day and
+# by night:
+#   tools/sim.sh --board 175c --lang en --script endless-games --out shots/
+#   tools/sim.sh --board 175 --lang pt --clock "2026-11-16 21:00" --script endless-games --out shots/
+# The games' dice decide where the ball, the pet, the berry or the next note is, so the
+# `gameplay point` and `gameplay miss` steps ask the game where to touch (sim/script.h). Each
+# section plays one game, looks at its screen with some points (the score, the record and the
+# pay step "x2" or "x3" under it), and misses: a dropped ball, a good berry that reaches the
+# ground, a wrong bush, a wrong note. The miss ends the game that frame: its result screen
+# comes at once, with the line "Play: GAME score=N speed=+M" paid once (the pay is
+# gameSpeedPay: keepy-uppy 20 hits pay 5, Berry Catch 30 points 6, Peekaboo 21 hits 6, Berry
+# Song a 9-note tune 6; the old pay, a fifth of the normalised score, would give 4, 4, 4 and 4). Before the miss nothing is paid ("expect-not Play:"). The Play button
+# is at (202, 404) and its strip's Poke Ball at (169, 320) (#13); a game shows its title card
+# for 1.2 s, then plays, and its result stays up for 4 s. Sections 5 and 6 leave by the
+# exit chip (#129).
+
+# new game: pick Charmander, hatch the egg
+wait 1s
+tap 233 220
+tap 233 200
+tap 233 200
+tap 233 200
+wait 6s
+serial SCENE auto clear auto
+
+# 0. A game nobody touches ends at its 15 s idle end and pays only the little it always paid
+# (R2-5 of #129: finishGame passes `games.played` as `touched`): joy +5 and no heart, not the +35
+# of a game she played. The new pet's joy is 80, so +5 is 85 and +35 would be 100 (the ENE and
+# the FOOD it costs are the same either way, so the joy is the check; the "Play:" line is the
+# same either way). It runs first, while the joy is still below the +35's reach.
+game peek
+tap 202 404
+tap 169 320
+wait 16s
+expect-once Play: peek score=0 speed=+0
+wait 5s
+serial STATS
+wait 300ms
+expect com=75 fel=85 ene=70
+expect-not fel=100
+wait 1s
+
+# 1. Keepy-uppy: 20 hits, then the ball is left to drop
+game keepy
+tap 202 404
+tap 169 320
+gameplay point 20
+shot 01-keepy-play
+expect-not Play:
+gameplay miss
+shot 02-keepy-result
+expect-once Play:
+expect Play: keepy score=20 speed=+5
+wait 5s
+
+# 2. Berry Catch: 30 berries caught (the rotten ones come after the fifth), then a good berry
+# the pet isn't at
+game catch
+tap 202 404
+tap 169 320
+gameplay point 30
+shot 03-catch-play
+expect-not Play:
+gameplay miss
+shot 04-catch-result
+expect-once Play:
+expect Play: catch score=30 speed=+6
+wait 5s
+
+# 3. Peekaboo: 21 hits, then a tap on the wrong bush
+game peek
+tap 202 404
+tap 169 320
+gameplay point 21
+shot 05-peek-play
+expect-not Play:
+gameplay miss
+shot 06-peek-result
+expect-once Play:
+expect Play: peek score=21 speed=+6
+wait 5s
+
+# 4. Berry Song: the first 2-note tune, then each one a note longer up to 9 notes, then a wrong note
+game song
+tap 202 404
+tap 169 320
+gameplay point 8
+shot 07-song-play
+expect-not Play:
+gameplay miss
+shot 08-song-result
+expect-once Play:
+expect Play: song score=9 speed=+6
+wait 5s
+
+# 5. Leaving a played game by the exit chip (hold it for 1 s) pays what was done, as a miss
+# does (#129, R1-2): Berry Song, 8 notes' worth of points, the tune playing, then the exit.
+# The same line and the same pay as section 4, and the result screen.
+game song
+tap 202 404
+tap 169 320
+gameplay point 8
+expect-not Play:
+hold 233 40 1100ms
+shot 09-song-exit-result
+expect-once Play:
+expect Play: song score=9 speed=+6
+wait 5s
+
+# 6. A game nobody touched just closes by the exit chip: no "Play:" line, nothing paid
+game peek
+tap 202 404
+tap 169 320
+wait 2s
+hold 233 40 1100ms
+shot 10-untouched-exit
+wait 1s
+expect-not Play:

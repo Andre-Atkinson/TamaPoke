@@ -934,8 +934,8 @@ TEST(play, minijuego_entrena_velocidad_y_guarda_record) {
   p.joy = 10;
   p.weight = 50;
   p.playGame(GAME_KEEPY, 20);
-  CHECK_EQ(p.trSpe, (uint8_t)4);
-  CHECK_EQ(p.joy, (uint8_t)45);   // +5 +30 por marcar mas de 15
+  CHECK_EQ(p.trSpe, (uint8_t)5);  // gameSpeedPay(keepy, 20): 4 hits at step 1, 8 at step 2 and 8 at step 3: 4.5, half up
+  CHECK_EQ(p.joy, (uint8_t)45);   // +35: a game the player touched (#127)
   CHECK_EQ(p.weight, (uint8_t)10);  // 50 - 20*2
   CHECK_EQ(p.gameHi, (uint16_t)20);
   p.playGame(GAME_KEEPY, 5);
@@ -956,7 +956,7 @@ TEST(play, cada_minijuego_guarda_su_propio_record) {
   freshPlayer(p);
   p.playGame(GAME_CATCH, 30);
   CHECK_EQ(p.catchHi, (uint16_t)30);
-  CHECK_MSG(p.gameHi == 0, "ghi sigue siendo solo el record de keepy-uppy");
+  CHECK_MSG(p.gameHi == 0, "keephi sigue siendo solo el record de keepy-uppy");
   p.playGame(GAME_PEEK, 9);
   p.playGame(GAME_SONG, 7);
   p.playGame(GAME_KEEPY, 12);
@@ -993,9 +993,9 @@ TEST(play, play_game_returns_the_speed_it_trained) {
   freshPlayer(p);  // speed 10
   CHECK_EQ(p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]), (uint8_t)3);
   CHECK_EQ(p.trSpe, (uint8_t)13);
-  CHECK_EQ(p.playGame(GAME_KEEPY, 4), (uint8_t)0);  // 4 points pay no speed
+  CHECK_EQ(p.playGame(GAME_KEEPY, 3), (uint8_t)0);  // 3 hits pay no speed
   p.trSpe = 99;
-  CHECK_MSG(p.playGame(GAME_CATCH, 200) == 1, "at 99 only 1 fits, not 6");
+  CHECK_MSG(p.playGame(GAME_CATCH, 200) == 1, "at 99 only 1 fits, not the 100 the run earned");
   CHECK_EQ(p.trSpe, (uint8_t)100);
   CHECK_EQ(p.playGame(GAME_CATCH, 200), (uint8_t)0);
   CHECK_EQ(p.playGame(GAME_COUNT, 10), (uint8_t)0);  // not a game
@@ -1005,12 +1005,29 @@ TEST(play, play_game_returns_the_speed_it_trained) {
   CHECK_EQ(egg.playGame(GAME_KEEPY, 15), (uint8_t)0);
 }
 
-TEST(play, la_recompensa_se_topa_en_30_pero_el_record_no) {
+// #127: every game pays by its own ladder (gameSpeedPay), through the real Play path
+TEST(play, each_game_pays_its_speed_by_its_ladder) {
+  struct Row { uint8_t game; uint16_t score; uint8_t speed; };
+  const Row rows[] = { { GAME_KEEPY, 30, 9 }, { GAME_CATCH, 20, 3 }, { GAME_CATCH, 40, 10 }, { GAME_PEEK, 14, 3 },
+                       { GAME_SONG, 2, 1 }, { GAME_SONG, 9, 6 }, { GAME_SONG, 12, 10 }, { GAME_KEEPY, 255, 100 } };
+  for (const Row &r : rows) {
+    Pet p;
+    freshPlayer(p);
+    p.trSpe = 0;
+    CHECK_MSG(p.playGame(r.game, r.score) == r.speed,
+              "game " + std::to_string(r.game) + " score " + std::to_string(r.score) + " paid " +
+                  std::to_string(p.trSpe));
+    CHECK_EQ(p.trSpe, r.speed);
+  }
+}
+
+TEST(play, what_a_run_costs_is_capped_at_30_but_its_pay_and_its_record_are_not) {
   Pet p;
   freshPlayer(p);
   p.playGame(GAME_KEEPY, 40);
-  CHECK_EQ(p.trSpe, (uint8_t)16);   // 10 + 30/5, no 10 + 40/5
-  CHECK_EQ(p.weight, (uint8_t)20);  // 80 - 30*2
+  CHECK_EQ(p.trSpe, (uint8_t)25);   // 10 + 15: the pay rises with the run (gameSpeedPay), past the cost's cap
+  CHECK_EQ(p.weight, (uint8_t)20);  // 80 - 30*2: the cost stops at a normalised 30
+  CHECK_EQ(p.energy, (uint8_t)55);  // 80 - (10 + 30/2)
   CHECK_EQ(p.gameHi, (uint16_t)40);
 }
 
@@ -1018,11 +1035,18 @@ TEST(play, un_record_imposible_se_recorta_al_maximo_del_juego) {
   Pet p;
   freshPlayer(p);
   p.playGame(GAME_PEEK, 500);
-  CHECK_EQ(p.peekHi, (uint16_t)20);
-  p.playGame(GAME_SONG, 13);
-  CHECK_EQ(p.songHi, (uint16_t)12);
+  CHECK_EQ(p.peekHi, (uint16_t)255);
+  p.playGame(GAME_SONG, 101);
+  CHECK_EQ(p.songHi, (uint16_t)100);
+  p.playGame(GAME_CATCH, 1000);
+  CHECK_EQ(p.catchHi, (uint16_t)400);
+  p.playGame(GAME_KEEPY, 65535);
+  CHECK_EQ(p.gameHi, (uint16_t)255);
   p.playGame(GAME_COUNT, 5);  // juego que no existe: nada
-  CHECK_EQ(p.gameHi, (uint16_t)0);
+  Pet q;
+  freshPlayer(q);
+  q.playGame(GAME_COUNT, 5);
+  CHECK_EQ(q.gameHi, (uint16_t)0);
 }
 
 TEST(play, sin_bicho_no_hay_premio_ni_record) {
@@ -1051,6 +1075,44 @@ TEST(nvs, records_de_los_minijuegos_sobreviven_al_reinicio) {
   CHECK_EQ(b.catchHi, (uint16_t)33);
   CHECK_EQ(b.peekHi, (uint16_t)17);
   CHECK_EQ(b.songHi, (uint16_t)8);
+  // in their own keys (#127), and the old ones are neither written nor read
+  Preferences raw;
+  raw.begin("tamapoke", true);
+  CHECK_EQ(raw.getUShort("keephi", 0), (uint16_t)21);
+  CHECK_EQ(raw.getUShort("catchhi", 0), (uint16_t)33);
+  CHECK_EQ(raw.getUShort("peekhi", 0), (uint16_t)17);
+  CHECK_EQ(raw.getUShort("songhi", 0), (uint16_t)8);
+  CHECK_MSG(!raw.isKey("ghi") && !raw.isKey("mgc") && !raw.isKey("mgp") && !raw.isKey("mgs"),
+            "the old record keys are written again");
+  raw.end();
+}
+
+// A save from before the games were endless has records in the old keys, which mean something
+// else now: they are not read (and not touched, so an older firmware flashed back finds them).
+TEST(nvs, the_old_record_keys_are_not_read_and_not_touched) {
+  Pet a;
+  freshPlayer(a);
+  Preferences raw;
+  raw.begin("tamapoke", false);
+  raw.putUShort("ghi", 12);
+  raw.putUShort("mgc", 30);
+  raw.putUShort("mgp", 9);
+  raw.putUShort("mgs", 7);
+  raw.end();
+  Pet b;
+  b.begin();
+  CHECK_EQ(b.gameHi, (uint16_t)0);
+  CHECK_EQ(b.catchHi, (uint16_t)0);
+  CHECK_EQ(b.peekHi, (uint16_t)0);
+  CHECK_EQ(b.songHi, (uint16_t)0);
+  b.playGame(GAME_KEEPY, 5);  // saves
+  raw.begin("tamapoke", true);
+  CHECK_EQ(raw.getUShort("ghi", 0), (uint16_t)12);
+  CHECK_EQ(raw.getUShort("mgc", 0), (uint16_t)30);
+  CHECK_EQ(raw.getUShort("mgp", 0), (uint16_t)9);
+  CHECK_EQ(raw.getUShort("mgs", 0), (uint16_t)7);
+  CHECK_EQ(raw.getUShort("keephi", 0), (uint16_t)5);
+  raw.end();
 }
 
 TEST(nvs, records_imposibles_en_la_nvs_se_leen_como_0) {
@@ -1058,10 +1120,10 @@ TEST(nvs, records_imposibles_en_la_nvs_se_leen_como_0) {
   freshPlayer(a);
   Preferences raw;
   raw.begin("tamapoke", false);
-  raw.putUShort("ghi", 256);
-  raw.putUShort("mgc", 201);
-  raw.putUShort("mgp", 21);
-  raw.putUShort("mgs", 13);
+  raw.putUShort("keephi", 256);
+  raw.putUShort("catchhi", 401);
+  raw.putUShort("peekhi", 256);
+  raw.putUShort("songhi", 101);
   raw.end();
   Pet b;
   b.begin();
@@ -1070,46 +1132,84 @@ TEST(nvs, records_imposibles_en_la_nvs_se_leen_como_0) {
   CHECK_EQ(b.peekHi, (uint16_t)0);
   CHECK_EQ(b.songHi, (uint16_t)0);
   raw.begin("tamapoke", false);  // justo en el maximo: se conservan
-  raw.putUShort("ghi", 255);
-  raw.putUShort("mgc", 200);
-  raw.putUShort("mgp", 20);
-  raw.putUShort("mgs", 12);
+  raw.putUShort("keephi", 255);
+  raw.putUShort("catchhi", 400);
+  raw.putUShort("peekhi", 255);
+  raw.putUShort("songhi", 100);
   raw.end();
   Pet c;
   c.begin();
   CHECK_EQ(c.gameHi, (uint16_t)255);
-  CHECK_EQ(c.catchHi, (uint16_t)200);
-  CHECK_EQ(c.peekHi, (uint16_t)20);
-  CHECK_EQ(c.songHi, (uint16_t)12);
+  CHECK_EQ(c.catchHi, (uint16_t)400);
+  CHECK_EQ(c.peekHi, (uint16_t)255);
+  CHECK_EQ(c.songHi, (uint16_t)100);
 }
 
 TEST(nvs, sin_claves_de_minijuegos_los_records_empiezan_en_0) {
   Pet a;
-  freshPlayer(a);  // guardado sin mgc/mgp/mgs (como uno de antes)
+  freshPlayer(a);  // guardado sin las claves de los records (como uno de antes)
   Preferences raw;
   raw.begin("tamapoke", false);
-  raw.remove("mgc");
-  raw.remove("mgp");
-  raw.remove("mgs");
+  raw.remove("keephi");
+  raw.remove("catchhi");
+  raw.remove("peekhi");
+  raw.remove("songhi");
   raw.end();
   Pet b;
   b.begin();
+  CHECK_EQ(b.gameHi, (uint16_t)0);
   CHECK_EQ(b.catchHi, (uint16_t)0);
   CHECK_EQ(b.peekHi, (uint16_t)0);
   CHECK_EQ(b.songHi, (uint16_t)0);
 }
 
-// A game, the real Play path (#87): scored 10, it cheers (+5, +2 a point), tires (-10,
-// -half the score), makes a little hungry (-5) and shows the heart.
+// A game, the real Play path (#87): scored 10, it cheers (+35 since #127: a game the player
+// touched gives full joy whatever it scored), tires (-10, -half the score), makes a little
+// hungry (-5) and shows the heart.
 TEST(play, a_game_cheers_tires_and_makes_hungry) {
   Pet p;
   makePet(p, 4);
   setStats(p, 50, 50, 50, 50);
   p.playGame(GAME_KEEPY, 10);  // normalised 10
-  CHECK_EQ(p.joy, (uint8_t)75);
+  CHECK_EQ(p.joy, (uint8_t)85);
   CHECK_EQ(p.energy, (uint8_t)35);
   CHECK_EQ(p.fullness, (uint8_t)45);
   CHECK(p.showHeart());
+}
+
+// #127: a game ends at its first miss, so a short run is still play: any game the player
+// touched gives full joy, +2 bond and the heart, even one that scored 0 (and no speed). One
+// nobody touched (the 15 s idle end) keeps the little it always gave: +5 joy, no heart.
+TEST(play, a_touched_game_that_scored_0_still_gives_full_joy_the_heart_and_bond) {
+  for (uint8_t g = 0; g < GAME_COUNT; g++) {
+    Pet p;
+    makePet(p, 4);
+    setStats(p, 50, 50, 50, 50);
+    p.bond = 10;
+    uint8_t spe = p.trSpe;
+    CHECK_EQ(p.playGame(g, 0), (uint8_t)0);
+    CHECK_MSG(p.joy == 85, "joy +35 in game " + std::to_string(g));
+    CHECK_MSG(p.showHeart(), "heart in game " + std::to_string(g));
+    CHECK_MSG(p.bond == 12, "bond +2 in game " + std::to_string(g));
+    CHECK_EQ(p.trSpe, spe);
+    CHECK_EQ(p.energy, (uint8_t)40);  // the run's cost: 10 + 0
+    CHECK_EQ(p.fullness, (uint8_t)45);
+    CHECK_EQ(p.gameBest(g), (uint16_t)0);
+  }
+  Pet idle;
+  makePet(idle, 4);
+  setStats(idle, 50, 50, 50, 50);
+  idle.bond = 10;
+  CHECK_EQ(idle.playGame(GAME_CATCH, 0, false), (uint8_t)0);
+  CHECK_EQ(idle.joy, (uint8_t)55);  // +5
+  CHECK(!idle.showHeart());
+  CHECK_EQ(idle.bond, (uint8_t)12);
+  Pet playful;  // a playful pet gets its extra on top of the full joy
+  makePet(playful, 4);
+  playful.nature = NAT_PLAYFUL;
+  setStats(playful, 50, 50, 50, 50);
+  playful.playGame(GAME_PEEK, 0);
+  CHECK_EQ(playful.joy, (uint8_t)(85 + NAT_PLAY_JOY_EXTRA));
 }
 
 TEST(care, limpiar_quita_cacas_y_deja_higiene_a_tope) {
@@ -1614,6 +1714,7 @@ static void hourlyCare(Pet &p) {
 TEST(ribbons, the_thresholds_are_reachable) {
   CHECK(RIBBON_STR <= exerciseGain(22));  // one 22-punch run (Pet::trainStrength, #78, #126)
   CHECK(RIBBON_SPD <= 10 * 3);  // a game at par
+  CHECK(RIBBON_SPD <= 4 * gameSpeedPay(GAME_KEEPY, 30));  // or four runs of 30 keepy-uppy hits (#127)
   Pet p;
   makePet(p, 4);
   for (int i = 0; i < 10; i++) p.playGame(GAME_KEEPY, GAME_PAR[GAME_KEEPY]);
@@ -2053,8 +2154,8 @@ TEST(nature, playful_minigames_cheer_5_more) {
     makePet(p, 4);
     p.nature = n;
     setStats(p, 60, 40, 80, 60);
-    p.playGame(GAME_KEEPY, 10);  // normalised 10: joy + 5 + 20
-    CHECK_EQ(p.joy, (uint8_t)(40 + 25 + extra));
+    p.playGame(GAME_KEEPY, 10);  // a touched game: joy + 35 (#127)
+    CHECK_EQ(p.joy, (uint8_t)(40 + 35 + extra));
   }
 }
 
@@ -2138,7 +2239,7 @@ TEST(nature, tidy_trains_stamina_in_the_push_ups_25_percent_more) {
   }
 }
 
-// speed: the Play minigames (Pet::playReward), normalised score / 5
+// speed: the Play minigames (Pet::playReward), by gameSpeedPay (#127)
 TEST(nature, playful_trains_speed_25_percent_more) {
   for (uint8_t n = 0; n < NAT_COUNT; n++) {
     bool bonus = n == NAT_PLAYFUL;
@@ -2146,10 +2247,10 @@ TEST(nature, playful_trains_speed_25_percent_more) {
     makePet(p, 4);
     p.nature = n;
     // playGame() returns the speed gained (#76): the boosted gain, what really went in
-    CHECK_EQ(p.playGame(GAME_KEEPY, 5), (uint8_t)(bonus ? 2 : 1));  // normalised 5: 1 point
+    CHECK_EQ(p.playGame(GAME_KEEPY, 5), (uint8_t)(bonus ? 2 : 1));  // 5 hits: 1 point
     CHECK_EQ(p.trSpe, (uint8_t)(bonus ? 2 : 1));
-    CHECK_EQ(p.playGame(GAME_KEEPY, 30), (uint8_t)(bonus ? 8 : 6));  // normalised 30 (the cap): 6
-    CHECK_EQ(p.trSpe, (uint8_t)(bonus ? 10 : 7));
+    CHECK_EQ(p.playGame(GAME_KEEPY, 30), (uint8_t)(bonus ? 12 : 9));  // 30 hits: 9 points, 25% more rounded up
+    CHECK_EQ(p.trSpe, (uint8_t)(bonus ? 14 : 10));
     p.trSpe = 97;
     CHECK_EQ(p.playGame(GAME_KEEPY, 30), (uint8_t)3);
     CHECK_EQ(p.trSpe, (uint8_t)100);
@@ -2178,7 +2279,7 @@ TEST(nature, trained_stats_out_of_range_load_capped_at_100) {
   CHECK_EQ(b.trDef, (uint8_t)100);
   CHECK_EQ(b.trSpe, (uint8_t)100);
   b.nature = NAT_PLAYFUL;
-  b.playGame(GAME_KEEPY, 30);  // 6 points, 8 for a playful pet: 108 must not wrap
+  b.playGame(GAME_KEEPY, 30);  // 9 points, 12 for a playful pet: 112 must not wrap
   CHECK_EQ(b.trSpe, (uint8_t)100);
   // defence in depth: playReward does not rely on load() for the 8-bit sum (a value that
   // load() caps can't reach this; it is set directly)

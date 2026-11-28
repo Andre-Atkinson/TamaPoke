@@ -114,7 +114,23 @@ travels to, and it stays through an ending: the next egg finds the plant as it w
 - 🍎 **Berry** (3 flavors): +25 FOOD. Each species has a **hidden favorite flavor**
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
 - 🍬 **Candy:** +10 FOOD, +12 JOY, but **+12 weight** (fattening).
-- ⚽ **Play / minigames:** +JOY, −ENE; a random one of four short games (keepy-uppy, Berry Catch, Peekaboo, Berry Song). Each trains **SPEED** and burns weight, and keeps its own best score.
+- ⚽ **Play / minigames:** +JOY, −ENE; a random one of four games (keepy-uppy, Berry Catch, Peekaboo, Berry Song). Each trains **SPEED** and burns weight, and keeps its own best score.
+  They are **endless and skill-based** (#127): there is no timer, no lives and no set length. A
+  game goes on until the first miss, and gets harder with every point, so a good player can
+  play for as long as they keep up. The miss only ends it: the game still pays for every point,
+  and each point pays more the longer the run goes (**x1**, **x2**... under the score; a game
+  at its par pays SPEED +3, keepy-uppy 30 pays +9, a 12-note song +10). Until the first point
+  the game is a warm-up, where a miss costs nothing, so a start that takes a try or two
+  never ends at 0. Any game you touched gives full JOY, a heart and bond, even one that ended
+  at 0. What ends each one: *keepy-uppy*, the ball hitting the floor (it speeds up past 31 hits);
+  *Berry Catch*, a good berry reaching the ground or catching a rotten one (no berry is placed
+  where the creature can't get to it); *Peekaboo*, a creature ducking back untapped or a tap
+  on the wrong bush; *Berry Song*, one wrong note (the tune grows a note a round, with no limit
+  but a 100-note tune, which wins). The records are new (the old ones are left in the save,
+  unread). A double tap never ends a run: *Peekaboo* and *Berry Song* ignore a second tap on
+  the same bush or pad a moment after the first, and *keepy-uppy*'s ball still counts a tap for
+  60 ms after it reached the floor. Leaving by the *Hold: exit* chip pays for what was done, as a miss does, and shows
+  the result; a game you haven't touched yet just closes.
   Turning the screen off (PWR, or the 1.75C's pocket lock) ends the game at once and the
   creature keeps what its score so far earned, with no result screen; a game you haven't
   touched yet just closes, for nothing and at no cost. The screen comes back on to the creature.
@@ -640,7 +656,7 @@ with every new pet:
   stamina far faster: looked after hourly with such naps, the stamina ribbon comes
   in about a day and a half; never napped, it takes a week or more.
   The push-ups add a faster way, paid like the punch.
-- **Speed** ← the Play minigames: a fifth of the game's score (3 for a game at par).
+- **Speed** ← the Play minigames, by their pay ladder (#127): each point pays more the longer the run, in steps (a step is about half a game's par: 8 keepy-uppy hits, 10 berries, 7 pop-ups, 3 notes), and a game at par pays 3.
 
 The stat card's **Fitness** page shows the three bars, what trains each, a ribbon
 at each goal, and the weight (which goes up with candy and burns off with exercise).
@@ -941,7 +957,7 @@ and the other special days' greetings too),
 `sim/scripts/fitness.txt`), `steps 300` (the 1.75C's step counter counts that many more, simulator
 only; see `sim/scripts/walks.txt`, and `walks-clock.txt` with the clock not set; and `board 175c` / `board 175` / `board both`, which marks the steps
 after it for one board, since only the 1.75C counts steps), `game catch` (the next Play deals this minigame, `keepy`,
-`catch`, `peek` or `song`, simulator only; see `sim/scripts/game-screen-off.txt`), and `shot NAME`.
+`catch`, `peek` or `song`, simulator only; see `sim/scripts/game-screen-off.txt`), `gameplay point 8` / `gameplay miss` (the open minigame's next points, or its miss, asked of the game itself since its dice decide where to touch, simulator only; see `sim/scripts/endless-games.txt`), and `shot NAME`.
 `expect Play: peek score=* (screen off)` checks the serial output: some line printed
 since the previous check contains the text, where `*` stands for any run of characters;
 `expect-not` checks that none does, and `expect-once` that exactly one does. A failed

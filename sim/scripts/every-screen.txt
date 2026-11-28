@@ -44,7 +44,8 @@ tap 298 278
 wait 520ms
 
 # every minigame: the bag deals each one once in four plays. Untouched, each ends on its own
-# (a dropped ball, or 15 s idle) and shows its result for 4 s. The Play button opens its strip
+# after 15 s idle (they are endless since #127: with no first point a miss costs nothing, so a
+# dropped ball no longer ends one) and shows its result for 4 s. The Play button opens its strip
 # (#13) and the Poke Ball deals the game; each wait before the button is 480 ms shorter than
 # before the strip, so each game starts at the same moment and the bag deals the same ones.
 tap 202 404

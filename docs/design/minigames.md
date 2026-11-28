@@ -6,6 +6,15 @@ in a shuffle bag; per-game records on the Medals page; the "Hold: exit" chip;
 25–40 s games with a gentle ramp; the reflex/calm mix as proposed. Bubble Pop
 is not in this release.
 
+> **Superseded by #127 (2026-11-28): the games are endless and skill-based.** This doc is
+> the original design, kept as it was approved; where it gives a game's length, lives, timer
+> or time bar, a result for "quitting", the rules below win. There is no timer, no lives and
+> no set length. Each game has a warm-up until the player's first point (a miss costs nothing),
+> then one miss ends it, and it pays for every point, at a rising pay step (`gameSpeedPay`,
+> the screen's "x1", "x2"...). Every ramp goes by the points made, towards a floor. Leaving
+> by the exit chip pays what was done, as a miss does (nothing for a game nobody touched).
+> The rules are in the header of each game (`game_*.h`) and `gamecore.h`, and in the README.
+
 ## Goal
 
 Play starts one of several short touch games at random instead of always
@@ -50,10 +59,10 @@ The numbers are starting values to tune in the simulator and on the board.
 
 | Game | Feel | Ends | Raw score |
 |---|---|---|---|
-| Keepy-uppy | reflex | 3 misses (unchanged) | taps on the ball |
-| Berry Catch | in between | 30 s | berries caught |
-| Peekaboo | reflex | 20 pop-ups | pop-ups tapped |
-| Berry Song | calm, memory | 3 wrong answers, or a 12-note song | longest song repeated |
+| Keepy-uppy | reflex | the first drop (#127; was 3 misses) | taps on the ball |
+| Berry Catch | in between | a good berry on the ground, or a rotten one caught (#127; was 30 s) | berries caught |
+| Peekaboo | reflex | a pop-up ducking untapped, or a wrong bush (#127; was 20 pop-ups) | pop-ups tapped |
+| Berry Song | calm, memory | one wrong note, or a 100-note tune (#127; was 3 wrong answers, or 12 notes) | longest song repeated |
 | Bubble Pop *(optional)* | calm-ish | 30 s | bubbles popped |
 
 ### Keepy-uppy (existing)
@@ -64,11 +73,17 @@ end goes through the shared reward path. The logic moves into a header behind
 the same interface as the others, with a test that pins today's physics so the
 move can't change the feel.
 
+Since #127 the ball that reaches the floor rests there for 60 ms (`SETTLE_MS`, as
+Peekaboo's) before it counts as dropped (the game is over, or in the warm-up the
+ball is dealt again): a tap made while the screen still showed it above the floor
+can be read just after the frame that took it past, and a tap within the hit
+radius of the ball still hits it in that time.
+
 ### Berry Catch
 
 ```
         [ Hold: exit ]
-     ●●●●●●●●○○○○○○○        time bar
+     ●●●●●●●●○○○○○○○        time bar (#127: gone, there is no timer)
           12
       🍓        🫐           berries fall
             🟤               rotten berry (avoid)
@@ -83,11 +98,14 @@ move can't change the feel.
   A catch is a berry crossing the pet's mouth line within ±55 px of the pet:
   +1, a short `EAT` frame, `SFX_EAT`.
 - **Rotten berries** (a brown recolour of the berry icon, one new 16×16 map):
-  −2 (never below 0), `HURT` frame, `SFX_DENY`. None in the first 5 s.
+  `HURT` frame, `SFX_DENY`. Since #127 catching one ends the game (it was −2),
+  and none comes before the first 5 berries are caught (it was the first 5 s).
 - **Favourite berry** counts 2 once she has discovered it (`berryKnown`), with
   a heart. The game never reveals the favourite.
-- Ramp over the 30 s: a berry every 1100 → 650 ms, falling 150 → 260 px/s,
-  rotten share 10 % → 30 %.
+- Ramp (originally over the 30 s; since #127 over the berries caught): the gap
+  between berries falls from 1100 towards 450 ms and the fall rises from 150
+  towards 420 px/s, never reaching either; no rotten berry below 5 caught, then
+  10 % rising towards 35 % (`spawnGapFor`, `fallSpeedFor`, `rottenPctFor`).
 
 ### Peekaboo
 
@@ -103,10 +121,17 @@ move can't change the feel.
   from one (`POSE`/`HOP`), stays a moment and ducks back.
 - Tap the pet or its bush while it's up: +1, `NOD`, `SFX_PLAY`. A second tap on
   the same pop-up doesn't count again. A tap on an empty bush only rustles it
-  (no penalty).
-- 20 pop-ups per game, never the same bush twice in a row. Time up: 1500 →
-  750 ms; gap between pop-ups 500 → 300 ms (about 30 s in all).
+  (no penalty; since #127 only until the first hit, then it ends the game).
+- Never the same bush twice in a row. Time up: 1500 → 750 ms over the first
+  19 hits, then on towards a 550 ms floor; gap between pop-ups 500 → 300 ms by
+  19 hits. Since #127 there is no pop-up limit (it was 20 per game, about 30 s):
+  the game goes on to 255 hits or the first miss (see `game_peek.h`).
 - Hit area: the bush plus the pet's height above it, at least 100 px wide.
+- Taps are read before the frame that steps the game, so a tap made just before
+  the pet ducked can be read just after: an untapped pop-up stays tappable for
+  60 ms past its time (`SETTLE_MS`) before it is the miss that ends the game, and
+  a second tap on the pet just hit within 150 ms (`BOUNCE_MS`) is the same tap.
+  Keepy-uppy does the same for the ball (below).
 
 ### Berry Song
 
@@ -124,12 +149,16 @@ move can't change the feel.
   she repeats it. Each round adds one note to the same song. It starts at 2
   notes.
 - A wrong pad: `SFX_DENY`, the pet tilts its head, the same song plays again.
-  Three wrong answers end the game. Twelve notes repeated ends it with a
-  fanfare.
+  Since #127 one wrong note ends the game (it was three wrong answers), and
+  a 100-note tune repeated ends it with the fanfare (it was twelve notes).
 - No timer while it's her turn. **The pads light up, so it works with the
   sound muted** (BOOT button), and the colours differ in brightness too.
-- Playback 500 ms a note, faster to 350 ms by the 8th note. Score = longest
+- Playback 500 ms a note, faster to 350 ms by the 8th note, and on shortening
+  after that (`200 + 1200/n` ms: 300 at 12 notes, 212 at 100). Score = longest
   song repeated. A typical run (5–7 notes) takes about 30–40 s.
+- A double tap is not a wrong note (since #127): a second press on the pad just
+  pressed, within 150 ms (`BOUNCE_MS`, as Peekaboo's), is ignored unless it is
+  the next note of the song.
 
 ### Bubble Pop (optional fifth)
 
@@ -160,8 +189,10 @@ Recommended: the same **"Hold: exit"** chip in every game, at the top centre
 (160 × 40 px, y 20–60, inside the circle), with the same look, string
 (`S_HOLD_EXIT`) and 1 s hold as the strength bag's exit on the 1.75C. A hold
 must start on the chip; sliding onto it doesn't count; the touch that exits is
-swallowed. Leaving pays nothing, as today. Same on both boards. Scores and
-lives move down ~40 px to make room.
+swallowed. Leaving paid nothing in this design; since #127 it pays what was
+done, as the game's own end does (a game nobody touched just closes). Same on
+both boards. Scores move down ~40 px to make room (the lives of the original
+design are gone).
 
 ### Game input
 
@@ -182,7 +213,8 @@ game left open in the dark (`bedApply`).
 Nothing new runs outside a game: no timers, no wakeups, the picker is RAM
 only. Inside a game it's the same as today (85 ms frames, 240 MHz). Because a
 game keeps the screen on, **every game ends after 15 s with no touch** and pays
-for what was done (Berry Song needs this; the others end sooner anyway). One
+for what was done (a game nobody touches ends only here: since #127 none of
+them has a timer or a limit of its own). One
 NVS write per finished game, as today.
 
 ### Reward
@@ -266,7 +298,8 @@ loaded it draws the old `mon` sprite or the Pokéball icon, as keepy-uppy does.
   (10 000 seeded draws), works with 4 or 5 games.
 - **Reward:** `N` for each game at 0, par and the cap; keepy-uppy gives today's
   reward up to 30; `playGame` updates only that game's record and `ghi` keeps
-  keepy-uppy's raw score; quitting pays nothing.
+  keepy-uppy's raw score; quitting pays nothing (since #127: quitting a game the
+  player touched pays what was done).
 - **Save:** the new keys survive save/load; missing keys load as 0; values
   above each limit load as 0.
 - **Exit chip:** a 1 s hold that starts on it exits; sliding onto it, releasing
@@ -275,9 +308,11 @@ loaded it draws the old `mon` sprite or the Pokéball icon, as keepy-uppy does.
   without a touch ends any game.
 - **Berry Catch:** spawn x stays inside the safe range; the ramp at 0, 15 and
   30 s; catch edges at ±55 px; rotten floors at 0; favourite counts 2 only when
-  known; ends at 30 s.
+  known; ends at 30 s (these were the tests of the 30 s game; test_minigames.cpp
+  has the endless one's since #127).
 - **Peekaboo:** no bush twice in a row; a hit inside the window scores once;
-  after it, a miss; a wrong bush costs nothing; ends after 20.
+  after it, a miss; a wrong bush costs nothing; ends after 20 (since #127: the
+  warm-up costs nothing, then a miss ends it, and it ends at 255 hits).
 - **Berry Song:** the song grows by one and keeps its start; pads during
   playback are ignored; a wrong pad costs a try and replays; 3 wrong ends it;
   the score is the longest song; ends at 12.
