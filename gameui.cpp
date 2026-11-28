@@ -64,16 +64,18 @@ uint8_t gameSimAim(bool point, int16_t &x, int16_t &y) {
       return GAMEAIM_TAP;
     }
     case GAME_CATCH: {
-      // the good berry that reaches the mouth line first
+      // The berry that reaches the mouth line first (the lowest of the live ones, whatever its
+      // speed). A good one: the finger goes to where it falls (or away from it, for a miss). A
+      // rotten one: the finger holds still, where the pet is (the spawner keeps a rotten berry
+      // out of reach of a pet standing where it caught the last good one, game_catch.h).
       const CatchGame &c = games.catcher;
       const CatchGame::Berry *next = nullptr;
       for (const CatchGame::Berry &b : c.berries)
-        if (b.live && b.kind != CatchGame::ROTTEN && b.y < CatchGame::CATCH_Y &&
-            (!next || b.y > next->y))  // the lowest of the live ones: the soonest, whatever its speed
-          next = &b;
+        if (b.live && b.y < CatchGame::CATCH_Y && (!next || b.y > next->y)) next = &b;
       if (!next) return GAMEAIM_WAIT;
       y = 350;
-      x = point ? next->x : (int16_t)(next->x < 233 ? CatchGame::X_MAX : CatchGame::X_MIN);  // away from it
+      if (next->kind == CatchGame::ROTTEN) x = (int16_t)(c.petX + 0.5f);
+      else x = point ? next->x : (int16_t)(next->x < 233 ? CatchGame::X_MAX : CatchGame::X_MIN);  // away from it
       return GAMEAIM_HOLD;
     }
     case GAME_PEEK: {

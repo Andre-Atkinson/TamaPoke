@@ -9,8 +9,8 @@
 # pay step "x2" or "x3" under it), and misses: a dropped ball, a good berry that reaches the
 # ground, a wrong bush, a wrong note. The miss ends the game that frame: its result screen
 # comes at once, with the line "Play: GAME score=N speed=+M" paid once (the pay is
-# gameSpeedPay: keepy-uppy 8 hits pay 1, Berry Catch 12 points 1, Peekaboo 14 hits 3, Berry
-# Song a 6-note tune 3). Before the miss nothing is paid ("expect-not Play:"). The Play button
+# gameSpeedPay: keepy-uppy 20 hits pay 5, Berry Catch 30 points 6, Peekaboo 21 hits 6, Berry
+# Song a 9-note tune 6; the old pay, a fifth of the normalised score, would give 4, 4, 4 and 4). Before the miss nothing is paid ("expect-not Play:"). The Play button
 # is at (202, 404) and its strip's Poke Ball at (169, 320) (#13); a game shows its title card
 # for 1.2 s, then plays, and its result stays up for 4 s.
 
@@ -23,55 +23,55 @@ tap 233 200
 wait 6s
 serial SCENE auto clear auto
 
-# 1. Keepy-uppy: 8 hits, then the ball is left to drop
+# 1. Keepy-uppy: 20 hits, then the ball is left to drop
 game keepy
 tap 202 404
 tap 169 320
-gameplay point 8
+gameplay point 20
 shot 01-keepy-play
 expect-not Play:
 gameplay miss
 shot 02-keepy-result
 expect-once Play:
-expect Play: keepy score=8 speed=+1
+expect Play: keepy score=20 speed=+5
 wait 5s
 
-# 2. Berry Catch: 12 berries caught (the rotten ones come after the fifth), then a good berry
+# 2. Berry Catch: 30 berries caught (the rotten ones come after the fifth), then a good berry
 # the pet isn't at
 game catch
 tap 202 404
 tap 169 320
-gameplay point 12
+gameplay point 30
 shot 03-catch-play
 expect-not Play:
 gameplay miss
 shot 04-catch-result
 expect-once Play:
-expect Play: catch score=12 speed=+1
+expect Play: catch score=30 speed=+6
 wait 5s
 
-# 3. Peekaboo: 14 hits, then a tap on the wrong bush
+# 3. Peekaboo: 21 hits, then a tap on the wrong bush
 game peek
 tap 202 404
 tap 169 320
-gameplay point 14
+gameplay point 21
 shot 05-peek-play
 expect-not Play:
 gameplay miss
 shot 06-peek-result
 expect-once Play:
-expect Play: peek score=14 speed=+3
+expect Play: peek score=21 speed=+6
 wait 5s
 
-# 4. Berry Song: the first 2-note tune, then each one a note longer up to 6 notes, then a wrong note
+# 4. Berry Song: the first 2-note tune, then each one a note longer up to 9 notes, then a wrong note
 game song
 tap 202 404
 tap 169 320
-gameplay point 5
+gameplay point 8
 shot 07-song-play
 expect-not Play:
 gameplay miss
 shot 08-song-result
 expect-once Play:
-expect Play: song score=6 speed=+3
+expect Play: song score=9 speed=+6
 wait 5s

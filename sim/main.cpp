@@ -375,7 +375,11 @@ int main(int argc, char **argv) {
               k += (SIM_TAP_DOWN_MS + SETTLE_MS) / 10;
             } else if (aim == GAMEAIM_HOLD) {
               simTouchSet(true, x, y);
-              for (int h = 0; h < 600 && gameSimOpen() && !(point && gameSimScore() > before); h++) run(10);
+              for (int h = 0; h < 600 && gameSimOpen() && !(point && gameSimScore() > before); h++) {
+                run(10);
+                int16_t x2 = 0, y2 = 0;  // the finger follows the game: the next berry may be another
+                if (gameSimAim(point, x2, y2) == GAMEAIM_HOLD) simTouchSet(true, x2, y2);
+              }
               simTouchSet(false, 0, 0);
               run(SETTLE_MS);
               k += 600;
